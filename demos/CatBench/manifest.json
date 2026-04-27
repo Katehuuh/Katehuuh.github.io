@@ -5,45 +5,45 @@
       "python_render": "assets/GPT-5.5-Pro-python.jpg",
       "python_source": "assets/GPT-5.5-Pro.py",
       "svg": "assets/gpt-5.5-pro-svg.jpg",
-      "_first_seen": "2026-04-27T11:24:06+02:00"
+      "_first_seen": "2026-04-27T15:12:56+02:00"
     },
     "gpt-5.5": {
       "display_name": "GPT-5.5",
       "python_render": "assets/GPT-5.5-python.jpg",
       "python_source": "assets/GPT-5.5.py",
       "svg": "assets/gpt-5.5-svg.jpg",
-      "_first_seen": "2026-04-27T11:24:06+02:00"
+      "_first_seen": "2026-04-27T15:12:56+02:00"
     },
     "claude-opus-4.7": {
       "display_name": "claude-opus-4.7",
       "python_render": "assets/claude-opus-4.7-python.jpg",
       "python_source": "assets/claude-opus-4.7.py",
       "svg": "assets/claude-opus-4.7.svg",
-      "_first_seen": "2026-04-27T11:24:06+02:00"
+      "_first_seen": "2026-04-27T15:12:56+02:00"
     },
     "deepseek-v4-flash-thinking": {
       "display_name": "deepseek-v4-flash-thinking",
       "python_render": "assets/deepseek-v4-flash-thinking-python.jpg",
       "svg": "assets/deepseek-v4-flash-thinking-svg.jpg",
-      "_first_seen": "2026-04-27T11:24:06+02:00"
+      "_first_seen": "2026-04-27T15:12:56+02:00"
     },
     "deepseek-v4-pro-thinking": {
       "display_name": "deepseek-v4-pro-thinking",
       "python_render": "assets/deepseek-v4-pro-thinking-python.jpg",
       "svg": "assets/deepseek-v4-pro-thinking-svg.jpg",
-      "_first_seen": "2026-04-27T11:24:06+02:00"
+      "_first_seen": "2026-04-27T15:12:56+02:00"
     },
     "kimi-k2.6": {
       "display_name": "kimi-k2.6",
       "python_render": "assets/kimi-k2.6-python.jpg",
       "svg": "assets/kimi-k2.6-svg.gif",
-      "_first_seen": "2026-04-27T11:24:06+02:00"
+      "_first_seen": "2026-04-27T15:12:56+02:00"
     },
     "mimo-v2.5-pro": {
       "display_name": "mimo-v2.5-pro",
       "python_render": "assets/mimo-v2.5-pro-python.jpg",
       "svg": "assets/mimo-v2.5-pro-svg.jpg",
-      "_first_seen": "2026-04-27T11:24:06+02:00"
+      "_first_seen": "2026-04-27T15:12:56+02:00"
     }
   },
   "prompts": {
