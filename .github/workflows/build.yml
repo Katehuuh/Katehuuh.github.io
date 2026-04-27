@@ -1,0 +1,96 @@
+# Build pipeline. Triggered by pushes touching CatBench/, demos/, data.json,
+# scripts/, or this file. Steps:
+#   1. autocrop_assets.py        — squares each raster in CatBench/assets/ around
+#                                  its subject (corner-color background detection,
+#                                  bbox crop, padded back to a square).
+#   2. build_catbench_manifest.py — runs render_python.py on any <model>.py with
+#                                  no matching raster (matplotlib Agg, no display);
+#                                  writes CatBench/manifest.json sorted newest-first
+#                                  by git first-commit date.
+#   3. screenshot_thumbs.mjs     — Playwright Chromium screenshots every
+#                                  demos/<name>/index.html and every screenshot_from
+#                                  URL in data.json. Local pages are served on a
+#                                  tiny localhost HTTP server so fetch() works
+#                                  (file:// origin would block it).
+#   4. Commits regenerated artifacts back to main as github-actions[bot].
+#
+# SVG cropping is intentionally NOT here — that runs client-side in the browser,
+# so dropping a fresh .svg is instant and keeps the asset pipeline serverless-light.
+
+name: build
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'demos/**'
+      - 'data.json'
+      - 'scripts/**'
+      - '.github/workflows/build.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: scripts/requirements.txt
+
+      - name: Install Python deps
+        run: pip install -r scripts/requirements.txt
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Playwright + Chromium
+        working-directory: scripts
+        run: |
+          npm install --no-audit --no-fund --loglevel=error
+          npx playwright install chromium --with-deps
+
+      - name: Auto-crop CatBench raster assets
+        run: python scripts/autocrop_assets.py
+
+      - name: Build CatBench manifest (renders matplotlib)
+        run: python scripts/build_catbench_manifest.py
+
+      - name: Build demos manifest
+        run: python scripts/build_demos_manifest.py
+
+      - name: Screenshot demos + external URLs
+        run: node scripts/screenshot_thumbs.mjs
+
+      - name: Commit regenerated artifacts
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Stage by directory — pathspec globs on missing files would fail atomically.
+          # Also pick up any deletions (legacy .png thumbs replaced by .jpg, etc.).
+          # `demos/` covers CatBench renders, demos/manifest.json, and demos/CatBench/manifest.json.
+          git add -A demos/ assets/thumbs/
+          if git diff --cached --quiet; then
+            echo "no changes to commit"
+          else
+            git commit -m "build: regenerate CatBench renders + project thumbs"
+            git push
+          fi

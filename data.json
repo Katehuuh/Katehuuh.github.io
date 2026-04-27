@@ -1,0 +1,82 @@
+{
+  "projects": [
+    {
+      "name": "static-p2p-pong",
+      "url": "https://katehuuh.github.io/static-p2p-pong/",
+      "repo": "https://github.com/Katehuuh/static-p2p-pong",
+      "description": "Pong with rollback netcode, peer to peer over WebRTC. No backend, just two browsers and PeerJS finding each other.",
+      "tags": ["webrtc", "p2p", "rollback"],
+      "thumb": "assets/thumbs/static-p2p-pong.jpg",
+      "screenshot_from": "https://katehuuh.github.io/static-p2p-pong/"
+    },
+    {
+      "name": "curvecrash-RL",
+      "url": "https://katehuuh.github.io/curvecrash-RL/",
+      "repo": "https://github.com/Katehuuh/curvecrash-RL",
+      "description": "Trained an RL bot to play CurveCrash. Self-play PPO, IMPALA encoder, exported to TF.js. Race it with arrow keys.",
+      "tags": ["rl", "ppo", "tfjs"],
+      "thumb": "assets/thumbs/curvecrash-RL.jpg",
+      "screenshot_from": "https://katehuuh.github.io/curvecrash-RL/"
+    },
+    {
+      "name": "FlexVoice",
+      "url": "https://katehuuh.github.io/FlexVoice/",
+      "repo": "https://github.com/Katehuuh/FlexVoice",
+      "description": "Real-time voice to voice. Every link in the chain swaps out. VAD, STT, LLM, TTS, all running local.",
+      "tags": ["voice", "local"],
+      "thumb": "assets/thumbs/FlexVoice.jpg",
+      "screenshot_from": "https://katehuuh.github.io/FlexVoice/"
+    }
+  ],
+  "datasets": [
+    {
+      "name": "Tree-of-Web-Knowledge",
+      "url": "https://huggingface.co/datasets/Nekochu/Tree-of-Web-Knowledge",
+      "description": "4k Q&A rows, Llama-2 generated, PairRM cleaned. Apache-2.0."
+    },
+    {
+      "name": "novel17_train_alpaca_format",
+      "url": "https://huggingface.co/datasets/Nekochu/novel17_train_alpaca_format",
+      "description": "French novel set in alpaca format."
+    },
+    {
+      "name": "Luminia-mixture",
+      "url": "https://huggingface.co/datasets/Nekochu/Luminia-mixture",
+      "description": "Training mixture behind the Luminia series."
+    }
+  ],
+  "models": [
+    {
+      "name": "nanochat-d24",
+      "url": "https://huggingface.co/Nekochu/nanochat-d24",
+      "description": "1.38B nanochat trained on a single RTX 5090, end to end."
+    },
+    {
+      "name": "Llama-2-13B-fp16-french",
+      "url": "https://huggingface.co/Nekochu/Llama-2-13B-fp16-french",
+      "description": "Llama 2 13B with continued pretrain on French."
+    },
+    {
+      "name": "Luminia-13B-v3",
+      "url": "https://huggingface.co/Nekochu/Luminia-13B-v3",
+      "description": "Roleplay and Stable Diffusion prompt help."
+    },
+    {
+      "name": "stable-audio-open-1.0-Music",
+      "url": "https://huggingface.co/Nekochu/stable-audio-open-1.0-Music",
+      "description": "Stable Audio Open 1.0 with a music finetune."
+    }
+  ],
+  "repos": [
+    {
+      "name": "ooba-insanely-fast-whisper",
+      "url": "https://github.com/Katehuuh/ooba-insanely-fast-whisper",
+      "description": "Streaming Whisper extension for text-generation-webui."
+    },
+    {
+      "name": "ProPainter-Webui",
+      "url": "https://github.com/Katehuuh/ProPainter-Webui",
+      "description": "Webui fork for ProPainter video object removal."
+    }
+  ]
+}

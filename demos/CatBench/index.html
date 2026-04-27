@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>CatBench</title>
+<meta name="description" content="Two prompts, one kitten, every model that wants to play.">
+<meta name="color-scheme" content="dark">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500&family=Manrope:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%20100%20100%22%3E%3Ctext%20y%3D%2280%22%20font-size%3D%2280%22%3E%F0%9F%90%B1%3C/text%3E%3C/svg%3E">
+<style>
+:root {
+  --bg: #050507;
+  --bg-1: #0c0c10;
+  --bg-2: #14141a;
+  --line: rgba(255, 255, 255, 0.07);
+  --line-2: rgba(255, 255, 255, 0.13);
+  --text: #f4f4f6;
+  --text-2: rgba(244, 244, 246, 0.62);
+  --text-3: rgba(244, 244, 246, 0.36);
+  --accent: #ff6b35;
+  --accent-soft: rgba(255, 107, 53, 0.12);
+  --accent-line: rgba(255, 107, 53, 0.42);
+  --r-sm: 10px; --r: 16px; --r-lg: 22px;
+  --serif: "Fraunces", ui-serif, Georgia, serif;
+  --sans:  "Manrope", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --mono:  ui-monospace, "JetBrains Mono", "SF Mono", Consolas, monospace;
+  --max: 980px;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: var(--bg); color: var(--text); font-family: var(--sans);
+  font-size: 18px; line-height: 1.6;
+  -webkit-font-smoothing: antialiased; -webkit-text-size-adjust: 100%;
+  text-rendering: optimizeLegibility;
+}
+main { max-width: var(--max); margin: 0 auto; padding: 3.5rem 1.4rem 5rem; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { color: #ffb98d; }
+::selection { background: var(--accent-soft); color: var(--accent); }
+
+.hero { text-align: center; margin-bottom: 2.4rem; }
+.hero-cb { text-align: left; margin-bottom: 1.6rem; }
+.hero-cb h1 { font-size: clamp(2rem, 5.5vw, 2.8rem); margin: .2rem 0 1rem; }
+.back {
+  display: inline-block; font-family: var(--mono); font-size: .78rem;
+  color: var(--text-3); letter-spacing: .04em;
+}
+.back:hover { color: var(--accent); }
+.back::before { content: "← "; }
+
+.prompts {
+  list-style: none; margin: 0; padding: 0;
+  display: grid; gap: .35rem;
+}
+.prompts li {
+  display: flex; align-items: baseline; gap: .55rem;
+  margin: 0; padding: .45rem .7rem;
+  background: var(--bg-1); border: 1px solid var(--line);
+  border-radius: 10px; flex-wrap: wrap;
+}
+.prompts .tag {
+  font-family: var(--mono); font-size: .66rem; letter-spacing: .08em;
+  color: var(--accent); text-transform: lowercase;
+  background: var(--accent-soft); border: 1px solid var(--accent-line);
+  padding: .08rem .45rem; border-radius: 999px; flex-shrink: 0;
+}
+.prompts code {
+  font-family: var(--mono); font-size: .9rem;
+  color: var(--text-2); background: transparent; padding: 0; border: 0;
+}
+
+main > section { margin-block: 2.4rem; }
+main > section:first-of-type { margin-top: 0; }
+@media (max-width: 600px) {
+  main > section { margin-block: 1.8rem; }
+  .hero-cb { margin-bottom: 1.2rem; }
+  .prompts code { font-size: .76rem; }
+}
+
+code:not(.prompts code):not(.add-note code) {
+  font-family: var(--mono); font-size: .88em;
+  background: var(--bg-2); border: 1px solid var(--line);
+  padding: .08em .42em; border-radius: 6px;
+}
+
+.add-note { margin: 2.4rem 0 0; color: var(--text-2); font-size: 1rem; }
+.add-note code {
+  font-family: var(--mono); font-size: .88em;
+  background: var(--bg-2); border: 1px solid var(--line);
+  padding: .08em .42em; border-radius: 6px; color: var(--text);
+}
+
+footer {
+  margin-top: 6rem; padding-top: 2rem;
+  border-top: 1px solid var(--line);
+  color: var(--text-3); font-size: .94rem;
+}
+footer p { margin: 0; }
+footer a { color: var(--text-2); border-bottom: 1px dotted var(--line-2); }
+footer a:hover { color: var(--accent); border-bottom-color: var(--accent-line); }
+main > footer { margin-top: 1.4rem; padding-top: 1.2rem; }
+main > footer .dot { color: var(--text-3); margin: 0 .35rem; }
+
+.grid-wrap {
+  overflow-x: auto; border: 1px solid var(--line);
+  border-radius: var(--r); background: var(--bg-1); margin-top: .4rem;
+}
+.catbench-grid {
+  border-collapse: collapse; table-layout: fixed; width: max-content;
+  margin: 0 auto; font-family: var(--mono); font-size: .88rem;
+}
+.catbench-grid th, .catbench-grid td {
+  padding: .55rem; border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line); vertical-align: top;
+  background: var(--bg-1);
+}
+.catbench-grid th:last-child, .catbench-grid td:last-child { border-right: none; }
+.catbench-grid tbody tr:last-child td { border-bottom: none; }
+.catbench-grid .row-label {
+  position: sticky; left: 0; z-index: 2; width: 76px;
+  background: var(--bg-2); color: var(--text-2);
+  font-weight: 600; text-transform: uppercase; letter-spacing: .06em;
+  font-size: .92rem; text-align: center; vertical-align: middle;
+  border-right: 1px solid var(--line);
+}
+.catbench-grid thead .row-label { color: var(--accent); font-size: .78rem; font-weight: 700; }
+.catbench-grid .model-header {
+  text-align: center; font-weight: 600; color: var(--text);
+  padding: .85rem .5rem; background: var(--bg-2);
+  width: 180px; font-size: .92rem; letter-spacing: -0.01em;
+}
+.catbench-grid .cell {
+  width: 180px; height: 180px; padding: 0;
+  position: relative; cursor: zoom-in; background: #08080a;
+}
+.catbench-grid .cell .render-frame {
+  display: flex; align-items: center; justify-content: center;
+  width: 100%; height: 100%; overflow: hidden;
+}
+.catbench-grid .cell img,
+.catbench-grid .cell svg,
+.catbench-grid .cell object {
+  max-width: 100%; max-height: 100%; width: auto; height: auto;
+  pointer-events: none;
+}
+.catbench-grid .cell .source-link {
+  position: absolute; bottom: 6px; right: 6px;
+  font-size: .68rem; background: rgba(0, 0, 0, 0.72);
+  color: var(--accent); padding: .12rem .42rem;
+  border-radius: 6px; pointer-events: auto; z-index: 1;
+  font-family: var(--mono);
+}
+.catbench-grid .cell .source-link:hover { background: var(--accent); color: var(--bg); }
+.catbench-grid .cell.empty {
+  cursor: default; color: var(--text-3);
+  display: flex; align-items: center; justify-content: center; font-size: .8rem;
+}
+.catbench-grid .cell.error {
+  background: rgba(239, 106, 106, 0.04);
+  color: rgba(239, 106, 106, 0.8); font-size: .72rem;
+  padding: .5rem; text-align: center;
+  display: flex; align-items: center; justify-content: center;
+}
+.empty-state {
+  margin-top: 1.2rem; padding: 1.4rem;
+  background: var(--bg-1); border: 1px dashed var(--line);
+  border-radius: var(--r); color: var(--text-2);
+  text-align: center; font-size: 1rem;
+}
+
+.lightbox {
+  position: fixed; inset: 0; background: rgba(0, 0, 0, 0.88);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 100; padding: 2rem; animation: fadein .2s ease both;
+}
+@keyframes fadein { from { opacity: 0; } to { opacity: 1; } }
+.lightbox[hidden] { display: none; }
+.lightbox-content {
+  background: var(--bg-1); border: 1px solid var(--accent-line);
+  border-radius: var(--r); max-width: 90vw; max-height: 90vh;
+  position: relative; display: flex; align-items: center; justify-content: center;
+  padding: 1.2rem; overflow: hidden;
+}
+.lightbox-body {
+  display: flex; align-items: center; justify-content: center;
+  max-width: 100%; max-height: calc(90vh - 2.4rem);
+}
+.lightbox-body img, .lightbox-body svg, .lightbox-body object {
+  max-width: 100%; max-height: calc(90vh - 2.4rem); display: block;
+}
+.lightbox-close {
+  position: absolute; top: 8px; right: 12px;
+  background: transparent; border: 0; color: var(--text);
+  font-size: 1.6rem; cursor: pointer; line-height: 1;
+  padding: .2rem .4rem;
+}
+.lightbox-close:hover { color: var(--accent); }
+
+@keyframes rise {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.rise { animation: rise .65s cubic-bezier(.2, .65, .2, 1) both; }
+.rise[data-d="1"] { animation-delay: .04s; }
+.rise[data-d="2"] { animation-delay: .12s; }
+.rise[data-d="3"] { animation-delay: .20s; }
+.rise[data-d="4"] { animation-delay: .28s; }
+@media (prefers-reduced-motion: reduce) { .rise { animation: none; } }
+
+@media (max-width: 600px) {
+  main { padding: 2rem 1.1rem 3.5rem; }
+}
+</style>
+</head>
+<body>
+
+<main>
+
+  <header class="hero hero-cb rise" data-d="1">
+    <a class="back" href="../../">back</a>
+    <h1>CatBench</h1>
+    <ul class="prompts">
+      <li><span class="tag">svg</span><code>Create a detailed SVG image of a cute kitten.</code></li>
+      <li><span class="tag">python</span><code>Write a Python script that draws a cute kitten using matplotlib.</code></li>
+    </ul>
+  </header>
+
+  <section class="rise" data-d="2">
+    <div class="grid-wrap">
+      <table id="catbench-grid" class="catbench-grid">
+        <thead><tr><th class="row-label">model</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <p id="empty-state" class="empty-state" hidden>
+      No entries yet. Drop SVG, Python, or PNG files into <code>CatBench/assets/</code>, push, and the build pipeline fills the grid.
+    </p>
+  </section>
+
+  <p class="add-note rise" data-d="3">Add a model: PR <code>&lt;model&gt;.svg</code> &amp; <code>&lt;model&gt;.py</code> (or <code>&lt;model&gt;.png</code>) to <code>CatBench/assets/</code>.</p>
+
+  <footer class="rise" data-d="4">
+    <p>How cute is your kitten? <span class="dot">·</span> Name from the exllama / TurboCat community.</p>
+  </footer>
+
+</main>
+
+<div id="lightbox" class="lightbox" hidden>
+  <div class="lightbox-content">
+    <button class="lightbox-close" aria-label="close">×</button>
+    <div class="lightbox-body"></div>
+  </div>
+</div>
+
+<script>
+(async () => {
+  let manifest = { models: {} };
+  try {
+    manifest = await fetch('manifest.json', { cache: 'no-store' }).then(r => r.json());
+  } catch (e) {
+    console.warn('manifest.json missing, falling back to live discovery', e);
+  }
+  await liveAugment(manifest);
+  const models = manifest.models || {};
+  if (Object.keys(models).length === 0) {
+    document.getElementById('empty-state').hidden = false;
+    return;
+  }
+  buildGrid(models);
+  setupLightbox();
+})();
+
+const KIND_BY_EXT = {
+  svg: 'svg', png: 'python_render', jpg: 'python_render',
+  jpeg: 'python_render', gif: 'python_render', py: 'python_source',
+};
+const RASTER_EXTS = ['png', 'jpg', 'jpeg', 'gif'];
+
+function normKey(stem) { return stem.toLowerCase().replace(/[_\s]+/g, '-'); }
+function displayFromStem(stem) { return stem.replace(/[_\s]+/g, ' '); }
+
+async function liveAugment(manifest) {
+  const host = location.hostname;
+  if (!/\.github\.io$/i.test(host)) return;
+  const owner = host.split('.')[0];
+  const repo = host;
+  const cacheKey = `catbench:${owner}/${repo}`;
+  const cacheTtlMs = 30_000;
+
+  let contents = null;
+  const cached = sessionStorage.getItem(cacheKey);
+  if (cached) {
+    try {
+      const { t, data } = JSON.parse(cached);
+      if (Date.now() - t < cacheTtlMs) contents = data;
+    } catch {}
+  }
+
+  if (!contents) {
+    try {
+      const url = `https://api.github.com/repos/${owner}/${repo}/contents/demos/CatBench/assets`;
+      const resp = await fetch(url, { headers: { 'Accept': 'application/vnd.github+json' } });
+      if (!resp.ok) { console.warn(`contents API ${resp.status}; manifest only`); return; }
+      contents = await resp.json();
+      sessionStorage.setItem(cacheKey, JSON.stringify({ t: Date.now(), data: contents }));
+    } catch (e) { console.warn('contents API failed, manifest only', e); return; }
+  }
+
+  if (!Array.isArray(contents)) return;
+
+  for (const file of contents) {
+    if (file.type !== 'file') continue;
+    const dot = file.name.lastIndexOf('.');
+    if (dot < 1) continue;
+    const stem = file.name.slice(0, dot);
+    const ext = file.name.slice(dot + 1).toLowerCase();
+    if (!KIND_BY_EXT[ext]) continue;
+    let key, kind, baseStem;
+    if (RASTER_EXTS.includes(ext) && normKey(stem).endsWith('-svg')) {
+      baseStem = stem.replace(/-svg$/i, '');
+      key = normKey(baseStem); kind = 'svg';
+    } else if (RASTER_EXTS.includes(ext) && normKey(stem).endsWith('-python')) {
+      baseStem = stem.replace(/-python$/i, '');
+      key = normKey(baseStem); kind = 'python_render';
+    } else {
+      baseStem = stem; key = normKey(stem); kind = KIND_BY_EXT[ext];
+    }
+    if (!manifest.models[key]) manifest.models[key] = { display_name: displayFromStem(baseStem) };
+    if (!manifest.models[key][kind]) manifest.models[key][kind] = `assets/${file.name}`;
+  }
+}
+
+function buildGrid(models) {
+  const table = document.getElementById('catbench-grid');
+  const thead = table.querySelector('thead tr');
+  const sortedKeys = Object.keys(models);
+  for (const key of sortedKeys) {
+    const m = models[key];
+    const th = document.createElement('th');
+    th.className = 'model-header';
+    th.textContent = m.display_name || key;
+    thead.appendChild(th);
+  }
+  const rows = [
+    { label: 'SVG',    field: 'svg',           kind: 'svg',   errorField: 'svg_error' },
+    { label: 'Python', field: 'python_render', kind: 'image', sourceField: 'python_source', errorField: 'python_error' },
+  ];
+  for (const row of rows) {
+    const tr = document.createElement('tr');
+    const labelTd = document.createElement('td');
+    labelTd.className = 'row-label';
+    labelTd.textContent = row.label;
+    tr.appendChild(labelTd);
+    for (const key of sortedKeys) {
+      const m = models[key];
+      const td = document.createElement('td');
+      td.className = 'cell';
+      const path = m[row.field];
+      const sourcePath = row.sourceField ? m[row.sourceField] : null;
+      const errMsg = row.errorField ? m[row.errorField] : null;
+      if (errMsg && !path) {
+        td.classList.add('error');
+        td.title = errMsg;
+        td.textContent = row.field === 'svg' ? 'not valid svg' : 'render failed';
+        if (sourcePath) attachSourceLink(td, sourcePath);
+      } else if (!path) {
+        td.classList.add('empty');
+        td.textContent = '—';
+      } else {
+        const frame = document.createElement('div');
+        frame.className = 'render-frame';
+        const isVector = row.kind === 'svg' && /\.svg$/i.test(path);
+        if (isVector) {
+          const obj = document.createElement('object');
+          obj.type = 'image/svg+xml';
+          obj.data = path;
+          attachSvgAutoCrop(obj);
+          frame.appendChild(obj);
+        } else {
+          const img = document.createElement('img');
+          img.src = path;
+          img.loading = 'lazy';
+          img.alt = `${m.display_name || key} ${row.label}`;
+          frame.appendChild(img);
+        }
+        td.appendChild(frame);
+        if (sourcePath) attachSourceLink(td, sourcePath);
+        td.dataset.kind = row.kind;
+        td.dataset.path = path;
+        td.dataset.label = `${m.display_name || key} ${row.label}`;
+        td.addEventListener('click', () => openLightbox(td.dataset));
+      }
+      tr.appendChild(td);
+    }
+    document.querySelector('#catbench-grid tbody').appendChild(tr);
+  }
+}
+
+function rawSourceUrl(relPath) {
+  return `https://raw.githubusercontent.com/Katehuuh/Katehuuh.github.io/main/demos/CatBench/${relPath}`;
+}
+
+function attachSourceLink(td, sourcePath) {
+  const a = document.createElement('a');
+  a.className = 'source-link';
+  a.href = rawSourceUrl(sourcePath);
+  a.textContent = '.py';
+  a.title = 'view source';
+  a.addEventListener('click', e => e.stopPropagation());
+  td.appendChild(a);
+}
+
+function attachSvgAutoCrop(obj) {
+  obj.addEventListener('load', () => {
+    let svg;
+    try { svg = obj.contentDocument && obj.contentDocument.querySelector('svg'); }
+    catch (_) { return; }
+    if (!svg) return;
+    const vb = svg.viewBox && svg.viewBox.baseVal;
+    const fullW = (vb && vb.width) || svg.getBBox().width;
+    const fullH = (vb && vb.height) || svg.getBBox().height;
+    if (!fullW || !fullH) return;
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    const skip = new Set(['defs', 'metadata', 'title', 'desc', 'style']);
+    const walk = (el) => {
+      for (const c of el.children) {
+        const tag = (c.tagName || '').toLowerCase();
+        if (skip.has(tag)) continue;
+        if (tag === 'g') { walk(c); continue; }
+        try {
+          const b = c.getBBox();
+          if (tag === 'rect' && b.width >= fullW * 0.95 && b.height >= fullH * 0.95) continue;
+          if (b.width === 0 && b.height === 0) continue;
+          if (b.x < minX) minX = b.x;
+          if (b.y < minY) minY = b.y;
+          if (b.x + b.width > maxX) maxX = b.x + b.width;
+          if (b.y + b.height > maxY) maxY = b.y + b.height;
+        } catch (_) {}
+      }
+    };
+    walk(svg);
+    if (!isFinite(minX)) return;
+    let x = minX, y = minY, w = maxX - minX, h = maxY - minY;
+    if (w / fullW >= 0.92 && h / fullH >= 0.92) return;
+    const pad = Math.max(w, h) * 0.04;
+    x -= pad; y -= pad; w += 2 * pad; h += 2 * pad;
+    const side = Math.max(w, h);
+    x -= (side - w) / 2;
+    y -= (side - h) / 2;
+    svg.setAttribute('viewBox', `${x.toFixed(2)} ${y.toFixed(2)} ${side.toFixed(2)} ${side.toFixed(2)}`);
+    svg.removeAttribute('width');
+    svg.removeAttribute('height');
+    svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+  }, { once: true });
+}
+
+function setupLightbox() {
+  const lb = document.getElementById('lightbox');
+  const close = lb.querySelector('.lightbox-close');
+  close.addEventListener('click', () => closeLightbox());
+  lb.addEventListener('click', e => { if (e.target === lb) closeLightbox(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !lb.hidden) closeLightbox(); });
+}
+
+function openLightbox({ kind, path, label }) {
+  const lb = document.getElementById('lightbox');
+  const body = lb.querySelector('.lightbox-body');
+  body.innerHTML = '';
+  const isVector = kind === 'svg' && /\.svg$/i.test(path);
+  if (isVector) {
+    const obj = document.createElement('object');
+    obj.type = 'image/svg+xml';
+    obj.data = path;
+    attachSvgAutoCrop(obj);
+    body.appendChild(obj);
+  } else {
+    const img = document.createElement('img');
+    img.src = path;
+    img.alt = label || '';
+    body.appendChild(img);
+  }
+  lb.hidden = false;
+}
+
+function closeLightbox() {
+  const lb = document.getElementById('lightbox');
+  lb.hidden = true;
+  lb.querySelector('.lightbox-body').innerHTML = '';
+}
+</script>
+</body>
+</html>

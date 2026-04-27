@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PBR Sphere Viewer</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%; overflow: hidden;
+    background: #1a1a1a; color: #f5f5f5;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    font-size: 13px;
+  }
+  canvas { display: block; }
+
+  #info {
+    position: absolute; top: 14px; left: 16px;
+    font-family: ui-monospace, monospace; font-size: 12px;
+    color: rgba(255,255,255,.55); pointer-events: none;
+    letter-spacing: .04em;
+  }
+
+  #controls {
+    position: absolute; top: 14px; right: 14px;
+    width: 280px; max-height: calc(100vh - 28px);
+    overflow-y: auto;
+    background: rgba(18,18,22,.86);
+    -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+    border: 1px solid rgba(255,255,255,.09);
+    border-radius: 14px; padding: 16px;
+    scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.15) transparent;
+  }
+  #controls::-webkit-scrollbar { width: 4px; }
+  #controls::-webkit-scrollbar-thumb { background: rgba(255,255,255,.15); border-radius: 2px; }
+
+  #controls h2 {
+    margin: 14px 0 10px;
+    font-size: 13px; font-weight: 600;
+    color: #ff8a4c; letter-spacing: .03em;
+  }
+  #controls h2:first-child { margin-top: 0; }
+  #controls p { margin: 0 0 14px; color: rgba(255,255,255,.5); font-size: 12px; line-height: 1.45; }
+
+  .input-group { margin-bottom: 12px; }
+  .input-group label {
+    display: block; margin-bottom: 5px;
+    font-size: 12px; color: rgba(255,255,255,.7);
+  }
+  .input-wrapper { display: flex; align-items: center; gap: 6px; }
+  .input-wrapper input[type="file"] { flex: 1; min-width: 0; }
+
+  input[type="file"], select {
+    width: 100%; background: rgba(0,0,0,.32);
+    border: 1px solid rgba(255,255,255,.1); border-radius: 6px;
+    color: #f5f5f5; padding: 5px 7px; font-size: 12px;
+    font-family: inherit;
+  }
+  input[type="file"]::file-selector-button {
+    background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.1);
+    color: #f5f5f5; border-radius: 4px; padding: 2px 8px; font-size: 11px;
+    margin-right: 8px; cursor: pointer;
+  }
+  input[type="file"]::file-selector-button:hover { background: rgba(255,138,76,.18); }
+
+  input[type="range"] {
+    width: 100%; accent-color: #ff8a4c; height: 18px;
+  }
+
+  button.remove-texture-btn {
+    width: 26px; height: 26px; flex-shrink: 0;
+    background: rgba(0,0,0,.32); border: 1px solid rgba(255,255,255,.1);
+    border-radius: 5px; color: #f5f5f5; cursor: pointer;
+    font-size: 16px; line-height: 1; padding: 0;
+  }
+  button.remove-texture-btn:hover {
+    background: rgba(255,107,53,.18); border-color: #ff6b35; color: #ff8a4c;
+  }
+
+  @media (max-width: 540px) {
+    #controls { width: calc(100vw - 28px); right: 14px; left: 14px; }
+  }
+</style>
+</head>
+<body>
+
+<div id="info">PBR Viewer</div>
+
+<div id="controls">
+  <h2>PBR Material</h2>
+  <p>Upload textures to see them on the sphere. Use the &times; button to remove a texture.</p>
+
+  <div class="input-group">
+    <label for="albedo-input">Albedo / Color Map</label>
+    <div class="input-wrapper">
+      <input type="file" id="albedo-input" data-map-type="map" accept="image/*">
+      <button class="remove-texture-btn" data-map-type="map" title="Remove texture">&times;</button>
+    </div>
+  </div>
+  <div class="input-group">
+    <label for="normal-input">Normal Map</label>
+    <div class="input-wrapper">
+      <input type="file" id="normal-input" data-map-type="normalMap" accept="image/*">
+      <button class="remove-texture-btn" data-map-type="normalMap" title="Remove texture">&times;</button>
+    </div>
+  </div>
+  <div class="input-group">
+    <label for="metallic-input">Metallic Map</label>
+    <div class="input-wrapper">
+      <input type="file" id="metallic-input" data-map-type="metalnessMap" accept="image/*">
+      <button class="remove-texture-btn" data-map-type="metalnessMap" title="Remove texture">&times;</button>
+    </div>
+  </div>
+  <div class="input-group">
+    <label for="roughness-input">Roughness Map</label>
+    <div class="input-wrapper">
+      <input type="file" id="roughness-input" data-map-type="roughnessMap" accept="image/*">
+      <button class="remove-texture-btn" data-map-type="roughnessMap" title="Remove texture">&times;</button>
+    </div>
+  </div>
+  <div class="input-group">
+    <label for="ao-input">Ambient Occlusion Map</label>
+    <div class="input-wrapper">
+      <input type="file" id="ao-input" data-map-type="aoMap" accept="image/*">
+      <button class="remove-texture-btn" data-map-type="aoMap" title="Remove texture">&times;</button>
+    </div>
+  </div>
+  <div class="input-group">
+    <label for="displacement-input">Displacement / Height Map</label>
+    <div class="input-wrapper">
+      <input type="file" id="displacement-input" data-map-type="displacementMap" accept="image/*">
+      <button class="remove-texture-btn" data-map-type="displacementMap" title="Remove texture">&times;</button>
+    </div>
+  </div>
+  <div class="input-group">
+    <label for="displacement-scale">Displacement Scale: <span id="displacement-value">0.10</span></label>
+    <input type="range" id="displacement-scale" min="0" max="1" step="0.01" value="0.1">
+  </div>
+
+  <h2>Lighting &amp; Rendering</h2>
+  <div class="input-group">
+    <label for="exposure-slider">Exposure: <span id="exposure-value">1.00</span></label>
+    <input type="range" id="exposure-slider" min="0" max="2" step="0.05" value="1.0">
+  </div>
+  <div class="input-group">
+    <label for="envmap-select">Environment</label>
+    <select id="envmap-select"></select>
+  </div>
+  <div class="input-group">
+    <label for="envmap-input">Custom Environment (.hdr)</label>
+    <input type="file" id="envmap-input" accept=".hdr">
+  </div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
+
+// ─── scene ─────────────────────────────────────────────
+const scene = new THREE.Scene();
+const FALLBACK_BG = new THREE.Color(0x141418);
+scene.background = FALLBACK_BG;
+scene.backgroundBlurriness = 0;
+
+const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+camera.position.set(0, 0, 3.4);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.0;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+document.body.appendChild(renderer.domElement);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.minDistance = 1.5;
+controls.maxDistance = 8;
+
+// soft fill lights so even with no env map there's something to see
+scene.add(new THREE.HemisphereLight(0xfff7e8, 0x202028, 0.35));
+const key = new THREE.DirectionalLight(0xffffff, 0.9);
+key.position.set(4, 5, 6);
+scene.add(key);
+
+// ─── sphere + material ────────────────────────────────
+const geometry = new THREE.SphereGeometry(1, 256, 256);
+const material = new THREE.MeshStandardMaterial({
+  color: 0xffffff,
+  roughness: 1.0,
+  metalness: 0.0,
+});
+const sphere = new THREE.Mesh(geometry, material);
+scene.add(sphere);
+
+// ─── environment ──────────────────────────────────────
+const pmrem = new THREE.PMREMGenerator(renderer);
+pmrem.compileEquirectangularShader();
+
+const studioEnv = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+
+const envOptions = {
+  studio: studioEnv,
+  none: null,
+};
+const envSelect = document.getElementById('envmap-select');
+for (const name of Object.keys(envOptions)) {
+  const opt = document.createElement('option');
+  opt.value = name;
+  opt.textContent = name;
+  envSelect.appendChild(opt);
+}
+function applyEnv(name) {
+  const tex = envOptions[name] || null;
+  scene.environment = tex;
+  if (tex) {
+    scene.background = tex;
+    // synthesized "studio" looks better with a tiny blur as a backdrop;
+    // real HDRs already look like skies, no blur needed.
+    scene.backgroundBlurriness = name === 'studio' ? 0.25 : 0;
+  } else {
+    scene.background = FALLBACK_BG;
+    scene.backgroundBlurriness = 0;
+  }
+}
+envSelect.value = 'studio';
+applyEnv('studio');
+
+envSelect.addEventListener('change', () => applyEnv(envSelect.value));
+
+// custom HDR upload
+document.getElementById('envmap-input').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const url = URL.createObjectURL(file);
+  new RGBELoader().load(url, (hdr) => {
+    const envMap = pmrem.fromEquirectangular(hdr).texture;
+    hdr.dispose();
+    envOptions['custom'] = envMap;
+    if (![...envSelect.options].some(o => o.value === 'custom')) {
+      const opt = document.createElement('option');
+      opt.value = 'custom';
+      opt.textContent = 'custom';
+      envSelect.appendChild(opt);
+    }
+    envSelect.value = 'custom';
+    applyEnv('custom');
+    URL.revokeObjectURL(url);
+  }, undefined, (err) => {
+    console.error('failed to load HDR', err);
+    URL.revokeObjectURL(url);
+  });
+});
+
+// ─── texture inputs ───────────────────────────────────
+const texLoader = new THREE.TextureLoader();
+const SRGB_MAPS = new Set(['map']);
+
+function bindTextureInput(inputId, mapKey) {
+  const input = document.getElementById(inputId);
+  input.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const url = URL.createObjectURL(file);
+    texLoader.load(url, (tex) => {
+      tex.colorSpace = SRGB_MAPS.has(mapKey) ? THREE.SRGBColorSpace : THREE.NoColorSpace;
+      tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+      if (material[mapKey]) material[mapKey].dispose();
+      material[mapKey] = tex;
+      // aoMap requires uv2; SphereGeometry uses uv. Three accepts uv if uv2 absent in r158+, but be explicit.
+      material.needsUpdate = true;
+      URL.revokeObjectURL(url);
+    });
+  });
+
+  const btn = document.querySelector(`.remove-texture-btn[data-map-type="${mapKey}"]`);
+  if (btn) {
+    btn.addEventListener('click', () => {
+      if (material[mapKey]) {
+        material[mapKey].dispose();
+        material[mapKey] = null;
+        material.needsUpdate = true;
+      }
+      input.value = '';
+    });
+  }
+}
+
+bindTextureInput('albedo-input',       'map');
+bindTextureInput('normal-input',       'normalMap');
+bindTextureInput('metallic-input',     'metalnessMap');
+bindTextureInput('roughness-input',    'roughnessMap');
+bindTextureInput('ao-input',           'aoMap');
+bindTextureInput('displacement-input', 'displacementMap');
+
+// when there's a metalness or roughness map we want them to actually work,
+// so make sure the base scalars don't multiply them down to zero.
+function ensureScalars() {
+  if (material.metalnessMap)  material.metalness = 1.0;
+  if (material.roughnessMap)  material.roughness = 1.0;
+}
+const origUpdate = material.needsUpdate;
+Object.defineProperty(material, 'needsUpdate', {
+  set(v) { if (v) ensureScalars(); origUpdate?.call?.(material, v); },
+  get() { return false; },
+});
+
+// ─── sliders ──────────────────────────────────────────
+const dispRange = document.getElementById('displacement-scale');
+const dispLabel = document.getElementById('displacement-value');
+dispRange.addEventListener('input', (e) => {
+  const v = parseFloat(e.target.value);
+  material.displacementScale = v;
+  dispLabel.textContent = v.toFixed(2);
+});
+material.displacementScale = parseFloat(dispRange.value);
+
+const expRange = document.getElementById('exposure-slider');
+const expLabel = document.getElementById('exposure-value');
+expRange.addEventListener('input', (e) => {
+  const v = parseFloat(e.target.value);
+  renderer.toneMappingExposure = v;
+  expLabel.textContent = v.toFixed(2);
+});
+
+// ─── render loop ──────────────────────────────────────
+function tick() {
+  controls.update();
+  renderer.render(scene, camera);
+  requestAnimationFrame(tick);
+}
+tick();
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+</script>
+
+</body>
+</html>

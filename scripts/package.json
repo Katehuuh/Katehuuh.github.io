@@ -1,0 +1,11 @@
+{
+  "name": "catbench-livepage-build-scripts",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "thumbs": "node screenshot_thumbs.mjs"
+  },
+  "dependencies": {
+    "playwright": "^1.49.0"
+  }
+}

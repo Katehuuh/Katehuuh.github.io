@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Neon Drift: Cyber UI 2025</title>
+<style>
+    /* --- IMPORTS & FONTS --- */
+    @import url('https://unpkg.com/normalize.css') layer(normalize);
+    @font-face {
+        font-family: 'Cyber';
+        src: url('https://assets.codepen.io/605876/Blender-Pro-Bold.otf');
+        font-display: swap;
+    }
+
+    /* --- GAME CANVAS STYLES (Base Layer) --- */
+    html, body {
+        margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
+        background: #000;
+        font-family: 'Cyber', sans-serif;
+    }
+    #game-container { position: relative; width: 100%; height: 100%; }
+    canvas { display: block; width: 100%; height: 100%; }
+
+    /* --- UI VARIABLES & LAYERS --- */
+    :root {
+        --accent: hsl(183 38% 57%);
+        --shadow: hsl(10 100% 60%);
+        --border: 2px;
+        --corner: 12px;
+        --clip-one: polygon(0 2%,100% 2%,100% 95%,95% 95%,95% 90%,85% 90%,85% 95%,8% 95%,0 70%);
+        --clip-btn: polygon(0 0, 100% 0, 100% calc(100% - var(--corner)), calc(100% - var(--corner)) 100%, 0% 100%);
+    }
+
+    /* --- GAME HUD --- */
+    #hud {
+        position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+        width: 90%; max-width: 500px; display: flex; justify-content: space-between;
+        background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);
+        border: 1px solid var(--accent); padding: 10px;
+        clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
+        z-index: 10; pointer-events: none; opacity: 0; transition: opacity 0.5s;
+    }
+    #hud.visible { opacity: 1; }
+    .hud-group { color: #fff; font-size: 14px; display: flex; gap: 10px; align-items: center; }
+    .val { color: var(--accent); font-size: 18px; }
+    .boost-bar { width: 80px; height: 6px; background: rgba(255,255,255,0.1); transform: skewX(-20deg); }
+    .boost-fill { height: 100%; background: var(--shadow); width: 100%; box-shadow: 0 0 8px var(--shadow); }
+
+    /* --- CYBER MODAL CSS (Ported from Reference) --- */
+    .ui-overlay {
+        position: absolute; inset: 0; z-index: 100;
+        display: grid; place-items: center;
+        background: rgba(0,0,0,0.6);
+        backdrop-filter: blur(5px);
+        transition: opacity 0.3s;
+    }
+    .ui-overlay.hidden { opacity: 0; pointer-events: none; }
+
+    .modal {
+        position: relative;
+        width: clamp(340px, 55vw, 480px);
+        background: #0000;
+        color: var(--accent);
+        padding: 0;
+        /* The decorative borders */
+        --clip: polygon(0 0, 100% 0, 100% calc(100% - var(--corner)), calc(100% - var(--corner)) 100%, 0% 100%);
+    }
+
+    /* Modal Backdrop Construction */
+    .modal::before, .modal::after {
+        content: ''; position: absolute; top: 1px; bottom: 1px; right: 100%;
+        width: 1rem; border: var(--border) solid var(--accent);
+        translate: var(--border) 0;
+        backdrop-filter: saturate(180%) blur(6px);
+        transition: translate 0.5s ease-out, opacity 0.5s;
+        opacity: 0;
+    }
+    .modal.open::before, .modal.open::after { translate: -25% 0; opacity: 1; }
+    
+    .body__backdrop {
+        position: absolute; inset: 0;
+        z-index: -1;
+        transition: translate 0.5s ease-out;
+        translate: calc(-100% - 20px) 0;
+    }
+    .modal.open .body__backdrop { translate: 0 0; }
+
+    .backdrop {
+        position: absolute; inset: 0;
+        background: rgba(0,0,0,0.85);
+        clip-path: var(--clip);
+    }
+    /* The white/accent border outline */
+    .backdrop::before {
+        content: ''; position: absolute; inset: 0;
+        background: var(--accent);
+        border: var(--border) solid transparent;
+        clip-path: var(--clip);
+        mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
+        mask-composite: exclude;
+        z-index: 2;
+    }
+    /* The corner triangle */
+    .corner {
+        position: absolute; bottom: 0; right: 0; height: var(--corner); width: var(--corner);
+    }
+    .corner::after {
+        content: ''; height: calc(var(--border) * 2); width: 200%;
+        position: absolute; top: 50%; left: 50%;
+        translate: -50% -50%; transform: rotate(135deg);
+        background: var(--accent);
+    }
+
+    /* Content Area */
+    .modal__body {
+        padding: 2rem;
+        clip-path: inset(0 100% 0 0); /* Closed state */
+        transition: clip-path 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) 0.2s;
+    }
+    .modal.open .modal__body { clip-path: inset(0 -100% 0 0); }
+
+    h2 {
+        margin: 0 0 1rem 0; font-size: 1.5rem; text-transform: uppercase; position: relative;
+        color: #fff;
+    }
+    h2::after {
+        content: ''; height: var(--border); width: 100%;
+        position: absolute; bottom: -5px; left: 0;
+        background: var(--accent);
+        transform: scaleX(0); transform-origin: left;
+        transition: transform 0.4s ease 0.6s;
+    }
+    .modal.open h2::after { transform: scaleX(1); }
+
+    .body__text {
+        color: #aaa; line-height: 1.5; font-size: 0.95rem;
+        opacity: 0; transform: translateY(-10px);
+        transition: all 0.4s ease 0.7s;
+    }
+    .modal.open .body__text { opacity: 1; transform: translateY(0); }
+
+    /* Buttons */
+    .modal__actions {
+        display: flex; justify-content: flex-end; gap: 1rem; margin-top: 1.5rem;
+        opacity: 0; transform: translateX(-20px);
+        transition: all 0.4s ease 0.9s;
+    }
+    .modal.open .modal__actions { opacity: 1; transform: translateX(0); }
+
+    .cyber-btn {
+        position: relative;
+        font-family: 'Cyber', sans-serif;
+        text-transform: uppercase;
+        display: flex; align-items: center; gap: 0.5rem;
+        padding: 0.8rem 1.5rem;
+        border: 0; background: transparent;
+        color: var(--accent); cursor: pointer;
+        font-size: 1.1rem;
+    }
+    
+    .cyber-btn .btn-backdrop {
+        position: absolute; inset: 0; z-index: -1;
+        background: rgba(0, 255, 255, 0.05);
+        clip-path: var(--clip-btn);
+        transition: background 0.2s;
+    }
+    .cyber-btn:hover { color: #fff; }
+    .cyber-btn:hover .btn-backdrop { background: var(--accent); }
+    .cyber-btn:hover kbd { color: var(--accent); background: #000; }
+
+    kbd {
+        color: #000; font-weight: bold; width: 24px; aspect-ratio: 1;
+        font-size: 14px; border-radius: 50%; background: var(--accent);
+        display: grid; place-items: center;
+        transition: all 0.2s;
+    }
+
+    /* Glitch Effect on Button Hover */
+    .glitch {
+        display: none; position: absolute; inset: 0;
+        align-items: center; gap: 0.5rem; padding: 0.8rem 1.5rem;
+        pointer-events: none; color: var(--shadow);
+        text-shadow: 2px 0 #fff;
+        background: transparent;
+    }
+    .cyber-btn:hover .glitch { display: flex; animation: glitch-anim 0.3s infinite; }
+
+    @keyframes glitch-anim {
+        0% { clip-path: inset(20% 0 80% 0); transform: translate(-2px, 1px); }
+        20% { clip-path: inset(60% 0 10% 0); transform: translate(2px, -1px); }
+        40% { clip-path: inset(40% 0 50% 0); transform: translate(-2px, 2px); }
+        60% { clip-path: inset(80% 0 5% 0); transform: translate(1px, -2px); }
+        80% { clip-path: inset(10% 0 70% 0); transform: translate(-1px, 1px); }
+        100% { clip-path: inset(30% 0 20% 0); transform: translate(2px, -1px); }
+    }
+    
+    .letters span:nth-child(odd) { display: inline-block; transform: scaleY(-1); }
+
+    /* Joystick for Mobile */
+    #joystickWrapper { position: absolute; bottom: 40px; left: 40px; width: 120px; height: 120px; z-index: 50; display: none; }
+    @media (max-width: 900px) { #joystickWrapper { display: block; } }
+    #joystickBase { width: 100%; height: 100%; border: 2px solid rgba(255,255,255,0.2); border-radius: 50%; position: relative; }
+    #joystickThumb { width: 50px; height: 50px; background: var(--accent); border-radius: 50%; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); box-shadow: 0 0 15px var(--accent); }
+
+</style>
+</head>
+<body>
+
+<div id="game-container">
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- HUD -->
+    <div id="hud">
+        <div class="hud-group">
+            <span>POS</span><span class="val" id="uiPos">2/2</span>
+        </div>
+        <div class="hud-group">
+            <span>DIST</span><span class="val" id="uiDist">0%</span>
+        </div>
+        <div class="hud-group">
+            <div class="boost-bar"><div class="boost-fill" id="uiBoost"></div></div>
+            <span>BST</span>
+        </div>
+    </div>
+
+    <!-- MAIN MENU / GAME OVER OVERLAY -->
+    <div id="uiOverlay" class="ui-overlay">
+        <!-- The CyberPopover Structure -->
+        <div class="modal open" id="modalCard">
+            
+            <div class="body__backdrop">
+                <div class="backdrop">
+                    <div class="corner"></div>
+                </div>
+            </div>
+
+            <div class="modal__body">
+                <div style="position: absolute; right: 10px; top: 10px; font-size: 10px; opacity: 0.5;">v2.0.25</div>
+                
+                <h2 id="modalTitle"><span>NEON DRIFT: PROTOCOL</span></h2>
+                
+                <div class="body__text" id="modalText">
+                    <p>
+                        High-speed pursuit initiated. Intercept the target bot.
+                        <br><br>
+                        Steer with <strong>[A] / [D]</strong>.
+                        Boost with <strong>[SPACE]</strong>.
+                        <br>
+                        Avoid collisions. Maintain velocity.
+                    </p>
+                </div>
+
+                <div class="modal__actions">
+                    <!-- The Special Glitch Button -->
+                    <button class="cyber-btn" onclick="Game.start()" onmouseenter="Game.uiHover()">
+                        <span class="btn-backdrop">
+                            <span class="corner"></span>
+                        </span>
+                        
+                        <kbd>↵</kbd>
+                        <span id="btnText">INITIALIZE</span>
+                        
+                        <!-- Glitch Layer (Auto activates on hover) -->
+                        <div class="glitch" aria-hidden="true">
+                            <span class="btn-backdrop"></span>
+                            <kbd>↵</kbd>
+                            <span class="letters" id="glitchText">
+                                <span>I</span><span>N</span><span>I</span><span>T</span>
+                            </span>
+                        </div>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- JOYSTICK -->
+    <div id="joystickWrapper">
+        <div id="joystickBase"><div id="joystickThumb"></div></div>
+    </div>
+</div>
+
+<script>
+const Game = (function () {
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d', { alpha: false });
+
+    // --- CONFIG ---
+    const CFG = {
+        ROAD_W: 0.6, LEN: 50000, SPD: 500, BOOST: 950,
+        ACCEL: 300, FRIC: 150, TURN: 450, DRAG: 0.94,
+        BOT_SPD: 515, BOT_RB: 160
+    };
+
+    let state = {
+        run: false, time: 0, last: 0, w: 0, h: 0, scroll: 0, shake: 0, diff: 1,
+        p: { x:0, y:0, dist:0, spd:0, boost:100, w:0, h:0 },
+        b: { x:0, y:0, dist:0, spd:0, w:0, h:0 },
+        obs: [], dec: [], part: [],
+        keys: { l: false, r: false, b: false },
+        joy: { on: false, id: null, x: 0, y: 0, cx:0, cy:0, r:0 }
+    };
+
+    // --- UI REFS ---
+    const els = {
+        over: document.getElementById('uiOverlay'),
+        modal: document.getElementById('modalCard'),
+        title: document.getElementById('modalTitle'),
+        text: document.getElementById('modalText'),
+        btnTxt: document.getElementById('btnText'),
+        gliTxt: document.getElementById('glitchText'),
+        hud: document.getElementById('hud'),
+        dist: document.getElementById('uiDist'),
+        pos: document.getElementById('uiPos'),
+        bst: document.getElementById('uiBoost')
+    };
+
+    // --- AUDIO ---
+    let actx, engOsc, engGn, sfxGn;
+    function initAudio() {
+        if(!window.AudioContext && !window.webkitAudioContext) return;
+        actx = new (window.AudioContext || window.webkitAudioContext)();
+        
+        // Engine Synth
+        engOsc = actx.createOscillator(); engOsc.type='sawtooth';
+        engGn = actx.createGain(); engGn.gain.value=0;
+        const f = actx.createBiquadFilter(); f.frequency.value=300;
+        engOsc.connect(f).connect(engGn).connect(actx.destination);
+        engOsc.start();
+
+        // SFX Bus
+        sfxGn = actx.createGain(); sfxGn.gain.value=0.25;
+        sfxGn.connect(actx.destination);
+    }
+    
+    function playTone(type, f1, f2, t, v) {
+        if(!actx) return;
+        const o=actx.createOscillator(); const g=actx.createGain();
+        o.type=type; o.frequency.setValueAtTime(f1, actx.currentTime);
+        if(f2) o.frequency.exponentialRampToValueAtTime(f2, actx.currentTime+t);
+        g.gain.setValueAtTime(v, actx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.01, actx.currentTime+t);
+        o.connect(g).connect(sfxGn);
+        o.start(); o.stop(actx.currentTime+t+0.1);
+    }
+    function uiHover() { playTone('sine', 1200, 800, 0.05, 0.1); }
+    function uiStart() { playTone('square', 200, 800, 0.4, 0.2); }
+
+    // --- INPUT ---
+    function setKey(k, v) {
+        if(['arrowleft','a'].includes(k)) state.keys.l = v;
+        if(['arrowright','d'].includes(k)) state.keys.r = v;
+        if([' ','shift','arrowup','w'].includes(k)) state.keys.b = v;
+    }
+    window.addEventListener('keydown', e => {
+        setKey(e.key.toLowerCase(), true);
+        if(e.key === 'Enter' && !state.run && !els.over.classList.contains('hidden')) start();
+    });
+    window.addEventListener('keyup', e => setKey(e.key.toLowerCase(), false));
+
+    // Joystick
+    const jb = document.getElementById('joystickBase');
+    const jt = document.getElementById('joystickThumb');
+    jb.addEventListener('pointerdown', e => {
+        state.joy.on=true; state.joy.id=e.pointerId;
+        const r=jb.getBoundingClientRect();
+        state.joy.cx=r.left+r.width/2; state.joy.cy=r.top+r.height/2; state.joy.r=r.width/2;
+        jb.setPointerCapture(e.pointerId);
+        moveJoy(e.clientX, e.clientY);
+    });
+    window.addEventListener('pointermove', e => {
+        if(state.joy.on && e.pointerId===state.joy.id) moveJoy(e.clientX, e.clientY);
+    });
+    window.addEventListener('pointerup', e => {
+        if(state.joy.on && e.pointerId===state.joy.id) {
+            state.joy.on=false; state.joy.x=0; state.joy.y=0;
+            jt.style.transform='translate(-50%,-50%)';
+        }
+    });
+    function moveJoy(mx, my) {
+        let dx=mx-state.joy.cx, dy=my-state.joy.cy;
+        const d=Math.sqrt(dx*dx+dy*dy);
+        if(d>state.joy.r) { dx=(dx/d)*state.joy.r; dy=(dy/d)*state.joy.r; }
+        state.joy.x = dx/state.joy.r; state.joy.y = dy/state.joy.r;
+        jt.style.transform=`translate(-50%,-50%) translate(${dx}px,${dy}px)`;
+    }
+
+    // --- LOGIC ---
+    function resize() {
+        canvas.width=window.innerWidth; canvas.height=window.innerHeight;
+        state.w=canvas.width; state.h=canvas.height;
+        const rw = state.w * CFG.ROAD_W;
+        state.p.w = rw*0.14; state.p.h = state.p.w*1.8;
+        state.b.w = state.p.w; state.b.h = state.p.h;
+    }
+
+    function update(dt) {
+        if(!state.run) return;
+        state.time += dt;
+
+        const p=state.p, b=state.b;
+        
+        // Input
+        let steer = state.joy.on ? state.joy.x : (state.keys.r?1:0) - (state.keys.l?1:0);
+        let boost = state.keys.b || (state.joy.on && state.joy.y<-0.3);
+        
+        let tgt = CFG.SPD;
+        if(boost && p.boost>0) {
+            tgt = CFG.BOOST; p.boost -= dt*40;
+            if(Math.random()>0.5) state.part.push({x:p.x, y:p.y+p.h/2, vx:(Math.random()-0.5)*100, vy:100, l:1, c:'#0ff'});
+        } else {
+            p.boost = Math.min(100, p.boost + dt*10);
+        }
+
+        // Phys
+        if(p.spd<tgt) p.spd+=CFG.ACCEL*dt; else p.spd-=CFG.FRIC*dt;
+        const step = p.spd*dt;
+        p.dist += step; state.scroll += step;
+        p.x += steer * CFG.TURN * dt;
+
+        const cx = state.w/2, rw = state.w*CFG.ROAD_W, rl = cx-rw/2, rr = cx+rw/2;
+        if(p.x < rl+p.w/2) { p.x=rl+p.w/2; p.spd*=CFG.DRAG; }
+        if(p.x > rr-p.w/2) { p.x=rr-p.w/2; p.spd*=CFG.DRAG; }
+
+        // Bot
+        let bTgt = CFG.BOT_SPD * state.diff;
+        const diff = p.dist - b.dist;
+        if(diff>600) bTgt += CFG.BOT_RB; if(diff<-600) bTgt -= CFG.BOT_RB;
+        if(b.spd<bTgt) b.spd+=CFG.ACCEL*dt; else b.spd-=CFG.FRIC*dt;
+        b.dist += b.spd*dt;
+        
+        let bOff = b.x-cx;
+        let bDes = Math.sin(state.scroll*0.003)*rw*0.2;
+        // Simple avoid
+        state.obs.forEach(o => {
+            if(o.dist>b.dist && o.dist-b.dist<600 && Math.abs((cx+o.off)-b.x)<rw*0.15) {
+                bDes = o.off > bOff ? bOff-rw*0.3 : bOff+rw*0.3;
+            }
+        });
+        b.x += (cx+bDes-b.x)*dt*3;
+        b.x = Math.max(rl+b.w/2, Math.min(rr-b.w/2, b.x));
+        b.y = p.y - (b.dist - p.dist);
+
+        // Gen
+        if(Math.random()<0.015 && p.dist < CFG.LEN-1000) {
+            state.obs.push({dist: p.dist+2000, off:(Math.random()-0.5)*rw*0.8, type: Math.random()>0.5});
+        }
+        if(Math.random()<0.04) {
+            state.dec.push({dist: p.dist+2000, side: Math.random()>0.5?1:-1, type: Math.random()});
+        }
+
+        // Collisions
+        state.obs.forEach((o,i) => {
+            o.y = p.y-(o.dist-p.dist); o.x = cx+o.off;
+            if(Math.abs(p.x-o.x)<p.w*0.7 && Math.abs(p.y-o.y)<p.h*0.6) {
+                p.spd*=0.5; state.shake=20; playTone('sawtooth', 100, 50, 0.2, 0.5);
+                state.obs.splice(i,1);
+            }
+            if(o.y>state.h+100) state.obs.splice(i,1);
+        });
+        state.dec.forEach((d,i) => {
+            d.y = p.y-(d.dist-p.dist);
+            d.x = (d.side===1 ? rr+50 : rl-50) + d.side*d.type*50;
+            if(d.y>state.h+100) state.dec.splice(i,1);
+        });
+
+        // Bot Hit
+        if(Math.abs(p.x-b.x)<p.w*0.8 && Math.abs(p.y-b.y)<p.h*0.8) {
+            const push = p.x<b.x ? -5 : 5; p.x+=push; b.x-=push; p.spd*=0.9; state.shake=10;
+        }
+
+        if(state.shake>0) state.shake -= dt*50;
+
+        // Sound
+        if(engOsc) {
+            const n = p.spd/CFG.BOOST;
+            engOsc.frequency.value = 60 + n*120;
+            engGn.gain.value = 0.05 + n*0.1;
+        }
+
+        // HUD
+        els.dist.textContent = Math.floor((p.dist/CFG.LEN)*100) + '%';
+        els.pos.textContent = p.dist>=b.dist ? '1/2' : '2/2';
+        els.bst.style.width = p.boost + '%';
+        els.bst.style.background = p.boost<20 ? '#f00' : 'var(--shadow)';
+
+        if(p.dist>=CFG.LEN || b.dist>=CFG.LEN) end(p.dist>=b.dist);
+    }
+
+    function draw() {
+        const w=state.w, h=state.h, cx=w/2, p=state.p;
+        
+        ctx.fillStyle='#050505'; ctx.fillRect(0,0,w,h);
+        ctx.save();
+        if(state.shake>0) ctx.translate((Math.random()-0.5)*state.shake, (Math.random()-0.5)*state.shake);
+
+        // Road
+        const rw = w*CFG.ROAD_W, rl = cx-rw/2, rr = cx+rw/2;
+        
+        // Grid
+        ctx.strokeStyle='rgba(0,255,255,0.1)'; ctx.lineWidth=1; ctx.beginPath();
+        const off = state.scroll % 40;
+        for(let y=-off; y<h; y+=40) { ctx.moveTo(0,y); ctx.lineTo(w,y); }
+        ctx.moveTo(rl,0); ctx.lineTo(rl,h); ctx.moveTo(rr,0); ctx.lineTo(rr,h);
+        ctx.stroke();
+
+        ctx.fillStyle='#111'; ctx.fillRect(rl,0,rw,h);
+
+        // Decor
+        state.dec.forEach(d => {
+            const sz = 60 + d.type*40;
+            ctx.fillStyle='#080808'; ctx.fillRect(d.x-sz/2, d.y-sz, sz, sz);
+            ctx.fillStyle='rgba(0,255,255,0.1)'; if(d.type>0.5) ctx.fillRect(d.x-5, d.y-sz+10, 10, sz-20);
+        });
+
+        // Stripes
+        const soff = state.scroll % 160;
+        for(let y=-160; y<h; y+=160) {
+            const dy=y+soff;
+            ctx.fillStyle='rgba(255,255,255,0.05)'; ctx.fillRect(cx-2, dy, 4, 80);
+            const red = Math.floor((state.scroll+y)/160)%2===0;
+            ctx.fillStyle=red?'#f03':'#fff'; ctx.fillRect(rl-10, dy, 10, 80); ctx.fillRect(rr, dy, 10, 80);
+        }
+
+        // Finish
+        if(CFG.LEN-p.dist < h) {
+            ctx.fillStyle='#fff'; ctx.fillRect(rl, p.y-(CFG.LEN-p.dist), rw, 20);
+        }
+
+        // Obs
+        state.obs.forEach(o => {
+            ctx.fillStyle = o.type ? '#f90' : '#666';
+            ctx.beginPath();
+            if(o.type) { ctx.moveTo(o.x, o.y-20); ctx.lineTo(o.x-15, o.y+15); ctx.lineTo(o.x+15, o.y+15); }
+            else ctx.fillRect(o.x-25, o.y-15, 50, 30);
+            ctx.fill();
+        });
+
+        // Cars
+        drawCar(state.b, '#0af');
+        drawCar(state.p, '#f05');
+
+        // Particles
+        state.part.forEach((pt,i) => {
+            ctx.globalAlpha=pt.l; ctx.fillStyle=pt.c;
+            ctx.beginPath(); ctx.arc(pt.x, pt.y, 3, 0, 7); ctx.fill();
+            pt.x+=pt.vx*0.016; pt.y+=pt.vy*0.016; pt.l-=0.05; if(pt.l<=0) state.part.splice(i,1);
+        });
+        ctx.globalAlpha=1;
+
+        ctx.restore();
+    }
+
+    function drawCar(c, col) {
+        const x=c.x, y=c.y, w=c.w, h=c.h;
+        ctx.fillStyle='rgba(0,0,0,0.5)'; ctx.beginPath(); ctx.ellipse(x, y+10, w/2, h/2, 0,0,7); ctx.fill();
+        ctx.fillStyle=col; ctx.beginPath(); ctx.roundRect(x-w/2,y-h/2,w,h,6); ctx.fill();
+        ctx.fillStyle='#000'; ctx.fillRect(x-w*0.3, y-h*0.3, w*0.6, h*0.25);
+        ctx.fillStyle='#ff0'; ctx.fillRect(x-w/2+2, y-h/2, 5, 4); ctx.fillRect(x+w/2-7, y-h/2, 5, 4);
+    }
+
+    // --- GAME CONTROL ---
+    function loop(now) {
+        const dt = Math.min((now-state.last)/1000, 0.1);
+        state.last=now;
+        update(dt);
+        draw();
+        requestAnimationFrame(loop);
+    }
+
+    function start() {
+        if(!actx) initAudio();
+        if(actx && actx.state==='suspended') actx.resume();
+        uiStart();
+
+        // Close Modal Transition
+        els.modal.classList.remove('open');
+        els.over.classList.add('hidden');
+        els.hud.classList.add('visible');
+
+        state.run = true;
+        state.diff = 1;
+        state.p.dist=0; state.p.spd=0; state.p.boost=100; state.p.x=state.w/2; state.p.y=state.h*0.75;
+        state.b.dist=0; state.b.spd=0; state.b.x=state.w/2+50; state.b.y=state.h*0.75;
+        state.obs=[]; state.dec=[]; state.time=0;
+        resize();
+    }
+
+    function end(win) {
+        state.run = false;
+        if(engGn) engGn.gain.value=0;
+
+        els.hud.classList.remove('visible');
+        els.over.classList.remove('hidden');
+        // Trigger Modal Open Animation
+        setTimeout(() => els.modal.classList.add('open'), 50);
+
+        els.title.innerHTML = win ? `<span style="color:var(--accent)">MISSION COMPLETE</span>` : `<span style="color:var(--shadow)">CRITICAL FAILURE</span>`;
+        els.text.innerHTML = win 
+            ? `Target neutralized.<br>Race time: ${state.time.toFixed(2)}s.<br>Rank: S-Class.` 
+            : `Systems critical.<br>Bot escaped.<br>Recommend immediate retry.`;
+        
+        els.btnTxt.textContent = "RETRY";
+        els.gliTxt.innerHTML = "<span>R</span><span>E</span><span>T</span><span>R</span><span>Y</span>";
+        
+        if(win) state.diff += 0.2;
+    }
+
+    window.addEventListener('resize', resize);
+    resize();
+    requestAnimationFrame(loop);
+
+    return { start, uiHover };
+})();
+</script>
+</body>
+</html>

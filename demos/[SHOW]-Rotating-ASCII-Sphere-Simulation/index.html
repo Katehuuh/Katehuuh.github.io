@@ -1,0 +1,865 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Rotating ASCII Sphere</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%; overflow: hidden;
+    background: #000; color: #f4f4f6;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  }
+  canvas { display: block; }
+  /* The cosmic disk sits behind the ASCII sphere. p5 canvas uses clear()
+     so the disk shows through the transparent gaps. */
+  #cosmic-canvas { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+  .p5Canvas { position: fixed; inset: 0; z-index: 1; }
+
+  .prompt {
+    position: fixed; left: 50%; bottom: clamp(20px, 3vw, 36px);
+    transform: translateX(-50%);
+    z-index: 5;
+    max-width: min(1400px, calc(100vw - 32px));
+    padding: clamp(18px, 2.4vw, 32px) clamp(24px, 4vw, 56px);
+    background: rgba(28, 28, 32, .72);
+    -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, .08);
+    border-radius: clamp(16px, 2vw, 28px);
+    color: rgba(244, 244, 246, .85);
+    font-size: clamp(18px, 2.2vw, 30px);
+    line-height: 1.5;
+    text-align: center;
+    pointer-events: auto;     /* let user select prompt text + click sound toggle */
+    user-select: text;
+    cursor: text;
+  }
+  .sound-toggle {
+    position: absolute; top: 10px; right: 14px;
+    background: rgba(255, 255, 255, .06);
+    border: 1px solid rgba(255, 255, 255, .18);
+    color: rgba(244, 244, 246, .7);
+    font-family: ui-monospace, monospace;
+    font-size: 11px;
+    letter-spacing: .06em;
+    padding: 4px 10px;
+    border-radius: 999px;
+    cursor: pointer;
+    user-select: none;
+    transition: background .15s, color .15s, border-color .15s;
+  }
+  .sound-toggle:hover { background: rgba(255, 255, 255, .12); color: #fff; }
+  .sound-toggle.on {
+    color: rgba(255, 138, 76, .95);
+    border-color: rgba(255, 138, 76, .45);
+    background: rgba(255, 138, 76, .08);
+  }
+  .prompt::before {
+    content: "prompt";
+    display: inline-block;
+    font-family: ui-monospace, monospace;
+    font-size: clamp(11px, 1vw, 14px);
+    letter-spacing: .12em;
+    color: rgba(255, 138, 76, .9);
+    border: 1px solid rgba(255, 138, 76, .35);
+    background: rgba(255, 138, 76, .08);
+    padding: clamp(2px, .25vw, 4px) clamp(8px, 1vw, 12px);
+    border-radius: 999px;
+    margin-right: clamp(10px, 1vw, 14px);
+    vertical-align: middle;
+  }
+  .hint {
+    position: fixed; top: 14px; left: 50%; transform: translateX(-50%);
+    z-index: 5;
+    font-family: ui-monospace, monospace; font-size: 11px;
+    color: rgba(244, 244, 246, .35);
+    letter-spacing: .08em; text-transform: uppercase;
+    pointer-events: none; user-select: none;
+    transition: opacity .4s ease;
+  }
+  #audio-status {
+    position: fixed; bottom: 14px; right: 14px; z-index: 5;
+    font-family: ui-monospace, monospace; font-size: 10px;
+    color: rgba(244, 244, 246, .25);
+    letter-spacing: .04em;
+    pointer-events: none; user-select: none;
+    transition: opacity .6s ease;
+  }
+</style>
+</head>
+<body>
+
+<div class="hint" id="hint">hover · click for more</div>
+<div class="prompt"><button class="sound-toggle" id="sound-toggle" type="button" aria-label="toggle sound">sound off</button>I'd like to make a p5.js simulation of a sphere made up of ASCII numbers, rotating. The closest numbers should be pure white, and the farthest ones should fade to gray, on a black background</div>
+
+<canvas id="cosmic-canvas"></canvas>
+<div id="audio-status">audio: idle</div>
+
+<!-- ───── shared state between the p5 sphere and the cosmic-disk module ───── -->
+<script>
+window.__sphere = { mode: 0 };
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/p5@1.9.0/lib/p5.min.js"></script>
+
+<!-- ───── COSMIC DISK + AUDIO MODULE ─────────────────────────────────────────
+     Two MP3s live alongside this index.html. They get fetched + decoded
+     into AudioBuffers on page load; A runs through a HPF + LPF + reverb
+     chain ("DJ in the next room" feel), B is clean. Crossfade gain
+     follows window.__sphere.mode (set by the p5 sphere on hover). FFT
+     bins from the actual playing audio drive the disk shader's
+     uBass/uMid/uHigh/uRaw uniforms. Disk renders with Three.js
+     underneath the sphere via z-index. To swap tracks: replace the MP3s
+     and update TRACK_A_FILE / TRACK_B_FILE constants. To retune the
+     filter: edit the FILTER_*/REVERB_* constants at the top of the
+     module and reload — no audio re-encoding needed.
+─────────────────────────────────────────────────────────────────────────── -->
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+</script>
+<script type="module">
+import * as THREE from 'three';
+
+// ─── Audio tweakable params ─────────────────────────────────────────────
+// Track A is the "DJ in the next room" filter chain — bass passes through
+// the wall, mids/highs are killed, big reverb tail.
+const TRACK_A_FILE   = 'Breathing Underwater - Jamra.mp3';
+const TRACK_B_FILE   = 'Downfall - Kisnou.mp3';
+const TRACK_RATE_A   = 1.00;     // 1.0 = no slowdown. Drop to 0.85 if you want "slowed reverb" pitch shift.
+const TRACK_RATE_B   = 1.00;
+const FILTER_HPF_HZ  = 50;       // cut sub-rumble that wouldn't realistically pass through a wall
+const FILTER_LPF_HZ  = 280;      // kill mids/highs above this — lower = more muffled "wall between rooms"
+const REVERB_SECONDS = 4.0;      // tail length — longer = bigger room
+const REVERB_DECAY   = 1.6;      // higher = more abrupt fadeout
+const REVERB_WET     = 0.65;     // 0..1 — higher = more cavernous
+
+const statusEl = document.getElementById('audio-status');
+const setStatus = (s, hideAfter=0) => {
+  statusEl.textContent = s;
+  statusEl.style.opacity = '1';
+  if (hideAfter) setTimeout(() => statusEl.style.opacity = '0', hideAfter);
+};
+
+// ─── Three.js scene ─────────────────────────────────────────────────────
+const renderer = new THREE.WebGLRenderer({ antialias:false, alpha:true,
+  canvas: document.getElementById('cosmic-canvas') });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setClearColor(0x000000, 0);
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 100);
+camera.position.set(0, 6, 12);
+camera.lookAt(0, 0, 0);
+
+// Particles — radial cloud around y=0 plane, dense around a 2.5-radius
+// hole where the ASCII sphere sits (sphere is on top via z-index, the
+// hole shows the void around it)
+const COUNT = 220000;
+const positions = new Float32Array(COUNT * 3);
+const randoms = new Float32Array(COUNT);
+for (let i = 0; i < COUNT; i++) {
+  const r = 2.5 + Math.pow(Math.random(), 1.5) * 9.0;
+  const t = Math.random() * Math.PI * 2;
+  positions[i*3]   = Math.cos(t) * r;
+  positions[i*3+1] = (Math.random() - 0.5) * 0.15;
+  positions[i*3+2] = Math.sin(t) * r;
+  randoms[i] = Math.random();
+}
+const geo = new THREE.BufferGeometry();
+geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+geo.setAttribute('aRandom',  new THREE.BufferAttribute(randoms, 1));
+
+const vertexShader = `
+  uniform float uTime, uBass, uMid, uHigh, uRaw;
+  attribute float aRandom;
+  varying vec3 vPosition;
+  varying float vDistance, vAngle;
+
+  vec4 permute(vec4 x){return mod(((x*34.0)+1.0)*x,289.0);}
+  vec4 taylorInvSqrt(vec4 r){return 1.79284291400159-0.85373472095314*r;}
+  float snoise(vec3 v){
+    const vec2 C=vec2(1.0/6.0,1.0/3.0);const vec4 D=vec4(0,0.5,1,2);
+    vec3 i=floor(v+dot(v,C.yyy));vec3 x0=v-i+dot(i,C.xxx);
+    vec3 g=step(x0.yzx,x0.xyz);vec3 l=1.0-g;
+    vec3 i1=min(g.xyz,l.zxy);vec3 i2=max(g.xyz,l.zxy);
+    vec3 x1=x0-i1+C.xxx;vec3 x2=x0-i2+2.0*C.xxx;vec3 x3=x0-1.0+3.0*C.xxx;
+    i=mod(i,289.0);
+    vec4 p=permute(permute(permute(i.z+vec4(0,i1.z,i2.z,1))+i.y+vec4(0,i1.y,i2.y,1))+i.x+vec4(0,i1.x,i2.x,1));
+    float n_=1.0/7.0;vec3 ns=n_*D.wyz-D.xzx;
+    vec4 j=p-49.0*floor(p*ns.z*ns.z);
+    vec4 x_=floor(j*ns.z);vec4 y_=floor(j-7.0*x_);
+    vec4 x=x_*ns.x+ns.yyyy;vec4 y=y_*ns.x+ns.yyyy;
+    vec4 h=1.0-abs(x)-abs(y);
+    vec4 b0=vec4(x.xy,y.xy);vec4 b1=vec4(x.zw,y.zw);
+    vec4 s0=floor(b0)*2.0+1.0;vec4 s1=floor(b1)*2.0+1.0;
+    vec4 sh=-step(h,vec4(0));
+    vec4 a0=b0.xzyw+s0.xzyw*sh.xxyy;vec4 a1=b1.xzyw+s1.xzyw*sh.zzww;
+    vec3 p0=vec3(a0.xy,h.x);vec3 p1=vec3(a0.zw,h.y);vec3 p2=vec3(a1.xy,h.z);vec3 p3=vec3(a1.zw,h.w);
+    vec4 norm=taylorInvSqrt(vec4(dot(p0,p0),dot(p1,p1),dot(p2,p2),dot(p3,p3)));
+    p0*=norm.x;p1*=norm.y;p2*=norm.z;p3*=norm.w;
+    vec4 m=max(0.6-vec4(dot(x0,x0),dot(x1,x1),dot(x2,x2),dot(x3,x3)),0.0);
+    m=m*m;
+    return 42.0*dot(m*m,vec4(dot(p0,x0),dot(p1,x1),dot(p2,x2),dot(p3,x3)));
+  }
+
+  void main(){
+    vPosition = position;
+    float dist = length(position.xz);
+    vDistance = dist;
+
+    float speedMult = 1.0 + uBass * 2.0;
+    float angle = uTime * speedMult * (0.6 / (dist + 0.5));
+    float s = sin(angle), c = cos(angle);
+    vec3 pos = position;
+    pos.x = position.x*c - position.z*s;
+    pos.z = position.x*s + position.z*c;
+    vAngle = atan(pos.z, pos.x);
+
+    float dip = smoothstep(5.0, 1.0, dist) * -0.8;
+    pos.y += dip;
+
+    float shellAmp = 0.5 + uMid * 2.5;
+    float shell = sin(dist * 3.5 - vAngle);
+    pos.y += smoothstep(0.0, 1.0, shell) * shellAmp;
+
+    float creaseAng = vAngle + uTime * 0.15;
+    float crease = smoothstep(0.2, 0.0, abs(sin(creaseAng))) * smoothstep(2.5, 8.0, dist);
+    pos.y -= crease * (1.2 + uBass * 1.5);
+    pos.y += smoothstep(0.2, 0.0, abs(sin(creaseAng + 0.15))) * 0.6;
+
+    float wave = sin(dist*2.0 - uTime*3.0) * uBass * 1.8;
+    wave += sin(dist*5.0 + uTime*2.0) * uHigh * 0.8;
+    pos.y += wave * smoothstep(2.5, 4.0, dist);
+
+    float noiseAmp = 0.4 + uRaw * 1.5;
+    float n = snoise(vec3(pos.x*0.3, pos.y*0.3 + uTime*0.2, pos.z*0.3));
+    pos.y += n * noiseAmp;
+
+    vec4 mv = modelViewMatrix * vec4(pos, 1.0);
+    gl_Position = projectionMatrix * mv;
+    float sizeBoost = 1.0 + uRaw * 3.0;
+    gl_PointSize = (8.0 * aRandom * sizeBoost) / -mv.z;
+  }
+`;
+
+const fragmentShader = `
+  uniform float uTime, uBass, uMid, uHigh, uRaw;
+  varying float vDistance, vAngle;
+
+  void main(){
+    if (vDistance < 2.5) discard;
+    float dc = length(gl_PointCoord - vec2(0.5));
+    if (dc > 0.5) discard;
+    float a0 = 1.0 - dc * 2.0;
+    float alpha = a0 * sqrt(a0);   // pow(x, 1.5) without log/exp
+
+    float b = uBass, m = uMid, h = uHigh;
+    vec3 cCore  = vec3(3.5 + b*3.0, 1.8 + m*2.0, 0.5);
+    vec3 cInner = vec3(2.5, 0.5 + h*1.5, 0.3 + b*1.0);
+    vec3 cMid   = vec3(1.5 + m*1.0, 0.1, 0.9 + b*1.0);
+    vec3 cOuter = vec3(0.8, 0.1 + h*0.5, 1.8);
+
+    vec3 color;
+    float d = vDistance;
+    if (d < 4.0)      color = mix(cCore, cInner, (d - 2.5)/1.5);
+    else if (d < 6.5) color = mix(cInner, cMid, (d - 4.0)/2.5);
+    else              color = mix(cMid, cOuter, clamp((d - 6.5)/6.0, 0.0, 1.0));
+
+    float shell = sin(d*3.5 - vAngle);
+    float bands = smoothstep(-0.2, 0.8, shell);
+    bands = mix(0.4, 1.0, bands);
+
+    float creaseAng = vAngle + uTime*0.15;
+    float creaseDarken = 1.0 - smoothstep(0.2, 0.0, abs(sin(creaseAng))) * 0.7;
+
+    float fade = smoothstep(2.5, 2.9, d) * (1.0 - smoothstep(8.0, 12.0, d));
+    float densityBoost = 0.08 + uRaw * 0.15;
+    float finalAlpha = alpha * fade * bands * creaseDarken * densityBoost;
+
+    float coreGlow = smoothstep(2.9, 2.5, d);
+    color += cCore * coreGlow * (2.0 + b*4.0);
+    color += vec3(1.0, 0.6, 0.2) * b * 0.5 * smoothstep(5.0, 2.5, d);
+
+    gl_FragColor = vec4(color, finalAlpha);
+  }
+`;
+
+const mat = new THREE.ShaderMaterial({
+  vertexShader, fragmentShader,
+  uniforms: {
+    uTime:{value:0}, uBass:{value:0}, uMid:{value:0}, uHigh:{value:0}, uRaw:{value:0},
+  },
+  transparent:true, depthWrite:false, blending: THREE.AdditiveBlending,
+});
+scene.add(new THREE.Points(geo, mat));
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// ___AUDIO_INTRO_PLACEHOLDER___
+
+let audioCtx = null, analyser = null, masterGain = null;
+let freqData = null;
+const trackA = { buffer:null, source:null, gain:null, lpf:null, dryGain:null, wetGain:null, convolver:null };
+const trackB = { buffer:null, source:null, gain:null };
+let analyserMix = null;
+let audioStarted = false;
+let audioOn = false;
+
+function ensureCtx() {
+  if (audioCtx) return;
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  analyser = audioCtx.createAnalyser();
+  analyser.fftSize = 512;
+  analyser.smoothingTimeConstant = 0.8;
+  freqData = new Uint8Array(analyser.frequencyBinCount);
+
+  // analyserMix is a separate sum node BEFORE the crossfade gains. Both
+  // sources fan out into it at full volume so the wave reacts to BOTH
+  // tracks at all times, regardless of which one is currently audible.
+  analyserMix = audioCtx.createGain();
+  analyserMix.gain.value = 1.0;
+  analyserMix.connect(analyser);
+  // analyser is a pure tap — no destination connection.
+
+  // masterGain is the speaker output. Starts muted (sound off by default);
+  // toggleSound flips it to 1 on user click.
+  masterGain = audioCtx.createGain();
+  masterGain.gain.value = 0.0;
+  masterGain.connect(audioCtx.destination);
+}
+
+function makeIR() {
+  // Synthetic IR. Random noise shaped by an exponential decay, with a
+  // running low-pass to keep the tail bass-heavy (real-room wall absorbs
+  // highs faster than lows).
+  const sr = audioCtx.sampleRate;
+  const len = Math.floor(sr * REVERB_SECONDS);
+  const buf = audioCtx.createBuffer(2, len, sr);
+  for (let ch=0; ch<2; ch++) {
+    const data = buf.getChannelData(ch);
+    let lp = 0;
+    for (let i=0; i<len; i++) {
+      lp = lp * 0.85 + (Math.random()*2 - 1) * 0.15;
+      data[i] = lp * Math.pow(1 - i/len, REVERB_DECAY);
+    }
+  }
+  return buf;
+}
+
+function buildChainA() {
+  const t = trackA;
+  // source → hpf → lpf → split: dry → gain, wet → convolver → wetGain → gain → masterGain
+  // HPF cuts sub-rumble that wouldn't pass through walls; LPF kills mids/highs
+  // (muffled wall feel); convolver adds the room reverb tail.
+  t.hpf = audioCtx.createBiquadFilter();
+  t.hpf.type = 'highpass';
+  t.hpf.frequency.value = FILTER_HPF_HZ;
+  t.hpf.Q.value = 0.7;
+
+  t.lpf = audioCtx.createBiquadFilter();
+  t.lpf.type = 'lowpass';
+  t.lpf.frequency.value = FILTER_LPF_HZ;
+  t.lpf.Q.value = 0.7;
+
+  t.dryGain = audioCtx.createGain();
+  t.wetGain = audioCtx.createGain();
+  t.dryGain.gain.value = 1 - REVERB_WET;
+  t.wetGain.gain.value = REVERB_WET;
+
+  t.convolver = audioCtx.createConvolver();
+  t.convolver.buffer = makeIR();
+
+  t.gain = audioCtx.createGain();
+  t.gain.gain.value = 1.0;        // initial: A audible (no hover yet)
+
+  t.hpf.connect(t.lpf);
+  t.lpf.connect(t.dryGain);
+  t.lpf.connect(t.convolver);
+  t.convolver.connect(t.wetGain);
+  t.dryGain.connect(t.gain);
+  t.wetGain.connect(t.gain);
+  t.gain.connect(masterGain);
+}
+
+function buildChainB() {
+  const t = trackB;
+  t.gain = audioCtx.createGain();
+  t.gain.gain.value = 0.0;        // initial: B silent
+  t.gain.connect(masterGain);
+}
+
+async function loadTrack(file) {
+  const res = await fetch(file);
+  if (!res.ok) throw new Error(`HTTP ${res.status} for ${file}`);
+  const ab = await res.arrayBuffer();
+  return await audioCtx.decodeAudioData(ab);
+}
+
+async function preload() {
+  try {
+    ensureCtx();
+    setStatus('audio: loading A …');
+    trackA.buffer = await loadTrack(TRACK_A_FILE);
+    setStatus('audio: loading B …');
+    trackB.buffer = await loadTrack(TRACK_B_FILE);
+    setStatus('audio: ready (click sound)', 4000);
+    // NOTE: don't auto-start — wait for the sound toggle click. Sources
+    // are created on first toggle-on and never destroyed, so toggling
+    // off only mutes, never pauses; on resumes wherever the music would
+    // have been (the user's "music keeps going underneath" requirement).
+  } catch (e) {
+    console.error('[audio] preload failed:', e);
+    setStatus('audio: ' + e.message, 0);
+  }
+}
+
+async function tryStartAudio() {
+  if (audioStarted) return;
+  if (!trackA.buffer || !trackB.buffer) return;
+  audioStarted = true;
+  ensureCtx();
+  if (audioCtx.state === 'suspended') {
+    try { await audioCtx.resume(); } catch {}
+  }
+  if (audioCtx.state !== 'running') {
+    audioStarted = false;
+    return;
+  }
+
+  buildChainA();
+  buildChainB();
+
+  trackA.source = audioCtx.createBufferSource();
+  trackA.source.buffer = trackA.buffer;
+  trackA.source.loop = true;
+  trackA.source.playbackRate.value = TRACK_RATE_A;
+  trackA.source.connect(trackA.hpf);     // → speaker chain (filtered)
+  trackA.source.connect(analyserMix);    // → wave reactivity (raw, full vol)
+
+  trackB.source = audioCtx.createBufferSource();
+  trackB.source.buffer = trackB.buffer;
+  trackB.source.loop = true;
+  trackB.source.playbackRate.value = TRACK_RATE_B;
+  trackB.source.connect(trackB.gain);    // → speaker chain
+  trackB.source.connect(analyserMix);    // → wave reactivity
+
+  const when = audioCtx.currentTime + 0.05;
+  trackA.source.start(when, 0);
+  trackB.source.start(when, 0);
+}
+
+// Sound on/off toggle — default off. First click starts the sources +
+// resumes the AudioContext (a click counts as the required user gesture).
+// Subsequent clicks just ramp masterGain so the music keeps running but
+// goes silent / audible on the speakers. Wave reactivity is independent
+// (driven by analyserMix → analyser, never affected by masterGain).
+const soundBtn = document.getElementById('sound-toggle');
+soundBtn.addEventListener('click', async () => {
+  audioOn = !audioOn;
+  soundBtn.textContent = audioOn ? 'sound on' : 'sound off';
+  soundBtn.classList.toggle('on', audioOn);
+  if (audioOn) {
+    if (!audioStarted) await tryStartAudio();
+    if (masterGain) masterGain.gain.setTargetAtTime(1.0, audioCtx.currentTime, 0.05);
+  } else {
+    if (masterGain) masterGain.gain.setTargetAtTime(0.0, audioCtx.currentTime, 0.05);
+  }
+});
+
+preload();
+
+// ─── Animate: poll FFT, drive uniforms, drive crossfade ─────────────────
+const clock = new THREE.Clock();
+let bassS = 0, midS = 0, highS = 0, rawS = 0;
+let lastModeApplied = -1;
+
+function animate() {
+  requestAnimationFrame(animate);
+  const t = clock.getElapsedTime();
+  mat.uniforms.uTime.value = t;
+
+  if (audioStarted && analyser) {
+    analyser.getByteFrequencyData(freqData);
+    const n = freqData.length;
+    let bass = 0, mid = 0, high = 0;
+    for (let i = 0; i < n; i++) {
+      const v = freqData[i] / 255;
+      if (i < n * 0.15) bass += v;
+      else if (i < n * 0.5) mid += v;
+      else high += v;
+    }
+    bass /= n * 0.15;
+    mid  /= n * 0.35;
+    high /= n * 0.5;
+    const raw = (bass + mid + high) / 3;
+    const lerp = 0.15;
+    bassS += (bass - bassS) * lerp;
+    midS  += (mid  - midS)  * lerp;
+    highS += (high - highS) * lerp;
+    rawS  += (raw  - rawS)  * lerp;
+  } else {
+    // Audio not playing yet (loading or failed) — drive the disk with a
+    // procedural pseudo-beat so it doesn't sit silent and dead-looking.
+    // Hover mode boosts amplitude so the disk feels more alive when engaged.
+    const m = window.__sphere?.mode ?? 0;
+    const amp = 0.15 + m * 0.35;
+    const beat = Math.pow(Math.sin(t * 1.45) * 0.5 + 0.5, 4.0);   // ~83 BPM
+    const wash = Math.sin(t * 0.8) * 0.5 + 0.5;
+    const sparkle = Math.sin(t * 3.1) * 0.5 + 0.5;
+    bassS = bassS * 0.85 + (beat * amp * 1.2) * 0.15;
+    midS  = midS  * 0.85 + (wash * amp * 0.7) * 0.15;
+    highS = highS * 0.85 + (sparkle * amp * 0.4) * 0.15;
+    rawS  = (bassS + midS + highS) / 3;
+  }
+  mat.uniforms.uBass.value = bassS;
+  mat.uniforms.uMid.value  = midS;
+  mat.uniforms.uHigh.value = highS;
+  mat.uniforms.uRaw.value  = rawS;
+
+  // Equal-power crossfade tied to sphere hover mode.
+  // mode=0 → A loud, B silent. mode=1 → A quiet, B loud.
+  // Skip the setTarget calls when mode hasn't moved — saves Web Audio
+  // scheduler churn (was 120 calls/s even on idle).
+  if (audioStarted && trackA.gain && trackB.gain) {
+    const m = window.__sphere?.mode ?? 0;
+    if (Math.abs(m - lastModeApplied) > 0.001) {
+      const gA = Math.cos(m * Math.PI / 2);
+      const gB = Math.sin(m * Math.PI / 2);
+      trackA.gain.gain.setTargetAtTime(gA, audioCtx.currentTime, 0.08);
+      trackB.gain.gain.setTargetAtTime(gB, audioCtx.currentTime, 0.08);
+      lastModeApplied = m;
+    }
+  }
+
+  renderer.render(scene, camera);
+}
+animate();
+</script>
+
+<!-- ───── ASCII SPHERE (p5.js) ───────────────────────────────────────────
+     Two states crossfade based on the `mode` factor (0..1):
+       mode = 0 → plain rotating ASCII sphere (the simple prompt)
+       mode = 1 → adds bouncing internal balls, a black-hole core that
+                  absorbs them, and a coloured accretion disk
+     Hovering the sphere eases mode toward 1; leaving eases it back to 0.
+     Clicking once mode is engaged spawns 5 more balls. `mode` is exported
+     to window.__sphere.mode so the cosmic-disk module can crossfade audio.
+─────────────────────────────────────────────────────────────────────── -->
+<script>
+const NUM_POINTS = 600;
+const SPHERE_RADIUS = 150;
+const BLACK_HOLE_RADIUS = 35;
+const ACCRETION_POINTS = 260;
+const Z_OFFSET = 300;
+const PROJ_DISTANCE = 500;
+const INITIAL_BALLS = 28;
+
+// Maths shorthand to dodge p5's tiny wrapper overhead in the hot path.
+const COS = Math.cos, SIN = Math.sin, SQRT = Math.sqrt;
+
+let points = [];
+let balls = [];
+let accretionDisk = [];
+let mode = 0;
+let targetMode = 0;
+let ctx = null;          // raw CanvasRenderingContext2D, set in setup()
+let lastFont = '';       // batches `ctx.font` writes across draws
+
+// Pre-allocated pool of projection slots so the per-frame projection /
+// accretion / ball / core loops don't churn the garbage collector. Slots
+// are reused across frames; only `projN` (the current count) and the slot
+// fields are mutated.
+const projPool = [];
+const sortBuf = [];
+let projN = 0;
+function nextSlot() {
+  let s = projPool[projN];
+  if (!s) {
+    s = projPool[projN] = {
+      x: 0, y: 0, z: 0, char: '', txtSize: 0, bright: 0,
+      kind: '', cr: 0, cg: 0, cb: 0, size: 0,
+    };
+  }
+  projN++;
+  return s;
+}
+
+function setup() {
+  createCanvas(windowWidth, windowHeight);
+  // Grab the raw 2D context — we bypass p5's text()/ellipse() in the hot
+  // loop. p5's text() pushes/pops state and re-builds font strings every
+  // call, which dominated the trace.
+  ctx = drawingContext;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  noStroke();
+
+  for (let i = 0; i < NUM_POINTS; i++) {
+    let u = random(-1, 1);
+    let angle = random(TWO_PI);
+    points.push({
+      x: sqrt(1 - u * u) * cos(angle) * SPHERE_RADIUS,
+      y: u * SPHERE_RADIUS,
+      z: sqrt(1 - u * u) * sin(angle) * SPHERE_RADIUS,
+      char: floor(random(10)).toString()
+    });
+  }
+  for (let i = 0; i < INITIAL_BALLS; i++) spawnBall();
+  for (let i = 0; i < ACCRETION_POINTS; i++) {
+    const r = random(BLACK_HOLE_RADIUS, SPHERE_RADIUS * 0.8);
+    accretionDisk.push({
+      r,
+      rPulsePhase: r * 0.1,                  // hoisted out of draw()
+      angle: random(TWO_PI),
+      char: floor(random(10)).toString()
+    });
+  }
+
+  const c = document.querySelector('canvas.p5Canvas') || document.querySelector('canvas:not(#cosmic-canvas)');
+  if (c) {
+    c.addEventListener('touchstart', () => engage(), { passive: true });
+  }
+}
+
+function engage() {
+  targetMode = 1;
+  const hint = document.getElementById('hint');
+  if (hint) hint.style.opacity = '0';
+}
+
+// Marsaglia-style uniform unit vector on a sphere — no allocation past
+// the local plain object that gets returned (caller copies into ball slots).
+function randomUnit3() {
+  let u, v, s;
+  do {
+    u = Math.random() * 2 - 1;
+    v = Math.random() * 2 - 1;
+    s = u * u + v * v;
+  } while (s >= 1);
+  const m = 2 * Math.sqrt(1 - s);
+  return { x: u * m, y: v * m, z: 1 - 2 * s };
+}
+
+function spawnBall() {
+  const u = randomUnit3();
+  const r = SPHERE_RADIUS * (0.7 + Math.random() * 0.25);
+  const v = randomUnit3();
+  const vmul = 0.4 + Math.random() * 0.8;
+  // Plain {x,y,z} objects — p5.Vector wrappers showed up as retained-object
+  // scan time during MajorGC mark phases (see trace).
+  balls.push({
+    pos: { x: u.x * r, y: u.y * r, z: u.z * r },
+    vel: { x: v.x * vmul, y: v.y * vmul, z: v.z * vmul },
+    char: Math.floor(Math.random() * 10).toString()
+  });
+}
+
+function updateBalls() {
+  // Hot loop, ~30 balls per frame. Avoid every p5.Vector.copy/normalize/mult
+  // chain — they each allocate. Inline the math against b.pos / b.vel.
+  for (let i = balls.length - 1; i >= 0; i--) {
+    const b = balls[i];
+    const px = b.pos.x, py = b.pos.y, pz = b.pos.z;
+    const d2 = px * px + py * py + pz * pz;
+    const d = SQRT(d2);
+    if (d > 1) {
+      // gravity = -strength * (pos / |pos|), capped between 0.0005 and 0.06
+      const inv = 1 / d2;
+      let strength = inv * 0.5 * BLACK_HOLE_RADIUS;
+      if (strength < 0.0005) strength = 0.0005;
+      else if (strength > 0.06) strength = 0.06;
+      const f = -strength / d;
+      b.vel.x += px * f;
+      b.vel.y += py * f;
+      b.vel.z += pz * f;
+    }
+    b.vel.x *= 0.995; b.vel.y *= 0.995; b.vel.z *= 0.995;
+    b.pos.x += b.vel.x; b.pos.y += b.vel.y; b.pos.z += b.vel.z;
+
+    const nx2 = b.pos.x, ny2 = b.pos.y, nz2 = b.pos.z;
+    const nd2 = nx2 * nx2 + ny2 * ny2 + nz2 * nz2;
+    if (nd2 > SPHERE_RADIUS * SPHERE_RADIUS) {
+      const nd = SQRT(nd2);
+      const inv = 1 / nd;
+      const nx = nx2 * inv, ny = ny2 * inv, nz = nz2 * inv;
+      // Reflection with restitution: v' = v - (1 + r) * (v·n) * n, r=0.75
+      const vDotN = b.vel.x * nx + b.vel.y * ny + b.vel.z * nz;
+      const k = 1.75 * vDotN;
+      b.vel.x -= k * nx; b.vel.y -= k * ny; b.vel.z -= k * nz;
+      // push back inside the sphere
+      const r = SPHERE_RADIUS - 1.5;
+      b.pos.x = nx * r; b.pos.y = ny * r; b.pos.z = nz * r;
+    } else if (nd2 < BLACK_HOLE_RADIUS * BLACK_HOLE_RADIUS) {
+      balls.splice(i, 1);
+    }
+  }
+  // Trickle in replacements while engaged so the scene doesn't fade out.
+  if (mode > 0.3 && balls.length < 6) {
+    for (let i = 0; i < 4; i++) spawnBall();
+  }
+}
+
+function mousePressed() {
+  engage();
+  if (mode > 0.4) {
+    for (let i = 0; i < 5; i++) spawnBall();
+  }
+}
+
+function isOverSphere() {
+  const cx = width / 2, cy = height / 2;
+  // Projected sphere radius at the centre depth.
+  const r = SPHERE_RADIUS * (PROJ_DISTANCE / (PROJ_DISTANCE + Z_OFFSET));
+  // A small forgiveness ring so the trigger isn't razor-thin.
+  return dist(mouseX, mouseY, cx, cy) < r + 24;
+}
+
+function draw() {
+  const overSphere = isOverSphere();
+  if (overSphere) {
+    if (targetMode !== 1) targetMode = 1;
+    const hint = document.getElementById('hint');
+    if (hint && hint.style.opacity !== '0') hint.style.opacity = '0';
+  } else if (!touches.length) {
+    if (targetMode !== 0) targetMode = 0;
+  }
+
+  mode += (targetMode - mode) * 0.06;
+  // Export hover factor to the cosmic-disk module — drives audio crossfade.
+  window.__sphere.mode = mode;
+  // Transparent clear so the cosmic-disk canvas behind shows through.
+  clear();
+
+  if (mode > 0.02) updateBalls();
+
+  const angleY = frameCount * 0.01;
+  const angleX = frameCount * 0.005;
+  const cosY = COS(angleY), sinY = SIN(angleY);
+  const cosX = COS(angleX), sinX = SIN(angleX);
+  const scaleCore = PROJ_DISTANCE / (PROJ_DISTANCE + Z_OFFSET);
+  const halfW = width * 0.5, halfH = height * 0.5;
+  const zNear = Z_OFFSET - SPHERE_RADIUS;
+  const zFar  = Z_OFFSET + SPHERE_RADIUS;
+  const zRange = zFar - zNear;
+
+  // Reset the projection pool — slots get overwritten in place below.
+  projN = 0;
+
+  function projectInto(slot, x, y, z, char, sizeMul, kind) {
+    const x1 = cosY * x + sinY * z;
+    const z1 = -sinY * x + cosY * z;
+    const y2 = cosX * y - sinX * z1;
+    const z2 = sinX * y + cosX * z1;
+    const finalZ = z2 + Z_OFFSET;
+    const scaleFactor = PROJ_DISTANCE / (PROJ_DISTANCE + finalZ);
+    slot.x = x1 * scaleFactor + halfW;
+    slot.y = y2 * scaleFactor + halfH;
+    slot.z = finalZ;
+    slot.char = char;
+    slot.txtSize = 16 * scaleFactor * sizeMul;
+    // map(finalZ, zNear, zFar, 255, 100) inlined and clamped
+    let bri = 255 + (finalZ - zNear) * (-155 / zRange);
+    if (bri < 100) bri = 100; else if (bri > 255) bri = 255;
+    slot.bright = bri;
+    slot.kind = kind;
+  }
+
+  // Surface points always render.
+  for (let i = 0, n = points.length; i < n; i++) {
+    const p = points[i];
+    projectInto(nextSlot(), p.x, p.y, p.z, p.char, 1, 'surface');
+  }
+
+  if (mode > 0.02) {
+    for (let i = 0, n = balls.length; i < n; i++) {
+      const b = balls[i];
+      projectInto(nextSlot(), b.pos.x, b.pos.y, b.pos.z, b.char, 2.5, 'ball');
+    }
+
+    const waveOffset = frameCount * 0.05;
+    const accretionOuter = SPHERE_RADIUS * 0.8;
+    const accretionRange = accretionOuter - BLACK_HOLE_RADIUS;
+    const angularStepNum = frameCount * 0.02 * SPHERE_RADIUS;   // hoist
+    for (let i = 0, n = accretionDisk.length; i < n; i++) {
+      const ad = accretionDisk[i];
+      const cR = ad.r;
+      const cA = ad.angle + angularStepNum / cR;
+      const slot = nextSlot();
+      projectInto(slot, COS(cA) * cR, SIN(cA) * cR, 0, ad.char, 1.2, 'wave');
+      const distNorm = (cR - BLACK_HOLE_RADIUS) / accretionRange;
+      const pulse = SIN(ad.rPulsePhase - waveOffset) * 0.5 + 0.5;
+      slot.cr = (100 + distNorm * 155) * pulse;
+      let g = (distNorm - 0.4) * (255 / 0.6) * pulse;
+      slot.cg = g < 0 ? 0 : g;
+      slot.cb = 0;
+    }
+
+    const coreSlot = nextSlot();
+    coreSlot.kind = 'core';
+    coreSlot.x = halfW;
+    coreSlot.y = halfH;
+    coreSlot.z = Z_OFFSET;
+    coreSlot.size = BLACK_HOLE_RADIUS * 2 * scaleCore;
+  }
+
+  // Sort just the active slice via a re-used buffer: zero-allocation
+  // shadowing of projPool[0..projN].
+  sortBuf.length = projN;
+  for (let i = 0; i < projN; i++) sortBuf[i] = projPool[i];
+  sortBuf.sort(zCompare);
+
+  // Render via raw canvas2d — p5's text() was 1.7 s of the 5.4 s trace.
+  // textAlign/Baseline persist from setup but clear() doesn't touch
+  // them, so this stays cheap. We bucket fonts to nearest pixel and skip
+  // the ctx.font setter when the bucket doesn't change.
+  const a01 = mode;
+
+  for (let i = 0; i < projN; i++) {
+    const pt = sortBuf[i];
+    const k = pt.kind;
+    if (k === 'core') {
+      // Fully opaque black disk so the cosmic disk doesn't bleed through
+      // the event horizon. Even at mode<1 the disk is meant to feel solid.
+      ctx.fillStyle = '#000';
+      ctx.beginPath();
+      ctx.arc(pt.x, pt.y, pt.size * 0.5, 0, 6.283185307179586);
+      ctx.fill();
+      lastFont = '';
+      continue;
+    }
+    const sz = (pt.txtSize + 0.5) | 0;
+    const font = (k === 'ball')
+      ? `bold ${sz}px monospace`
+      : `${sz}px monospace`;
+    if (font !== lastFont) {
+      ctx.font = font;
+      lastFont = font;
+    }
+    if (k === 'ball') {
+      const b = pt.bright | 0;
+      ctx.fillStyle = `rgba(${b},${b},255,${a01})`;
+    } else if (k === 'wave') {
+      ctx.fillStyle = `rgba(${pt.cr | 0},${pt.cg | 0},0,${a01})`;
+    } else {
+      // surface — always fully opaque
+      const b = pt.bright | 0;
+      ctx.fillStyle = `rgb(${b},${b},${b})`;
+    }
+    ctx.fillText(pt.char, pt.x, pt.y);
+  }
+}
+
+function zCompare(a, b) { return b.z - a.z; }
+
+function windowResized() {
+  resizeCanvas(windowWidth, windowHeight);
+}
+</script>
+
+</body>
+</html>

@@ -1,0 +1,454 @@
+<!-- Credit: https://play.google.com/store/apps/details?id=pl.nenter.app.bubblelevel -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#000000">
+    <title>Pro Bubble Level</title>
+    <style>
+        :root {
+            /* Professional Neon Palette */
+            --bg-color: #050505;
+            --tube-bg: #0a1a0a;
+            --liquid-color: #32CD32; /* Standard Lime */
+            --liquid-glow: #39ff14; /* Neon Glow */
+            --bubble-core: #ccff00;
+            --grid-color: rgba(255, 255, 255, 0.2);
+            --text-color: #39ff14;
+            --active-orange: #ff9500;
+        }
+
+        * { box-sizing: border-box; touch-action: none; user-select: none; -webkit-user-select: none; }
+
+        body {
+            margin: 0; padding: 0;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: 'Roboto Mono', 'Courier New', monospace;
+            height: 100vh; width: 100vw;
+            overflow: hidden;
+            display: grid;
+            grid-template-columns: 60px 1fr; /* Left bar | Main Area */
+            grid-template-rows: 60px 1fr 100px; /* Top bar | Main | Controls */
+        }
+
+        /* --- VISUAL STYLING --- */
+        
+        /* 1. TOP TUBE (Roll / Gamma) */
+        .tube-h-container {
+            grid-column: 2; grid-row: 1;
+            background: linear-gradient(180deg, #000, var(--tube-bg) 40%, var(--tube-bg) 60%, #000);
+            border-left: 1px solid #333;
+            border-bottom: 1px solid #333;
+            position: relative;
+            overflow: hidden;
+        }
+        /* Markers for Top Tube */
+        .marker { position: absolute; background: rgba(0,0,0,0.5); z-index: 1; pointer-events: none; }
+        .m-v { width: 1px; height: 100%; top: 0; border-left: 1px solid var(--grid-color); }
+        .m-center { border-left: 2px solid #fff; opacity: 0.8; }
+        
+        .bubble-h {
+            width: 40px; height: 40px;
+            border-radius: 50%;
+            background: radial-gradient(circle at 35% 35%, var(--bubble-core), var(--liquid-color));
+            box-shadow: 0 0 8px var(--liquid-glow), inset 0 0 4px #000;
+            position: absolute;
+            top: 10px; left: 50%;
+            transform: translateX(-50%);
+            z-index: 2;
+        }
+
+        /* 2. LEFT TUBE (Pitch / Beta) */
+        .tube-v-container {
+            grid-column: 1; grid-row: 2;
+            background: linear-gradient(90deg, #000, var(--tube-bg) 40%, var(--tube-bg) 60%, #000);
+            border-right: 1px solid #333;
+            border-bottom: 1px solid #333;
+            position: relative;
+            overflow: hidden;
+        }
+        .m-h { height: 1px; width: 100%; left: 0; border-top: 1px solid var(--grid-color); }
+        
+        .bubble-v {
+            width: 40px; height: 40px;
+            border-radius: 50%;
+            background: radial-gradient(circle at 35% 35%, var(--bubble-core), var(--liquid-color));
+            box-shadow: 0 0 8px var(--liquid-glow), inset 0 0 4px #000;
+            position: absolute;
+            left: 10px; top: 50%;
+            transform: translateY(-50%);
+            z-index: 2;
+        }
+
+        /* 3. MAIN BULLSEYE */
+        .stage-center {
+            grid-column: 2; grid-row: 2;
+            background: radial-gradient(circle at center, #111 0%, #000 100%);
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .bullseye-grid {
+            position: absolute;
+            width: 300px; height: 300px;
+            border-radius: 50%;
+            border: 2px solid rgba(255,255,255,0.1);
+        }
+        /* Grid Lines using CSS conic gradients for radar look */
+        .bullseye-grid::before {
+            content: ''; position: absolute; top:0; left:0; right:0; bottom:0;
+            border-radius: 50%;
+            background: 
+                repeating-radial-gradient(transparent 0, transparent 29px, var(--grid-color) 30px),
+                conic-gradient(from 0deg, transparent 0deg, var(--grid-color) 1deg, transparent 2deg) repeat scroll 0% 0% / 50% 50%;
+            background-size: 100% 100%, 100% 100%; 
+        }
+        
+        .bubble-c {
+            width: 50px; height: 50px;
+            border-radius: 50%;
+            background: radial-gradient(circle at 30% 30%, #fff, var(--liquid-glow));
+            box-shadow: 0 0 15px var(--liquid-glow);
+            position: absolute;
+            /* Will be moved by JS */
+            transform: translate(0px, 0px);
+            z-index: 10;
+        }
+
+        .center-cross {
+            position: absolute; width: 20px; height: 20px;
+            border: 2px solid #fff; border-radius: 50%;
+            z-index: 5; opacity: 0.5;
+        }
+
+        /* 4. CONTROLS */
+        .controls {
+            grid-column: 1 / span 2; grid-row: 3;
+            background: #111;
+            display: flex; justify-content: space-evenly; align-items: center;
+            border-top: 1px solid #333;
+            padding-bottom: env(safe-area-inset-bottom);
+        }
+
+        .btn {
+            background: #222;
+            width: 60px; height: 60px;
+            border-radius: 15px;
+            display: flex; justify-content: center; align-items: center;
+            border: 1px solid #444;
+            color: #fff;
+            font-size: 12px;
+            flex-direction: column;
+            gap: 4px;
+            cursor: pointer;
+        }
+        .btn:active { transform: scale(0.95); }
+        .btn.active { background: var(--active-orange); color: #000; border-color: #ffb74d; }
+        .btn svg { width: 24px; height: 24px; fill: currentColor; }
+
+        .readout {
+            position: absolute;
+            bottom: 110px; left: 0; right: 0;
+            text-align: center;
+            font-size: 14px;
+            opacity: 0.8;
+            pointer-events: none;
+        }
+
+        /* OVERLAYS */
+        .overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 999; display: none;
+        }
+
+        /* Ruler */
+        #ruler-overlay { background: #000; color: #fff; overflow-y: auto; }
+        .ruler-wrap { position: relative; width: 100%; height: 100%; display: flex; }
+        .ruler-scale {
+            width: 60px; height: 200vh; /* Long enough */
+            border-right: 1px solid #fff;
+            position: relative;
+        }
+        .tick { position: absolute; right: 0; border-top: 1px solid #fff; width: 10px; }
+        .tick.cm { width: 25px; border-top: 2px solid #fff; }
+        .tick.mm { width: 8px; border-top: 1px solid #666; }
+        .tick-label { position: absolute; right: 30px; font-size: 12px; transform: translateY(-50%); }
+        .close-btn { 
+            position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
+            padding: 10px 30px; background: #333; color: #fff; border: 1px solid #fff; 
+        }
+
+        /* Flashlight White Screen Fallback */
+        #white-screen { background: #fff; z-index: 998; }
+
+        /* iOS Permission Modal */
+        #ios-perm {
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            background: rgba(0,0,0,0.95);
+        }
+        #ios-perm button {
+            padding: 15px 40px; font-size: 18px; background: var(--liquid-color); border: none; font-weight: bold; border-radius: 30px;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- iOS Permission Overlay -->
+    <div id="ios-perm" class="overlay" style="display: flex;">
+        <h2 style="margin-bottom:20px; text-align:center;">Professional Level</h2>
+        <p style="color:#aaa; margin-bottom:30px; text-align:center; max-width:80%;">Requires Sensor Access for Precision</p>
+        <button onclick="requestPerms()">START SENSORS</button>
+    </div>
+
+    <!-- Top Left Corner (Filler) -->
+    <div style="background:var(--tube-bg); border-bottom:1px solid #333; border-right:1px solid #333;"></div>
+
+    <!-- Horizontal Tube (Top) -->
+    <div class="tube-h-container">
+        <!-- Grid lines for tube -->
+        <div class="marker m-v m-center" style="left:50%"></div>
+        <div class="marker m-v" style="left:25%"></div>
+        <div class="marker m-v" style="left:75%"></div>
+        <div class="bubble-h" id="b-h"></div>
+    </div>
+
+    <!-- Vertical Tube (Left) -->
+    <div class="tube-v-container">
+        <div class="marker m-h m-center" style="top:50%"></div>
+        <div class="marker m-h" style="top:25%"></div>
+        <div class="marker m-h" style="top:75%"></div>
+        <div class="bubble-v" id="b-v"></div>
+    </div>
+
+    <!-- Main Bullseye -->
+    <div class="stage-center">
+        <div class="bullseye-grid"></div>
+        <div class="center-cross"></div>
+        <div class="bubble-c" id="b-c"></div>
+    </div>
+
+    <!-- Text Readout -->
+    <div class="readout" id="readout">X: 0.0°&nbsp;&nbsp;Y: 0.0°</div>
+
+    <!-- Controls -->
+    <div class="controls">
+        <div class="btn" onclick="toggleFlash()" id="btn-flash">
+            <svg viewBox="0 0 24 24"><path d="M7 2v11h3v9l7-12h-4l4-8z"/></svg>
+            <span>LIGHT</span>
+        </div>
+        <div class="btn" onclick="toggleRuler()">
+            <svg viewBox="0 0 24 24"><path d="M2 6v12h20V6H2zm2 2h2v3h2V8h2v3h2V8h2v3h2V8h2v3h2V8h2v8H4V8z"/></svg>
+            <span>RULER</span>
+        </div>
+        <div class="btn" onclick="calibrate()" id="btn-cal">
+            <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v6h-2zm0 8h2v2h-2z"/></svg>
+            <span>ZERO</span>
+        </div>
+    </div>
+
+    <!-- Ruler Overlay -->
+    <div id="ruler-overlay" class="overlay">
+        <div class="ruler-wrap">
+            <div class="ruler-scale" id="ruler-scale"></div>
+            <button class="close-btn" onclick="toggleRuler()">CLOSE</button>
+        </div>
+    </div>
+
+    <!-- White Screen Fallback -->
+    <div id="white-screen" class="overlay"></div>
+
+<script>
+    /* 
+       PROFESSIONAL PRECISION LOGIC
+       Uses a Low-Pass Filter (LPF) to simulate fluid viscosity.
+       No external libraries needed.
+    */
+
+    // --- Configuration ---
+    const VISCOSITY = 0.12; // 0.05 (very slow/thick) to 0.5 (very fast/watery)
+    const MAX_ANGLE = 45;   // Max degrees for the tube levels
+
+    // --- State ---
+    let sensorData = {
+        beta: 0,  // Raw X tilt
+        gamma: 0, // Raw Y tilt
+        smoothBeta: 0,
+        smoothGamma: 0,
+        calibBeta: 0,
+        calibGamma: 0
+    };
+
+    let torchTrack = null;
+    let isFlashOn = false;
+
+    // --- Elements ---
+    const bH = document.getElementById('b-h'); // Horizontal Bubble
+    const bV = document.getElementById('b-v'); // Vertical Bubble
+    const bC = document.getElementById('b-c'); // Center Bubble
+    const txt = document.getElementById('readout');
+
+    // --- 1. Sensor Initialization (iOS & Android) ---
+    function requestPerms() {
+        if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+            // iOS 13+ requires explicit permission
+            DeviceOrientationEvent.requestPermission()
+                .then(response => {
+                    if (response === 'granted') {
+                        document.getElementById('ios-perm').style.display = 'none';
+                        window.addEventListener('deviceorientation', handleOrientation);
+                    } else {
+                        alert("Permission denied. Reload to try again.");
+                    }
+                })
+                .catch(console.error);
+        } else {
+            // Android / Non-iOS
+            document.getElementById('ios-perm').style.display = 'none';
+            window.addEventListener('deviceorientation', handleOrientation);
+        }
+    }
+
+    // --- 2. The Physics Engine ---
+    function handleOrientation(event) {
+        // Fix for when device is flat vs upright
+        let { beta, gamma } = event;
+        
+        // Basic Constraints
+        if (!beta) beta = 0;
+        if (!gamma) gamma = 0;
+
+        // Apply Calibration Offset
+        let targetBeta = beta - sensorData.calibBeta;
+        let targetGamma = gamma - sensorData.calibGamma;
+
+        // Cap values to prevent UI breaking (visual only)
+        if (targetBeta > 90) targetBeta = 90;
+        if (targetBeta < -90) targetBeta = -90;
+
+        // --- THE SMOOTHING ALGORITHM (Low Pass Filter) ---
+        // New Value = Old Value + (Difference * Viscosity)
+        sensorData.smoothBeta += (targetBeta - sensorData.smoothBeta) * VISCOSITY;
+        sensorData.smoothGamma += (targetGamma - sensorData.smoothGamma) * VISCOSITY;
+
+        updateUI(sensorData.smoothBeta, sensorData.smoothGamma);
+    }
+
+    // --- 3. UI Rendering ---
+    function updateUI(b, g) {
+        // Update Text
+        txt.innerHTML = `X: ${b.toFixed(1)}° &nbsp; Y: ${g.toFixed(1)}°`;
+
+        // 1. Horizontal Tube (Gamma / Roll)
+        // Range: -MAX_ANGLE to +MAX_ANGLE maps to Left/Right
+        const tubeWidth = document.querySelector('.tube-h-container').clientWidth;
+        const maxPxH = (tubeWidth / 2) - 20; // 20 is bubble radius
+        let xPos = (g / MAX_ANGLE) * maxPxH;
+        xPos = Math.max(-maxPxH, Math.min(maxPxH, xPos));
+        bH.style.transform = `translateX(calc(-50% + ${xPos}px))`;
+
+        // 2. Vertical Tube (Beta / Pitch)
+        const tubeHeight = document.querySelector('.tube-v-container').clientHeight;
+        const maxPxV = (tubeHeight / 2) - 20;
+        let yPos = (b / MAX_ANGLE) * maxPxV;
+        yPos = Math.max(-maxPxV, Math.min(maxPxV, yPos));
+        bV.style.transform = `translateY(calc(-50% + ${yPos}px))`;
+
+        // 3. Center Bullseye (2D)
+        // Map degrees to pixels (e.g. 1 degree = 4 pixels displacement)
+        const sensitivity = 4; 
+        let cX = g * sensitivity;
+        let cY = b * sensitivity;
+
+        // Circular Clamp (Keep inside the circle)
+        const maxRad = 125; // Radius of the grid - bubble radius
+        const dist = Math.sqrt(cX*cX + cY*cY);
+        if (dist > maxRad) {
+            const angle = Math.atan2(cY, cX);
+            cX = Math.cos(angle) * maxRad;
+            cY = Math.sin(angle) * maxRad;
+        }
+        bC.style.transform = `translate(${cX}px, ${cY}px)`;
+    }
+
+    // --- 4. Tools & Features ---
+
+    // Zero Calibration
+    function calibrate() {
+        // Store current smoothed value as the new "0"
+        sensorData.calibBeta = sensorData.smoothBeta + sensorData.calibBeta; // Add to existing offset
+        sensorData.calibGamma = sensorData.smoothGamma + sensorData.calibGamma;
+        
+        // Visual Feedback
+        const btn = document.getElementById('btn-cal');
+        btn.classList.add('active');
+        setTimeout(() => btn.classList.remove('active'), 200);
+    }
+
+    // Flashlight
+    async function toggleFlash() {
+        isFlashOn = !isFlashOn;
+        const btn = document.getElementById('btn-flash');
+        btn.classList.toggle('active', isFlashOn);
+
+        // Method A: Native Torch (Android/Chrome)
+        try {
+            if (!torchTrack) {
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: 'environment' } 
+                });
+                torchTrack = stream.getVideoTracks()[0];
+            }
+            const capabilities = torchTrack.getCapabilities();
+            if (capabilities.torch) {
+                torchTrack.applyConstraints({ advanced: [{ torch: isFlashOn }] });
+                return; // Success, don't show white screen
+            }
+        } catch (e) {
+            console.log("Torch API not supported, using fallback");
+        }
+
+        // Method B: White Screen (iOS/Fallback)
+        const whiteScreen = document.getElementById('white-screen');
+        whiteScreen.style.display = isFlashOn ? 'block' : 'none';
+    }
+
+    // Ruler
+    function toggleRuler() {
+        const el = document.getElementById('ruler-overlay');
+        const isOpen = el.style.display === 'block';
+        el.style.display = isOpen ? 'none' : 'block';
+        
+        if (!isOpen) renderRuler();
+    }
+
+    function renderRuler() {
+        const container = document.getElementById('ruler-scale');
+        if (container.children.length > 0) return; // Already rendered
+
+        // Generate ticks for 30cm
+        for (let i = 0; i < 300; i++) { // i is mm
+            const tick = document.createElement('div');
+            tick.className = 'tick';
+            tick.style.top = `${i}mm`; // CSS Physical Units!
+            
+            if (i % 10 === 0) {
+                tick.classList.add('cm');
+                const lbl = document.createElement('div');
+                lbl.className = 'tick-label';
+                lbl.innerText = (i / 10) + 'cm';
+                lbl.style.top = `${i}mm`;
+                container.appendChild(lbl);
+            } else {
+                tick.classList.add('mm');
+            }
+            container.appendChild(tick);
+        }
+    }
+
+</script>
+</body>
+</html>

@@ -1,0 +1,31 @@
+# Node / Playwright
+node_modules/
+package-lock.json
+playwright-report/
+test-results/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor
+.vscode/
+.idea/
+
+# Local secrets — never commit
+.env
+.env.local
+*.token
+*-credentials*
+
+/tmp/
+
+Trace-*/
+Trace-*.json

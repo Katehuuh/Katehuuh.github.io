@@ -1,0 +1,2923 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Desloppify Web — Mechanical Health Scanner</title>
+<style>
+/* ── Dark theme (default) ───────────────────────────────────────────────── */
+:root {
+  --bg: #0e0e10; --bg-card: #18181b; --bg-table: #1c1c20; --bg-row-alt: #222228;
+  --text: #e4e4e8; --dim: #71717a; --border: #2c2c34; --accent: #6ee7b7;
+  --frame: #3f3f48; --green: #4ade80; --olive: #facc15; --amber: #fb923c;
+  --red: #f87171; --scorecard-bg: rgb(247,240,228); --scorecard-text: rgb(58,48,38);
+  --radius: 6px;
+}
+/* ── Light theme (toggle) ───────────────────────────────────────────────── */
+[data-theme="light"] {
+  --bg: #f7f0e4; --bg-card: #f0e8d9; --bg-table: #f0e9dc; --bg-row-alt: #eae2d4;
+  --text: #3a3026; --dim: #8a7a66; --border: #c0b098; --accent: #94704e;
+  --frame: #ac987e; --green: #447844; --olive: #788c48; --amber: #919b50;
+  --red: #b45038;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', system-ui, sans-serif;
+  min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 1.2rem 1rem; transition: background .2s, color .2s; }
+/* ── Header ─────────────────────────────────────────────────────────────── */
+#page-header { text-align: center; margin-bottom: 1rem; }
+h1 { font-size: 1.1rem; letter-spacing: 0.2em; text-transform: uppercase; color: var(--accent);
+  font-weight: 600; margin-bottom: 0.15rem; }
+.subtitle { font-size: 0.72rem; color: var(--dim); letter-spacing: 0.04em; }
+/* ── Theme toggle ───────────────────────────────────────────────────────── */
+#theme-toggle { position: fixed; top: 0.6rem; right: 0.8rem; background: var(--bg-card); border: 1px solid var(--border);
+  color: var(--dim); font-size: 0.85rem; padding: 0.25rem 0.5rem; border-radius: var(--radius); cursor: pointer; z-index: 99;
+  transition: color .2s, border-color .2s; }
+#theme-toggle:hover { color: var(--text); border-color: var(--accent); }
+/* ── Input bar ──────────────────────────────────────────────────────────── */
+#input-card { width: 100%; max-width: 640px; margin-bottom: 1rem; }
+.input-row { display: flex; gap: 0.5rem; align-items: stretch; }
+.input-row input[type="text"] { flex: 1; }
+input[type="text"], textarea { padding: 0.5rem 0.7rem; font-family: 'SF Mono', 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.82rem; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius);
+  color: var(--text); outline: none; transition: border-color .15s; }
+input[type="text"]:focus, textarea:focus { border-color: var(--accent); }
+textarea { resize: vertical; min-height: 80px; width: 100%; }
+button { padding: 0.5rem 1.2rem; font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif; font-size: 0.82rem; font-weight: 500;
+  cursor: pointer; background: var(--accent); color: #0e0e10; border: none; border-radius: var(--radius);
+  letter-spacing: 0.02em; transition: opacity .15s; }
+button:hover { opacity: 0.85; }
+button:disabled { opacity: 0.35; cursor: not-allowed; }
+.opts-row { display: flex; align-items: center; gap: 0.7rem; margin-top: 0.5rem; font-size: 0.75rem; color: var(--dim); flex-wrap: wrap; }
+.opts-row label { margin: 0; font-size: 0.75rem; cursor: pointer; }
+.opts-row input[type="checkbox"] { accent-color: var(--green); width: 13px; height: 13px; cursor: pointer; vertical-align: -2px; }
+.opts-row select { padding: 0.2rem 0.35rem; font-family: 'SF Mono', monospace; font-size: 0.72rem;
+  background: var(--bg-card); border: 1px solid var(--border); border-radius: 3px; color: var(--text); }
+.opts-row select:disabled { opacity: 0.3; }
+/* Token row — hidden by default, shown on rate limit */
+#token-row { display: none; margin-top: 0.5rem; }
+#token-row input { font-size: 0.78rem; width: 100%; }
+.token-hint { font-size: 0.65rem; color: var(--dim); margin-top: 0.15rem; }
+/* ── Progress ───────────────────────────────────────────────────────────── */
+#progress { display: none; margin-bottom: 1rem; width: 100%; max-width: 640px; }
+.progress-bar { height: 3px; background: var(--border); border-radius: 2px; overflow: hidden; margin-bottom: 0.3rem; }
+.progress-fill { height: 100%; background: var(--accent); width: 0%; transition: width 0.3s; }
+.progress-text { font-family: 'SF Mono', monospace; font-size: 0.72rem; color: var(--dim); }
+/* ── Results ────────────────────────────────────────────────────────────── */
+#results { display: none; width: 100%; max-width: 720px; }
+/* Score hero — text-based, copyable */
+#score-hero { text-align: center; padding: 1rem 0 0.6rem; position: relative; }
+#score-number { font-size: 3.2rem; font-weight: 700; font-family: 'SF Mono', 'JetBrains Mono', monospace;
+  letter-spacing: -0.02em; line-height: 1; }
+#score-label { font-size: 0.65rem; letter-spacing: 0.15em; text-transform: uppercase; color: var(--dim); margin-top: 0.2rem; }
+#score-subtitle { font-size: 0.6rem; color: var(--dim); font-style: italic; margin-top: 0.1rem; }
+#score-project { font-size: 0.72rem; color: var(--dim); font-family: 'SF Mono', monospace; margin-top: 0.2rem; }
+/* Inline dim pills below score */
+#score-dims { display: flex; justify-content: center; flex-wrap: wrap; gap: 0.35rem; margin: 0.5rem 0 0.4rem;
+  font-family: 'SF Mono', monospace; font-size: 0.7rem; }
+.dim-pill { padding: 0.15rem 0.5rem; border: 1px solid var(--border); border-radius: 12px; color: var(--dim); }
+.dim-pill .pill-score { font-weight: 600; }
+/* Action icons */
+.result-actions { display: flex; justify-content: center; gap: 0.8rem; margin-bottom: 0.5rem; }
+.icon-btn { background: none; border: 1px solid var(--border); color: var(--dim); font-size: 0.8rem;
+  padding: 0.3rem 0.6rem; border-radius: var(--radius); cursor: pointer; transition: color .15s, border-color .15s; }
+.icon-btn:hover { color: var(--accent); border-color: var(--accent); }
+/* Hidden canvas for PNG export */
+#scorecard { display: none; }
+/* AI status */
+#ai-status { display: none; text-align: center; font-family: 'SF Mono', monospace; font-size: 0.7rem; color: var(--dim); margin-bottom: 0.4rem; }
+/* Dim table */
+.dim-table { width: 100%; border-collapse: collapse; font-family: 'SF Mono', monospace; font-size: 0.75rem; }
+.dim-table th, .dim-table td { padding: 0.2rem 0.5rem; text-align: left; }
+.dim-table th { color: var(--dim); font-weight: 400; border-bottom: 1px solid var(--border); font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; }
+.dim-table td { border-bottom: 1px solid var(--bg-row-alt); }
+.dim-table tr:nth-child(even) { background: var(--bg-row-alt); }
+.score-cell { font-weight: 600; }
+/* Findings */
+#findings-summary { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 0.7rem; }
+#findings-summary h3 { font-size: 0.8rem; margin-bottom: 0.3rem; color: var(--accent); }
+.finding-group { margin-bottom: 0.25rem; }
+.finding-group h4 { font-size: 0.75rem; color: var(--text); margin-bottom: 0.15rem; font-family: 'SF Mono', monospace; }
+.finding-item { font-family: 'SF Mono', monospace; font-size: 0.68rem; color: var(--dim); padding: 0.1rem 0;
+  padding-left: 0.6rem; border-left: 2px solid var(--border); margin-bottom: 0.05rem; }
+.error-msg { color: var(--red); font-family: 'SF Mono', monospace; font-size: 0.78rem;
+  padding: 0.5rem; background: rgba(248,113,113,0.08); border-radius: var(--radius); margin-bottom: 0.8rem; }
+#manual-paste { display: none; margin-top: 0.6rem; }
+details { margin-bottom: 0.4rem; }
+details summary { cursor: pointer; font-family: 'SF Mono', monospace; font-size: 0.75rem; color: var(--accent);
+  padding: 0.25rem 0; user-select: none; letter-spacing: 0.02em; }
+details summary:hover { color: var(--text); }
+details[open] summary { margin-bottom: 0.2rem; }
+footer { margin-top: 0.8rem; font-size: 0.65rem; color: var(--dim); text-align: center; }
+footer a { color: var(--accent); text-decoration: none; }
+footer a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<button id="theme-toggle" title="Toggle light/dark">☀</button>
+
+<div id="page-header">
+<h1>Desloppify</h1>
+<p class="subtitle">code health scanner</p>
+</div>
+
+<div id="input-card">
+  <div class="input-row">
+    <input type="text" id="repo-url" placeholder="owner/repo" />
+    <button id="scan-btn">Scan</button>
+  </div>
+  <div class="opts-row">
+    <input type="checkbox" id="ai-enabled" /><label for="ai-enabled">AI review</label>
+    <select id="ai-model" disabled>
+      <option value="anthropic/claude-sonnet-4-6">Claude Sonnet 4.6</option>
+      <option value="anthropic/claude-sonnet-4-5">Claude Sonnet 4.5</option>
+      <option value="anthropic/claude-haiku-4-5">Claude Haiku 4.5</option>
+      <option value="openai/gpt-5-nano">GPT-5 Nano</option>
+      <option value="openai/gpt-5-mini">GPT-5 Mini</option>
+      <option value="google/gemini-2.5-flash-lite">Gemini 2.5 Flash Lite</option>
+      <option value="google/gemini-2.5-flash-preview-09-2025">Gemini 2.5 Flash</option>
+      <option value="deepseek/deepseek-v3.2">DeepSeek V3.2</option>
+      <option value="qwen/qwen3-32b">Qwen3 32B</option>
+      <option value="qwen/qwen3-4b:free">Qwen3 4B (free)</option>
+    </select>
+  </div>
+  <div id="token-row">
+    <input type="text" id="gh-token" placeholder="GitHub token (ghp_...)" />
+    <div class="token-hint">Rate-limited — add a token for 5000 req/hr. Stored in sessionStorage only.</div>
+  </div>
+  <div id="manual-paste">
+    <textarea id="paste-area" placeholder="Paste gitingest output: FILE: src/main.py&#10;import os&#10;..."></textarea>
+    <button id="paste-btn" style="margin-top:0.3rem;width:100%">Scan from paste</button>
+  </div>
+</div>
+
+<div id="progress">
+  <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+  <div class="progress-text" id="progress-text">Initializing...</div>
+</div>
+
+<div id="results">
+  <canvas id="scorecard"></canvas>
+  <div id="score-hero">
+    <div id="score-number">—</div>
+    <div id="score-label">MECHANICAL HEALTH SCORE</div>
+    <div id="score-subtitle"></div>
+    <div id="score-project"></div>
+  </div>
+  <div id="score-dims"></div>
+  <div class="result-actions">
+    <button class="icon-btn" id="download-btn" title="Download scorecard PNG">↓ PNG</button>
+    <button class="icon-btn" id="rescan-btn" title="Scan another repo">← New scan</button>
+  </div>
+  <div id="ai-status"></div>
+  <details><summary id="dims-toggle">Dimensions</summary><table class="dim-table" id="dim-table"></table></details>
+  <details><summary id="findings-toggle">Findings</summary><div id="findings-summary"></div></details>
+</div>
+
+<footer>
+  <a href="https://github.com/peteromallet/desloppify" target="_blank">desloppify</a> · mechanical + AI review via <a href="https://puter.com" target="_blank">Puter</a>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/web-tree-sitter@0.24.7/tree-sitter.js" async></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jshint/2.13.6/jshint.min.js" async></script>
+<script src="https://js.puter.com/v2/" async></script>
+<script>
+// =============================================================================
+// DESLOPPIFY WEB — Single-file mechanical code health scanner
+// =============================================================================
+
+// ── Scoring Policy Constants (exact port from engine/_scoring/policy/core.py) ──
+
+const CONFIDENCE_WEIGHTS = { high: 1.0, medium: 0.7, low: 0.3 };
+const MIN_SAMPLE = 200;
+
+const MECHANICAL_DIMENSION_WEIGHTS = {
+  'file health': 2.0, 'code quality': 1.0, 'duplication': 1.0,
+  'test health': 1.0, 'security': 1.0,
+};
+
+// Only detectors we actually implement in the web version
+const DETECTOR_SCORING_POLICIES = {
+  structural:  { detector: 'structural',  dimension: 'File health',  tier: 3, fileBased: false },
+  orphaned:    { detector: 'orphaned',    dimension: 'Code quality', tier: 3, fileBased: false },
+  flat_dirs:   { detector: 'flat_dirs',   dimension: 'Code quality', tier: 3, fileBased: false },
+  naming:      { detector: 'naming',      dimension: 'Code quality', tier: 3, fileBased: false },
+  single_use:  { detector: 'single_use',  dimension: 'Code quality', tier: 3, fileBased: false },
+  coupling:    { detector: 'coupling',    dimension: 'Code quality', tier: 3, fileBased: false },
+  logs:        { detector: 'logs',        dimension: 'Code quality', tier: 3, fileBased: false },
+  deprecated:  { detector: 'deprecated',  dimension: 'Code quality', tier: 3, fileBased: false },
+  dupes:       { detector: 'dupes',       dimension: 'Duplication',  tier: 3, fileBased: false },
+  cycles:      { detector: 'cycles',      dimension: 'Security',     tier: 4, fileBased: false },
+  go_security: { detector: 'go_security', dimension: 'Security',     tier: 4, fileBased: false },
+};
+
+// Build dimensions from policies (same algorithm as Python _build_dimensions)
+function buildDimensions() {
+  const dimTiers = {};
+  const grouped = {};
+  for (const [det, pol] of Object.entries(DETECTOR_SCORING_POLICIES)) {
+    if (!pol.dimension) continue;
+    if (!(pol.dimension in dimTiers)) {
+      dimTiers[pol.dimension] = pol.tier;
+      grouped[pol.dimension] = [];
+    }
+    grouped[pol.dimension].push(det);
+  }
+  return Object.entries(dimTiers).map(([name, tier]) => ({
+    name, tier, detectors: grouped[name]
+  }));
+}
+const DIMENSIONS = buildDimensions();
+
+// ── Language Configuration (50+ languages, GitHub Linguist-aligned) ──────────
+
+const LANG_EXTENSIONS = {
+  // Tier 1: mainstream
+  python:     ['.py','.pyw','.pyi','.pyx','.pxd'],
+  typescript: ['.ts','.tsx','.mts','.cts'],
+  javascript: ['.js','.jsx','.mjs','.cjs'],
+  go:         ['.go'],
+  rust:       ['.rs'],
+  java:       ['.java'],
+  kotlin:     ['.kt','.kts'],
+  csharp:     ['.cs','.csx'],
+  cpp:        ['.cpp','.cc','.cxx','.c++','.hpp','.hh','.hxx','.h++','.ipp','.tpp','.tcc'],
+  c:          ['.c'],
+  ruby:       ['.rb','.rbw','.rake','.gemspec','.ru'],
+  php:        ['.php','.phtml','.php3','.php4','.php5'],
+  swift:      ['.swift'],
+  scala:      ['.scala','.sc','.sbt'],
+  objectivec: ['.m','.mm'],
+  // Tier 2: systems/functional/rising
+  dart:       ['.dart'],
+  elixir:     ['.ex','.exs'],
+  erlang:     ['.erl','.hrl'],
+  haskell:    ['.hs','.hsc'],
+  ocaml:      ['.ml','.mli','.mll','.mly'],
+  clojure:    ['.clj','.cljs','.cljc','.edn'],
+  fsharp:     ['.fs','.fsi','.fsx'],
+  lua:        ['.lua'],
+  perl:       ['.pl','.pm','.t','.pod'],
+  r:          ['.r','.R','.Rmd'],
+  julia:      ['.jl'],
+  zig:        ['.zig','.zon'],
+  nim:        ['.nim','.nims','.nimble'],
+  crystal:    ['.cr'],
+  dlang:      ['.d','.di'],
+  vlang:      ['.v','.vsh'],
+  groovy:     ['.groovy','.gvy','.gradle'],
+  // Tier 3: web/frontend
+  html:       ['.html','.htm','.xhtml'],
+  css:        ['.css'],
+  scss:       ['.scss'],
+  sass:       ['.sass'],
+  less:       ['.less'],
+  vue:        ['.vue'],
+  svelte:     ['.svelte'],
+  astro:      ['.astro'],
+  elm:        ['.elm'],
+  coffeescript:['.coffee','.cjsx','.iced'],
+  // Tier 4: shell/scripting
+  bash:       ['.sh','.bash','.bats'],
+  powershell: ['.ps1','.psm1','.psd1'],
+  fish:       ['.fish'],
+  batchfile:  ['.bat','.cmd'],
+  // Tier 5: infra/config/build
+  dockerfile: ['.dockerfile','.containerfile'],
+  terraform:  ['.tf','.tfvars','.hcl'],
+  nix:        ['.nix'],
+  cmake:      ['.cmake'],
+  // Tier 6: data/markup
+  markdown:   ['.md','.markdown','.mdx','.mdown'],
+  yaml:       ['.yaml','.yml'],
+  json:       ['.json','.jsonl','.jsonc','.json5'],
+  toml:       ['.toml'],
+  xml:        ['.xml','.xsl','.xslt','.xsd','.svg','.plist'],
+  graphql:    ['.graphql','.gql'],
+  protobuf:   ['.proto'],
+  sql:        ['.sql','.ddl','.dml'],
+  latex:      ['.tex','.sty','.cls','.bib'],
+  rst:        ['.rst','.rest'],
+  // Tier 7: specialized
+  solidity:   ['.sol'],
+  gdscript:   ['.gd'],
+  cuda:       ['.cu','.cuh'],
+  fortran:    ['.f','.for','.f77','.f90','.f95','.f03','.f08'],
+  assembly:   ['.asm','.s','.S','.nasm'],
+  wasm:       ['.wast','.wat'],
+};
+
+const LANG_MARKERS = {
+  // Mainstream
+  python:     ['pyproject.toml','setup.py','setup.cfg','requirements.txt','Pipfile','tox.ini','manage.py','.python-version'],
+  typescript: ['tsconfig.json','tsconfig.app.json'],
+  javascript: ['package.json','.eslintrc.js','webpack.config.js','babel.config.js','.babelrc','next.config.js','next.config.mjs','vite.config.js','vite.config.ts'],
+  go:         ['go.mod','go.sum'],
+  rust:       ['Cargo.toml','Cargo.lock'],
+  java:       ['pom.xml','build.gradle','gradlew','*.mvn'],
+  kotlin:     ['build.gradle.kts'],
+  csharp:     ['*.csproj','*.sln','global.json','Directory.Build.props','nuget.config'],
+  cpp:        ['CMakeLists.txt','Makefile','meson.build','conanfile.txt','vcpkg.json'],
+  c:          ['Makefile','CMakeLists.txt','configure.ac','meson.build'],
+  ruby:       ['Gemfile','Rakefile','*.gemspec','.ruby-version','config.ru'],
+  php:        ['composer.json','artisan','wp-config.php'],
+  swift:      ['Package.swift','*.xcodeproj','Podfile'],
+  scala:      ['build.sbt'],
+  objectivec: ['*.xcodeproj','Podfile','Cartfile'],
+  // Systems/functional
+  dart:       ['pubspec.yaml','analysis_options.yaml'],
+  elixir:     ['mix.exs','mix.lock'],
+  erlang:     ['rebar.config','rebar.lock'],
+  haskell:    ['stack.yaml','*.cabal','cabal.project','package.yaml'],
+  ocaml:      ['dune-project','*.opam','dune'],
+  clojure:    ['project.clj','deps.edn','shadow-cljs.edn'],
+  fsharp:     ['*.fsproj'],
+  lua:        ['.luacheckrc','*.rockspec'],
+  perl:       ['Makefile.PL','Build.PL','cpanfile','dist.ini'],
+  r:          ['DESCRIPTION','NAMESPACE','.Rprofile','renv.lock','.Rproj'],
+  julia:      ['Project.toml','Manifest.toml'],
+  zig:        ['build.zig','build.zig.zon'],
+  nim:        ['*.nimble','nim.cfg'],
+  crystal:    ['shard.yml','shard.lock'],
+  dlang:      ['dub.json','dub.sdl'],
+  vlang:      ['v.mod'],
+  groovy:     ['Jenkinsfile'],
+  // Web/frontend
+  html:       ['index.html'],
+  vue:        ['vue.config.js','nuxt.config.js','nuxt.config.ts'],
+  svelte:     ['svelte.config.js','svelte.config.ts'],
+  astro:      ['astro.config.mjs','astro.config.ts'],
+  elm:        ['elm.json'],
+  coffeescript:['Cakefile'],
+  // Shell
+  bash:       ['.bashrc','.bash_profile'],
+  fish:       ['config.fish'],
+  // Infra/config
+  dockerfile: ['Dockerfile','Containerfile','docker-compose.yml','docker-compose.yaml','compose.yml','compose.yaml'],
+  terraform:  ['main.tf','*.tf','terraform.tfstate','.terraform.lock.hcl'],
+  nix:        ['flake.nix','default.nix','shell.nix'],
+  cmake:      ['CMakeLists.txt'],
+  // Data/markup
+  latex:      ['latexmkrc','.latexmkrc'],
+  rst:        ['conf.py'], // Sphinx
+  graphql:    ['.graphqlrc','*.graphqlrc.yml'],
+  protobuf:   ['buf.yaml','buf.gen.yaml'],
+  // Specialized
+  solidity:   ['hardhat.config.js','hardhat.config.ts','foundry.toml','truffle-config.js'],
+  gdscript:   ['project.godot'],
+};
+
+// Ambiguous extensions: .h → check siblings for C vs C++ vs ObjC
+const AMBIGUOUS_EXTS = {'.h': ['c','cpp','objectivec']};
+
+// Extension → language lookup (first-registered wins for non-ambiguous)
+const EXT_TO_LANG = {};
+for (const [lang, exts] of Object.entries(LANG_EXTENSIONS)) {
+  for (const ext of exts) {
+    if (!EXT_TO_LANG[ext]) EXT_TO_LANG[ext] = lang;
+  }
+}
+// Ensure .h maps to c by default (cpp wins via marker/count)
+EXT_TO_LANG['.h'] = 'c';
+
+// Language display names (for UI)
+const LANG_DISPLAY = {
+  python:'Python', typescript:'TypeScript', javascript:'JavaScript', go:'Go', rust:'Rust',
+  java:'Java', kotlin:'Kotlin', csharp:'C#', cpp:'C++', c:'C', ruby:'Ruby', php:'PHP',
+  swift:'Swift', scala:'Scala', objectivec:'Objective-C', dart:'Dart', elixir:'Elixir',
+  erlang:'Erlang', haskell:'Haskell', ocaml:'OCaml', clojure:'Clojure', fsharp:'F#',
+  lua:'Lua', perl:'Perl', r:'R', julia:'Julia', zig:'Zig', nim:'Nim', crystal:'Crystal',
+  dlang:'D', vlang:'V', groovy:'Groovy', html:'HTML', css:'CSS', scss:'SCSS', sass:'Sass',
+  less:'Less', vue:'Vue', svelte:'Svelte', astro:'Astro', elm:'Elm', coffeescript:'CoffeeScript',
+  bash:'Shell', powershell:'PowerShell', fish:'Fish', batchfile:'Batch',
+  dockerfile:'Docker', terraform:'Terraform/HCL', nix:'Nix', cmake:'CMake',
+  markdown:'Markdown', yaml:'YAML', json:'JSON', toml:'TOML', xml:'XML',
+  graphql:'GraphQL', protobuf:'Protocol Buffers', sql:'SQL', latex:'LaTeX', rst:'reStructuredText',
+  solidity:'Solidity', gdscript:'GDScript', cuda:'CUDA', fortran:'Fortran',
+  assembly:'Assembly', wasm:'WebAssembly',
+};
+
+// Tree-sitter grammar names (may differ from language key)
+const GRAMMAR_NAMES = {
+  python: 'python', typescript: 'tsx', javascript: 'javascript',
+  go: 'go', rust: 'rust', java: 'java', kotlin: 'kotlin',
+  csharp: 'c_sharp', cpp: 'cpp', c: 'c', ruby: 'ruby', php: 'php',
+  dart: 'dart', swift: 'swift', scala: 'scala', bash: 'bash', lua: 'lua',
+  html: 'html', css: 'css', vue: 'vue', svelte: 'svelte',
+  elixir: 'elixir', haskell: 'haskell', ocaml: 'ocaml', julia: 'julia',
+  zig: 'zig', elm: 'elm', perl: 'perl', r: 'r', yaml: 'yaml', json: 'json',
+  markdown: 'markdown', toml: 'toml', sql: 'sql', latex: 'latex',
+};
+
+// Tree-sitter S-expression queries per language (ported from _specs.py)
+const TS_SPECS = {
+  python: {
+    functionQuery: `
+      (function_definition name: (identifier) @name body: (block) @body) @func`,
+    classQuery: `
+      (class_definition name: (identifier) @name body: (block) @body) @class`,
+    importQuery: `
+      (import_from_statement module_name: (dotted_name) @path) @import
+      (import_statement name: (dotted_name) @path) @import`,
+    commentTypes: new Set(['comment']),
+    logPatterns: [/^\s*(?:print\(|logging\.|logger\.)/],
+  },
+  javascript: {
+    functionQuery: `
+      (function_declaration name: (identifier) @name body: (statement_block) @body) @func
+      (method_definition name: (property_identifier) @name body: (statement_block) @body) @func
+      (variable_declarator name: (identifier) @name value: (arrow_function body: (statement_block) @body)) @func`,
+    classQuery: `
+      (class_declaration name: (identifier) @name body: (class_body) @body) @class`,
+    importQuery: `
+      (import_statement source: (string (string_fragment) @path)) @import`,
+    commentTypes: new Set(['comment']),
+    logPatterns: [/^\s*console\./],
+  },
+  typescript: {
+    functionQuery: `
+      (function_declaration name: (identifier) @name body: (statement_block) @body) @func
+      (method_definition name: (property_identifier) @name body: (statement_block) @body) @func
+      (variable_declarator name: (identifier) @name value: (arrow_function body: (statement_block) @body)) @func`,
+    classQuery: `
+      (class_declaration name: (type_identifier) @name body: (class_body) @body) @class`,
+    importQuery: `
+      (import_statement source: (string (string_fragment) @path)) @import`,
+    commentTypes: new Set(['comment']),
+    logPatterns: [/^\s*console\./],
+  },
+  go: {
+    functionQuery: `
+      (function_declaration name: (identifier) @name body: (block) @body) @func
+      (method_declaration name: (field_identifier) @name body: (block) @body) @func`,
+    classQuery: `
+      (type_declaration (type_spec name: (type_identifier) @name type: (struct_type) @body)) @class`,
+    importQuery: `
+      (import_spec path: (interpreted_string_literal) @path) @import`,
+    commentTypes: new Set(['comment']),
+    logPatterns: [/^\s*(?:fmt\.Print|fmt\.Fprint|log\.)/],
+  },
+  rust: {
+    functionQuery: `
+      (function_item name: (identifier) @name body: (block) @body) @func`,
+    classQuery: `
+      (struct_item name: (type_identifier) @name body: (field_declaration_list) @body) @class`,
+    importQuery: `
+      (use_declaration argument: (_) @path) @import`,
+    commentTypes: new Set(['line_comment', 'block_comment']),
+    logPatterns: [/^\s*(?:println!|eprintln!|dbg!|tracing::)/],
+  },
+  java: {
+    functionQuery: `
+      (method_declaration name: (identifier) @name body: (block) @body) @func
+      (constructor_declaration name: (identifier) @name body: (constructor_body) @body) @func`,
+    classQuery: `
+      (class_declaration name: (identifier) @name body: (class_body) @body) @class
+      (interface_declaration name: (identifier) @name body: (interface_body) @body) @class`,
+    importQuery: `
+      (import_declaration (scoped_identifier) @path) @import`,
+    commentTypes: new Set(['line_comment', 'block_comment']),
+    logPatterns: [/^\s*(?:System\.out\.|System\.err\.|Logger\.|log\.)/],
+  },
+  ruby: {
+    functionQuery: `
+      (method name: (identifier) @name) @func
+      (singleton_method name: (identifier) @name) @func`,
+    classQuery: `
+      (class name: (constant) @name) @class`,
+    importQuery: `
+      (call method: (identifier) @_method arguments: (argument_list (string (string_content) @path))) @import`,
+    commentTypes: new Set(['comment']),
+    logPatterns: [/^\s*(?:puts |p |pp |Rails\.logger)/],
+  },
+  php: {
+    functionQuery: `
+      (function_definition name: (name) @name body: (compound_statement) @body) @func
+      (method_declaration name: (name) @name body: (compound_statement) @body) @func`,
+    classQuery: `
+      (class_declaration name: (name) @name body: (declaration_list) @body) @class`,
+    importQuery: `
+      (namespace_use_declaration (namespace_use_clause (qualified_name) @path)) @import`,
+    commentTypes: new Set(['comment']),
+    logPatterns: [/^\s*(?:echo |print |var_dump|error_log|Log::)/],
+  },
+  cpp: {
+    functionQuery: `
+      (function_definition declarator: (function_declarator declarator: (identifier) @name) body: (compound_statement) @body) @func`,
+    classQuery: `
+      (class_specifier name: (type_identifier) @name body: (field_declaration_list) @body) @class
+      (struct_specifier name: (type_identifier) @name body: (field_declaration_list) @body) @class`,
+    importQuery: `
+      (preproc_include path: (string_literal) @path) @import`,
+    commentTypes: new Set(['comment']),
+    logPatterns: [/^\s*(?:std::cout|std::cerr|printf\(|fprintf\()/],
+  },
+  c: {
+    functionQuery: `
+      (function_definition declarator: (function_declarator declarator: (identifier) @name) body: (compound_statement) @body) @func`,
+    classQuery: `
+      (struct_specifier name: (type_identifier) @name body: (field_declaration_list) @body) @class`,
+    importQuery: `
+      (preproc_include path: (string_literal) @path) @import`,
+    commentTypes: new Set(['comment']),
+    logPatterns: [/^\s*(?:printf\(|fprintf\(|perror\()/],
+  },
+};
+
+// ── GitHub API & File Fetching ──────────────────────────────────────────────
+
+function parseRepoUrl(input) {
+  input = input.trim();
+  let owner, repo, branch;
+  // owner/repo@branch
+  const atMatch = input.match(/^([^\/\s]+)\/([^@\s]+)@(.+)$/);
+  if (atMatch) return { owner: atMatch[1], repo: atMatch[2], branch: atMatch[3] };
+  // Full URL
+  const urlMatch = input.match(/github\.com\/([^\/]+)\/([^\/\s#?]+)/);
+  if (urlMatch) {
+    owner = urlMatch[1]; repo = urlMatch[2].replace(/\.git$/, '');
+    const branchMatch = input.match(/\/tree\/([^\/\s#?]+)/);
+    branch = branchMatch ? branchMatch[1] : undefined;
+    return { owner, repo, branch };
+  }
+  // owner/repo
+  const simpleMatch = input.match(/^([^\/\s]+)\/([^\/\s]+)$/);
+  if (simpleMatch) return { owner: simpleMatch[1], repo: simpleMatch[2] };
+  return null;
+}
+
+function ghHeaders() {
+  const token = document.getElementById('gh-token').value.trim();
+  const h = { Accept: 'application/vnd.github.v3+json' };
+  if (token) h.Authorization = `token ${token}`;
+  return h;
+}
+
+async function fetchDefaultBranch(owner, repo) {
+  const res = await fetch(`https://api.github.com/repos/${owner}/${repo}`, { headers: ghHeaders() });
+  if (!res.ok) throw new Error(`GitHub API ${res.status}: ${res.statusText}`);
+  const data = await res.json();
+  return data.default_branch || 'main';
+}
+
+async function fetchRepoTree(owner, repo, branch) {
+  const res = await fetch(
+    `https://api.github.com/repos/${owner}/${repo}/git/trees/${branch}?recursive=1`,
+    { headers: ghHeaders() }
+  );
+  if (!res.ok) throw new Error(`Tree API ${res.status}: ${res.statusText}`);
+  const data = await res.json();
+  if (data.truncated) log('Warning: tree truncated by GitHub API (large repo)');
+  return data.tree.filter(n => n.type === 'blob').map(n => ({ path: n.path, size: n.size || 0 }));
+}
+
+const BINARY_EXTS = new Set([
+  '.png','.jpg','.jpeg','.gif','.ico','.svg','.webp','.bmp','.woff','.woff2','.ttf','.eot',
+  '.otf','.mp3','.mp4','.wav','.ogg','.avi','.mov','.zip','.gz','.tar','.bz2','.7z','.rar',
+  '.pdf','.doc','.docx','.xls','.xlsx','.ppt','.pptx','.exe','.dll','.so','.dylib','.o',
+  '.pyc','.class','.jar','.wasm','.sqlite','.db','.lock','.min.js','.min.css','.map',
+]);
+
+function isBinary(path) {
+  const ext = '.' + path.split('.').pop().toLowerCase();
+  return BINARY_EXTS.has(ext);
+}
+
+const MAX_FILE_SIZE = 100_000; // 100KB
+const MAX_FILES = 400;
+
+async function fetchFileContents(owner, repo, branch, tree, onProgress) {
+  const files = new Map(); // path → content
+  const eligible = tree.filter(f => !isBinary(f.path) && f.size < MAX_FILE_SIZE && f.size > 0);
+  const toFetch = eligible.slice(0, MAX_FILES);
+
+  let done = 0;
+  const total = toFetch.length;
+  const CONCURRENCY = 15;
+
+  async function fetchOne(f) {
+    try {
+      const url = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${f.path}`;
+      const res = await fetch(url);
+      if (res.ok) {
+        const text = await res.text();
+        files.set(f.path, text);
+      }
+    } catch (e) { /* skip */ }
+    done++;
+    if (onProgress) onProgress(done, total);
+  }
+
+  // Fetch in batches
+  for (let i = 0; i < toFetch.length; i += CONCURRENCY) {
+    const batch = toFetch.slice(i, i + CONCURRENCY);
+    await Promise.all(batch.map(fetchOne));
+  }
+  return files;
+}
+
+// Gitingest fallback
+async function fetchViaGitingest(owner, repo) {
+  // Try raw endpoint
+  try {
+    const res = await fetch(`https://gitingest.com/${owner}/${repo}/raw`, { mode: 'cors' });
+    if (res.ok) return parseGitingestText(await res.text());
+  } catch (e) { /* try next */ }
+  // Try API endpoint
+  try {
+    const res = await fetch(`https://gitingest.com/api/digest?url=https://github.com/${owner}/${repo}`, { mode: 'cors' });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.content) return parseGitingestText(data.content);
+    }
+  } catch (e) { /* fall through */ }
+  return null;
+}
+
+function parseGitingestText(text) {
+  const files = new Map();
+  const parts = text.split(/^FILE:\s*/m);
+  for (const part of parts) {
+    if (!part.trim()) continue;
+    const nlIdx = part.indexOf('\n');
+    if (nlIdx < 0) continue;
+    const path = part.substring(0, nlIdx).trim();
+    const content = part.substring(nlIdx + 1);
+    if (path && !isBinary(path)) files.set(path, content);
+  }
+  return files;
+}
+
+// ── Language Detection ──────────────────────────────────────────────────────
+
+// Non-code languages: these are detected but deprioritized when a "real" code lang exists
+const DATA_LANGS = new Set(['markdown','yaml','json','toml','xml','graphql','protobuf','sql','latex','rst','css','scss','sass','less','html','dockerfile','batchfile']);
+
+function detectLanguage(filePaths) {
+  // 1. Check marker files at project root (basename match)
+  const pathSet = new Set(filePaths);
+  const basenames = new Set(filePaths.map(p => {
+    const slash = Math.max(p.lastIndexOf('/'), p.lastIndexOf('\\'));
+    return slash >= 0 ? p.substring(slash + 1) : p;
+  }));
+  // Also track root-level files (depth 0 or 1 segment)
+  const rootFiles = new Set(filePaths.filter(p => !p.includes('/') || p.split('/').length <= 2)
+    .map(p => { const s = p.lastIndexOf('/'); return s >= 0 ? p.substring(s + 1) : p; }));
+
+  const candidates = [];
+  for (const [lang, markers] of Object.entries(LANG_MARKERS)) {
+    for (const marker of markers) {
+      let found = false;
+      if (marker.startsWith('*.')) {
+        const suffix = marker.substring(1);
+        found = [...rootFiles].some(f => f.endsWith(suffix));
+      } else if (marker.includes('/')) {
+        found = pathSet.has(marker);
+      } else {
+        found = rootFiles.has(marker) || basenames.has(marker);
+      }
+      if (found) { candidates.push(lang); break; }
+    }
+  }
+
+  // 2. Count files by language (extension-based)
+  const counts = {};
+  for (const p of filePaths) {
+    const dot = p.lastIndexOf('.');
+    if (dot < 0) continue;
+    const ext = p.substring(dot).toLowerCase();
+    const lang = EXT_TO_LANG[ext];
+    if (lang) counts[lang] = (counts[lang] || 0) + 1;
+  }
+
+  // 3. Resolve ambiguous .h files: look at sibling extensions
+  if (counts['c'] && (counts['cpp'] || candidates.includes('cpp'))) {
+    // If .cpp/.cc files exist, .h files are likely C++ headers
+    const hCount = filePaths.filter(p => p.endsWith('.h')).length;
+    counts['c'] = Math.max(0, (counts['c'] || 0) - hCount);
+    counts['cpp'] = (counts['cpp'] || 0) + hCount;
+  }
+
+  // 4. Merge web framework/markup languages into parent code languages
+  // Vue/Svelte/Astro/HTML files → count toward typescript if tsconfig exists, else javascript
+  for (const framework of ['vue','svelte','astro','html','coffeescript']) {
+    if (counts[framework]) {
+      // Only merge if actual code files (JS/TS) exist or markers suggest a code project
+      const hasCodeFiles = counts['typescript'] || counts['javascript'] || candidates.includes('typescript') || candidates.includes('javascript');
+      if (hasCodeFiles || framework !== 'html') {
+        const target = candidates.includes('typescript') || counts['typescript'] ? 'typescript' : 'javascript';
+        counts[target] = (counts[target] || 0) + counts[framework];
+        if (!candidates.includes(target)) candidates.push(target);
+        delete counts[framework];
+      }
+    }
+  }
+  // CSS/SCSS/Less/Sass → merge into whatever code language is dominant (don't compete)
+  for (const style of ['css','scss','sass','less']) {
+    if (counts[style]) delete counts[style];
+  }
+
+  // 5. Filter candidates: prefer code languages over data/markup
+  const codeCandidates = candidates.filter(c => !DATA_LANGS.has(c));
+  const effectiveCandidates = codeCandidates.length > 0 ? codeCandidates : candidates;
+
+  if (effectiveCandidates.length === 1) return effectiveCandidates[0];
+  if (effectiveCandidates.length > 1) {
+    let best = effectiveCandidates[0], bestCount = counts[effectiveCandidates[0]] || 0;
+    for (const c of effectiveCandidates) {
+      if ((counts[c] || 0) > bestCount) { best = c; bestCount = counts[c] || 0; }
+    }
+    return best;
+  }
+
+  // 6. No marker match: pick code language with most files, deprioritize data langs
+  let best = null, bestCount = 0;
+  for (const [lang, count] of Object.entries(counts)) {
+    if (count > bestCount && !DATA_LANGS.has(lang)) { best = lang; bestCount = count; }
+  }
+  // If only data/markup langs found, pick the best of those
+  if (!best) {
+    for (const [lang, count] of Object.entries(counts)) {
+      if (count > bestCount) { best = lang; bestCount = count; }
+    }
+  }
+  return best;
+}
+
+function getSourceFiles(files, lang) {
+  const exts = new Set(LANG_EXTENSIONS[lang] || []);
+  // For html/css/markdown etc, also include files from "related" web extensions
+  const WEB_RELATED = { html: ['.html','.htm','.xhtml','.js','.css','.ts'],
+    css: ['.css','.scss','.sass','.less','.html'], vue: ['.vue','.ts','.js'],
+    svelte: ['.svelte','.ts','.js'], astro: ['.astro','.ts','.js'] };
+  if (WEB_RELATED[lang]) for (const ext of WEB_RELATED[lang]) exts.add(ext);
+  return [...files.keys()].filter(p => {
+    const dot = p.lastIndexOf('.');
+    return dot >= 0 && exts.has(p.substring(dot).toLowerCase());
+  });
+}
+
+// ── Tree-Sitter Integration ─────────────────────────────────────────────────
+
+let TSParser = null; // TreeSitter constructor
+const loadedGrammars = new Map(); // grammarName → Language
+
+async function initTreeSitter() {
+  try {
+    if (typeof TreeSitter === 'undefined') return false;
+    await TreeSitter.init({
+      locateFile: (name) => `https://cdn.jsdelivr.net/npm/web-tree-sitter@0.24.7/${name}`
+    });
+    TSParser = TreeSitter;
+    return true;
+  } catch (e) {
+    console.warn('Tree-sitter init failed:', e);
+    return false;
+  }
+}
+
+const WASM_BASES = [
+  'https://cdn.jsdelivr.net/npm/tree-sitter-wasms@0.0.11/out/tree-sitter-',
+];
+
+async function loadGrammar(lang) {
+  if (!TSParser) return null;
+  const grammarName = GRAMMAR_NAMES[lang];
+  if (!grammarName) return null;
+  if (loadedGrammars.has(grammarName)) return loadedGrammars.get(grammarName);
+
+  for (const base of WASM_BASES) {
+    try {
+      const url = `${base}${grammarName}.wasm`;
+      const language = await TSParser.Language.load(url);
+      loadedGrammars.set(grammarName, language);
+      return language;
+    } catch (e) { /* try next base */ }
+  }
+  console.warn(`Failed to load grammar for ${lang}`);
+  return null;
+}
+
+// ── AST Extraction ──────────────────────────────────────────────────────────
+
+function capturesAsMap(captures) {
+  const m = {};
+  for (const c of captures) m[c.name] = c.node;
+  return m;
+}
+
+function nodeText(node) {
+  return typeof node.text === 'string' ? node.text :
+    (node.text instanceof Uint8Array ? new TextDecoder().decode(node.text) : String(node.text));
+}
+
+function extractParamNames(funcNode) {
+  const PARAM_NODE_TYPES = new Set([
+    'parameters','parameter_list','formal_parameters','formal_parameter_list',
+    'function_type_parameters','lambda_parameters','method_parameters','params',
+  ]);
+  const IDENT_TYPES = new Set([
+    'identifier','name','simple_identifier','word','pattern','shorthand_field_identifier',
+  ]);
+  const TYPE_PARENT_TYPES = new Set([
+    'type','type_identifier','type_annotation','return_type','generic_type',
+    'scoped_type_identifier','constrained_type_parameter',
+  ]);
+  const params = [];
+  for (const child of funcNode.children) {
+    if (PARAM_NODE_TYPES.has(child.type)) {
+      walkParams(child, params, IDENT_TYPES, TYPE_PARENT_TYPES);
+      break;
+    }
+  }
+  return params;
+}
+
+function walkParams(node, params, identTypes, typeParentTypes) {
+  if (identTypes.has(node.type)) {
+    if (!node.parent || !typeParentTypes.has(node.parent.type)) {
+      const text = nodeText(node);
+      if (text && !params.includes(text)) params.push(text);
+    }
+    return;
+  }
+  for (const child of node.children) {
+    walkParams(child, params, identTypes, typeParentTypes);
+  }
+}
+
+function normalizeBody(source, funcNode, spec) {
+  // Collect comment ranges
+  const commentRanges = [];
+  const stack = [funcNode];
+  while (stack.length) {
+    const n = stack.pop();
+    if (spec.commentTypes.has(n.type)) {
+      commentRanges.push([n.startIndex, n.endIndex]);
+    } else {
+      for (let i = n.childCount - 1; i >= 0; i--) stack.push(n.child(i));
+    }
+  }
+  // Extract function source, remove comments
+  let text = source.substring(funcNode.startIndex, funcNode.endIndex);
+  if (commentRanges.length) {
+    const offset = funcNode.startIndex;
+    const sorted = commentRanges.map(([s, e]) => [s - offset, e - offset]).sort((a, b) => a[0] - b[0]);
+    let result = '';
+    let pos = 0;
+    for (const [s, e] of sorted) {
+      result += text.substring(pos, s);
+      // Replace comment with spaces, keep newlines
+      for (let i = s; i < e && i < text.length; i++) result += text[i] === '\n' ? '\n' : ' ';
+      pos = e;
+    }
+    result += text.substring(pos);
+    text = result;
+  }
+  // Strip blank lines and log lines
+  let lines = text.split('\n').filter(l => l.trim());
+  if (spec.logPatterns) {
+    lines = lines.filter(l => !spec.logPatterns.some(p => p.test(l)));
+  }
+  return lines.join('\n');
+}
+
+function simpleHash(str) {
+  let hash = 5381;
+  for (let i = 0; i < str.length; i++) hash = ((hash << 5) + hash + str.charCodeAt(i)) & 0xffffffff;
+  return hash.toString(16);
+}
+
+async function extractFunctions(files, lang, sourceFiles) {
+  const spec = TS_SPECS[lang];
+  const grammar = await loadGrammar(lang);
+  const functions = [];
+
+  if (grammar && spec && spec.functionQuery) {
+    const parser = new TSParser();
+    parser.setLanguage(grammar);
+    let query;
+    try { query = grammar.query(spec.functionQuery); } catch (e) {
+      console.warn('Query parse failed for', lang, e);
+      return extractFunctionsRegex(files, lang, sourceFiles);
+    }
+
+    for (const filepath of sourceFiles) {
+      const content = files.get(filepath);
+      if (!content) continue;
+      try {
+        const tree = parser.parse(content);
+        const matches = query.matches(tree.rootNode);
+        for (const match of matches) {
+          const caps = capturesAsMap(match.captures);
+          if (!caps.func || !caps.name) continue;
+          const name = nodeText(caps.name);
+          const line = caps.func.startPosition.row + 1;
+          const endLine = caps.func.endPosition.row + 1;
+          const loc = endLine - line + 1;
+          const normalized = normalizeBody(content, caps.func, spec);
+          if (normalized.split('\n').length < 3) continue;
+          const bodyHash = simpleHash(normalized);
+          const params = extractParamNames(caps.func);
+          functions.push({ name, file: filepath, line, endLine, loc, normalized, bodyHash, params });
+        }
+        tree.delete();
+      } catch (e) { /* skip file */ }
+    }
+    parser.delete();
+  } else {
+    return extractFunctionsRegex(files, lang, sourceFiles);
+  }
+  return functions;
+}
+
+// Regex fallback for function extraction
+function extractFunctionsRegex(files, lang, sourceFiles) {
+  const patterns = {
+    python:     /^(\s*)def\s+(\w+)\s*\(/gm,
+    javascript: /(?:function\s+(\w+)|(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s+)?(?:\([^)]*\)|[^=])\s*=>|(\w+)\s*\([^)]*\)\s*\{)/gm,
+    typescript: /(?:function\s+(\w+)|(?:const|let|var)\s+(\w+)\s*(?::\s*\w+)?\s*=\s*(?:async\s+)?(?:\([^)]*\)|[^=])\s*=>|(\w+)\s*\([^)]*\)\s*\{)/gm,
+    go:         /^func\s+(?:\([^)]+\)\s+)?(\w+)\s*\(/gm,
+    rust:       /^(?:pub\s+)?(?:async\s+)?fn\s+(\w+)/gm,
+    java:       /(?:public|private|protected|static|\s)+\s+\w+\s+(\w+)\s*\(/gm,
+    kotlin:     /(?:fun|suspend\s+fun)\s+(?:<[^>]+>\s+)?(\w+)\s*\(/gm,
+    csharp:     /(?:public|private|protected|internal|static|async|override|virtual|\s)+\s+\w+(?:<[^>]+>)?\s+(\w+)\s*\(/gm,
+    ruby:       /^\s*def\s+(\w+)/gm,
+    php:        /(?:public|private|protected|static|\s)*function\s+(\w+)/gm,
+    cpp:        /(?:\w+(?:::\w+)*\s+)?(\w+)\s*\([^)]*\)\s*(?:const\s*)?\{/gm,
+    c:          /(?:\w+\s+)+(\w+)\s*\([^)]*\)\s*\{/gm,
+    swift:      /(?:func|class\s+func|static\s+func)\s+(\w+)/gm,
+    scala:      /\bdef\s+(\w+)/gm,
+    dart:       /(?:void|int|String|bool|double|Future|Stream|dynamic|\w+)\s+(\w+)\s*\(/gm,
+    elixir:     /\bdef[p]?\s+(\w+)/gm,
+    haskell:    /^(\w+)\s+::/gm,
+    lua:        /(?:function\s+(?:\w+[.:])?(\w+)|local\s+function\s+(\w+))/gm,
+    perl:       /\bsub\s+(\w+)/gm,
+    r:          /(\w+)\s*<-\s*function/gm,
+    julia:      /\bfunction\s+(\w+)/gm,
+    zig:        /(?:pub\s+)?fn\s+(\w+)/gm,
+    nim:        /(?:proc|func|method|iterator)\s+(\w+)/gm,
+    crystal:    /\bdef\s+(\w+)/gm,
+    clojure:    /\(defn?\s+(\w[\w-]*)/gm,
+    fsharp:     /\blet\s+(?:rec\s+)?(\w+)/gm,
+    ocaml:      /\blet\s+(?:rec\s+)?(\w+)/gm,
+    erlang:     /^(\w+)\s*\(/gm,
+    groovy:     /(?:def|void|int|String|boolean|\w+)\s+(\w+)\s*\(/gm,
+    html:       /(?:function\s+(\w+)|(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s+)?(?:\([^)]*\)|[^=])\s*=>)/gm,
+    vue:        /(?:function\s+(\w+)|(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s+)?(?:\([^)]*\)|[^=])\s*=>)/gm,
+    svelte:     /(?:function\s+(\w+)|(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s+)?(?:\([^)]*\)|[^=])\s*=>)/gm,
+    solidity:   /\bfunction\s+(\w+)/gm,
+    gdscript:   /\bfunc\s+(\w+)/gm,
+    fortran:    /(?:subroutine|function)\s+(\w+)/gim,
+    powershell: /\bfunction\s+(\w[\w-]*)/gm,
+    bash:       /(?:^|\s)(\w+)\s*\(\s*\)/gm,
+  };
+  const pat = patterns[lang] || patterns[lang === 'generic' ? 'javascript' : 'javascript'];
+  const functions = [];
+
+  for (const filepath of sourceFiles) {
+    const content = files.get(filepath);
+    if (!content) continue;
+    const lines = content.split('\n');
+    pat.lastIndex = 0;
+    let match;
+    while ((match = pat.exec(content)) !== null) {
+      const name = match[1] || match[2] || match[3] || 'anonymous';
+      if (name === 'anonymous' || name === 'if' || name === 'for' || name === 'while') continue;
+      const line = content.substring(0, match.index).split('\n').length;
+      // Estimate function end: find next function or end of file
+      const endLine = Math.min(line + 30, lines.length); // rough estimate
+      const loc = endLine - line + 1;
+      const body = lines.slice(line - 1, endLine).join('\n');
+      const normalized = body.split('\n').filter(l => l.trim() && !l.trim().startsWith('//')).join('\n');
+      const bodyHash = simpleHash(normalized);
+      functions.push({ name, file: filepath, line, endLine, loc, normalized, bodyHash, params: [] });
+    }
+  }
+  return functions;
+}
+
+async function extractClasses(files, lang, sourceFiles) {
+  const spec = TS_SPECS[lang];
+  const grammar = await loadGrammar(lang);
+  const classes = [];
+
+  if (grammar && spec && spec.classQuery) {
+    const parser = new TSParser();
+    parser.setLanguage(grammar);
+    let query;
+    try { query = grammar.query(spec.classQuery); } catch (e) { return classes; }
+
+    for (const filepath of sourceFiles) {
+      const content = files.get(filepath);
+      if (!content) continue;
+      try {
+        const tree = parser.parse(content);
+        const matches = query.matches(tree.rootNode);
+        for (const match of matches) {
+          const caps = capturesAsMap(match.captures);
+          if (!caps.class || !caps.name) continue;
+          const name = nodeText(caps.name);
+          const line = caps.class.startPosition.row + 1;
+          const endLine = caps.class.endPosition.row + 1;
+          const loc = endLine - line + 1;
+          // Count methods within class body
+          const bodyNode = caps.body || caps.class;
+          let methodCount = 0, attrCount = 0;
+          const methodStack = [bodyNode];
+          while (methodStack.length) {
+            const n = methodStack.pop();
+            if (['method_definition','function_definition','method_declaration',
+                 'function_declaration','method','singleton_method'].includes(n.type)) {
+              methodCount++;
+            } else if (['field_declaration','assignment','property_declaration'].includes(n.type)) {
+              attrCount++;
+            }
+            for (let i = 0; i < n.childCount; i++) methodStack.push(n.child(i));
+          }
+          classes.push({
+            name, file: filepath, line, loc, methods: methodCount, attributes: attrCount,
+            metrics: { methods: methodCount, attributes: attrCount, loc },
+          });
+        }
+        tree.delete();
+      } catch (e) { /* skip */ }
+    }
+    parser.delete();
+  }
+  return classes;
+}
+
+// ── Import Graph Building ───────────────────────────────────────────────────
+
+async function buildImportGraph(files, lang, sourceFiles) {
+  const graph = new Map(); // filepath → { imports: Set, importers: Set }
+  for (const f of sourceFiles) graph.set(f, { imports: new Set(), importers: new Set() });
+
+  const spec = TS_SPECS[lang];
+  const grammar = await loadGrammar(lang);
+  const fileSet = new Set(sourceFiles);
+
+  if (grammar && spec && spec.importQuery) {
+    const parser = new TSParser();
+    parser.setLanguage(grammar);
+    let query;
+    try { query = grammar.query(spec.importQuery); } catch (e) {
+      parser.delete();
+      return buildImportGraphRegex(files, lang, sourceFiles);
+    }
+
+    for (const filepath of sourceFiles) {
+      const content = files.get(filepath);
+      if (!content) continue;
+      try {
+        const tree = parser.parse(content);
+        const matches = query.matches(tree.rootNode);
+        for (const match of matches) {
+          const caps = capturesAsMap(match.captures);
+          const pathNode = caps.path;
+          if (!pathNode) continue;
+          let importText = nodeText(pathNode).replace(/^["'`]+|["'`]+$/g, '');
+          const resolved = resolveImport(importText, filepath, fileSet, lang);
+          if (resolved && graph.has(resolved)) {
+            graph.get(filepath).imports.add(resolved);
+            graph.get(resolved).importers.add(filepath);
+          }
+        }
+        tree.delete();
+      } catch (e) { /* skip */ }
+    }
+    parser.delete();
+  } else {
+    return buildImportGraphRegex(files, lang, sourceFiles);
+  }
+
+  // Add counts
+  const result = {};
+  for (const [f, data] of graph) {
+    result[f] = {
+      imports: data.imports, importers: data.importers,
+      import_count: data.imports.size, importer_count: data.importers.size,
+    };
+  }
+  return result;
+}
+
+function buildImportGraphRegex(files, lang, sourceFiles) {
+  const graph = {};
+  const fileSet = new Set(sourceFiles);
+  for (const f of sourceFiles) graph[f] = { imports: new Set(), importers: new Set() };
+
+  const importPatterns = {
+    python: /^\s*(?:from\s+([\w.]+)\s+import|import\s+([\w.]+))/gm,
+    javascript: /(?:import\s+.*?from\s+['"]([^'"]+)['"]|require\s*\(\s*['"]([^'"]+)['"]\s*\))/gm,
+    typescript: /(?:import\s+.*?from\s+['"]([^'"]+)['"]|require\s*\(\s*['"]([^'"]+)['"]\s*\))/gm,
+    go: /^\s*"([^"]+)"/gm,
+    rust: /^\s*use\s+((?:crate|super|self)(?:::\w+)*)/gm,
+  };
+  const pat = importPatterns[lang];
+  if (!pat) {
+    for (const f of sourceFiles) {
+      graph[f].import_count = 0; graph[f].importer_count = 0;
+    }
+    return graph;
+  }
+
+  for (const filepath of sourceFiles) {
+    const content = files.get(filepath);
+    if (!content) continue;
+    pat.lastIndex = 0;
+    let match;
+    while ((match = pat.exec(content)) !== null) {
+      const importText = match[1] || match[2] || '';
+      const resolved = resolveImport(importText, filepath, fileSet, lang);
+      if (resolved && graph[resolved]) {
+        graph[filepath].imports.add(resolved);
+        graph[resolved].importers.add(filepath);
+      }
+    }
+  }
+
+  for (const f of sourceFiles) {
+    graph[f].import_count = graph[f].imports.size;
+    graph[f].importer_count = graph[f].importers.size;
+  }
+  return graph;
+}
+
+function resolveImport(importText, sourceFile, fileSet, lang) {
+  if (!importText) return null;
+  const dir = sourceFile.substring(0, sourceFile.lastIndexOf('/')) || '.';
+
+  if (lang === 'python') {
+    if (importText.startsWith('.')) {
+      // Relative import
+      const dots = importText.match(/^\.+/)[0].length;
+      let base = dir;
+      for (let i = 1; i < dots; i++) base = base.substring(0, base.lastIndexOf('/')) || '.';
+      const rest = importText.substring(dots).replace(/\./g, '/');
+      const candidates = rest ? [`${base}/${rest}.py`, `${base}/${rest}/__init__.py`] : [`${base}/__init__.py`];
+      for (const c of candidates) if (fileSet.has(normPath(c))) return normPath(c);
+      return null;
+    }
+    const parts = importText.replace(/\./g, '/');
+    for (const c of [`${parts}.py`, `${parts}/__init__.py`]) if (fileSet.has(c)) return c;
+    return null;
+  }
+
+  if (lang === 'javascript' || lang === 'typescript') {
+    if (!importText.startsWith('.')) return null;
+    const base = normPath(`${dir}/${importText}`);
+    const exts = lang === 'typescript'
+      ? ['', '.ts', '.tsx', '.js', '/index.ts', '/index.tsx', '/index.js']
+      : ['', '.js', '.jsx', '.mjs', '/index.js', '/index.jsx'];
+    for (const ext of exts) { const c = base + ext; if (fileSet.has(c)) return c; }
+    return null;
+  }
+
+  if (lang === 'go') {
+    // Find go.mod module path from file set
+    let modulePath = '';
+    for (const f of fileSet) {
+      if (f === 'go.mod' || f.endsWith('/go.mod')) {
+        // We'd need to read go.mod content, skip for now
+        break;
+      }
+    }
+    // Simplified: match by path suffix
+    const parts = importText.split('/');
+    for (const f of fileSet) {
+      if (f.endsWith('.go') && !f.endsWith('_test.go')) {
+        const fDir = f.substring(0, f.lastIndexOf('/'));
+        if (importText.endsWith(fDir) || fDir.endsWith(parts[parts.length - 1])) return f;
+      }
+    }
+    return null;
+  }
+
+  if (lang === 'rust') {
+    if (!importText.startsWith('crate::')) return null;
+    const parts = importText.substring(7).split('::');
+    for (let i = parts.length; i > 0; i--) {
+      const c = 'src/' + parts.slice(0, i).join('/') + '.rs';
+      if (fileSet.has(c)) return c;
+      const c2 = 'src/' + parts.slice(0, i).join('/') + '/mod.rs';
+      if (fileSet.has(c2)) return c2;
+    }
+    return null;
+  }
+
+  return null;
+}
+
+function normPath(p) {
+  const parts = p.split('/');
+  const result = [];
+  for (const part of parts) {
+    if (part === '.' || part === '') continue;
+    if (part === '..' && result.length > 0) result.pop();
+    else if (part !== '..') result.push(part);
+  }
+  return result.join('/');
+}
+
+// ── Detectors ───────────────────────────────────────────────────────────────
+
+function detectLargeFiles(files, sourceFiles, threshold = 500) {
+  const entries = [];
+  for (const filepath of sourceFiles) {
+    const content = files.get(filepath);
+    if (!content) continue;
+    const loc = content.split('\n').length;
+    if (loc > threshold) entries.push({ file: filepath, loc });
+  }
+  entries.sort((a, b) => b.loc - a.loc);
+  return { entries, potential: sourceFiles.length };
+}
+
+function detectFlatDirs(sourceFiles, threshold = 20) {
+  const dirCounts = {};
+  for (const f of sourceFiles) {
+    const dir = f.substring(0, f.lastIndexOf('/')) || '.';
+    dirCounts[dir] = (dirCounts[dir] || 0) + 1;
+  }
+  const entries = [];
+  for (const [dir, count] of Object.entries(dirCounts)) {
+    if (count >= threshold) entries.push({ directory: dir, file_count: count });
+  }
+  entries.sort((a, b) => b.file_count - a.file_count);
+  return { entries, potential: Object.keys(dirCounts).length };
+}
+
+function classifyConvention(filename) {
+  const stem = filename.includes('.') ? filename.substring(0, filename.lastIndexOf('.')) : filename;
+  if (!stem) return null;
+  if (stem.includes('-') && stem === stem.toLowerCase()) return 'kebab-case';
+  if (stem[0] === stem[0].toUpperCase() && stem[0] !== stem[0].toLowerCase() && !stem.includes('-'))
+    return 'PascalCase';
+  if (stem[0] === stem[0].toLowerCase() && /[A-Z]/.test(stem) && !stem.includes('-'))
+    return 'camelCase';
+  if (stem.includes('_') && stem === stem.toLowerCase()) return 'snake_case';
+  if (stem === stem.toLowerCase() && !stem.includes('-')) return 'flat_lower';
+  return null;
+}
+
+function detectNaming(sourceFiles) {
+  const dirFiles = {}; // dir → { convention → [filenames] }
+  const SKIP = new Set(['__init__.py', '__main__.py', 'conftest.py', 'setup.py', 'index.js',
+    'index.ts', 'index.tsx', 'mod.rs', 'main.go', 'main.py', 'main.rs']);
+  for (const f of sourceFiles) {
+    const dir = f.substring(0, f.lastIndexOf('/')) || '.';
+    const fname = f.substring(f.lastIndexOf('/') + 1);
+    if (SKIP.has(fname)) continue;
+    const conv = classifyConvention(fname);
+    if (!conv) continue;
+    if (!dirFiles[dir]) dirFiles[dir] = {};
+    if (!dirFiles[dir][conv]) dirFiles[dir][conv] = [];
+    dirFiles[dir][conv].push(fname);
+  }
+  const entries = [];
+  for (const [dir, conventions] of Object.entries(dirFiles)) {
+    const convNames = Object.keys(conventions);
+    if (convNames.length < 2) continue;
+    const sorted = convNames.map(c => [c, conventions[c]]).sort((a, b) => b[1].length - a[1].length);
+    const total = sorted.reduce((s, [, fs]) => s + fs.length, 0);
+    for (let i = 1; i < sorted.length; i++) {
+      const [convName, convFiles] = sorted[i];
+      if (convFiles.length < 5 || convFiles.length / total < 0.15) continue;
+      entries.push({
+        directory: dir, majority: sorted[0][0], majority_count: sorted[0][1].length,
+        minority: convName, minority_count: convFiles.length, total_files: total,
+      });
+    }
+  }
+  entries.sort((a, b) => b.minority_count - a.minority_count);
+  return { entries, potential: Object.keys(dirFiles).length };
+}
+
+function detectComplexity(files, sourceFiles, functions, threshold = 15, minLoc = 50) {
+  const entries = [];
+  let checked = 0;
+  for (const filepath of sourceFiles) {
+    const content = files.get(filepath);
+    if (!content) continue;
+    const lines = content.split('\n');
+    const loc = lines.length;
+    if (loc < minLoc) continue;
+    checked++;
+
+    let score = 0;
+    const signals = [];
+
+    // Nesting depth (brace-based for most languages, indent-based for Python)
+    let maxNesting = 0, currentNesting = 0;
+    for (const line of lines) {
+      for (const ch of line) {
+        if (ch === '{') { currentNesting++; maxNesting = Math.max(maxNesting, currentNesting); }
+        else if (ch === '}') currentNesting = Math.max(0, currentNesting - 1);
+      }
+    }
+    // Also check indentation depth
+    let maxIndent = 0;
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      const spaces = line.length - line.trimStart().length;
+      const level = Math.floor(spaces / 4);
+      maxIndent = Math.max(maxIndent, level);
+    }
+    const nesting = Math.max(maxNesting, maxIndent);
+    if (nesting > 6) { signals.push(`${nesting} max nesting`); score += (nesting - 6) * 3; }
+
+    // Long functions (count from extracted functions)
+    const fileFuncs = functions.filter(f => f.file === filepath);
+    const longFuncs = fileFuncs.filter(f => f.loc > 50);
+    if (longFuncs.length > 0) {
+      signals.push(`${longFuncs.length} long functions`);
+      score += longFuncs.length * 2;
+    }
+
+    // Many parameters
+    const highParamFuncs = fileFuncs.filter(f => f.params.length > 5);
+    if (highParamFuncs.length > 0) {
+      signals.push(`${highParamFuncs.length} functions with >5 params`);
+      score += highParamFuncs.length * 2;
+    }
+
+    // TODO patterns
+    const todoCount = (content.match(/\b(?:TODO|FIXME|HACK|XXX)\b/g) || []).length;
+    if (todoCount > 5) { signals.push(`${todoCount} TODO/FIXME markers`); score += (todoCount - 5); }
+
+    if (signals.length > 0 && score >= threshold) {
+      entries.push({ file: filepath, loc, score, signals });
+    }
+  }
+  entries.sort((a, b) => b.score - a.score);
+  return { entries, potential: checked };
+}
+
+function detectDuplicates(functions, threshold = 0.8) {
+  if (!functions.length) return { entries: [], potential: 0 };
+
+  // Phase 1: exact duplicates by body hash
+  const byHash = {};
+  for (let i = 0; i < functions.length; i++) {
+    const h = functions[i].bodyHash;
+    if (!byHash[h]) byHash[h] = [];
+    byHash[h].push(i);
+  }
+  const seenPairs = new Set();
+  const pairs = []; // [idxA, idxB, similarity, kind]
+
+  for (const idxs of Object.values(byHash)) {
+    if (idxs.length < 2) continue;
+    for (let i = 0; i < idxs.length; i++) {
+      for (let j = i + 1; j < idxs.length; j++) {
+        const key = `${idxs[i]}-${idxs[j]}`;
+        if (seenPairs.has(key)) continue;
+        seenPairs.add(key);
+        pairs.push([idxs[i], idxs[j], 1.0, 'exact']);
+      }
+    }
+  }
+
+  // Phase 2: near-duplicates (line-set similarity)
+  const large = functions.map((f, i) => [i, f]).filter(([, f]) => f.loc >= 15);
+  large.sort((a, b) => a[1].loc - b[1].loc);
+
+  for (let i = 0; i < large.length; i++) {
+    const [idxA, fnA] = large[i];
+    const linesA = fnA.normalized.split('\n');
+    const setA = new Set(linesA.map(l => l.trim()));
+
+    for (let j = i + 1; j < large.length; j++) {
+      const [idxB, fnB] = large[j];
+      if (fnB.loc > fnA.loc * 1.5) break; // pruning
+
+      const key = `${idxA}-${idxB}`;
+      if (seenPairs.has(key) || fnA.bodyHash === fnB.bodyHash) continue;
+
+      const linesB = fnB.normalized.split('\n');
+      // Quick check: max possible ratio
+      const maxPossible = (2 * Math.min(linesA.length, linesB.length)) / (linesA.length + linesB.length);
+      if (maxPossible < threshold) continue;
+
+      const setB = new Set(linesB.map(l => l.trim()));
+      let matching = 0;
+      for (const line of setA) if (setB.has(line)) matching++;
+      const ratio = (2 * matching) / (setA.size + setB.size);
+
+      if (ratio >= threshold) {
+        seenPairs.add(key);
+        pairs.push([idxA, idxB, ratio, 'near-duplicate']);
+      }
+    }
+  }
+
+  // Union-find clustering
+  const parent = Array.from({ length: functions.length }, (_, i) => i);
+  function find(x) { while (parent[x] !== x) { parent[x] = parent[parent[x]]; x = parent[x]; } return x; }
+  function union(a, b) { const ra = find(a), rb = find(b); if (ra !== rb) parent[ra] = rb; }
+
+  for (const [a, b] of pairs) union(a, b);
+
+  const clusters = {};
+  for (let i = 0; i < functions.length; i++) {
+    const r = find(i);
+    if (!clusters[r]) clusters[r] = [];
+    clusters[r].push(i);
+  }
+
+  const entries = [];
+  for (const cluster of Object.values(clusters)) {
+    if (cluster.length < 2) continue;
+    // Find best pair in cluster
+    let bestSim = 0, bestA = cluster[0], bestB = cluster[1], bestKind = 'near-duplicate';
+    for (const [a, b, sim, kind] of pairs) {
+      if (cluster.includes(a) && cluster.includes(b) && sim > bestSim) {
+        bestSim = sim; bestA = a; bestB = b; bestKind = kind;
+      }
+    }
+    entries.push({
+      fn_a: { file: functions[bestA].file, name: functions[bestA].name, line: functions[bestA].line },
+      fn_b: { file: functions[bestB].file, name: functions[bestB].name, line: functions[bestB].line },
+      similarity: Math.round(bestSim * 1000) / 1000,
+      kind: bestKind, cluster_size: cluster.length,
+    });
+  }
+  entries.sort((a, b) => -a.similarity + b.similarity || -a.cluster_size + b.cluster_size);
+  return { entries, potential: functions.length };
+}
+
+function detectGods(classes, minReasons = 2) {
+  const rules = [
+    { name: 'methods', description: 'methods', extract: c => c.methods, threshold: 15 },
+    { name: 'attributes', description: 'attributes', extract: c => c.attributes, threshold: 15 },
+    { name: 'loc', description: 'LOC', extract: c => c.loc, threshold: 500 },
+  ];
+  const entries = [];
+  for (const cls of classes) {
+    const reasons = [];
+    for (const rule of rules) {
+      const value = rule.extract(cls);
+      if (value >= rule.threshold) reasons.push(`${value} ${rule.description}`);
+    }
+    if (reasons.length >= minReasons) {
+      entries.push({ file: cls.file, name: cls.name, loc: cls.loc, reasons });
+    }
+  }
+  entries.sort((a, b) => b.loc - a.loc);
+  return { entries, potential: classes.length };
+}
+
+const SIGNATURE_ALLOWLIST = new Set([
+  '__init__','__repr__','__str__','__eq__','__hash__','main','setup','teardown',
+  'configure','run','handle','setUp','tearDown','get','post','put','delete','patch',
+  'toString','equals','hashCode','constructor',
+]);
+
+function detectSignatureVariance(functions, minOccurrences = 3) {
+  const byName = {};
+  for (const fn of functions) {
+    if (fn.name.startsWith('_') && !fn.name.startsWith('__')) continue;
+    if (SIGNATURE_ALLOWLIST.has(fn.name)) continue;
+    if (fn.name.startsWith('test_') || fn.name.startsWith('Test')) continue;
+    if (!byName[fn.name]) byName[fn.name] = [];
+    byName[fn.name].push(fn);
+  }
+
+  const entries = [];
+  for (const [name, fns] of Object.entries(byName)) {
+    const distinctFiles = new Set(fns.map(f => f.file));
+    if (distinctFiles.size < minOccurrences) continue;
+    const paramSigs = new Set(fns.map(f => {
+      const params = f.params.filter(p => p !== 'self' && p !== 'cls');
+      return params.join(',');
+    }));
+    if (paramSigs.size < 2) continue;
+    entries.push({
+      name, occurrences: fns.length, file_count: distinctFiles.size,
+      signature_count: paramSigs.size,
+    });
+  }
+  entries.sort((a, b) => -a.signature_count + b.signature_count || -a.occurrences + b.occurrences);
+  return { entries, potential: functions.length };
+}
+
+function detectCycles(graph) {
+  // Iterative Tarjan's SCC (exact port from graph.py)
+  let indexCounter = 0;
+  const sccStack = [];
+  const lowlinks = {};
+  const index = {};
+  const onStack = {};
+  const sccs = [];
+  const nodes = Object.keys(graph);
+
+  function getEdges(v) {
+    const node = graph[v];
+    if (!node) return [];
+    const imports = node.imports instanceof Set ? [...node.imports] : [...(node.imports || [])];
+    return imports.filter(w => w in graph);
+  }
+
+  for (const root of nodes) {
+    if (root in index) continue;
+    index[root] = lowlinks[root] = indexCounter++;
+    sccStack.push(root);
+    onStack[root] = true;
+    const callStack = [[root, getEdges(root), 0]];
+
+    while (callStack.length) {
+      const frame = callStack[callStack.length - 1];
+      const [v, edges, ei] = frame;
+      if (ei < edges.length) {
+        const w = edges[ei];
+        frame[2] = ei + 1;
+        if (!(w in index)) {
+          index[w] = lowlinks[w] = indexCounter++;
+          sccStack.push(w);
+          onStack[w] = true;
+          callStack.push([w, getEdges(w), 0]);
+        } else if (onStack[w]) {
+          lowlinks[v] = Math.min(lowlinks[v], index[w]);
+        }
+      } else {
+        if (lowlinks[v] === index[v]) {
+          const component = [];
+          while (true) {
+            const w = sccStack.pop();
+            onStack[w] = false;
+            component.push(w);
+            if (w === v) break;
+          }
+          if (component.length > 1) {
+            component.sort();
+            sccs.push(component);
+          }
+        }
+        callStack.pop();
+        if (callStack.length) {
+          const parent = callStack[callStack.length - 1][0];
+          lowlinks[parent] = Math.min(lowlinks[parent], lowlinks[v]);
+        }
+      }
+    }
+  }
+
+  const entries = sccs.map(scc => ({ files: scc, length: scc.length }));
+  entries.sort((a, b) => b.length - a.length);
+  return { entries, potential: nodes.length };
+}
+
+function detectOrphaned(graph, sourceFiles) {
+  const ENTRY_PATTERNS = [
+    'main.', 'index.', 'app.', 'cli.', '__main__', 'setup.', 'conftest.',
+    'manage.', 'wsgi.', 'asgi.', 'server.', 'webpack.config', 'vite.config',
+    'jest.config', 'tsconfig', '.config.', 'Makefile',
+  ];
+  const BARREL_NAMES = new Set([
+    '__init__.py', 'index.js', 'index.ts', 'index.tsx', 'mod.rs', 'lib.rs',
+  ]);
+
+  const entries = [];
+  for (const [filepath, entry] of Object.entries(graph)) {
+    if (entry.importer_count > 0) continue;
+    const fname = filepath.substring(filepath.lastIndexOf('/') + 1);
+    if (BARREL_NAMES.has(fname)) continue;
+    if (ENTRY_PATTERNS.some(p => filepath.includes(p))) continue;
+    const content = null; // We'd need files map here, estimate LOC
+    const loc = entry._loc || 0;
+    if (loc < 10) continue;
+    entries.push({ file: filepath, loc, import_count: entry.import_count || 0 });
+  }
+  entries.sort((a, b) => b.loc - a.loc);
+  return { entries, potential: Object.keys(graph).length };
+}
+
+function detectSingleUse(graph, sourceFiles) {
+  const BARREL_NAMES = new Set([
+    '__init__.py', 'index.js', 'index.ts', 'index.tsx', 'mod.rs', 'lib.rs',
+  ]);
+  const entries = [];
+  let candidates = 0;
+  for (const [filepath, entry] of Object.entries(graph)) {
+    if (entry.importer_count !== 1) continue;
+    const fname = filepath.substring(filepath.lastIndexOf('/') + 1);
+    if (BARREL_NAMES.has(fname)) continue;
+    const importerArr = entry.importers instanceof Set ? [...entry.importers] : [...(entry.importers || [])];
+    const importer = importerArr[0] || '';
+    // Skip if sole importer is a test file
+    if (importer.includes('/test') || importer.includes('test_') || importer.includes('.test.')) continue;
+    candidates++;
+    const loc = entry._loc || 0;
+    if (loc < 20 || loc > 300) continue;
+    entries.push({ file: filepath, loc, sole_importer: importer });
+  }
+  entries.sort((a, b) => b.loc - a.loc);
+  return { entries, potential: candidates };
+}
+
+function detectCoupling(graph, sourceFiles) {
+  // Simplified: detect high fan-out files (>15 imports)
+  const entries = [];
+  let totalEdges = 0;
+  for (const [filepath, entry] of Object.entries(graph)) {
+    totalEdges += entry.import_count || 0;
+    if ((entry.import_count || 0) > 15) {
+      entries.push({
+        file: filepath, import_count: entry.import_count,
+        importer_count: entry.importer_count || 0,
+      });
+    }
+  }
+  entries.sort((a, b) => b.import_count - a.import_count);
+  return { entries, potential: totalEdges };
+}
+
+// ── Go-specific Detectors (ported from xyleth's fork) ───────────────────────
+
+function detectGoSecurity(files) {
+  const entries = [];
+  let scanned = 0;
+  const sqlInjectRe = /(?:db|tx)\.\s*(?:Query|Exec|QueryRow|QueryContext|ExecContext)\s*\(/;
+  const sqlFormatRe = /(?:fmt\.Sprintf|"\s*\+\s*\w|\bfmt\.Fprintf)/;
+  const execCmdRe = /exec\.Command\s*\(/;
+  const pathTraversalRe = /filepath\.Join\s*\([^)]*(?:\+|fmt\.Sprintf|r\.URL)/;
+
+  for (const [filepath, content] of files) {
+    if (!filepath.endsWith('.go') || filepath.endsWith('_test.go')) continue;
+    scanned++;
+    const lines = content.split('\n');
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const stripped = line.trim();
+      if (stripped.startsWith('//')) continue;
+
+      // SQL injection
+      if (sqlInjectRe.test(line) && (sqlFormatRe.test(line) || line.includes('+'))) {
+        entries.push({ file: filepath, line: i + 1, check: 'sql_injection',
+          summary: 'SQL injection risk: query built with string formatting',
+          severity: 'critical', content: stripped.substring(0, 100) });
+      }
+      // Command injection
+      if (execCmdRe.test(line)) {
+        if (!/exec\.Command\s*\(\s*"[^"]*"\s*\)/.test(stripped)) {
+          entries.push({ file: filepath, line: i + 1, check: 'command_injection',
+            summary: 'Potential command injection: exec.Command with dynamic arguments',
+            severity: 'high', content: stripped.substring(0, 100) });
+        }
+      }
+      // Path traversal
+      if (pathTraversalRe.test(line)) {
+        entries.push({ file: filepath, line: i + 1, check: 'path_traversal',
+          summary: 'Potential path traversal: filepath.Join with unsanitized input',
+          severity: 'high', content: stripped.substring(0, 100) });
+      }
+    }
+  }
+  return { entries, scanned, potential: scanned };
+}
+
+function detectGoSmells(files) {
+  const smellChecks = [
+    { id: 'panic_in_lib', label: 'panic() in library code', severity: 'high',
+      pattern: /\bpanic\s*\(/, skipMain: true },
+    { id: 'fire_and_forget_goroutine', label: 'Fire-and-forget goroutine', severity: 'medium',
+      pattern: /^\s*go\s+(?:func\b|\w+\()/ },
+    { id: 'time_tick_leak', label: 'time.Tick leaks ticker', severity: 'high',
+      pattern: /\btime\.Tick\s*\(/ },
+    { id: 'todo_fixme', label: 'TODO/FIXME/HACK comments', severity: 'low',
+      pattern: /\/\/\s*(?:TODO|FIXME|HACK|XXX)/, allowComments: true },
+    { id: 'dogsledding', label: 'Excessive blank identifiers (3+ _)', severity: 'low',
+      pattern: /_\s*,\s*_\s*,\s*_/ },
+  ];
+
+  const results = {};
+  smellChecks.forEach(c => results[c.id] = []);
+  let totalFiles = 0;
+
+  for (const [filepath, content] of files) {
+    if (!filepath.endsWith('.go') || filepath.endsWith('_test.go')) continue;
+    totalFiles++;
+    const lines = content.split('\n');
+    const isMainPkg = lines.some(l => l.trim() === 'package main');
+
+    for (const check of smellChecks) {
+      if (!check.pattern) continue;
+      if (check.skipMain && isMainPkg) continue;
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        const stripped = line.trim();
+        if (stripped.startsWith('//') && !check.allowComments) continue;
+        if (check.pattern.test(line)) {
+          results[check.id].push({ file: filepath, line: i + 1, content: stripped.substring(0, 100) });
+        }
+      }
+    }
+
+    // Multi-line: unbuffered signal
+    const chanVars = new Set();
+    for (let i = 0; i < lines.length; i++) {
+      const stripped = lines[i].trim();
+      if (stripped.startsWith('//')) continue;
+      const chanMatch = stripped.match(/(\w+)\s*:?=\s*make\s*\(\s*chan\s+os\.Signal\s*\)/);
+      if (chanMatch) chanVars.add(chanMatch[1]);
+      if (stripped.includes('signal.Notify')) {
+        for (const v of chanVars) {
+          if (stripped.includes(v)) {
+            if (!results['unbuffered_signal']) results['unbuffered_signal'] = [];
+            results['unbuffered_signal'].push({ file: filepath, line: i + 1, content: stripped.substring(0, 100) });
+          }
+        }
+      }
+    }
+
+    // String concat in loop
+    let inLoop = false, braceDepth = 0, loopBraceDepth = 0;
+    for (let i = 0; i < lines.length; i++) {
+      const stripped = lines[i].trim();
+      if (stripped.startsWith('//')) continue;
+      braceDepth += (stripped.match(/{/g) || []).length - (stripped.match(/}/g) || []).length;
+      if (/^\bfor\b/.test(stripped)) { inLoop = true; loopBraceDepth = braceDepth; }
+      if (inLoop && braceDepth < loopBraceDepth) inLoop = false;
+      if (inLoop && stripped.includes('+=') && /^\w+\s*\+=/.test(stripped)) {
+        if (!results['string_concat_loop']) results['string_concat_loop'] = [];
+        results['string_concat_loop'].push({ file: filepath, line: i + 1, content: stripped.substring(0, 100) });
+      }
+    }
+
+    // Too many params
+    const funcParamRe = /^func\s+(?:\(\s*\w+\s+\*?\w+\s*\)\s*)?\w+\s*\(([^)]*)\)/gm;
+    let m;
+    while ((m = funcParamRe.exec(content)) !== null) {
+      const params = m[1].trim();
+      if (params && (params.split(',').length > 5)) {
+        const lineNum = content.substring(0, m.index).split('\n').length;
+        if (!results['too_many_params']) results['too_many_params'] = [];
+        results['too_many_params'].push({ file: filepath, line: lineNum,
+          content: lines[lineNum - 1] ? lines[lineNum - 1].trim().substring(0, 100) : '' });
+      }
+    }
+  }
+
+  // Build entries list
+  const entries = [];
+  const severityOrder = { high: 0, medium: 1, low: 2 };
+  const labels = {};
+  smellChecks.forEach(c => labels[c.id] = c.label);
+  labels['unbuffered_signal'] = 'Unbuffered signal channel';
+  labels['string_concat_loop'] = 'String concatenation in loop';
+  labels['too_many_params'] = 'Too many function parameters (>5)';
+  const severities = {};
+  smellChecks.forEach(c => severities[c.id] = c.severity);
+  severities['unbuffered_signal'] = 'high';
+  severities['string_concat_loop'] = 'medium';
+  severities['too_many_params'] = 'medium';
+
+  for (const [id, matches] of Object.entries(results)) {
+    if (matches.length > 0) {
+      entries.push({ id, label: labels[id] || id, severity: severities[id] || 'medium',
+        count: matches.length, matches: matches.slice(0, 20) });
+    }
+  }
+  entries.sort((a, b) => (severityOrder[a.severity] || 9) - (severityOrder[b.severity] || 9));
+  return { entries, totalFiles };
+}
+
+// ── Logs Detector (catches leftover debug/print statements) ───────────────────
+
+function detectLogs(files, sourceFiles, lang) {
+  const patterns = {
+    python:     /\b(?:print\s*\(|logging\.\w+\(|logger\.\w+\()/,
+    javascript: /\bconsole\.\w+\s*\(/,
+    typescript: /\bconsole\.\w+\s*\(/,
+    html:       /\bconsole\.\w+\s*\(/,
+    vue:        /\bconsole\.\w+\s*\(/,
+    svelte:     /\bconsole\.\w+\s*\(/,
+    go:         /\b(?:fmt\.Print|fmt\.Fprint|log\.(?:Print|Fatal|Panic)|zap\.\w+\(|logrus\.)/,
+    rust:       /\b(?:println!|eprintln!|dbg!|print!)/,
+    java:       /\b(?:System\.out\.|System\.err\.|Logger\.\w+\(|log\.\w+\()/,
+    kotlin:     /\b(?:println\(|System\.out\.|Logger\.\w+\()/,
+    ruby:       /\b(?:puts |p |pp |Rails\.logger)/,
+    csharp:     /\b(?:Console\.Write|Debug\.Write|Trace\.Write)/,
+    dart:       /\b(?:print\(|debugPrint\(|log\()/,
+    php:        /\b(?:echo |print |var_dump\(|print_r\(|error_log\()/,
+    swift:      /\b(?:print\(|debugPrint\(|NSLog\()/,
+    cpp:        /\b(?:std::cout|std::cerr|printf\(|fprintf\()/,
+    c:          /\b(?:printf\(|fprintf\(|puts\()/,
+    scala:      /\b(?:println\(|System\.out\.|Logger\.\w+\()/,
+    elixir:     /\b(?:IO\.(?:puts|inspect|write)|Logger\.\w+)/,
+    lua:        /\bprint\s*\(/,
+    perl:       /\b(?:print |say |warn )/,
+    r:          /\b(?:print\(|cat\(|message\()/,
+    julia:      /\b(?:println\(|print\(|@info|@debug|@warn)/,
+    zig:        /\bstd\.debug\.print/,
+    nim:        /\b(?:echo |debugEcho\()/,
+    crystal:    /\b(?:puts |p |pp )/,
+    groovy:     /\b(?:println\(|System\.out\.|log\.\w+\()/,
+    bash:       /\b(?:echo |printf )/,
+    powershell: /\b(?:Write-Host|Write-Output|Write-Debug)/,
+    solidity:   /\b(?:console\.log|emit )/,
+    gdscript:   /\b(?:print\(|push_warning\(|push_error\()/,
+    fortran:    /\b(?:WRITE|PRINT)/i,
+  };
+  const pat = patterns[lang];
+  if (!pat) return { entries: [], potentialBase: 0 };
+  const entries = [];
+  for (const fp of sourceFiles) {
+    if (fp.endsWith('_test.go') || fp.includes('test_') || fp.includes('.test.') || fp.includes('__tests__')) continue;
+    const content = files.get(fp);
+    if (!content) continue;
+    const lines = content.split('\n');
+    let count = 0;
+    for (let i = 0; i < lines.length; i++) {
+      const stripped = lines[i].trim();
+      if (stripped.startsWith('//') || stripped.startsWith('#') || stripped.startsWith('*')) continue;
+      if (pat.test(stripped)) count++;
+    }
+    if (count >= 3) {
+      entries.push({ file: fp, count, loc: lines.length });
+    }
+  }
+  return { entries, potential: sourceFiles.length };
+}
+
+// ── Deprecated Code Detector ──────────────────────────────────────────────────
+
+function detectDeprecated(files, sourceFiles) {
+  const patterns = [
+    /@deprecated/i, /@Deprecated/, /\/\/\s*Deprecated/i, /\/\*\*?\s*@deprecated/i,
+    /\[Obsolete\]/, /#\[deprecated/, /\.deprecated/, /DEPRECATED/,
+  ];
+  const entries = [];
+  for (const fp of sourceFiles) {
+    const content = files.get(fp);
+    if (!content) continue;
+    const lines = content.split('\n');
+    let count = 0;
+    for (let i = 0; i < lines.length; i++) {
+      for (const pat of patterns) {
+        if (pat.test(lines[i])) { count++; break; }
+      }
+    }
+    if (count > 0) entries.push({ file: fp, count });
+  }
+  return { entries, potential: sourceFiles.length };
+}
+
+// ── JSHint Integration (JS/TS lint quality via CDN) ───────────────────────────
+
+function detectJSHintIssues(files, sourceFiles, lang) {
+  if (!['javascript', 'typescript'].includes(lang)) return { entries: [], scanned: 0 };
+  if (typeof JSHINT === 'undefined') return { entries: [], scanned: 0 };
+
+  const entries = [];
+  let scanned = 0;
+  const opts = {
+    esversion: 11, browser: true, node: true, undef: true, unused: true,
+    eqeqeq: true, forin: true, freeze: true, latedef: 'nofunc',
+    noarg: true, nonbsp: true, nonew: true,
+    maxerr: 50, // cap per file
+  };
+
+  for (const fp of sourceFiles) {
+    if (fp.endsWith('.d.ts') || fp.endsWith('.min.js') || fp.includes('vendor/')) continue;
+    const content = files.get(fp);
+    if (!content || content.length > 200000) continue; // skip huge files
+    scanned++;
+
+    try {
+      JSHINT(content, opts);
+      const data = JSHINT.data();
+      if (data && data.errors) {
+        for (const err of data.errors) {
+          if (!err) continue;
+          entries.push({
+            file: fp, line: err.line || 0, code: err.code || '',
+            reason: err.reason || '', evidence: (err.evidence || '').trim().substring(0, 80),
+          });
+        }
+      }
+    } catch (_) { /* JSHint parse failure, skip */ }
+  }
+  return { entries, scanned };
+}
+
+// ── Scoring Engine (exact port from results/core.py) ─────────────────────────
+
+function computeDimensionScores(findings, potentials) {
+  const result = {};
+
+  for (const dim of DIMENSIONS) {
+    let totalChecks = 0;
+    let totalIssues = 0;
+    let totalWeightedFailures = 0;
+    const detectorDetails = {};
+
+    for (const detector of dim.detectors) {
+      const potential = potentials[detector] || 0;
+      if (potential <= 0) continue;
+
+      // Count findings for this detector
+      let issues = 0;
+      let weighted = 0;
+      for (const finding of Object.values(findings)) {
+        if (finding.detector !== detector) continue;
+        if (finding.status !== 'open') continue;
+        const confWeight = CONFIDENCE_WEIGHTS[finding.confidence || 'high'] || 1.0;
+        issues++;
+        weighted += confWeight;
+      }
+
+      const passRate = Math.max(0, (potential - weighted) / potential);
+      totalChecks += potential;
+      totalIssues += issues;
+      totalWeightedFailures += weighted;
+
+      detectorDetails[detector] = { potential, pass_rate: passRate, issues, weighted_failures: weighted };
+    }
+
+    if (totalChecks <= 0) continue;
+
+    const dimScore = Math.max(0, (totalChecks - totalWeightedFailures) / totalChecks) * 100;
+    result[dim.name] = {
+      score: Math.round(dimScore * 10) / 10,
+      tier: dim.tier,
+      checks: totalChecks,
+      issues: totalIssues,
+      detectors: detectorDetails,
+    };
+  }
+  return result;
+}
+
+function computeHealthScore(dimensionScores) {
+  if (!Object.keys(dimensionScores).length) return 100.0;
+
+  let mechSum = 0, mechWeight = 0;
+  for (const [name, data] of Object.entries(dimensionScores)) {
+    const score = data.score || 0;
+    const checks = data.checks || 0;
+    const sampleFactor = checks > 0 ? Math.min(1.0, checks / MIN_SAMPLE) : 0;
+    const normName = name.trim().toLowerCase();
+    const configured = MECHANICAL_DIMENSION_WEIGHTS[normName] || 1.0;
+    const effective = configured * sampleFactor;
+    mechSum += score * effective;
+    mechWeight += effective;
+  }
+
+  return mechWeight > 0 ? Math.round((mechSum / mechWeight) * 10) / 10 : 100.0;
+}
+
+// ── Scorecard Canvas Renderer ───────────────────────────────────────────────
+
+const S = 4; // Scale factor (4x for 4K displays)
+function s(v) { return Math.round(v * S); }
+
+function scoreColor(score) {
+  if (score >= 90) return 'rgb(68,120,68)';
+  if (score >= 70) return 'rgb(120,140,72)';
+  return 'rgb(145,155,80)';
+}
+function scoreColorMuted(score) {
+  if (score >= 90) return 'rgb(195,160,115)';
+  if (score >= 70) return 'rgb(200,148,100)';
+  return 'rgb(195,125,95)';
+}
+function fmtScore(score) {
+  return score === Math.floor(score) ? String(Math.floor(score)) : score.toFixed(1);
+}
+
+function renderScorecard(canvas, mainScore, dimScores, projectName, isBlended = false) {
+  const activeDims = Object.entries(dimScores)
+    .filter(([, d]) => d.checks > 0)
+    .sort(([a], [b]) => (a === 'File health' ? -1 : b === 'File health' ? 1 : a.localeCompare(b)));
+
+  const rowCount = activeDims.length;
+  const rowH = s(20);
+  const width = s(780);
+  const dividerX = s(260);
+  const frameInset = s(5);
+
+  const cols = 2;
+  const rowsPerCol = Math.ceil(rowCount / cols);
+  const tableContentH = s(14) + s(4) + s(6) + rowsPerCol * rowH;
+  const contentH = Math.max(tableContentH + s(28), s(150));
+  const height = s(12) + contentH;
+
+  canvas.width = width;
+  canvas.height = height;
+  canvas.style.width = (width / S) + 'px';
+  canvas.style.height = (height / S) + 'px';
+  const ctx = canvas.getContext('2d');
+
+  // Background
+  ctx.fillStyle = 'rgb(247,240,228)';
+  ctx.fillRect(0, 0, width, height);
+
+  // Double frame
+  ctx.strokeStyle = 'rgb(172,152,126)';
+  ctx.lineWidth = s(2);
+  ctx.strokeRect(0, 0, width, height);
+  ctx.strokeStyle = 'rgb(192,176,152)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(frameInset, frameInset, width - 2 * frameInset, height - 2 * frameInset);
+
+  const contentTop = frameInset + s(1);
+  const contentBot = height - frameInset - s(1);
+  const contentMidY = (contentTop + contentBot) / 2;
+
+  // ── Left Panel ──
+  const lpLeft = frameInset + s(11);
+  const lpRight = dividerX - s(11);
+  const lpCenter = (lpLeft + lpRight) / 2;
+  const lpTop = contentTop + s(4);
+  const lpBot = contentBot - s(4);
+
+  // Left panel background
+  ctx.fillStyle = 'rgb(240,232,217)';
+  roundRect(ctx, lpLeft, lpTop, lpRight - lpLeft, lpBot - lpTop, s(4));
+  ctx.fill();
+  ctx.strokeStyle = 'rgb(192,176,152)';
+  ctx.lineWidth = 1;
+  roundRect(ctx, lpLeft, lpTop, lpRight - lpLeft, lpBot - lpTop, s(4));
+  ctx.stroke();
+
+  // Title
+  const titleFont = `bold ${s(15)}px Georgia, serif`;
+  const title = isBlended ? 'DESLOPPIFY SCORE' : 'MECHANICAL HEALTH SCORE';
+  ctx.font = titleFont;
+  ctx.fillStyle = 'rgb(58,48,38)';
+  const titleWidth = ctx.measureText(title).width;
+  const titleY = lpTop + s(32);
+  ctx.fillText(title, lpCenter - titleWidth / 2, titleY);
+
+  // Subtitle for blended mode
+  if (isBlended) {
+    ctx.font = `italic ${s(8)}px Georgia, serif`;
+    ctx.fillStyle = 'rgb(138,122,102)';
+    const sub = 'mechanical + AI review';
+    const subW = ctx.measureText(sub).width;
+    ctx.fillText(sub, lpCenter - subW / 2, titleY + s(11));
+  }
+
+  // Ornamental rule under title
+  const ruleY = titleY + (isBlended ? s(18) : s(10));
+  ctx.fillStyle = 'rgb(192,176,152)';
+  ctx.fillRect(lpLeft + s(28), ruleY, lpCenter - s(8) - lpLeft - s(28), s(1));
+  ctx.fillRect(lpCenter + s(8), ruleY, lpRight - s(28) - lpCenter - s(8), s(1));
+  // Diamond ornament
+  drawDiamond(ctx, lpCenter, ruleY, s(3), 'rgb(148,112,82)');
+
+  // Big score
+  const bigFont = `bold ${s(42)}px Georgia, serif`;
+  ctx.font = bigFont;
+  const scoreText = fmtScore(mainScore);
+  const scoreWidth = ctx.measureText(scoreText).width;
+  ctx.fillStyle = scoreColor(mainScore);
+  const scoreY = ruleY + s(55);
+  ctx.fillText(scoreText, lpCenter - scoreWidth / 2, scoreY);
+
+  // Project name pill
+  const projFont = `${s(9)}px Georgia, serif`;
+  ctx.font = projFont;
+  const projWidth = ctx.measureText(projectName).width;
+  const pillPadX = s(8), pillPadY = s(3);
+  const pillY = scoreY + s(16);
+  const pillLeft = lpCenter - projWidth / 2 - pillPadX;
+  const pillRight = lpCenter + projWidth / 2 + pillPadX;
+  const pillH = s(9) + 2 * pillPadY;
+  ctx.fillStyle = 'rgb(247,240,228)';
+  roundRect(ctx, pillLeft, pillY, pillRight - pillLeft, pillH, s(3));
+  ctx.fill();
+  ctx.strokeStyle = 'rgb(192,176,152)';
+  roundRect(ctx, pillLeft, pillY, pillRight - pillLeft, pillH, s(3));
+  ctx.stroke();
+  ctx.fillStyle = 'rgb(138,122,102)';
+  ctx.fillText(projectName, lpCenter - projWidth / 2, pillY + pillPadY + s(8));
+
+  // ── Vertical Divider ──
+  ctx.fillStyle = 'rgb(192,176,152)';
+  ctx.fillRect(dividerX, contentTop + s(12), s(1), contentMidY - s(8) - contentTop - s(12));
+  ctx.fillRect(dividerX, contentMidY + s(8), s(1), contentBot - s(12) - contentMidY - s(8));
+  drawDiamond(ctx, dividerX, contentMidY, s(3), 'rgb(148,112,82)');
+
+  // ── Right Panel: Dimension Table ──
+  const tableX1 = dividerX + s(11);
+  const tableX2 = width - frameInset - s(11);
+  const tableTop = contentTop + s(4);
+  const tableBot = contentBot - s(4);
+
+  // Single table area
+  ctx.fillStyle = 'rgb(240,233,220)';
+  roundRect(ctx, tableX1, tableTop, tableX2 - tableX1, tableBot - tableTop, s(4));
+  ctx.fill();
+  ctx.strokeStyle = 'rgb(192,176,152)';
+  roundRect(ctx, tableX1, tableTop, tableX2 - tableX1, tableBot - tableTop, s(4));
+  ctx.stroke();
+
+  const gridGap = s(8);
+  const gridWidth = ((tableX2 - tableX1) - gridGap) / 2;
+
+  for (let col = 0; col < cols; col++) {
+    const gridX1 = tableX1 + col * (gridWidth + gridGap);
+    const rowsThisCol = Math.min(rowsPerCol, rowCount - col * rowsPerCol);
+    if (rowsThisCol <= 0) continue;
+
+    const contentHeight = rowsThisCol * rowH;
+    const colContentTop = (tableTop + tableBot) / 2 - contentHeight / 2;
+    const startIdx = col * rowsPerCol;
+
+    const rowFont = `${s(11)}px 'JetBrains Mono', 'Fira Code', monospace`;
+    const nameColWidth = s(132);
+
+    for (let row = 0; row < rowsThisCol; row++) {
+      const dimIdx = startIdx + row;
+      if (dimIdx >= activeDims.length) break;
+
+      const [name, data] = activeDims[dimIdx];
+      const bandTop = colContentTop + row * rowH;
+
+      // Alternate row background
+      if (row % 2 === 1) {
+        ctx.fillStyle = 'rgb(234,226,212)';
+        ctx.fillRect(gridX1 + 1, bandTop, gridWidth - 2, rowH);
+      }
+
+      const textY = bandTop + rowH / 2 + s(4);
+      ctx.font = rowFont;
+
+      // Dimension name (truncate if needed)
+      let displayName = name;
+      while (displayName.length > 1 && ctx.measureText(displayName + '\u2026').width > nameColWidth) {
+        displayName = displayName.slice(0, -1);
+      }
+      if (displayName !== name) displayName += '\u2026';
+      ctx.fillStyle = 'rgb(58,48,38)';
+      ctx.fillText(displayName, gridX1 + s(6), textY);
+
+      // Score value
+      const dimScore = data.score;
+      ctx.fillStyle = scoreColor(dimScore);
+      ctx.fillText(fmtScore(dimScore) + '%', gridX1 + nameColWidth + s(10), textY);
+    }
+  }
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+function drawDiamond(ctx, cx, cy, size, fill) {
+  ctx.fillStyle = fill;
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - size);
+  ctx.lineTo(cx + size, cy);
+  ctx.lineTo(cx, cy + size);
+  ctx.lineTo(cx - size, cy);
+  ctx.closePath();
+  ctx.fill();
+}
+
+// ── UI & Orchestrator ───────────────────────────────────────────────────────
+
+function log(msg) {
+  const el = document.getElementById('progress-text');
+  if (el) el.textContent = msg;
+  console.log('[desloppify]', msg);
+}
+
+function setProgress(pct) {
+  const el = document.getElementById('progress-fill');
+  if (el) el.style.width = Math.min(100, pct) + '%';
+}
+
+function showError(msg) {
+  const el = document.getElementById('progress');
+  el.style.display = 'block';
+  el.innerHTML = `<div class="error-msg">${msg}</div>`;
+}
+
+async function runFullScan(files, projectName) {
+  const progressEl = document.getElementById('progress');
+  const resultsEl = document.getElementById('results');
+  progressEl.style.display = 'block';
+  resultsEl.style.display = 'none';
+
+  const allPaths = [...files.keys()];
+  log('Detecting language...');
+  setProgress(5);
+  const lang = detectLanguage(allPaths) || 'generic';
+  log(`Detected language: ${LANG_DISPLAY[lang] || lang}`);
+  setProgress(10);
+
+  let sourceFiles;
+  if (lang === 'generic') {
+    // No recognized language — use all non-binary files for file-level analysis
+    log('No specific language detected — running file-level detectors on all files');
+    sourceFiles = allPaths.filter(p => {
+      const ext = p.substring(p.lastIndexOf('.')).toLowerCase();
+      return !['.png','.jpg','.jpeg','.gif','.ico','.svg','.woff','.woff2','.ttf','.eot',
+               '.mp3','.mp4','.zip','.tar','.gz','.pdf','.exe','.dll','.so','.dylib',
+               '.bin','.dat','.db','.lock'].includes(ext);
+    });
+  } else {
+    sourceFiles = getSourceFiles(files, lang);
+  }
+  if (sourceFiles.length === 0) {
+    showError(`No analyzable source files found${lang !== 'generic' ? ` for ${lang}` : ''}.`);
+    return;
+  }
+  log(`Found ${sourceFiles.length} ${lang !== 'generic' ? lang + ' ' : ''}source files`);
+
+  // Init tree-sitter (non-blocking)
+  log('Loading tree-sitter...');
+  setProgress(15);
+  const tsReady = await initTreeSitter();
+  if (tsReady) log('Tree-sitter loaded');
+  else log('Tree-sitter unavailable, using regex fallback');
+
+  // Extract functions
+  log('Extracting functions...');
+  setProgress(25);
+  const functions = await extractFunctions(files, lang, sourceFiles);
+  log(`Extracted ${functions.length} functions`);
+  setProgress(35);
+
+  // Extract classes
+  log('Extracting classes...');
+  const classes = await extractClasses(files, lang, sourceFiles);
+  log(`Extracted ${classes.length} classes`);
+  setProgress(40);
+
+  // Build import graph
+  log('Building import graph...');
+  const graph = await buildImportGraph(files, lang, sourceFiles);
+  // Annotate graph nodes with LOC for orphaned/single-use detectors
+  for (const [filepath, node] of Object.entries(graph)) {
+    const content = files.get(filepath);
+    node._loc = content ? content.split('\n').length : 0;
+  }
+  setProgress(50);
+
+  // Run detectors
+  log('Running detectors...');
+  const findings = {}; // id → finding
+  const potentials = {};
+  let findingId = 0;
+
+  function addFindings(detectorName, result, makeDetail) {
+    potentials[detectorName] = result.potential;
+    for (const entry of result.entries) {
+      const id = `${detectorName}::${findingId++}`;
+      findings[id] = {
+        id, detector: detectorName, file: entry.file || entry.directory || '.',
+        status: 'open', confidence: 'high', tier: DETECTOR_SCORING_POLICIES[detectorName]?.tier || 3,
+        detail: makeDetail ? makeDetail(entry) : entry,
+      };
+    }
+  }
+
+  // File health: structural (complexity)
+  const complexityResult = detectComplexity(files, sourceFiles, functions);
+  addFindings('structural', complexityResult, e => ({ file: e.file, signals: e.signals, score: e.score }));
+  setProgress(55);
+
+  // Code quality: flat_dirs
+  const flatResult = detectFlatDirs(sourceFiles);
+  addFindings('flat_dirs', flatResult);
+
+  // Code quality: naming
+  const namingResult = detectNaming(sourceFiles);
+  addFindings('naming', namingResult);
+
+  // Code quality: orphaned
+  const orphanedResult = detectOrphaned(graph, sourceFiles);
+  addFindings('orphaned', orphanedResult);
+
+  // Code quality: single_use
+  const singleUseResult = detectSingleUse(graph, sourceFiles);
+  addFindings('single_use', singleUseResult);
+
+  // Code quality: coupling
+  const couplingResult = detectCoupling(graph, sourceFiles);
+  addFindings('coupling', couplingResult);
+
+  // Code quality: logs (leftover debug statements)
+  const logsResult = detectLogs(files, sourceFiles, lang);
+  addFindings('logs', logsResult);
+
+  // Code quality: deprecated code
+  const deprecatedResult = detectDeprecated(files, sourceFiles);
+  addFindings('deprecated', deprecatedResult);
+  setProgress(65);
+
+  // JSHint lint analysis (JS/TS only)
+  let jshintResult = { entries: [], scanned: 0 };
+  if (['javascript', 'typescript'].includes(lang)) {
+    log('Running JSHint analysis...');
+    jshintResult = detectJSHintIssues(files, sourceFiles, lang);
+    if (jshintResult.entries.length > 0) {
+      log(`JSHint: ${jshintResult.entries.length} issues in ${jshintResult.scanned} files`);
+    }
+  }
+  setProgress(70);
+
+  // Duplication: dupes
+  const dupesResult = detectDuplicates(functions);
+  addFindings('dupes', dupesResult, e => ({
+    fn_a: e.fn_a, fn_b: e.fn_b, similarity: e.similarity, kind: e.kind
+  }));
+  setProgress(75);
+
+  // Security: cycles
+  const cyclesResult = detectCycles(graph);
+  addFindings('cycles', cyclesResult, e => ({ files: e.files, length: e.length }));
+  setProgress(80);
+
+  // Go-specific detectors (if Go repo)
+  let goSecurityResult = { entries: [], scanned: 0 };
+  let goSmellsResult = { entries: [], totalFiles: 0 };
+  if (lang === 'go') {
+    log('Running Go security detectors...');
+    goSecurityResult = detectGoSecurity(files);
+    addFindings('go_security', goSecurityResult, e => ({
+      file: e.file, line: e.line, check: e.check, summary: e.summary
+    }));
+    log('Running Go smell detectors...');
+    goSmellsResult = detectGoSmells(files);
+    log(`Go: ${goSecurityResult.entries.length} security + ${goSmellsResult.entries.length} smell findings`);
+  }
+  setProgress(82);
+
+  // Display-only detectors (not scored)
+  const largeResult = detectLargeFiles(files, sourceFiles);
+  const godsResult = detectGods(classes);
+  const sigResult = detectSignatureVariance(functions);
+
+  // Compute scores
+  log('Computing scores...');
+  setProgress(85);
+  const dimScores = computeDimensionScores(findings, potentials);
+  const overallScore = computeHealthScore(dimScores);
+  log(`Overall mechanical score: ${fmtScore(overallScore)}`);
+
+  // Render scorecard
+  log('Rendering scorecard...');
+  setProgress(90);
+  const canvas = document.getElementById('scorecard');
+  renderScorecard(canvas, overallScore, dimScores, projectName);
+  setProgress(95);
+
+  // Save state for AI review (before displayResults which reads it)
+  _lastScanState = { files, sourceFiles, dimScores, overallScore, projectName, lang };
+
+  // Build results display
+  displayResults(dimScores, overallScore, {
+    large: largeResult, gods: godsResult, signature: sigResult,
+    structural: complexityResult, flat_dirs: flatResult, naming: namingResult,
+    orphaned: orphanedResult, single_use: singleUseResult, coupling: couplingResult,
+    logs: logsResult, deprecated: deprecatedResult, jshint: jshintResult,
+    dupes: dupesResult, cycles: cyclesResult,
+    go_security: goSecurityResult, go_smells: goSmellsResult,
+  }, sourceFiles.length, lang);
+
+  setProgress(100);
+  log('Scan complete!');
+  progressEl.style.display = 'none';
+  resultsEl.style.display = 'block';
+  document.getElementById('input-card').style.display = 'none';
+  document.getElementById('page-header').style.display = 'none';
+
+  // Auto-trigger AI review if checkbox is enabled
+  if (document.getElementById('ai-enabled').checked) {
+    runAIReview();
+  }
+}
+
+function displayResults(dimScores, overallScore, detectorResults, fileCount, lang) {
+  // Score hero (text-based, copyable)
+  const scoreNum = document.getElementById('score-number');
+  scoreNum.textContent = fmtScore(overallScore);
+  scoreNum.style.color = scoreColor(overallScore);
+  document.getElementById('score-label').textContent = 'MECHANICAL HEALTH SCORE';
+  document.getElementById('score-subtitle').textContent = '';
+  document.getElementById('score-project').textContent = _lastScanState?.projectName || '';
+
+  // Inline dim pills
+  const activeDims = Object.entries(dimScores)
+    .filter(([, d]) => d.checks > 0)
+    .sort(([a], [b]) => (a === 'File health' ? -1 : b === 'File health' ? 1 : a.localeCompare(b)));
+  const pillsEl = document.getElementById('score-dims');
+  pillsEl.innerHTML = activeDims.map(([name, d]) =>
+    `<span class="dim-pill">${name} <span class="pill-score" style="color:${scoreColor(d.score)}">${fmtScore(d.score)}%</span></span>`
+  ).join('');
+
+  // Dimension table
+  const tableEl = document.getElementById('dim-table');
+  let html = `<thead><tr><th>Dimension</th><th>Score</th><th>Checks</th><th>Issues</th></tr></thead><tbody>`;
+  for (const [name, data] of activeDims) {
+    html += `<tr>
+      <td>${name}</td>
+      <td class="score-cell" style="color:${scoreColor(data.score)}">${fmtScore(data.score)}%</td>
+      <td>${data.checks}</td>
+      <td>${data.issues}</td>
+    </tr>`;
+  }
+  html += `<tr style="border-top:2px solid var(--border)">
+    <td><strong>Overall</strong></td>
+    <td class="score-cell" style="color:${scoreColor(overallScore)}"><strong>${fmtScore(overallScore)}</strong></td>
+    <td>${fileCount} files</td>
+    <td>${lang}</td>
+  </tr>`;
+  html += '</tbody>';
+  tableEl.innerHTML = html;
+
+  // Findings summary
+  const summaryEl = document.getElementById('findings-summary');
+  let shtml = '<h3>Findings</h3>';
+
+  const detectorLabels = {
+    large: 'Large Files', structural: 'Complexity', flat_dirs: 'Flat Directories',
+    naming: 'Naming Inconsistencies', orphaned: 'Orphaned Files', single_use: 'Single-Use Abstractions',
+    coupling: 'High Coupling', logs: 'Debug/Log Statements', deprecated: 'Deprecated Code',
+    jshint: 'JSHint Lint Issues', dupes: 'Duplicates', cycles: 'Import Cycles',
+    gods: 'God Classes', signature: 'Signature Variance',
+    go_security: 'Go Security Issues', go_smells: 'Go Code Smells',
+  };
+
+  for (const [key, label] of Object.entries(detectorLabels)) {
+    const result = detectorResults[key];
+    if (!result || result.entries.length === 0) continue;
+    shtml += `<div class="finding-group"><h4>${label} (${result.entries.length})</h4>`;
+    const shown = result.entries.slice(0, 10);
+    for (const entry of shown) {
+      let text = '';
+      if (entry.file) text = entry.file;
+      if (entry.directory) text = entry.directory;
+      if (entry.loc) text += ` (${entry.loc} LOC)`;
+      if (entry.file_count) text += ` — ${entry.file_count} files`;
+      if (entry.signals) text += ` — ${entry.signals.join(', ')}`;
+      if (entry.similarity) text += ` — ${Math.round(entry.similarity * 100)}% similar`;
+      if (entry.fn_a) text = `${entry.fn_a.file}:${entry.fn_a.name} ↔ ${entry.fn_b.file}:${entry.fn_b.name}`;
+      if (entry.files && entry.length) text = `Cycle of ${entry.length}: ${entry.files.slice(0, 5).join(' → ')}`;
+      if (entry.reasons) text += ` — ${entry.reasons.join(', ')}`;
+      if (entry.minority) text += ` — ${entry.minority_count} ${entry.minority} vs ${entry.majority_count} ${entry.majority}`;
+      if (entry.sole_importer) text += ` — only used by ${entry.sole_importer}`;
+      if (entry.name && entry.signature_count) text = `${entry.name} — ${entry.signature_count} variants across ${entry.file_count} files`;
+      // Logs/deprecated entries (file + count)
+      if (entry.count && !entry.check && !entry.id) text += ` — ${entry.count} occurrences`;
+      // JSHint entries
+      if (entry.reason) text = `${entry.file}:${entry.line} — ${entry.reason}`;
+      // Go security entries
+      if (entry.check) text = `${entry.file}:${entry.line} — [${entry.check}] ${entry.summary}`;
+      // Go smell entries (grouped by smell type)
+      if (entry.id && entry.label && entry.matches) text = `${entry.label} (${entry.count} hits)`;
+      shtml += `<div class="finding-item">${escapeHtml(text)}</div>`;
+    }
+    if (result.entries.length > 10) {
+      shtml += `<div class="finding-item" style="font-style:italic">...and ${result.entries.length - 10} more</div>`;
+    }
+    shtml += '</div>';
+  }
+  summaryEl.innerHTML = shtml;
+}
+
+function escapeHtml(s) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function downloadScorecard() {
+  const canvas = document.getElementById('scorecard');
+  canvas.toBlob(blob => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'desloppify-scorecard.png';
+    a.click();
+    URL.revokeObjectURL(url);
+  }, 'image/png');
+}
+
+// ── AI Review via Puter.js ──────────────────────────────────────────────────
+
+// Global state for AI review integration
+let _lastScanState = null;
+
+const AI_REVIEW_PROMPT = `You are a code quality reviewer. Analyze the following code samples from a repository and rate them on these 5 dimensions (each 0-100).
+
+Score from evidence only. Do not inflate scores. If code is mediocre, say so.
+
+Dimensions:
+1. **Naming quality**: Are variable/function/class names descriptive, consistent, and following language conventions?
+2. **Error consistency**: Is error handling thorough, uniform, and following language idioms?
+3. **Abstraction fit**: Are abstractions at the right level? Not over-engineered or under-engineered?
+4. **Logic clarity**: Is the control flow easy to follow? Are complex conditions well-structured?
+5. **AI-generated debt**: Does this code show signs of AI-generated slop (repetitive boilerplate, over-commented obvious code, inconsistent patterns)?
+
+Return ONLY valid JSON with this exact shape (no markdown fences, no explanation outside the JSON):
+{
+  "assessments": {
+    "naming_quality": {"score": 0, "rationale": ""},
+    "error_consistency": {"score": 0, "rationale": ""},
+    "abstraction_fit": {"score": 0, "rationale": ""},
+    "logic_clarity": {"score": 0, "rationale": ""},
+    "ai_generated_debt": {"score": 0, "rationale": ""}
+  },
+  "findings": [
+    {"dimension": "", "summary": "", "file": "", "suggestion": ""}
+  ],
+  "overall_subjective": 0,
+  "summary": ""
+}
+
+CODE_SAMPLES`;
+
+function sampleCodeForReview(files, sourceFiles, maxSamples = 8, maxCharsPerFile = 3000) {
+  // Pick a diverse mix: largest files + random small ones
+  const withSize = sourceFiles.map(fp => ({ fp, size: (files.get(fp) || '').length }));
+  withSize.sort((a, b) => b.size - a.size);
+
+  const picked = [];
+  // Take top 4 largest (most representative)
+  for (let i = 0; i < Math.min(4, withSize.length); i++) picked.push(withSize[i].fp);
+  // Take 4 random from the rest
+  const rest = withSize.slice(4);
+  for (let i = rest.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [rest[i], rest[j]] = [rest[j], rest[i]];
+  }
+  for (let i = 0; i < Math.min(4, rest.length); i++) picked.push(rest[i].fp);
+
+  let samples = '';
+  for (const fp of picked.slice(0, maxSamples)) {
+    const content = files.get(fp) || '';
+    const truncated = content.length > maxCharsPerFile
+      ? content.substring(0, maxCharsPerFile) + '\n... (truncated)'
+      : content;
+    samples += `\n--- FILE: ${fp} ---\n${truncated}\n`;
+  }
+  return samples;
+}
+
+async function runAIReview() {
+  if (!_lastScanState) return;
+  const { files, sourceFiles, dimScores, overallScore, projectName, lang } = _lastScanState;
+
+  const statusEl = document.getElementById('ai-status');
+  const selectedModel = document.getElementById('ai-model').value;
+  statusEl.style.display = 'block';
+
+  try {
+    // Check if puter.js is loaded
+    if (typeof puter === 'undefined') {
+      statusEl.textContent = 'Puter.js not loaded. Please refresh the page.';
+      return;
+    }
+
+    // Auth check — signIn triggers popup (must be from user click)
+    statusEl.textContent = 'Signing into Puter (popup may appear)...';
+    try {
+      const isSignedIn = await puter.auth.isSignedIn();
+      if (!isSignedIn) {
+        await puter.auth.signIn();
+      }
+    } catch (authErr) {
+      statusEl.textContent = 'Puter auth cancelled or blocked. Allow popups and try again.';
+      return;
+    }
+
+    statusEl.textContent = 'Sampling code for AI review...';
+    const codeSamples = sampleCodeForReview(files, sourceFiles);
+    const prompt = AI_REVIEW_PROMPT.replace('CODE_SAMPLES', codeSamples);
+
+    statusEl.textContent = `AI reviewing code via ${selectedModel} (15-60s)...`;
+    const response = await puter.ai.chat(prompt, {
+      model: selectedModel,
+      temperature: 0.2,
+      max_tokens: 3000,
+    });
+
+    // Puter returns { message: { content: [{ type: "text", text: "..." }] } }
+    const content = response?.message?.content;
+    let text;
+    if (Array.isArray(content)) {
+      text = content.filter(b => b.type === 'text').map(b => b.text).join('');
+    } else if (typeof content === 'string') {
+      text = content;
+    } else {
+      text = response?.text || String(response);
+    }
+
+    // Parse JSON from response
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      statusEl.textContent = 'AI returned non-JSON response. Showing raw output below.';
+      document.getElementById('findings-summary').innerHTML +=
+        `<div class="finding-group"><h4>AI Review (raw)</h4><pre style="white-space:pre-wrap;font-size:0.8rem">${escapeHtml(text)}</pre></div>`;
+      return;
+    }
+
+    const review = JSON.parse(jsonMatch[0]);
+    statusEl.textContent = 'AI review complete! Updating scorecard...';
+
+    // Add subjective dimensions to the dimension table
+    const subjectiveDims = {};
+    if (review.assessments) {
+      const dimNames = {
+        naming_quality: 'Naming quality',
+        error_consistency: 'Error consistency',
+        abstraction_fit: 'Abstraction fit',
+        logic_clarity: 'Logic clarity',
+        ai_generated_debt: 'AI-generated debt',
+      };
+      for (const [key, data] of Object.entries(review.assessments)) {
+        const name = dimNames[key] || key;
+        subjectiveDims[name] = {
+          score: data.score, checks: 1, issues: data.score < 70 ? 1 : 0,
+          rationale: data.rationale, source: 'ai',
+        };
+      }
+    }
+
+    // Compute blended score (40% mechanical, 60% subjective — matching CLI)
+    const mechScore = overallScore;
+    const subjScores = Object.values(subjectiveDims).map(d => d.score);
+    const subjAvg = subjScores.length > 0
+      ? subjScores.reduce((a, b) => a + b, 0) / subjScores.length : null;
+
+    let blendedScore;
+    if (subjAvg !== null) {
+      blendedScore = mechScore * 0.4 + subjAvg * 0.6;
+    } else {
+      blendedScore = mechScore;
+    }
+
+    // Update score hero for blended mode
+    const scoreNum = document.getElementById('score-number');
+    scoreNum.textContent = fmtScore(blendedScore);
+    scoreNum.style.color = scoreColor(blendedScore);
+    document.getElementById('score-label').textContent = 'DESLOPPIFY SCORE';
+    document.getElementById('score-subtitle').textContent = 'mechanical + AI review';
+
+    // Update dim pills
+    const allDimsPills = { ...dimScores, ...subjectiveDims };
+    const pillDims = Object.entries(allDimsPills).filter(([, d]) => d.checks > 0);
+    document.getElementById('score-dims').innerHTML = pillDims.map(([name, d]) =>
+      `<span class="dim-pill">${name} <span class="pill-score" style="color:${scoreColor(d.score)}">${fmtScore(d.score)}%</span></span>`
+    ).join('');
+
+    // Re-render hidden canvas for PNG export
+    const canvas = document.getElementById('scorecard');
+    renderScorecard(canvas, blendedScore, { ...dimScores, ...subjectiveDims }, projectName, true);
+
+    // Update dimension table
+    const tableEl = document.getElementById('dim-table');
+    const allDims = { ...dimScores, ...subjectiveDims };
+    const activeDims = Object.entries(allDims)
+      .filter(([, d]) => d.checks > 0)
+      .sort(([a, da], [b, db]) => {
+        // Mechanical first, then subjective
+        const aIsSubj = da.source === 'ai' ? 1 : 0;
+        const bIsSubj = db.source === 'ai' ? 1 : 0;
+        if (aIsSubj !== bIsSubj) return aIsSubj - bIsSubj;
+        return a === 'File health' ? -1 : b === 'File health' ? 1 : a.localeCompare(b);
+      });
+
+    let html = `<thead><tr><th>Dimension</th><th>Score</th><th>Source</th><th>Notes</th></tr></thead><tbody>`;
+    for (const [name, data] of activeDims) {
+      const isAI = data.source === 'ai';
+      html += `<tr${isAI ? ' style="background:rgba(68,120,68,0.06)"' : ''}>
+        <td>${name}${isAI ? ' <span style="color:var(--green);font-size:0.75rem">[AI]</span>' : ''}</td>
+        <td class="score-cell" style="color:${scoreColor(data.score)}">${fmtScore(data.score)}%</td>
+        <td style="font-size:0.8rem;color:var(--dim)">${isAI ? 'Puter AI' : 'Mechanical'}</td>
+        <td style="font-size:0.8rem;color:var(--dim)">${data.rationale || (isAI ? '' : `${data.checks} checks, ${data.issues} issues`)}</td>
+      </tr>`;
+    }
+    html += `<tr style="border-top:2px solid var(--border)">
+      <td><strong>Mechanical</strong></td>
+      <td class="score-cell" style="color:${scoreColor(mechScore)}"><strong>${fmtScore(mechScore)}</strong></td>
+      <td></td><td style="font-size:0.8rem;color:var(--dim)">40% weight</td>
+    </tr>`;
+    if (subjAvg !== null) {
+      html += `<tr>
+        <td><strong>Subjective (AI)</strong></td>
+        <td class="score-cell" style="color:${scoreColor(subjAvg)}"><strong>${fmtScore(subjAvg)}</strong></td>
+        <td></td><td style="font-size:0.8rem;color:var(--dim)">60% weight</td>
+      </tr>`;
+    }
+    html += `<tr style="border-top:2px solid var(--accent)">
+      <td><strong>Overall (blended)</strong></td>
+      <td class="score-cell" style="color:${scoreColor(blendedScore)}"><strong>${fmtScore(blendedScore)}</strong></td>
+      <td>${sourceFiles.length} files</td><td>${lang}</td>
+    </tr>`;
+    html += '</tbody>';
+    tableEl.innerHTML = html;
+
+    // Add AI findings to findings summary
+    if (review.findings && review.findings.length > 0) {
+      const summaryEl = document.getElementById('findings-summary');
+      let aiFindingsHtml = '<div class="finding-group"><h4 style="color:var(--green)">AI Review Findings</h4>';
+      for (const f of review.findings.slice(0, 15)) {
+        aiFindingsHtml += `<div class="finding-item">${escapeHtml(
+          `[${f.dimension || 'general'}] ${f.file || ''}: ${f.summary || ''}`
+        )}</div>`;
+      }
+      if (review.summary) {
+        aiFindingsHtml += `<div style="margin-top:0.5rem;font-style:italic;font-size:0.85rem;color:var(--text)">${escapeHtml(review.summary)}</div>`;
+      }
+      aiFindingsHtml += '</div>';
+      summaryEl.innerHTML = aiFindingsHtml + summaryEl.innerHTML;
+    }
+
+    statusEl.textContent = `AI done — blended ${fmtScore(blendedScore)} (mech ${fmtScore(mechScore)}×0.4 + subj ${fmtScore(subjAvg)}×0.6)`;
+
+  } catch (err) {
+    const msg = err.message || String(err);
+    if (msg.includes('usage-limited') || msg.includes('limit')) {
+      statusEl.textContent = 'Puter credits exhausted — sign up at puter.com for more.';
+    } else {
+      statusEl.textContent = `AI review error: ${msg}`;
+    }
+  }
+}
+
+// ── Main Entry Points ───────────────────────────────────────────────────────
+
+async function startScan() {
+  const input = document.getElementById('repo-url').value;
+  const parsed = parseRepoUrl(input);
+  if (!parsed) { showError('Invalid repo URL. Use: owner/repo or https://github.com/owner/repo'); return; }
+
+  const { owner, repo } = parsed;
+  const scanBtn = document.getElementById('scan-btn');
+  scanBtn.disabled = true;
+  document.getElementById('progress').style.display = 'block';
+  document.getElementById('results').style.display = 'none';
+  document.getElementById('manual-paste').style.display = 'none';
+
+  try {
+    log('Fetching repository info...');
+    setProgress(2);
+    let branch = parsed.branch;
+    if (!branch) {
+      try { branch = await fetchDefaultBranch(owner, repo); }
+      catch (e) { branch = 'main'; }
+    }
+
+    log(`Fetching file tree (branch: ${branch})...`);
+    setProgress(5);
+    let files;
+
+    try {
+      const tree = await fetchRepoTree(owner, repo, branch);
+      log(`Found ${tree.length} files in tree, fetching contents...`);
+      files = await fetchFileContents(owner, repo, branch, tree, (done, total) => {
+        setProgress(5 + (done / total) * 40);
+        log(`Fetching files... ${done}/${total}`);
+      });
+    } catch (e) {
+      log(`GitHub API failed (${e.message}), trying gitingest fallback...`);
+      files = await fetchViaGitingest(owner, repo);
+      if (!files || files.size === 0) {
+        showError(
+          `Could not fetch repo. GitHub API: ${e.message}. Gitingest fallback also failed. ` +
+          `Try adding a GitHub token, or paste output below.`
+        );
+        document.getElementById('token-row').style.display = 'block';
+        document.getElementById('manual-paste').style.display = 'block';
+        scanBtn.disabled = false;
+        return;
+      }
+      log(`Got ${files.size} files via gitingest`);
+    }
+
+    if (!files || files.size === 0) {
+      showError('No files fetched. The repo might be empty or private.');
+      scanBtn.disabled = false;
+      return;
+    }
+
+    log(`Loaded ${files.size} files, starting analysis...`);
+    await runFullScan(files, `${owner}/${repo}`);
+  } catch (e) {
+    showError(`Scan failed: ${e.message}`);
+    console.error(e);
+  } finally {
+    scanBtn.disabled = false;
+  }
+}
+
+async function scanFromPaste() {
+  const text = document.getElementById('paste-area').value;
+  if (!text.trim()) { showError('Paste area is empty.'); return; }
+  const files = parseGitingestText(text);
+  if (files.size === 0) { showError('Could not parse any files from the pasted text.'); return; }
+  log(`Parsed ${files.size} files from paste`);
+  document.getElementById('manual-paste').style.display = 'none';
+  await runFullScan(files, 'pasted-repo');
+}
+
+// ── Token persistence ────────────────────────────────────────────────────
+const tokenInput = document.getElementById('gh-token');
+const savedToken = sessionStorage.getItem('gh_token');
+if (savedToken) { tokenInput.value = savedToken; document.getElementById('token-row').style.display = 'block'; }
+tokenInput.addEventListener('input', () => sessionStorage.setItem('gh_token', tokenInput.value));
+
+// ── Theme toggle ─────────────────────────────────────────────────────────
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  document.getElementById('theme-toggle').textContent = theme === 'dark' ? '☀' : '☾';
+  localStorage.setItem('desloppify-theme', theme);
+}
+document.getElementById('theme-toggle').addEventListener('click', () => {
+  const cur = document.documentElement.getAttribute('data-theme') || 'dark';
+  applyTheme(cur === 'dark' ? 'light' : 'dark');
+});
+applyTheme(localStorage.getItem('desloppify-theme') || 'dark');
+
+// ── AI checkbox ──────────────────────────────────────────────────────────
+document.getElementById('ai-enabled').addEventListener('change', (e) => {
+  document.getElementById('ai-model').disabled = !e.target.checked;
+});
+
+// ── Button events ────────────────────────────────────────────────────────
+document.getElementById('scan-btn').addEventListener('click', () => startScan());
+document.getElementById('paste-btn').addEventListener('click', () => scanFromPaste());
+document.getElementById('download-btn').addEventListener('click', () => downloadScorecard());
+document.getElementById('rescan-btn').addEventListener('click', () => {
+  document.getElementById('results').style.display = 'none';
+  document.getElementById('input-card').style.display = '';
+  document.getElementById('page-header').style.display = '';
+  window.scrollTo(0, 0);
+});
+document.getElementById('repo-url').addEventListener('keypress', (e) => {
+  if (e.key === 'Enter') startScan();
+});
+
+// ── Public API (for MCP / external callers) ──────────────────────────────
+window.desloppify = {
+  /** Scan a GitHub repo programmatically. Returns { score, dimensions, findings }. */
+  async scan(repo, opts = {}) {
+    const parsed = parseRepoUrl(repo);
+    if (!parsed) throw new Error('Invalid repo: use owner/repo');
+    const { owner, repo: repoName } = parsed;
+    let branch = parsed.branch;
+    if (!branch) { try { branch = await fetchDefaultBranch(owner, repoName); } catch { branch = 'main'; } }
+    const tree = await fetchRepoTree(owner, repoName, branch);
+    const files = await fetchFileContents(owner, repoName, branch, tree);
+    const lang = autoDetectLang(files);
+    const sourceFiles = [...files.keys()].filter(f => isSourceFile(f, lang));
+    // Run detectors (simplified — no progress UI)
+    const functions = [], classes = [], imports = [];
+    await extractAST(files, sourceFiles, lang, functions, classes, imports);
+    const findings = new Map(); const potentials = new Map();
+    const addFindings = (det, result, mapper) => {
+      if (!result || !result.entries) return;
+      const f = result.entries.map(mapper);
+      findings.set(det, f); potentials.set(det, result.potential || result.scanned || result.entries.length);
+    };
+    // Core detectors
+    const complexity = detectComplexity(functions);
+    addFindings('complexity', complexity, e => ({ file: e.file, signals: e.signals }));
+    const flatResult = detectFlatDirs(files, sourceFiles);
+    addFindings('flat_dirs', flatResult, e => ({ directory: e.directory, file_count: e.file_count }));
+    const namingResult = detectNaming(sourceFiles);
+    addFindings('naming', namingResult, e => ({ file: e.file, minority: e.minority }));
+    const orphanedResult = detectOrphaned(sourceFiles, imports);
+    addFindings('orphaned', orphanedResult, e => ({ file: e.file }));
+    const singleUseResult = detectSingleUse(sourceFiles, imports);
+    addFindings('single_use', singleUseResult, e => ({ file: e.file, sole_importer: e.sole_importer }));
+    const couplingResult = detectCoupling(imports, sourceFiles);
+    addFindings('coupling', couplingResult, e => ({ file: e.file }));
+    const logsResult = detectLogs(files, sourceFiles, lang);
+    addFindings('logs', logsResult, e => ({ file: e.file, count: e.count }));
+    const deprecatedResult = detectDeprecated(files, sourceFiles, lang);
+    addFindings('deprecated', deprecatedResult, e => ({ file: e.file, count: e.count }));
+    const dupesResult = detectDuplicates(functions);
+    addFindings('dupes', dupesResult, e => ({ fn_a: e.fn_a, fn_b: e.fn_b, similarity: e.similarity }));
+    const cyclesResult = detectCycles(imports);
+    addFindings('cycles', cyclesResult, e => ({ files: e.files, length: e.length }));
+    const dimScores = computeDimensionScores(findings, potentials);
+    const score = computeHealthScore(dimScores);
+    return {
+      score, lang,
+      dimensions: Object.fromEntries(Object.entries(dimScores).filter(([,d]) => d.checks > 0).map(([k,d]) => [k, { score: d.score, checks: d.checks, issues: d.issues }])),
+      findings: Object.fromEntries([...findings.entries()].map(([k,v]) => [k, v.length])),
+    };
+  },
+  /** Get last scan state */
+  get lastScan() { return _lastScanState; },
+};
+</script>
+</body>
+</html>

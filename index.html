@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Katehuuh / Nekochu</title>
+<meta name="description" content="Vibe code, models, and a kitten benchmark.">
+<meta name="color-scheme" content="dark">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500&family=Manrope:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%20100%20100%22%3E%3Ctext%20y%3D%2280%22%20font-size%3D%2280%22%3E%F0%9F%90%B1%3C/text%3E%3C/svg%3E">
+<style>
+:root {
+  --bg: #050507;
+  --bg-1: #0c0c10;
+  --bg-2: #14141a;
+  --line: rgba(255, 255, 255, 0.07);
+  --line-2: rgba(255, 255, 255, 0.13);
+  --text: #f4f4f6;
+  --text-2: rgba(244, 244, 246, 0.62);
+  --text-3: rgba(244, 244, 246, 0.36);
+  --accent: #ff6b35;
+  --accent-soft: rgba(255, 107, 53, 0.12);
+  --accent-line: rgba(255, 107, 53, 0.42);
+  --r-sm: 10px; --r: 16px; --r-lg: 22px;
+  --serif: "Fraunces", ui-serif, Georgia, serif;
+  --sans:  "Manrope", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --mono:  ui-monospace, "JetBrains Mono", "SF Mono", Consolas, monospace;
+  --max: 980px;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: var(--bg); color: var(--text); font-family: var(--sans);
+  font-size: 18px; line-height: 1.6;
+  -webkit-font-smoothing: antialiased; -webkit-text-size-adjust: 100%;
+  text-rendering: optimizeLegibility;
+}
+main { max-width: var(--max); margin: 0 auto; padding: 3.5rem 1.4rem 5rem; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { color: #ffb98d; }
+::selection { background: var(--accent-soft); color: var(--accent); }
+
+.hero { text-align: center; margin-bottom: 2.4rem; }
+.avatar {
+  width: 110px; height: 110px; border-radius: 50%; display: block;
+  margin: 0 auto .9rem;
+  box-shadow: 0 0 0 1px var(--line), 0 30px 60px -20px rgba(255, 107, 53, 0.18);
+}
+.icon-nav { display: inline-flex; gap: .45rem; justify-content: center; }
+.icon-nav a {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 48px; height: 48px; border-radius: 999px;
+  border: 1px solid var(--line); color: var(--text);
+  transition: border-color .18s ease, background-color .18s ease, color .18s ease, transform .18s ease;
+}
+.icon-nav a:hover {
+  border-color: var(--accent-line); background: var(--accent-soft);
+  color: var(--accent); transform: translateY(-2px);
+}
+.icon-nav svg { display: block; }
+.icon-nav .emoji { font-size: 1.35rem; line-height: 1; display: inline-block; -webkit-text-fill-color: initial; }
+
+/* Inline search field that lives next to the tag-filter pill */
+.inline-search {
+  appearance: none;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 999px;
+  padding: .4rem .95rem;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: .68rem;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  width: 130px;
+  -webkit-backdrop-filter: blur(12px) saturate(140%);
+  backdrop-filter: blur(12px) saturate(140%);
+  outline: none;
+  transition: border-color .2s ease, background-color .2s ease, width .25s ease;
+}
+.inline-search::placeholder { color: var(--text-3); }
+.inline-search:hover { border-color: rgba(255, 255, 255, 0.18); }
+.inline-search:focus {
+  border-color: var(--accent-line);
+  background: rgba(255, 138, 76, 0.08);
+  width: 200px;
+}
+.is-hidden-by-search { display: none !important; }
+
+section { margin-block: 2.8rem; }
+section h2 {
+  font-family: var(--serif); font-weight: 500;
+  font-size: clamp(1.55rem, 3vw, 1.95rem);
+  letter-spacing: -0.018em; margin: 0 0 .35rem;
+  display: flex; align-items: center; gap: .9rem; flex-wrap: wrap;
+}
+
+/* ─── Liquid-glass tag filter ─────────────────────────────────────────
+   Three layers stacked to fake Apple's "lip profile" + Snell-law bezel
+   without a real-time displacement shader:
+
+   1. multi-step inset box-shadow for the convex rim (light catches the
+      top edge twice — outer specular ring + inner highlight — same as a
+      pinched glass cross-section)
+   2. ::before conic-gradient specular highlight that tracks the cursor
+      via the --gloss-angle CSS variable (set by JS)
+   3. backdrop-filter: blur + saturate for the surface; on Chromium,
+      additionally `url(#lg-refract)` references an SVG turbulence-based
+      feDisplacementMap so the actual backdrop distorts at the rim. Safari
+      ignores the url() and falls back to plain blur.
+────────────────────────────────────────────────────────────────────── */
+.tag-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  position: relative;
+  isolation: isolate;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  -webkit-backdrop-filter: blur(14px) saturate(170%);
+  backdrop-filter: blur(14px) saturate(170%) url(#lg-refract);
+  box-shadow:
+    /* outer ambient ring */
+    0 0 0 1px rgba(255, 255, 255, 0.08),
+    /* outer drop shadow for elevation */
+    0 6px 24px -6px rgba(0, 0, 0, 0.55),
+    /* inner top highlight (the key light catching the lip) */
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.45),
+    /* inner side bevels — extra hint of glass thickness */
+    inset 1.5px 0 1px rgba(255, 255, 255, 0.10),
+    inset -1.5px 0 1px rgba(255, 255, 255, 0.10),
+    /* inner bottom shadow (back of the lip) */
+    inset 0 -1px 0 rgba(0, 0, 0, 0.28);
+  font-family: var(--mono);
+  font-size: .68rem;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
+/* Mouse-tracked specular sweep */
+.tag-filter::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: -1;
+  background: conic-gradient(
+    from var(--gloss-angle, 90deg),
+    transparent 0deg,
+    transparent 70deg,
+    rgba(255, 255, 255, 0.38) 100deg,
+    rgba(255, 255, 255, 0.16) 140deg,
+    transparent 210deg,
+    transparent 360deg
+  );
+  filter: blur(7px);
+  mix-blend-mode: screen;
+  opacity: 0.85;
+}
+
+/* Static top arc + bottom slope for the lip cross-section */
+.tag-filter::after {
+  content: '';
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: -1;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.22) 0%,
+    rgba(255, 255, 255, 0) 38%,
+    rgba(0, 0, 0, 0) 72%,
+    rgba(0, 0, 0, 0.07) 100%
+  );
+}
+
+.tag-filter button {
+  position: relative;
+  z-index: 1;
+  appearance: none;
+  background: transparent;
+  border: 0;
+  color: var(--text-3);
+  padding: .4rem .9rem;
+  border-radius: 999px;
+  font: inherit;
+  cursor: pointer;
+  transition: color .2s ease, background-color .25s ease, box-shadow .25s ease;
+}
+.tag-filter button:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.05);
+}
+.tag-filter button.active {
+  color: var(--accent);
+  background: linear-gradient(180deg,
+    rgba(255, 138, 76, 0.24),
+    rgba(255, 138, 76, 0.11)
+  );
+  box-shadow:
+    /* still a tiny lip on the active button */
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    inset 0 0 0 1px rgba(255, 138, 76, 0.38),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.20),
+    0 0 14px -3px rgba(255, 138, 76, 0.32);
+}
+.is-hidden-by-filter { display: none !important; }
+
+.vibe-grid { display: grid; grid-template-columns: 1fr; gap: 1rem; }
+@media (min-width: 720px) { .vibe-grid { grid-template-columns: 1fr 1fr; gap: 1.25rem; } }
+.vibe-card {
+  background: var(--bg-1); border: 1px solid var(--line); border-radius: var(--r-lg);
+  overflow: hidden; display: flex; flex-direction: column;
+  transition: border-color .2s ease, transform .2s ease;
+}
+.vibe-card:hover { border-color: var(--accent-line); transform: translateY(-2px); }
+.vibe-card a.card-link { color: inherit; display: flex; flex-direction: column; flex: 1; }
+.vibe-card a.card-link:hover { color: inherit; }
+.thumb {
+  aspect-ratio: 16 / 9; background: var(--bg-2);
+  width: 100%; display: block; object-fit: cover;
+  border-bottom: 1px solid var(--line);
+}
+.thumb.placeholder {
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text-3); font-family: var(--mono); font-size: .82rem; letter-spacing: .04em;
+}
+.card-body { padding: 1.05rem 1.2rem 1.2rem; }
+.card-body h3 {
+  font-family: var(--serif); font-weight: 500; font-size: 1.22rem;
+  letter-spacing: -0.01em; margin: 0 0 .28rem;
+}
+.card-body p { margin: 0; color: var(--text-2); font-size: 1rem; }
+.card-meta {
+  margin-top: .8rem; display: flex; gap: .4rem; flex-wrap: wrap;
+  font-family: var(--mono); font-size: .8rem; color: var(--text-3);
+}
+.card-meta span, .card-meta a {
+  border: 1px solid var(--line); padding: .12rem .55rem;
+  border-radius: 999px; color: inherit;
+}
+.card-meta a:hover { border-color: var(--accent-line); color: var(--accent); }
+
+section.compact { display: grid; gap: .6rem; }
+.compact-row {
+  display: grid; grid-template-columns: 90px 1fr; gap: 1rem; align-items: baseline;
+  padding-block: .55rem; border-top: 1px solid var(--line);
+}
+.compact-row:last-child { border-bottom: 1px solid var(--line); }
+.compact-row h3 {
+  font-family: var(--serif); font-weight: 500; font-size: 1.08rem;
+  color: var(--text-2); margin: 0; letter-spacing: -0.01em;
+}
+.chips {
+  list-style: none; padding: 0 0 .25rem; margin: 0;
+  display: flex; flex-wrap: nowrap; gap: .35rem;
+  overflow-x: auto; -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin; scrollbar-color: var(--line-2) transparent;
+}
+.chips::-webkit-scrollbar { height: 4px; }
+.chips::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: 2px; }
+.chips::-webkit-scrollbar-track { background: transparent; }
+.chips li { flex-shrink: 0; }
+.chips li a {
+  display: inline-block; padding: .25rem .7rem;
+  border: 1px solid var(--line); border-radius: 999px;
+  font-family: var(--mono); font-size: .85rem; color: var(--text);
+  white-space: nowrap;
+  transition: border-color .18s ease, color .18s ease, background-color .18s ease;
+}
+.chips li a:hover {
+  border-color: var(--accent-line); background: var(--accent-soft); color: var(--accent);
+}
+@media (max-width: 540px) {
+  .compact-row { grid-template-columns: 1fr; gap: .35rem; padding-block: .8rem; }
+}
+
+@keyframes rise {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.rise { animation: rise .65s cubic-bezier(.2, .65, .2, 1) both; }
+.rise[data-d="1"] { animation-delay: .04s; }
+.rise[data-d="2"] { animation-delay: .12s; }
+.rise[data-d="3"] { animation-delay: .20s; }
+.rise[data-d="4"] { animation-delay: .28s; }
+.rise[data-d="5"] { animation-delay: .36s; }
+@media (prefers-reduced-motion: reduce) { .rise { animation: none; } }
+
+@media (max-width: 600px) {
+  main { padding: 2rem 1.1rem 3.5rem; }
+  .hero { margin-bottom: 2rem; }
+  .avatar { width: 92px; height: 92px; margin-bottom: .8rem; }
+  section { margin-block: 2.2rem; }
+}
+</style>
+</head>
+<body>
+
+<!-- SVG filter referenced by .tag-filter's backdrop-filter on Chromium.
+     On Safari the url() is ignored and the blur+saturate still applies. -->
+<svg style="position:absolute;width:0;height:0;overflow:hidden" aria-hidden="true">
+  <defs>
+    <filter id="lg-refract" x="0%" y="0%" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.012 0.02" numOctaves="2" seed="4" result="t"/>
+      <feDisplacementMap in="SourceGraphic" in2="t" scale="3.5" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+  </defs>
+</svg>
+
+<main>
+
+  <header class="hero rise" data-d="1">
+    <img class="avatar" src="https://avatars.githubusercontent.com/u/133996730?v=4" alt="" loading="eager" width="120" height="120">
+    <nav class="icon-nav" aria-label="profiles">
+      <a href="https://github.com/Katehuuh" aria-label="GitHub" title="GitHub">
+        <svg viewBox="0 0 16 16" width="22" height="22" fill="currentColor" aria-hidden="true">
+          <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"/>
+        </svg>
+      </a>
+      <a href="https://huggingface.co/Nekochu" aria-label="Hugging Face" title="Hugging Face"><span class="emoji">🤗</span></a>
+      <a href="demos/CatBench/" aria-label="CatBench" title="CatBench"><span class="emoji">🐱</span></a>
+    </nav>
+  </header>
+
+  <section class="rise" data-d="2">
+    <h2>Vibe code
+      <span class="tag-filter" id="tag-filter" role="group" aria-label="filter by tag">
+        <button data-tag="tool" class="active" aria-pressed="true">tool</button>
+        <button data-tag="game" class="active" aria-pressed="true">game</button>
+        <button data-tag="show" class="active" aria-pressed="true">show</button>
+      </span>
+      <input type="search" id="site-search" class="inline-search" placeholder="" aria-label="search">
+    </h2>
+    <div id="projects-grid" class="vibe-grid">
+      <noscript><p>Browse <a href="https://github.com/Katehuuh">github.com/Katehuuh</a> directly.</p></noscript>
+    </div>
+  </section>
+
+  <section class="rise compact" data-d="3">
+    <div class="compact-row">
+      <h3>Datasets</h3>
+      <ul id="datasets-chips" class="chips"></ul>
+    </div>
+    <div class="compact-row">
+      <h3>Models</h3>
+      <ul id="models-chips" class="chips"></ul>
+    </div>
+    <div class="compact-row">
+      <h3>Code</h3>
+      <ul id="repos-chips" class="chips"></ul>
+    </div>
+  </section>
+
+</main>
+
+<script>
+(async () => {
+  let data;
+  try {
+    data = await fetch('data.json', { cache: 'no-store' }).then(r => r.json());
+  } catch (e) {
+    console.error('failed to load data.json', e);
+    return;
+  }
+
+  const projects = data.projects || [];
+  await liveAugmentDemos(projects);
+  renderProjects(projects);
+  renderChips('datasets-chips', data.datasets || []);
+  renderChips('models-chips', data.models || []);
+  renderChips('repos-chips', data.repos || []);
+  setupSearch();
+  setupTagFilter();
+})();
+
+function setupTagFilter() {
+  const root = document.getElementById('tag-filter');
+  if (!root) return;
+  const buttons = [...root.querySelectorAll('button')];
+  // The three toggles cover these category tags. Cards whose tags don't
+  // include any of these (descriptive-only tags like "webrtc", "p2p") are
+  // shown regardless — the toggles don't affect them.
+  const CATEGORY = new Set(buttons.map(b => b.dataset.tag));
+
+  function applyFilter() {
+    const enabled = new Set();
+    for (const b of buttons) if (b.classList.contains('active')) enabled.add(b.dataset.tag);
+    for (const card of document.querySelectorAll('.vibe-card')) {
+      const tags = [...card.querySelectorAll('.card-meta span')]
+        .map(s => s.textContent.trim().toLowerCase());
+      const cardCats = tags.filter(t => CATEGORY.has(t));
+      // No category tag on this card → always visible. Otherwise hide if all
+      // of its category tags are currently toggled off.
+      const visible = cardCats.length === 0 || cardCats.some(t => enabled.has(t));
+      card.classList.toggle('is-hidden-by-filter', !visible);
+    }
+  }
+
+  buttons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const on = !btn.classList.contains('active');
+      btn.classList.toggle('active', on);
+      btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+      applyFilter();
+    });
+  });
+
+  // Mouse-tracked specular: rotate the conic-gradient highlight on the
+  // glass pill so it points roughly at the cursor. rAF-throttled.
+  let rafId = 0;
+  const onMove = (e) => {
+    if (rafId) return;
+    rafId = requestAnimationFrame(() => {
+      rafId = 0;
+      const r = root.getBoundingClientRect();
+      const cx = r.left + r.width / 2;
+      const cy = r.top + r.height / 2;
+      const ang = Math.atan2(e.clientY - cy, e.clientX - cx) * 180 / Math.PI;
+      root.style.setProperty('--gloss-angle', `${ang + 90}deg`);
+    });
+  };
+  document.addEventListener('mousemove', onMove, { passive: true });
+}
+
+function setupSearch() {
+  const input = document.getElementById('site-search');
+  if (!input) return;
+  const targets = [
+    ...document.querySelectorAll('.vibe-card'),
+    ...document.querySelectorAll('.chips li'),
+  ];
+  input.addEventListener('input', () => {
+    const q = input.value.toLowerCase().trim();
+    let anyHidden = false;
+    for (const el of targets) {
+      const text = el.textContent.toLowerCase();
+      const match = !q || text.includes(q);
+      el.classList.toggle('is-hidden-by-search', !match);
+      if (!match) anyHidden = true;
+    }
+    // hide compact-rows whose chips are all filtered out
+    for (const row of document.querySelectorAll('.compact-row')) {
+      const chips = [...row.querySelectorAll('.chips li')];
+      const visible = chips.some(li => !li.classList.contains('is-hidden-by-search'));
+      row.classList.toggle('is-hidden-by-search', q && !visible);
+    }
+  });
+}
+
+// Pick up anything dropped under /demos/ (flat .html or subdir with
+// index.html) without needing a manual data.json entry.
+//
+// Strategy: read a static manifest committed by CI (no API quota cost). Only
+// fall back to the GitHub Contents API on rate limit / first-deploy gap.
+async function liveAugmentDemos(projects) {
+  const seen = new Set(projects.map(p => p.name));
+
+  let items = await loadDemosManifest();
+  if (!items) items = await loadDemosFromApi();
+  if (!items) return;
+
+  // Items are pre-sorted newest-first by the manifest; API path sorts via its
+  // own commit-date query already.
+  const fresh = [];
+  for (const it of items) {
+    let rawName, href;
+    if (it.type === 'file') {
+      rawName = it.name;
+      const fn = it.filename || `${it.name}.html`;
+      href = `demos/${fn}`;
+    } else if (it.type === 'dir') {
+      rawName = it.name;
+      href = `demos/${it.name}/`;
+    } else continue;
+
+    let displayName = rawName, tag = null;
+    const m = rawName.match(/^\[([^\]]+)\]-(.+)$/);
+    if (m) { tag = m[1].toLowerCase(); displayName = m[2]; }
+
+    if (seen.has(displayName)) continue;
+    seen.add(displayName);
+
+    fresh.push({
+      name: displayName,
+      url: href,
+      thumb: `assets/thumbs/${rawName}.jpg`,
+      tags: tag ? [tag] : ['demo'],
+    });
+  }
+
+  projects.unshift(...fresh);
+}
+
+async function loadDemosManifest() {
+  try {
+    const r = await fetch('demos/manifest.json', { cache: 'no-store' });
+    if (!r.ok) return null;
+    const data = await r.json();
+    return Array.isArray(data?.demos) ? data.demos : null;
+  } catch {
+    return null;
+  }
+}
+
+// Fallback: scan via the Contents API. Best-effort — if rate-limited, we
+// silently give up and the page just shows whatever data.json had.
+async function loadDemosFromApi() {
+  const host = location.hostname;
+  if (!/\.github\.io$/i.test(host)) return null;
+  const owner = host.split('.')[0];
+  const repo = host;
+  const ttl = 5 * 60_000;
+
+  const contents = await fetchCached(`demos:${owner}/${repo}`, ttl,
+    () => fetch(`https://api.github.com/repos/${owner}/${repo}/contents/demos`,
+                { headers: { 'Accept': 'application/vnd.github+json' } }));
+  if (!Array.isArray(contents)) return null;
+
+  const items = [];
+  for (const it of contents) {
+    if (!it.name || it.name.startsWith('.')) continue;
+    if (it.type === 'file' && /\.html?$/i.test(it.name)) {
+      items.push({ name: it.name.replace(/\.html?$/i, ''), type: 'file', filename: it.name });
+    } else if (it.type === 'dir') {
+      // CatBench is reachable only from the cat emoji, never via the gallery.
+      // Static manifest path filters via .gallery-exclude; API fallback can't
+      // see hidden sentinel files, so name-skip here.
+      if (it.name === 'CatBench') continue;
+      items.push({ name: it.name, type: 'dir' });
+    }
+  }
+  return items;
+}
+
+async function fetchCached(key, ttl, fetcher) {
+  const cached = sessionStorage.getItem(key);
+  if (cached) {
+    try {
+      const { t, data } = JSON.parse(cached);
+      if (Date.now() - t < ttl) return data;
+    } catch {}
+  }
+  try {
+    const r = await fetcher();
+    if (!r.ok) return null;
+    const data = await r.json();
+    sessionStorage.setItem(key, JSON.stringify({ t: Date.now(), data }));
+    return data;
+  } catch { return null; }
+}
+
+function el(tag, attrs, children) {
+  const e = document.createElement(tag);
+  if (attrs) for (const [k, v] of Object.entries(attrs)) {
+    if (v == null) continue;
+    if (k === 'class') e.className = v;
+    else if (k === 'html') e.innerHTML = v;
+    else e.setAttribute(k, v);
+  }
+  for (const c of [].concat(children || [])) {
+    if (c == null) continue;
+    e.appendChild(typeof c === 'string' ? document.createTextNode(c) : c);
+  }
+  return e;
+}
+
+function renderProjects(projects) {
+  const root = document.getElementById('projects-grid');
+  if (!root) return;
+  root.replaceChildren(...projects.map(projectCard));
+}
+
+function projectCard(p) {
+  const thumb = p.thumb
+    ? el('img', {
+        class: 'thumb', src: p.thumb, alt: '', loading: 'lazy',
+        onerror: "this.replaceWith(Object.assign(document.createElement('div'), {className:'thumb placeholder', textContent:'building'}))"
+      })
+    : el('div', { class: 'thumb placeholder' }, 'building');
+  const meta = el('div', { class: 'card-meta' }, [
+    p.repo ? el('a', { href: p.repo, title: 'source' }, 'src') : null,
+    ...(p.tags || []).map(t => el('span', null, t)),
+  ]);
+  const body = el('div', { class: 'card-body' }, [
+    el('h3', null, p.name),
+    el('p', null, p.description || ''),
+    meta,
+  ]);
+  const link = el('a', { class: 'card-link', href: p.url }, [thumb, body]);
+  return el('div', { class: 'vibe-card' }, link);
+}
+
+function renderChips(id, items) {
+  const root = document.getElementById(id);
+  if (!root) return;
+  root.replaceChildren(...items.map(i => el('li', null,
+    el('a', { href: i.url, title: i.description || '' }, i.name)
+  )));
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <!-- Compact, dark, single-file app -->
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Trace Summarizer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+  <script type="importmap">
+  {
+    "imports": {
+      "@google/genai": "https://aistudiocdn.com/@google/genai@^1.20.0"
+    }
+  }
+  </script>
+  <style>
+    :root{
+      --bg:#0b0b0b; --panel:#111; --fg:#f5f5f5; --muted:#9aa0a6; --line:#222; --accent:#4c8dff;
+      --radius:12px; --gap:12px; --pad:14px;
+    }
+    *{box-sizing:border-box}
+    html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font-family:"Noto Sans",system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
+    .app{max-width:1100px;margin:0 auto;padding:16px}
+    .topbar{display:flex;align-items:center;gap:10px;justify-content:space-between;margin-bottom:12px}
+    .brand{display:flex;align-items:center;gap:10px}
+    .brand h1{font-size:16px;margin:0;font-weight:700;letter-spacing:.3px}
+    .pill{font-size:11px;color:var(--muted);border:1px solid var(--line);padding:4px 8px;border-radius:999px}
+    .uploader{flex:1;display:flex;align-items:center;gap:10px}
+    #fileInput{display:none}
+    .drop{flex:1;border:1px dashed var(--line);border-radius:var(--radius);padding:10px 12px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;background:var(--panel)}
+    .drop:hover{border-color:#333}
+    .drop .hint{color:var(--muted);font-size:12px}
+    .controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    .num,.chk{display:flex;gap:6px;align-items:center;background:var(--panel);border:1px solid var(--line);padding:6px 8px;border-radius:10px}
+    .num input{width:80px;background:transparent;border:none;color:var(--fg);outline:none}
+    .chk input{width:16px;height:16px;accent-color:var(--accent)}
+    button.primary{background:#fff;color:#000;border:none;padding:8px 12px;border-radius:10px;cursor:pointer}
+    button.ghost{background:transparent;color:var(--fg);border:1px solid var(--line);padding:8px 12px;border-radius:10px;cursor:pointer}
+    button:disabled{opacity:.5;cursor:not-allowed}
+    .grid{display:grid;grid-template-columns:repeat(12,1fr);gap:var(--gap)}
+    .panel{grid-column: span 12;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:var(--pad)}
+    @media(min-width:900px){
+      .panel.stats{grid-column:span 4}
+      .panel.list{grid-column:span 6}
+      .panel.list.wide{grid-column:span 8}
+      .panel.list.slim{grid-column:span 4}
+    }
+    .stat{display:flex;flex-direction:column;gap:6px}
+    .stat .label{font-size:12px;color:var(--muted)}
+    .stat .value{font-size:18px;font-weight:600}
+    .progress{display:grid;gap:8px;margin:12px 0}
+    .spinner{width:18px;height:18px;border:2px solid #333;border-top-color:#fff;border-radius:50%;animation:spin .8s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .bar{height:6px;background:#181818;border-radius:999px;overflow:hidden;border:1px solid #1e1e1e}
+    .bar-fill{height:100%;background:var(--fg);width:0%;transition:width .2s ease}
+    h3{margin:0 0 10px;font-size:14px;letter-spacing:.2px}
+    ol{margin:0;padding-left:18px;max-height:280px;overflow:auto}
+    li{padding:4px 0;color:#e5e5e5}
+    .row{display:flex;align-items:center;gap:10px;justify-content:space-between}
+    .mono{font-variant-numeric:tabular-nums}
+    .muted{color:var(--muted)}
+    details{border:1px dashed #222;padding:10px;border-radius:10px}
+    summary{cursor:pointer}
+    .item-bar-bg{flex-shrink:0;width:100px;height:6px;background:#222;border-radius:3px}
+    .item-bar{height:100%;background:var(--accent);border-radius:3px;transition:width .2s ease}
+    li .name{color:var(--fg)}
+    li .meta{font-size:11px;color:var(--muted)}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="topbar">
+      <div class="brand">
+        <span class="pill">Chrome Trace is useful for LLM context when optimizing performance.</span>
+        <h1>Trace Summarizer: F12 → Performance → Record</h1>
+      </div>
+      <div class="uploader" id="dropzone">
+        <input id="fileInput" type="file" accept=".json" />
+        <div class="drop">
+          <span class="hint">Drop or pick Trace-*.json</span>
+          <button class="ghost" id="pickBtn">Browse</button>
+        </div>
+      </div>
+      <div class="controls">
+        <div class="num">
+          <span class="muted">Top</span>
+          <input id="topN" type="number" min="5" max="100" value="50" />
+        </div>
+        <div class="num">
+          <span class="muted">Long ≥</span>
+          <input id="longTaskMs" type="number" min="10" max="200" value="50" />
+          <span class="muted">ms</span>
+        </div>
+        <label class="chk">
+          <input id="onlyMain" type="checkbox" checked />
+          <span class="muted">Main only</span>
+        </label>
+        <button id="analyzeBtn" class="primary" hidden>Analyze</button>
+      </div>
+    </div>
+
+    <div id="progress" class="panel" hidden>
+      <div class="row">
+        <div class="row" style="gap:8px">
+          <div class="spinner" aria-hidden="true"></div>
+          <div class="muted" id="status">Reading…</div>
+        </div>
+        <div class="mono muted" id="pct">0%</div>
+      </div>
+      <div class="bar"><div class="bar-fill" id="barFill" style="width:0%"></div></div>
+    </div>
+
+    <div class="grid" id="summary" hidden>
+      <div class="panel" style="grid-column: span 12;">
+        <h3><span style="display:inline-flex;align-items:center;gap:8px">
+          <span class="pill">AI Summary</span>
+        </span></h3>
+        <div id="aiSummary" class="muted">Analyzing...</div>
+      </div>
+      <div class="panel" style="grid-column: span 12;">
+        <div class="row">
+          <h3>Export</h3>
+          <div style="display:flex;gap:8px">
+            <button id="copyCsv" class="ghost">Copy CSV</button>
+            <button id="copyLog" class="ghost">Copy .log</button>
+            <button id="downloadCsv" class="ghost">Download CSV</button>
+          </div>
+        </div>
+        <pre id="plainLog" class="mono" style="white-space:pre-wrap;margin-top:8px;color:var(--muted)"></pre>
+      </div>
+      <div class="panel stats" id="fileInfo"></div>
+      <div class="panel stats" id="threadInfo"></div>
+      <div class="panel stats" id="timeInfo"></div>
+
+      <div class="panel list wide">
+        <h3>Top JavaScript</h3>
+        <ol id="topJs"></ol>
+      </div>
+      <div class="panel list slim">
+        <h3>Top Events</h3>
+        <ol id="topEvents"></ol>
+      </div>
+
+      <div class="panel list slim">
+        <h3>Long Tasks</h3>
+        <ol id="longTasks"></ol>
+      </div>
+      <div class="panel list wide">
+        <h3>Rendering & Layout</h3>
+        <ol id="rendering"></ol>
+      </div>
+
+      <div class="panel list">
+        <div class="row">
+          <h3>Three.js Hotspots</h3>
+          <button id="downloadCsv" class="ghost">Download CSV</button>
+        </div>
+        <ol id="threeHotspots"></ol>
+      </div>
+
+      <div class="panel">
+        <details>
+          <summary>Debug aggregates</summary>
+          <pre id="rawOut" class="mono" style="white-space:pre-wrap"></pre>
+        </details>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    /* @tweakable primary accent color */
+    const THEME_ACCENT = "#4c8dff";
+    /* @tweakable base panel corner radius */
+    const THEME_RADIUS = 12;
+    /* @tweakable default Top N items */
+    let DEFAULT_TOP_N = 50;
+    /* @tweakable default long task threshold in ms */
+    let DEFAULT_LONG_TASK_MS = 50;
+    /* @tweakable debounce delay for auto re-run (ms) */
+    const DEBOUNCE_MS = 250;
+    /* @tweakable AI model to use */
+    const AI_MODEL = "gemini-2.5-flash";
+    /* @tweakable max words in AI summary */
+    const AI_MAX_WORDS = 100;
+
+    // apply theme tweaks
+    document.documentElement.style.setProperty('--accent', THEME_ACCENT);
+    document.documentElement.style.setProperty('--radius', THEME_RADIUS + 'px');
+
+    // Elements
+    const fileInput = document.getElementById('fileInput');
+    const pickBtn = document.getElementById('pickBtn');
+    const dropzone = document.getElementById('dropzone');
+    const analyzeBtn = document.getElementById('analyzeBtn');
+    const progress = document.getElementById('progress');
+    const statusEl = document.getElementById('status');
+    const pctEl = document.getElementById('pct');
+    const barFill = document.getElementById('barFill');
+    const topNEl = document.getElementById('topN');
+    const longTaskMsEl = document.getElementById('longTaskMs');
+    const onlyMainEl = document.getElementById('onlyMain');
+    const aiSummaryEl = document.getElementById('aiSummary');
+
+    const summary = document.getElementById('summary');
+    const fileInfo = document.getElementById('fileInfo');
+    const threadInfo = document.getElementById('threadInfo');
+    const timeInfo = document.getElementById('timeInfo');
+    const topJs = document.getElementById('topJs');
+    const longTasks = document.getElementById('longTasks');
+    const rendering = document.getElementById('rendering');
+    const topEvents = document.getElementById('topEvents');
+    const threeHotspots = document.getElementById('threeHotspots');
+    const rawOut = document.getElementById('rawOut');
+    const downloadCsv = document.getElementById('downloadCsv');
+    const copyCsvBtn = document.getElementById('copyCsv');
+    const copyLogBtn = document.getElementById('copyLog');
+    const plainLog = document.getElementById('plainLog');
+
+    let selectedFile = null;
+
+    function setProgress(vis, msg = '', pct = 0) {
+      progress.hidden = !vis;
+      statusEl.textContent = msg;
+      pctEl.textContent = Math.round(pct) + '%';
+      barFill.style.width = pct + '%';
+    }
+    function enableAnalyze(enabled) { analyzeBtn.disabled = !enabled; }
+
+    pickBtn.addEventListener('click', () => fileInput.click());
+    dropzone.addEventListener('click', (e) => {
+      // avoid click scattering to nested buttons
+      if (e.target.id !== 'pickBtn') fileInput.click();
+    });
+    dropzone.addEventListener('dragover', (e) => { e.preventDefault(); });
+    dropzone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      const f = e.dataTransfer.files?.[0];
+      if (f) handleFile(f);
+    });
+    fileInput.addEventListener('change', (e) => {
+      const f = e.target.files?.[0];
+      if (f) handleFile(f);
+    });
+
+    function handleFile(f) {
+      selectedFile = f;
+      enableAnalyze(true);
+      summary.hidden = true;
+      setProgress(false, '', 0);
+      pickBtn.textContent = 'Change';
+      statusEl.textContent = '';
+      runAnalyze(); // auto-analyze on select
+    }
+
+    // Inline Worker via Blob URL
+    const workerUrl = URL.createObjectURL(new Blob([`
+      /* @tweakable Treat only 'X' (complete) events for timing */
+      const USE_ONLY_COMPLETE_EVENTS = true;
+      /* @tweakable Known JS event names to aggregate as JavaScript work */
+      const JS_EVENT_NAMES = new Set(['FunctionCall','EvaluateScript','V8.Execute','v8.run','CompileCode','JSEvaluate']);
+      /* @tweakable Rendering/Layout events to surface */
+      const RENDER_EVENTS = new Set([
+        'AnimationFrame','AnimationFrame::Start','AnimationFrame::Fire','AnimationFrame::Process',
+        'Layout','RecalculateStyles','RecalculateStyle','Paint','RasterTask',
+        'CompositeLayers','UpdateLayerTree','HitTest','ParseHTML',
+        'BeginMainThreadFrame','BeginMainFrame','Commit','ActivateLayerTree',
+      ]);
+
+      self.onmessage = async (e) => {
+        const { type, file, topN, longTaskMs, onlyMain } = e.data || {};
+        if (type !== 'analyze') return;
+        try {
+          postProgress('Reading file…', 10);
+          const text = await file.text();
+
+          postProgress('Parsing JSON…', 25);
+          const obj = JSON.parse(text);
+          const traceEvents = Array.isArray(obj) ? obj : (obj.traceEvents || obj.events || []);
+          if (!Array.isArray(traceEvents)) throw new Error('Unrecognized trace JSON format');
+
+          postProgress('Indexing…', 40);
+          const meta = extractMetadata(traceEvents);
+
+          postProgress('Aggregating…', 65);
+          const res = aggregate(traceEvents, {
+            mainPid: meta.mainThread?.pid,
+            mainTid: meta.mainThread?.tid,
+            onlyMain,
+            longTaskThresholdUs: (longTaskMs || 50) * 1000,
+            topN: Math.min(100, Math.max(5, topN || 50)),
+          });
+
+          postProgress('Finalizing…', 90);
+          const output = buildOutput(res, meta);
+          postMessage({ type: 'result', data: output });
+        } catch (err) {
+          postMessage({ type: 'error', data: { message: 'Error: ' + err.message } });
+        }
+      };
+
+      function postProgress(message, percent) {
+        postMessage({ type: 'progress', data: { message, percent } });
+      }
+
+      function extractMetadata(events) {
+        const threadNames = new Map();
+        const processNames = new Map();
+        let minTs = Number.POSITIVE_INFINITY;
+        let maxTs = 0;
+
+        for (const ev of events) {
+          if (ev.ts != null) {
+            minTs = Math.min(minTs, ev.ts);
+            const endTs = ev.dur != null ? ev.ts + ev.dur : ev.ts;
+            maxTs = Math.max(maxTs, endTs);
+          }
+          if (ev.ph === 'M' && ev.name === 'thread_name' && ev.args?.name) {
+            threadNames.set(\`\${ev.pid}:\${ev.tid}\`, ev.args.name);
+          }
+          if (ev.ph === 'M' && ev.name === 'process_name' && ev.args?.name) {
+            processNames.set(ev.pid, ev.args.name);
+          }
+        }
+
+        let main = null;
+        for (const [key, name] of threadNames.entries()) {
+          if (/CrRendererMain|RendererMain/i.test(name)) {
+            const [pid, tid] = key.split(':').map(Number);
+            main = { pid, tid, name };
+            break;
+          }
+        }
+        if (!main) {
+          const totals = new Map();
+          for (const ev of events) {
+            if (USE_ONLY_COMPLETE_EVENTS && ev.ph !== 'X') continue;
+            if (!String(ev.cat || '').includes('devtools.timeline')) continue;
+            const key = \`\${ev.pid}:\${ev.tid}\`;
+            const prev = totals.get(key) || 0;
+            totals.set(key, prev + (ev.dur || 0));
+          }
+          let bestKey = null, bestVal = -1;
+          for (const [k, v] of totals.entries()) if (v > bestVal) { bestVal = v; bestKey = k; }
+          if (bestKey) {
+            const [pid, tid] = bestKey.split(':').map(Number);
+            main = { pid, tid, name: threadNames.get(bestKey) || 'Main (?)' };
+          }
+        }
+
+        const mainProcName = main ? (processNames.get(main.pid) || '') : '';
+
+        return {
+          threadNames,
+          processNames,
+          mainThread: main,
+          processName: mainProcName,
+          totalWindowUs: Math.max(0, maxTs - (isFinite(minTs) ? minTs : 0)),
+        };
+      }
+
+      function aggregate(events, opts) {
+        const { mainPid, mainTid, onlyMain, longTaskThresholdUs, topN } = opts;
+
+        const totalsByEvent = new Map();
+        const totalsRendering = new Map();
+        const totalsJS = new Map();
+        const totalsThree = new Map();
+        const longTasks = [];
+
+        let eventsParsed = 0;
+        let totalMainDurUs = 0;
+
+        const get = (obj, path) => {
+          const parts = path.split('.');
+          let cur = obj;
+          for (const p of parts) {
+            if (cur == null) return undefined;
+            cur = cur[p];
+          }
+          return cur;
+        };
+
+        for (const ev of events) {
+          eventsParsed++;
+          if (USE_ONLY_COMPLETE_EVENTS && ev.ph !== 'X') continue;
+
+          const isMain = (ev.pid === mainPid && ev.tid === mainTid);
+          if (onlyMain && !isMain) continue;
+
+          const dur = ev.dur || 0;
+
+          if (isMain) totalMainDurUs += dur;
+
+          addToMap(totalsByEvent, ev.name, dur);
+
+          if (['AnimationFrame','AnimationFrame::Start','AnimationFrame::Fire','AnimationFrame::Process',
+               'Layout','RecalculateStyles','RecalculateStyle','Paint','RasterTask',
+               'CompositeLayers','UpdateLayerTree','HitTest','ParseHTML',
+               'BeginMainThreadFrame','BeginMainFrame','Commit','ActivateLayerTree'].includes(ev.name)) {
+            addToMap(totalsRendering, ev.name, dur);
+          }
+
+          if (isLongTaskName(ev.name) && dur >= longTaskThresholdUs) {
+            longTasks.push({ name: ev.name, startUs: ev.ts || 0, durUs: dur, pid: ev.pid, tid: ev.tid });
+          }
+
+          const hasJsName = ['FunctionCall','EvaluateScript','V8.Execute','v8.run','CompileCode','JSEvaluate'].includes(ev.name);
+          const url = get(ev, 'args.data.url') || get(ev, 'args.beginData.url') || '';
+          const fn = get(ev, 'args.data.functionName') || get(ev, 'args.beginData.functionName') || '';
+          const line = get(ev, 'args.data.lineNumber') ?? get(ev, 'args.beginData.lineNumber');
+          const col = get(ev, 'args.data.columnNumber') ?? get(ev, 'args.beginData.columnNumber');
+          const loc = (line != null) ? \`:\${line}\${col!=null?':'+col:''}\` : '';
+          const jsKey = hasJsName || url || fn
+            ? [fn || '', url || '', ev.name].filter(Boolean).join(' @ ') + (loc || '')
+            : null;
+
+          if (jsKey) addToMap(totalsJS, jsKey, dur);
+
+          if ((url && /three(\\.module)?\\.js|threejs/i.test(url)) || /three/i.test(fn)) {
+            const key = [fn || ev.name, url || ''].filter(Boolean).join(' @ ') + (loc || '');
+            addToMap(totalsThree, key, dur);
+          }
+        }
+
+        const toArray = (m) => Array.from(m.entries()).map(([name, v]) => ({ name, totalUs: v.total, count: v.count }));
+        const sortDesc = (a, b) => b.totalUs - a.totalUs;
+
+        const topEvents = toArray(totalsByEvent).sort(sortDesc).slice(0, topN);
+        const rendering = toArray(totalsRendering).sort(sortDesc).slice(0, topN);
+        const topJs = Array.from(totalsJS.entries()).map(([key, v]) => ({ key, totalUs: v.total, count: v.count })).sort(sortDesc).slice(0, topN);
+        const three = Array.from(totalsThree.entries()).map(([key, v]) => ({ key, totalUs: v.total, count: v.count })).sort(sortDesc).slice(0, topN);
+
+        longTasks.sort((a,b)=> b.durUs - a.durUs);
+        const longTasksTop = longTasks.slice(0, topN);
+
+        return {
+          eventsParsed,
+          totalsByEvent: topEvents,
+          totalsRendering: rendering,
+          totalsJS: topJs,
+          totalsThree: three,
+          longTasks: longTasksTop,
+          totalMainDurUs,
+          debug: { counts: { eventsParsed, longTasks: longTasks.length } }
+        };
+      }
+
+      function addToMap(map, key, dur) {
+        const cur = map.get(key) || { total: 0, count: 0 };
+        cur.total += dur;
+        cur.count += 1;
+        map.set(key, cur);
+      }
+
+      function isLongTaskName(name) {
+        return /Task|RunTask|ProcessTask|EventDispatch|MessageLoop/i.test(name);
+      }
+
+      function buildOutput(agg, meta) {
+        return {
+          meta: {
+            eventsParsed: agg.eventsParsed,
+            mainThread: meta.mainThread,
+            processName: meta.processName,
+            totalWindowUs: meta.totalWindowUs,
+            totalMainDurUs: agg.totalMainDurUs,
+          },
+          topEvents: agg.totalsByEvent,
+          rendering: agg.totalsRendering,
+          topJs: agg.totalsJS,
+          three: agg.totalsThree,
+          longTasks: agg.longTasks,
+          debug: agg.debug,
+        };
+      }
+    `], { type: 'application/javascript' }));
+    const worker = new Worker(workerUrl, { type: 'module' });
+
+    analyzeBtn.addEventListener('click', () => {
+      if (!selectedFile) return;
+      const topN = Math.min(100, Math.max(5, Number(topNEl.value) || DEFAULT_TOP_N));
+      const longTaskMs = Math.min(200, Math.max(10, Number(longTaskMsEl.value) || DEFAULT_LONG_TASK_MS));
+      const onlyMain = !!onlyMainEl.checked;
+
+      setProgress(true, 'Parsing trace…', 5);
+      worker.postMessage({ type: 'analyze', file: selectedFile, topN, longTaskMs, onlyMain });
+    });
+
+    worker.onmessage = (e) => {
+      const { type, data } = e.data;
+      if (type === 'progress') {
+        setProgress(true, data.message, data.percent);
+        return;
+      }
+      if (type === 'result') {
+        setProgress(false, '', 0);
+        renderResults(data);
+        aiSummaryEl.textContent = 'Generating AI summary...';
+        getAiSummary(data).then(t=> aiSummaryEl.innerHTML = String(t).replace(/\n/g,'<br>'));
+      }
+      if (type === 'error') {
+        showError(data.message || 'Failed to parse trace.');
+      }
+    };
+
+    function ms(us) { return (us/1000).toFixed(2) + ' ms'; }
+
+    function showError(message){
+      progress.hidden = false;
+      statusEl.textContent = message;
+      statusEl.style.color = '#ff8080';
+      document.querySelector('#progress .spinner').hidden = true;
+      pctEl.textContent = 'Error';
+      barFill.style.width = '100%';
+      barFill.style.background = '#ff8080';
+    }
+
+    const debounce=(fn,ms)=>{let t;return(...a)=>{clearTimeout(t);t=setTimeout(()=>fn(...a),ms)}};
+
+    function runAnalyze(){
+      if(!selectedFile) return;
+      const topN = Math.min(100, Math.max(5, Number(topNEl.value) || DEFAULT_TOP_N));
+      const longTaskMs = Math.min(200, Math.max(10, Number(longTaskMsEl.value) || DEFAULT_LONG_TASK_MS));
+      const onlyMain = !!onlyMainEl.checked;
+      setProgress(true, 'Parsing trace…', 5);
+      document.querySelector('#progress .spinner').hidden = false;
+      barFill.style.background = 'var(--fg)';
+      worker.postMessage({ type: 'analyze', file: selectedFile, topN, longTaskMs, onlyMain });
+    }
+    const rerun = debounce(runAnalyze, DEBOUNCE_MS);
+    topNEl.addEventListener('input', rerun);
+    longTaskMsEl.addEventListener('input', rerun);
+    onlyMainEl.addEventListener('change', rerun);
+
+    async function getAiSummary(data){
+      const prompt = `You are a senior web perf engineer. Summarize primary bottlenecks under ${AI_MAX_WORDS} words with 2-3 actionable bullets.\n` +
+        `TopJS: ${JSON.stringify(data.topJs.slice(0,5))}\nRender: ${JSON.stringify(data.rendering.slice(0,5))}\n` +
+        `LongTasks: ${JSON.stringify(data.longTasks.slice(0,5))}\nTotal: ${(data.meta.totalWindowUs/1000).toFixed(2)} ms`;
+      try {
+        const completion = await websim.chat.completions.create({ messages:[{role:'user',content:prompt}] });
+        return (completion.content || '').trim() || 'No summary produced.';
+      } catch (e) {
+        console.error(e); return 'AI summary unavailable.';
+      }
+    }
+
+    function buildCsv(r){
+      const rows = [['Section','Operation Name','Total Time (ms)','Avg Time (ms)','Occurrences']];
+      const push = (section, name, totalUs, count)=> rows.push([section, name, (totalUs/1000).toFixed(3), (totalUs/1000/Math.max(1,count)).toFixed(3), count]);
+      r.topJs.forEach(i=>push('TopJS', i.key, i.totalUs, i.count));
+      r.rendering.forEach(i=>push('Rendering', i.name, i.totalUs, i.count));
+      r.topEvents.forEach(i=>push('TopEvents', i.name, i.totalUs, i.count));
+      r.three.forEach(i=>push('Three', i.key, i.totalUs, i.count));
+      r.longTasks.forEach(i=>rows.push(['LongTask', i.name, (i.durUs/1000).toFixed(3), (i.durUs/1000).toFixed(3), 1]));
+      return rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+    }
+    function buildLog(r){
+      const line = (name, totalUs, count)=> `${name} | total=${(totalUs/1000).toFixed(3)}ms | avg=${(totalUs/1000/Math.max(1,count)).toFixed(3)}ms | x${count}`;
+      const parts = [];
+      parts.push('# Operations (sorted within sections)');
+      r.topJs.forEach(i=>parts.push(`TopJS: ${line(i.key,i.totalUs,i.count)}`));
+      r.rendering.forEach(i=>parts.push(`Rendering: ${line(i.name,i.totalUs,i.count)}`));
+      r.topEvents.forEach(i=>parts.push(`TopEvents: ${line(i.name,i.totalUs,i.count)}`));
+      r.three.forEach(i=>parts.push(`Three: ${line(i.key,i.totalUs,i.count)}`));
+      r.longTasks.forEach(i=>parts.push(`LongTask: ${i.name} | dur=${(i.durUs/1000).toFixed(3)}ms`));
+      return parts.join('\n');
+    }
+
+    function renderList(ol, items, formatter, totalKey='totalUs'){
+      ol.innerHTML = '';
+      if(!items?.length) return;
+      const max = Math.max(...items.map(i => (i[totalKey] ?? i.totalUs ?? 0)));
+      items.forEach((i) => {
+        const val = i[totalKey] ?? i.totalUs ?? 0;
+        const pct = max ? Math.max(2, (val / max) * 100) : 0;
+        const li = document.createElement('li');
+        li.innerHTML = `
+          <div class="row" style="gap:12px">
+            <div style="flex:1;min-width:0">
+              <div class="name">${formatter.primary(i)}</div>
+              <div class="meta">${formatter.meta(i)}</div>
+            </div>
+            <div class="item-bar-bg"><div class="item-bar" style="width:${pct.toFixed(1)}%"></div></div>
+          </div>`;
+        ol.appendChild(li);
+      });
+    }
+
+    function renderResults(r) {
+      document.getElementById('summary').hidden = false;
+      const csvText = buildCsv(r);
+      const logText = buildLog(r);
+      plainLog.textContent = logText;
+
+      fileInfo.innerHTML = `
+        <div class="stat"><div class="label">File</div>
+          <div class="value">${selectedFile?.name || '—'}</div>
+          <div class="muted mono">${(selectedFile.size/1024/1024).toFixed(1)} MB</div>
+        </div>`;
+
+      threadInfo.innerHTML = `
+        <div class="stat"><div class="label">Thread</div>
+          <div class="value">${r.meta.mainThread?.name || 'unknown'}</div>
+          <div class="muted mono">pid ${r.meta.mainThread?.pid}, tid ${r.meta.mainThread?.tid}</div>
+        </div>`;
+
+      timeInfo.innerHTML = `
+        <div class="stat"><div class="label">Window / Work</div>
+          <div class="value mono">${ms(r.meta.totalWindowUs)}</div>
+          <div class="muted mono">Main 'X' total: ${ms(r.meta.totalMainDurUs)}</div>
+          <div class="muted mono">Events: ${r.meta.eventsParsed.toLocaleString()}</div>
+        </div>`;
+
+      renderList(topJs, r.topJs, {
+        primary: (i)=> i.key,
+        meta: (i)=> `${ms(i.totalUs)} (${i.count}×)`
+      });
+      renderList(longTasks, r.longTasks, {
+        primary: (i)=> `${i.name} (tid ${i.tid})`,
+        meta: (i)=> `${ms(i.durUs)} at ${ms(i.startUs)}`
+      }, 'durUs');
+      renderList(rendering, r.rendering, {
+        primary: (i)=> i.name,
+        meta: (i)=> `${ms(i.totalUs)} (${i.count}×)`
+      });
+      renderList(topEvents, r.topEvents, {
+        primary: (i)=> i.name,
+        meta: (i)=> `${ms(i.totalUs)} (${i.count}×)`
+      });
+      renderList(threeHotspots, r.three, {
+        primary: (i)=> i.key,
+        meta: (i)=> `${ms(i.totalUs)} (${i.count}×)`
+      });
+
+      rawOut.textContent = JSON.stringify(r.debug, null, 2);
+
+      copyCsvBtn.onclick = async ()=>{ await navigator.clipboard.writeText(csvText); };
+      copyLogBtn.onclick = async ()=>{ await navigator.clipboard.writeText(logText); };
+      downloadCsv.onclick = () => {
+        const blob = new Blob([csvText], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = `${selectedFile?.name || 'trace'}.summary.csv`;
+        document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+      };
+    }
+  </script>
+</body>
+</html>

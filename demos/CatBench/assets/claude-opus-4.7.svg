@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="400" height="400">
+  <rect width="400" height="400" fill="#fdf6e3"/>
+
+  <!-- body -->
+  <ellipse cx="200" cy="320" rx="100" ry="60" fill="#ff9a4a"/>
+
+  <!-- tail -->
+  <path d="M 290 320 Q 350 280 340 220" stroke="#ff9a4a" stroke-width="22" stroke-linecap="round" fill="none"/>
+
+  <!-- head -->
+  <circle cx="200" cy="200" r="80" fill="#ffb060"/>
+
+  <!-- ears -->
+  <polygon points="135,140 130,80 175,130" fill="#ffb060"/>
+  <polygon points="265,140 270,80 225,130" fill="#ffb060"/>
+  <polygon points="143,135 145,100 165,128" fill="#ff7a8a"/>
+  <polygon points="257,135 255,100 235,128" fill="#ff7a8a"/>
+
+  <!-- eyes -->
+  <ellipse cx="170" cy="200" rx="14" ry="18" fill="#2c3e50"/>
+  <ellipse cx="230" cy="200" rx="14" ry="18" fill="#2c3e50"/>
+  <circle cx="174" cy="194" r="5" fill="white"/>
+  <circle cx="234" cy="194" r="5" fill="white"/>
+  <circle cx="167" cy="206" r="2" fill="white"/>
+  <circle cx="227" cy="206" r="2" fill="white"/>
+
+  <!-- nose -->
+  <polygon points="200,225 192,232 208,232" fill="#ff7a8a"/>
+
+  <!-- mouth -->
+  <path d="M 200 232 Q 200 240 192 245" stroke="#3a2a1a" stroke-width="2" fill="none" stroke-linecap="round"/>
+  <path d="M 200 232 Q 200 240 208 245" stroke="#3a2a1a" stroke-width="2" fill="none" stroke-linecap="round"/>
+
+  <!-- whiskers -->
+  <line x1="135" y1="225" x2="170" y2="232" stroke="#3a2a1a" stroke-width="1.5"/>
+  <line x1="135" y1="240" x2="170" y2="240" stroke="#3a2a1a" stroke-width="1.5"/>
+  <line x1="265" y1="225" x2="230" y2="232" stroke="#3a2a1a" stroke-width="1.5"/>
+  <line x1="265" y1="240" x2="230" y2="240" stroke="#3a2a1a" stroke-width="1.5"/>
+
+  <!-- chest fluff -->
+  <path d="M 180 270 Q 200 285 220 270" stroke="#ffffff" stroke-width="3" fill="none"/>
+
+  <!-- paws -->
+  <ellipse cx="160" cy="365" rx="22" ry="12" fill="#ffb060"/>
+  <ellipse cx="240" cy="365" rx="22" ry="12" fill="#ffb060"/>
+</svg>
