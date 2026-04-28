@@ -103,30 +103,30 @@ a:hover { color: #ffb98d; }
   transition: opacity 0.18s ease, transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
   z-index: 200;
 }
-.icon-pop-wrap:hover .reveal-list,
+.icon-pop-wrap.show-pop .reveal-list,
 .icon-pop-wrap:focus-within .reveal-list {
   opacity: 1;
   pointer-events: auto;
   transform: translateX(-50%) translateY(0) scale(1);
 }
-/* Trunk: thin orange line that ALSO acts as a hover-bridge so the cursor
-   can travel from icon → popover without losing :hover state on the
-   wrapper. The bridge spans the FULL popover width (left:0 / right:0)
-   instead of a narrow 30px so cursor moving diagonally toward off-center
-   items still lands on it. Visible 1px line stays centered via the
-   background. Explicit pointer-events:auto so it stays interactive even
-   when the parent popover is pointer-events:none (default state). */
-.icon-pop-wrap .reveal-list::after {
+/* Invisible hover-bridge sits BETWEEN icon and popover. It's a child of
+   the wrapper (NOT the popover) so it stays in the layout and keeps the
+   wrapper's hover state alive while cursor traverses the gap. The visible
+   tree-line is a separate 1px gradient on top. */
+.icon-pop-wrap::before {
   content: '';
   position: absolute;
-  top: 100%;
-  left: 0;
-  right: 0;
-  height: 24px;
-  background:
-    linear-gradient(to bottom, rgba(255, 138, 76, 0.55), rgba(255, 138, 76, 0))
-    center top / 1px 100% no-repeat;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 220px;
+  height: 22px;
   pointer-events: auto;
+  z-index: 199;
+}
+.icon-pop-wrap.show-pop::before {
+  background: linear-gradient(to top, rgba(255, 138, 76, 0.55), rgba(255, 138, 76, 0))
+    center top / 1px 100% no-repeat;
 }
 .icon-pop-wrap .reveal-list li {
   position: relative;
@@ -134,7 +134,7 @@ a:hover { color: #ffb98d; }
   transform: translateY(6px);
   transition: opacity 0.22s ease, transform 0.32s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
-.icon-pop-wrap:hover .reveal-list li,
+.icon-pop-wrap.show-pop .reveal-list li,
 .icon-pop-wrap:focus-within .reveal-list li {
   opacity: 1;
   transform: translateY(0);
@@ -612,12 +612,36 @@ function populateHeroPopovers(data) {
 
   // Wrap a link element in a `.icon-pop-wrap` with the popover as a sibling.
   // Using an inline wrapper preserves the icon-nav's flex layout.
+  // Hover state is managed in JS (not :hover CSS) so we can keep the popover
+  // open while the cursor traverses the gap between icon and popover. Pure
+  // CSS :hover loses state the moment the cursor leaves the icon's box,
+  // before it can land on a hover-bridge — JS grace period fixes that.
+  const HIDE_DELAY_MS = 220;
   const wrapWithPopover = (link, ul) => {
     const wrap = document.createElement('span');
     wrap.className = 'icon-pop-wrap';
     link.parentNode.insertBefore(wrap, link);
     wrap.appendChild(link);
     wrap.appendChild(ul);
+
+    let hideTimer = null;
+    const show = () => {
+      if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; }
+      wrap.classList.add('show-pop');
+    };
+    const scheduleHide = () => {
+      if (hideTimer) clearTimeout(hideTimer);
+      hideTimer = setTimeout(() => {
+        wrap.classList.remove('show-pop');
+        hideTimer = null;
+      }, HIDE_DELAY_MS);
+    };
+    // Listen on the wrapper — events bubble from icon, popover, and bridge.
+    wrap.addEventListener('mouseenter', show);
+    wrap.addEventListener('mouseleave', scheduleHide);
+    // Touch / focus: tap on icon shows, blur hides
+    link.addEventListener('focus', show);
+    link.addEventListener('blur', scheduleHide);
   };
 
   if (ghLink && Array.isArray(data.repos) && data.repos.length) {
