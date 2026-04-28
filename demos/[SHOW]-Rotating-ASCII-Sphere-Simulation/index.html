@@ -35,11 +35,12 @@
     cursor: text;
   }
   .sound-toggle {
+    position: absolute;
+    top: clamp(10px, 1.4vw, 16px);
+    left: clamp(10px, 1.4vw, 16px);
     display: inline-flex; align-items: center; justify-content: center;
-    vertical-align: middle;
-    margin-left: clamp(12px, 1.2vw, 18px);
-    width: clamp(44px, 4.5vw, 60px);
-    height: clamp(44px, 4.5vw, 60px);
+    width: clamp(36px, 3.6vw, 48px);
+    height: clamp(36px, 3.6vw, 48px);
     padding: 0;
     background: rgba(255, 255, 255, .06);
     border: 1px solid rgba(255, 255, 255, .18);
@@ -48,6 +49,7 @@
     cursor: pointer;
     user-select: none;
     transition: background .15s, color .15s, border-color .15s, transform .12s;
+    z-index: 1;
   }
   .sound-toggle:hover { background: rgba(255, 255, 255, .12); color: #fff; transform: scale(1.06); }
   .sound-toggle:active { transform: scale(0.96); }
@@ -96,7 +98,7 @@
 <body>
 
 <div class="hint" id="hint">hover · click for more</div>
-<div class="prompt">I'd like to make a p5.js simulation of a sphere made up of ASCII numbers, rotating. The closest numbers should be pure white, and the farthest ones should fade to gray, on a black background<button class="sound-toggle" id="sound-toggle" type="button" aria-label="toggle sound" title="toggle sound"><svg class="icon-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4z"/><line x1="22" y1="9" x2="16" y2="15"/><line x1="16" y1="9" x2="22" y2="15"/></svg><svg class="icon-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4z"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg></button></div>
+<div class="prompt"><button class="sound-toggle" id="sound-toggle" type="button" aria-label="toggle sound" title="toggle sound"><svg class="icon-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4z"/><line x1="22" y1="9" x2="16" y2="15"/><line x1="16" y1="9" x2="22" y2="15"/></svg><svg class="icon-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4z"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg></button>I'd like to make a p5.js simulation of a sphere made up of ASCII numbers, rotating. The closest numbers should be pure white, and the farthest ones should fade to gray, on a black background</div>
 
 <canvas id="cosmic-canvas"></canvas>
 <div id="audio-status">audio: idle</div>
