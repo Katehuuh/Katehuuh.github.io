@@ -158,8 +158,10 @@
     const AI_MODEL = "openai";
     /* @tweakable max words in AI summary (instruction to the model) */
     const AI_MAX_WORDS = 90;
-    /* @tweakable hard token ceiling on the API call. Reasoning models (gpt-oss) burn tokens on hidden chain-of-thought; keep this generous so visible output isn't starved */
-    const AI_MAX_TOKENS = 1500;
+    /* @tweakable hard token ceiling on the API call. Reasoning models (gpt-oss-20b) burn tokens on hidden chain-of-thought BEFORE producing visible output; on a complex trace (~100k events) the CoT alone can eat 2000+ tokens, so this needs to be generous or the response comes back empty with finish_reason=length */
+    const AI_MAX_TOKENS = 4000;
+    /* @tweakable reasoning effort hint — "low" tells reasoning models to think briefly so visible output gets tokens. Some models ignore this; that's fine */
+    const AI_REASONING_EFFORT = "low";
 
     // apply theme tweaks
     document.documentElement.style.setProperty('--accent', THEME_ACCENT);
@@ -610,6 +612,7 @@
             model: AI_MODEL,
             messages: [{ role: 'user', content: prompt }],
             max_tokens: AI_MAX_TOKENS,
+            reasoning_effort: AI_REASONING_EFFORT,
           }),
         });
         if (!res.ok) {
