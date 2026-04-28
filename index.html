@@ -62,6 +62,75 @@ a:hover { color: #ffb98d; }
 .icon-nav svg { display: block; }
 .icon-nav .emoji { font-size: 1.35rem; line-height: 1; display: inline-block; -webkit-text-fill-color: initial; }
 
+/* Sims-4-style popover: list cascades out from behind the icon on hover.
+   Each <li> staggers via inline --idx and uses an overshooting bezier so
+   the items "settle" into place. Lives inside `.icon-nav a.has-popover`. */
+.icon-nav a.has-popover { position: relative; overflow: visible; }
+.icon-nav .reveal-list {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  list-style: none;
+  margin: 0;
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 180px;
+  max-width: 320px;
+  background: rgba(28, 28, 32, 0.92);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  box-shadow: 0 16px 32px -10px rgba(0, 0, 0, 0.55);
+  font-size: 12px;
+  font-weight: 400;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateX(-50%) translateY(-6px) scale(0.98);
+  transition: opacity 0.18s ease, transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+  z-index: 200;
+}
+.icon-nav a.has-popover:hover .reveal-list,
+.icon-nav a.has-popover:focus-within .reveal-list {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(-50%) translateY(0) scale(1);
+}
+.icon-nav .reveal-list li {
+  opacity: 0;
+  transform: translateY(-6px) translateX(-8px);
+  transition: opacity 0.22s ease, transform 0.32s cubic-bezier(0.34, 1.56, 0.64, 1);
+  padding: 3px 0;
+}
+.icon-nav a.has-popover:hover .reveal-list li,
+.icon-nav a.has-popover:focus-within .reveal-list li {
+  opacity: 1;
+  transform: translateY(0) translateX(0);
+  transition-delay: var(--idx, 0ms);
+}
+.icon-nav .reveal-list .section-header {
+  font-size: 9.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(255, 138, 76, 0.85);
+  padding-top: 6px;
+  cursor: default;
+}
+.icon-nav .reveal-list .section-header:first-child { padding-top: 0; }
+.icon-nav .reveal-list a {
+  color: rgba(244, 244, 246, 0.85);
+  text-decoration: none;
+  display: block;
+  padding: 2px 0;
+  transition: color 0.15s;
+}
+.icon-nav .reveal-list a:hover { color: var(--accent); transform: none; }
+
 /* Inline search field that lives next to the tag-filter pill */
 .inline-search {
   appearance: none;
@@ -324,7 +393,7 @@ section.compact { display: grid; gap: .6rem; }
         </svg>
       </a>
       <a href="https://huggingface.co/Nekochu" aria-label="Hugging Face" title="Hugging Face"><span class="emoji">🤗</span></a>
-      <a href="https://websim.com/" aria-label="Websim" title="Websim — more vibe-coded sites" target="_blank" rel="noopener">
+      <a href="https://websim.com/" aria-label="Websim" title="Websim — more vibe-coded sites">
         <img src="https://websim.com/favicon.ico" alt="" width="22" height="22" loading="lazy" style="display:block;border-radius:4px;background:rgba(255,255,255,.04)">
       </a>
       <a href="demos/CatBench/" aria-label="CatBench" title="CatBench"><span class="emoji">🐱</span></a>
@@ -380,6 +449,7 @@ section.compact { display: grid; gap: .6rem; }
   renderChips('repos-chips', data.repos || []);
   setupSearch();
   setupTagFilter();
+  populateHeroPopovers(data);
 })();
 
 function setupTagFilter() {
@@ -433,6 +503,64 @@ function setupTagFilter() {
   };
   root.addEventListener('mousemove', onMove, { passive: true });
   root.addEventListener('mouseleave', () => root.style.setProperty('--gloss-angle', '90deg'));
+}
+
+// Sims-4-style flyout: hovering the GitHub icon reveals the repos list,
+// hovering the Hugging Face icon reveals datasets + models. Items cascade
+// in via a stagger (--idx CSS var) using the data already in data.json —
+// no second source of truth.
+function populateHeroPopovers(data) {
+  const ghLink = document.querySelector('.icon-nav a[aria-label="GitHub"]');
+  const hfLink = document.querySelector('.icon-nav a[aria-label="Hugging Face"]');
+  const STAGGER_MS = 55;
+
+  const buildItem = (entry, idx) => {
+    const li = document.createElement('li');
+    li.style.setProperty('--idx', `${idx * STAGGER_MS}ms`);
+    const a = document.createElement('a');
+    a.href = entry.url;
+    a.target = '_blank';
+    a.rel = 'noopener';
+    a.textContent = entry.name;
+    if (entry.description) a.title = entry.description;
+    li.appendChild(a);
+    return li;
+  };
+  const buildHeader = (label, idx) => {
+    const li = document.createElement('li');
+    li.className = 'section-header';
+    li.textContent = label;
+    li.style.setProperty('--idx', `${idx * STAGGER_MS}ms`);
+    return li;
+  };
+
+  if (ghLink && Array.isArray(data.repos) && data.repos.length) {
+    ghLink.classList.add('has-popover');
+    const ul = document.createElement('ul');
+    ul.className = 'reveal-list';
+    data.repos.forEach((r, i) => ul.appendChild(buildItem(r, i)));
+    ghLink.appendChild(ul);
+  }
+
+  if (hfLink) {
+    const sets = Array.isArray(data.datasets) ? data.datasets : [];
+    const models = Array.isArray(data.models) ? data.models : [];
+    if (sets.length || models.length) {
+      hfLink.classList.add('has-popover');
+      const ul = document.createElement('ul');
+      ul.className = 'reveal-list';
+      let idx = 0;
+      if (sets.length) {
+        ul.appendChild(buildHeader('Datasets', idx++));
+        for (const d of sets) ul.appendChild(buildItem(d, idx++));
+      }
+      if (models.length) {
+        ul.appendChild(buildHeader('Models', idx++));
+        for (const m of models) ul.appendChild(buildItem(m, idx++));
+      }
+      hfLink.appendChild(ul);
+    }
+  }
 }
 
 function setupSearch() {
