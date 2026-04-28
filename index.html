@@ -109,24 +109,19 @@ a:hover { color: #ffb98d; }
   pointer-events: auto;
   transform: translateX(-50%) translateY(0) scale(1);
 }
-/* Invisible hover-bridge sits BETWEEN icon and popover. It's a child of
-   the wrapper (NOT the popover) so it stays in the layout and keeps the
-   wrapper's hover state alive while cursor traverses the gap. The visible
-   tree-line is a separate 1px gradient on top. */
-.icon-pop-wrap::before {
+/* Tree-line connector — purely visual, sized to icon width so neighboring
+   wrappers don't overlap their bridges. Hover-stability is handled by the
+   JS grace period (220ms after mouseleave) — no need for a wide bridge. */
+.icon-pop-wrap.show-pop::before {
   content: '';
   position: absolute;
   bottom: 100%;
   left: 50%;
-  transform: translateX(-50%);
-  width: 220px;
-  height: 22px;
-  pointer-events: auto;
+  width: 1px;
+  height: 18px;
+  background: linear-gradient(to top, rgba(255, 138, 76, 0.55), rgba(255, 138, 76, 0));
+  pointer-events: none;
   z-index: 199;
-}
-.icon-pop-wrap.show-pop::before {
-  background: linear-gradient(to top, rgba(255, 138, 76, 0.55), rgba(255, 138, 76, 0))
-    center top / 1px 100% no-repeat;
 }
 .icon-pop-wrap .reveal-list li {
   position: relative;
@@ -923,19 +918,29 @@ function puterReady(timeoutMs = 5000) {
 // hit this because it makes one call after a user gesture, by which
 // time the WS is already up; the home page fires many in parallel on
 // page load, so we need to gate them.
+// Race a promise against a timeout — every network call is timeboxed
+// because puter's WS can hang indefinitely on transient relay issues,
+// which would otherwise leave every like button stuck on "·" forever.
+function withTimeout(p, ms, label) {
+  return Promise.race([
+    p,
+    new Promise((_, rej) => setTimeout(() => rej(new Error(`${label} timeout ${ms}ms`)), ms)),
+  ]);
+}
+
 let puterReadyPromise = null;
 async function ensurePuterReady() {
   if (puterReadyPromise) return puterReadyPromise;
   puterReadyPromise = (async () => {
     if (!(await puterReady())) return false;
-    // Warm the WS with a benign request. Retry up to 5x because the
-    // first attempt can throw "Still in CONNECTING state".
-    for (let i = 0; i < 5; i++) {
+    // Warm the WS with a benign request. Retry up to 4x with a per-call
+    // timeout so a hanging relay can't block the entire page-load fetch.
+    for (let i = 0; i < 4; i++) {
       try {
-        const r = await puter.net.fetch('https://api.github.com/');
+        const r = await withTimeout(puter.net.fetch('https://api.github.com/'), 2500, 'puter warmup');
         if (r && r.ok) return true;
       } catch { /* retry */ }
-      await new Promise(r => setTimeout(r, 250 + i * 150));
+      await new Promise(r => setTimeout(r, 200 + i * 150));
     }
     return false;
   })();
@@ -947,6 +952,7 @@ async function ensurePuterReady() {
 // goes to puter.com / puter.cafe (the relay) which isn't on standard
 // filter lists. 400 "record not found" means the counter has zero hits
 // yet — treat as { count: 0 } so fresh slugs show 0 instead of hiding.
+// Each transport gets its own timeout so neither can hang forever.
 async function likesApi(path) {
   const url = `${LIKES_API}/${LIKES_NS}/${path}`;
   const parse = async (r) => {
@@ -961,12 +967,12 @@ async function likesApi(path) {
   };
   if (await ensurePuterReady()) {
     try {
-      const out = await parse(await puter.net.fetch(url));
+      const out = await parse(await withTimeout(puter.net.fetch(url), 4000, 'puter likes'));
       if (out !== undefined) return out;
     } catch { /* fall through */ }
   }
   try {
-    const out = await parse(await fetch(url));
+    const out = await parse(await withTimeout(fetch(url), 3000, 'direct likes'));
     if (out !== undefined) return out;
   } catch { /* both failed */ }
   return null;
