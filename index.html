@@ -127,6 +127,8 @@ a:hover { color: #ffb98d; }
   opacity: 0;
   transform: translateY(6px);
   transition: opacity 0.22s ease, transform 0.32s cubic-bezier(0.34, 1.56, 0.64, 1);
+  display: flex;
+  justify-content: center;
 }
 .icon-pop-wrap.show-pop .reveal-list li,
 .icon-pop-wrap:focus-within .reveal-list li {
@@ -142,17 +144,29 @@ a:hover { color: #ffb98d; }
   color: rgba(255, 138, 76, 0.9);
   padding: 3px 0 1px;
   cursor: default;
+  text-align: center;
 }
 .icon-pop-wrap .reveal-list .section-header:first-child { padding-top: 0; }
+/* Each link is its own pill that hugs its text — no half-empty rows when one
+   name is shorter than another. Centered in the row. */
 .icon-pop-wrap .reveal-list a {
   color: rgba(244, 244, 246, 0.88);
   text-decoration: none;
-  display: block;
-  padding: 1px 0;
+  display: inline-block;
+  padding: 3px 10px;
+  margin: 1px 0;
   line-height: 1.35;
-  transition: color 0.14s;
+  background: rgba(255, 138, 76, 0.04);
+  border: 1px solid rgba(255, 138, 76, 0.14);
+  border-radius: 999px;
+  transition: color 0.14s, background-color 0.14s, border-color 0.14s;
 }
-.icon-pop-wrap .reveal-list a:hover { color: var(--accent); transform: none; }
+.icon-pop-wrap .reveal-list a:hover {
+  color: var(--accent);
+  background: rgba(255, 138, 76, 0.12);
+  border-color: rgba(255, 138, 76, 0.36);
+  transform: none;
+}
 
 /* Inline search field that lives next to the tag-filter pill */
 .inline-search {
