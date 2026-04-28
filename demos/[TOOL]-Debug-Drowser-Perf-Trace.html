@@ -172,12 +172,12 @@
     let DEFAULT_LONG_TASK_MS = 50;
     /* @tweakable debounce delay for auto re-run (ms) */
     const DEBOUNCE_MS = 250;
-    /* @tweakable Pollinations text model — openai (gpt-4o-mini), openai-large (gpt-4o), mistral, qwen, llama, deepseek-reasoner */
+    /* @tweakable Pollinations text model — anonymous tier currently exposes only `openai-fast` (gpt-oss-20b reasoning); aliases: openai, gpt-oss */
     const AI_MODEL = "openai";
     /* @tweakable max words in AI summary (instruction to the model) */
     const AI_MAX_WORDS = 90;
-    /* @tweakable hard token ceiling on the API call so output isn't mid-sentence-cut */
-    const AI_MAX_TOKENS = 500;
+    /* @tweakable hard token ceiling on the API call. Reasoning models (gpt-oss) burn tokens on hidden chain-of-thought; keep this generous so visible output isn't starved */
+    const AI_MAX_TOKENS = 1500;
 
     // apply theme tweaks
     document.documentElement.style.setProperty('--accent', THEME_ACCENT);
@@ -529,16 +529,45 @@
     onlyMainEl.addEventListener('change', rerun);
 
     async function getAiSummary(data){
-      // Pollinations.ai: free, no key, no login, CORS-enabled. POST to
-      // /openai with OpenAI-compatible chat-completions schema.
+      // Pollinations.ai: free, no key, no login, CORS-enabled.
+      // Two key prompt-engineering choices:
+      //  1) Pre-convert all times to ms in the text we send. The model never
+      //     sees `totalUs` field names, so it can't hallucinate "kµs" or read
+      //     ms as seconds. Killed every unit error during testing.
+      //  2) Force severity tags ([CRITICAL]/[HIGH]/[LOW]/[NOISE]) instead of
+      //     asking "what to optimize". Without rules, LLMs default to
+      //     "always something to optimize" — generic cargo-cult advice.
+      //     The rubric forces them to call out noise + healthy items as
+      //     such, which is what makes the summary actually useful.
+      const ms = us => (us/1000).toFixed(2);
+      const avgMs = (us, n) => (us/1000/Math.max(1,n)).toFixed(3);
+      const trim = (s, n=72) => s && s.length > n ? s.slice(0,n)+'…' : s;
+      const fmtJs = items => items.slice(0,6).map(i =>
+        `  ${trim(i.key)} | total=${ms(i.totalUs)} ms | avg=${avgMs(i.totalUs,i.count)} ms/call | x${i.count}`
+      ).join('\n');
+      const fmtRender = items => items.slice(0,5).map(i =>
+        `  ${i.name} | total=${ms(i.totalUs)} ms | x${i.count}`
+      ).join('\n');
+      const fmtLong = items => items.slice(0,5).map(i =>
+        `  ${i.name} | dur=${ms(i.durUs)} ms`
+      ).join('\n');
+
       const prompt =
-        `You are a senior web-perf engineer. Reply in under ${AI_MAX_WORDS} words total. ` +
-        `Output exactly 2-3 plain-text bullets, each one combining a bottleneck and a concrete fix. ` +
-        `No headers, no preamble, no closing remarks. Markdown bold is fine, but keep it tight.\n\n` +
-        `TopJS: ${JSON.stringify(data.topJs.slice(0,5))}\n` +
-        `Render: ${JSON.stringify(data.rendering.slice(0,5))}\n` +
-        `LongTasks: ${JSON.stringify(data.longTasks.slice(0,5))}\n` +
-        `Total: ${(data.meta.totalWindowUs/1000).toFixed(2)} ms`;
+        `You are a senior web-perf engineer reviewing a Chrome trace.\n` +
+        `Tag EACH finding with EXACTLY ONE of: [CRITICAL] [HIGH] [LOW] [NOISE]\n` +
+        `Rules:\n` +
+        `  [NOISE]    = DevTools recording itself (v8::Debugger::*, CDP, profiler), chrome-extension://*, or per-call avg < 2 ms during animation\n` +
+        `  [LOW]      = init-only work (ParseHTML, ScriptCompiled, EvaluateScript on first load), or cumulative total from many fast calls\n` +
+        `  [HIGH]     = per-call avg > 5 ms during animation, OR a single long-task > 50 ms in steady state\n` +
+        `  [CRITICAL] = consistent frame work > 16.67 ms (60 Hz miss), or memory-leak signs\n\n` +
+        `Output 3-5 tagged lines: \`[TAG] one-line evidence — concrete fix\`. Reply in under ${AI_MAX_WORDS} words total. ` +
+        `End with one final line: \`verdict: <fine | minor wins | needs work>\`. No headers, no preamble, no markdown bold.\n\n` +
+        `Frame budget at 60 Hz = 16.67 ms. ALL TIMES BELOW ARE IN MILLISECONDS.\n\n` +
+        `Total main-thread time: ${ms(data.meta.totalWindowUs)} ms (${data.meta.eventsParsed||'?'} events).\n\n` +
+        `TopJS:\n${fmtJs(data.topJs)}\n\n` +
+        `Rendering:\n${fmtRender(data.rendering)}\n\n` +
+        `Long tasks:\n${fmtLong(data.longTasks)}`;
+
       try {
         const res = await fetch('https://text.pollinations.ai/openai/v1/chat/completions', {
           method: 'POST',
@@ -549,18 +578,19 @@
             max_tokens: AI_MAX_TOKENS,
           }),
         });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        if (!res.ok) {
+          const errText = await res.text().catch(() => '');
+          throw new Error(`HTTP ${res.status}${errText ? ': ' + errText.slice(0,140) : ''}`);
+        }
         const json = await res.json();
         const choice = json?.choices?.[0];
         const content = choice?.message?.content || '';
         if (choice?.finish_reason === 'length') {
-          // Token cap hit even though we lifted it — flag it instead of
-          // pretending the truncated text is complete.
           return content.trim() + '\n\n*[truncated — bump AI_MAX_TOKENS]*';
         }
-        return content.trim() || 'No summary produced.';
+        return content.trim() || 'No summary produced (model returned empty — try reload).';
       } catch (e) {
-        console.error(e); return 'AI summary unavailable.';
+        console.error(e); return 'AI summary unavailable: ' + e.message;
       }
     }
 
