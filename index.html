@@ -140,6 +140,23 @@ a:hover { color: #ffb98d; }
   border: 0 !important;
 }
 .icon-pop-wrap .reveal-list .pop-desc { display: none !important; }
+
+/* 2-column grid for HF (when items > 4). Halves the popover height so it
+   doesn't extend off the top of the viewport. Section headers span both
+   columns. Wider popover so names don't ellipsis-truncate too aggressively. */
+.icon-pop-wrap .reveal-list.grid-2col {
+  display: grid !important;
+  grid-template-columns: 1fr 1fr !important;
+  column-gap: 4px !important;
+  width: min(380px, calc(100vw - 24px)) !important;
+}
+.icon-pop-wrap .reveal-list.grid-2col > .section-header {
+  grid-column: 1 / -1 !important;
+}
+.icon-pop-wrap .reveal-list.grid-2col .pop-name {
+  font-size: 11.5px !important;
+  text-align: left !important;
+}
 .icon-pop-wrap.show-pop .reveal-list,
 .icon-pop-wrap:focus-within .reveal-list {
   opacity: 1;
@@ -757,6 +774,7 @@ function populateHeroPopovers(data) {
     if (sets.length || models.length) {
       const ul = document.createElement('ul');
       ul.className = 'reveal-list';
+      if (sets.length + models.length > 4) ul.classList.add('grid-2col');
       let idx = 0;
       if (sets.length) {
         ul.appendChild(buildHeader('Datasets', idx++));
