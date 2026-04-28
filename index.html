@@ -71,7 +71,7 @@ a:hover { color: #ffb98d; }
 .icon-pop-wrap { position: relative; display: inline-flex; }
 .icon-pop-wrap .reveal-list {
   position: absolute;
-  bottom: calc(100% + 18px);     /* sits above the icon, gap covered by ::after hit area */
+  bottom: calc(100% + 18px);
   left: 50%;
   list-style: none;
   margin: 0;
@@ -79,8 +79,16 @@ a:hover { color: #ffb98d; }
   display: flex;
   flex-direction: column;
   gap: 3px;
+  /* `width: max-content` makes the popover size to its natural content
+     width (one line per item via white-space: nowrap), capped by max-width
+     so it never extends past the viewport. min-width prevents collapse
+     on narrow content. max-height + scroll handles tall lists. */
+  white-space: nowrap;
+  width: max-content;
   min-width: 200px;
-  max-width: min(380px, calc(100vw - 32px));   /* responsive: never overflow viewport */
+  max-width: min(380px, calc(100vw - 24px));
+  max-height: calc(100vh - 120px);
+  overflow-y: auto;
   background: rgba(22, 22, 26, 0.94);
   -webkit-backdrop-filter: blur(14px);
   backdrop-filter: blur(14px);
@@ -89,8 +97,6 @@ a:hover { color: #ffb98d; }
   box-shadow: 0 18px 38px -12px rgba(0, 0, 0, 0.6);
   font-size: 12px;
   font-weight: 400;
-  white-space: normal;            /* allow long names to wrap rather than overflow */
-  word-break: break-word;
   opacity: 0;
   pointer-events: none;
   transform: translateX(-50%) translateY(8px) scale(0.96);
