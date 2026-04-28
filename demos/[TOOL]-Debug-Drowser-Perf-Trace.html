@@ -249,18 +249,30 @@
     }
 
     // Inline Worker via Blob URL
+    // Aggregator design notes:
+    //   - WRAPPER_NAMES (RunTask, RunMicrotasks, v8.callFunction, FireAnimationFrame raw)
+    //     have dur = sum-of-children. We list them in their own bucket so they
+    //     don't double-count in TopEvents rankings.
+    //   - NOISE_URL_RE filters chrome-extension://, userscript.html, websim host-chrome
+    //     and analytics URLs out of TopJS (they're not the page-under-test).
+    //   - Init phase ends at the first FireAnimationFrame on the main thread —
+    //     events before that are page-load work. Each TopJS/TopEvent entry
+    //     reports init vs steady-state counts/totals separately.
+    //   - We collect per-key dur samples (capped at PERCENTILE_SAMPLE_CAP) so we
+    //     can compute median + p95 + p99. Mean alone misleads under outliers.
     const workerUrl = URL.createObjectURL(new Blob([`
-      /* @tweakable Treat only 'X' (complete) events for timing */
       const USE_ONLY_COMPLETE_EVENTS = true;
-      /* @tweakable Known JS event names to aggregate as JavaScript work */
       const JS_EVENT_NAMES = new Set(['FunctionCall','EvaluateScript','V8.Execute','v8.run','CompileCode','JSEvaluate']);
-      /* @tweakable Rendering/Layout events to surface */
       const RENDER_EVENTS = new Set([
         'AnimationFrame','AnimationFrame::Start','AnimationFrame::Fire','AnimationFrame::Process',
         'Layout','RecalculateStyles','RecalculateStyle','Paint','RasterTask',
         'CompositeLayers','UpdateLayerTree','HitTest','ParseHTML',
         'BeginMainThreadFrame','BeginMainFrame','Commit','ActivateLayerTree',
       ]);
+      const WRAPPER_NAMES = new Set(['RunTask','RunMicrotasks','v8.callFunction','FireAnimationFrame']);
+      const NOISE_URL_RE = /^chrome-extension:\\/\\/|userscript\\.html|^https?:\\/\\/[^\\/]*\\.wbsm\\.ai\\/|^https?:\\/\\/websim\\.com\\/assets\\//i;
+      const INIT_FALLBACK_US = 1500 * 1000;
+      const PERCENTILE_SAMPLE_CAP = 1000;
 
       self.onmessage = async (e) => {
         const { type, file, topN, longTaskMs, onlyMain } = e.data || {};
@@ -268,27 +280,22 @@
         try {
           postProgress('Reading file…', 10);
           const text = await file.text();
-
           postProgress('Parsing JSON…', 25);
           const obj = JSON.parse(text);
           const traceEvents = Array.isArray(obj) ? obj : (obj.traceEvents || obj.events || []);
           if (!Array.isArray(traceEvents)) throw new Error('Unrecognized trace JSON format');
-
           postProgress('Indexing…', 40);
           const meta = extractMetadata(traceEvents);
-
           postProgress('Aggregating…', 65);
           const res = aggregate(traceEvents, {
-            mainPid: meta.mainThread?.pid,
-            mainTid: meta.mainThread?.tid,
+            mainPid: meta.mainThread && meta.mainThread.pid,
+            mainTid: meta.mainThread && meta.mainThread.tid,
             onlyMain,
             longTaskThresholdUs: (longTaskMs || 50) * 1000,
             topN: Math.min(100, Math.max(5, topN || 50)),
           });
-
           postProgress('Finalizing…', 90);
-          const output = buildOutput(res, meta);
-          postMessage({ type: 'result', data: output });
+          postMessage({ type: 'result', data: buildOutput(res, meta) });
         } catch (err) {
           postMessage({ type: 'error', data: { message: 'Error: ' + err.message } });
         }
@@ -303,27 +310,24 @@
         const processNames = new Map();
         let minTs = Number.POSITIVE_INFINITY;
         let maxTs = 0;
-
         for (const ev of events) {
           if (ev.ts != null) {
             minTs = Math.min(minTs, ev.ts);
             const endTs = ev.dur != null ? ev.ts + ev.dur : ev.ts;
             maxTs = Math.max(maxTs, endTs);
           }
-          if (ev.ph === 'M' && ev.name === 'thread_name' && ev.args?.name) {
-            threadNames.set(\`\${ev.pid}:\${ev.tid}\`, ev.args.name);
+          if (ev.ph === 'M' && ev.name === 'thread_name' && ev.args && ev.args.name) {
+            threadNames.set(ev.pid + ':' + ev.tid, ev.args.name);
           }
-          if (ev.ph === 'M' && ev.name === 'process_name' && ev.args?.name) {
+          if (ev.ph === 'M' && ev.name === 'process_name' && ev.args && ev.args.name) {
             processNames.set(ev.pid, ev.args.name);
           }
         }
-
         let main = null;
         for (const [key, name] of threadNames.entries()) {
           if (/CrRendererMain|RendererMain/i.test(name)) {
             const [pid, tid] = key.split(':').map(Number);
-            main = { pid, tid, name };
-            break;
+            main = { pid, tid, name }; break;
           }
         }
         if (!main) {
@@ -331,9 +335,8 @@
           for (const ev of events) {
             if (USE_ONLY_COMPLETE_EVENTS && ev.ph !== 'X') continue;
             if (!String(ev.cat || '').includes('devtools.timeline')) continue;
-            const key = \`\${ev.pid}:\${ev.tid}\`;
-            const prev = totals.get(key) || 0;
-            totals.set(key, prev + (ev.dur || 0));
+            const key = ev.pid + ':' + ev.tid;
+            totals.set(key, (totals.get(key) || 0) + (ev.dur || 0));
           }
           let bestKey = null, bestVal = -1;
           for (const [k, v] of totals.entries()) if (v > bestVal) { bestVal = v; bestKey = k; }
@@ -342,114 +345,150 @@
             main = { pid, tid, name: threadNames.get(bestKey) || 'Main (?)' };
           }
         }
-
         const mainProcName = main ? (processNames.get(main.pid) || '') : '';
-
         return {
-          threadNames,
-          processNames,
-          mainThread: main,
-          processName: mainProcName,
+          threadNames, processNames,
+          mainThread: main, processName: mainProcName,
           totalWindowUs: Math.max(0, maxTs - (isFinite(minTs) ? minTs : 0)),
+          traceMinUs: isFinite(minTs) ? minTs : 0,
         };
       }
 
       function aggregate(events, opts) {
         const { mainPid, mainTid, onlyMain, longTaskThresholdUs, topN } = opts;
 
+        // Pass A: locate first FireAnimationFrame on main thread → init/steady boundary
+        let traceMinUs = Number.POSITIVE_INFINITY;
+        for (const ev of events) if (ev.ts != null) traceMinUs = Math.min(traceMinUs, ev.ts);
+        if (!isFinite(traceMinUs)) traceMinUs = 0;
+        let initEndAbsUs = traceMinUs + INIT_FALLBACK_US;
+        for (const ev of events) {
+          if (ev.name === 'FireAnimationFrame' && ev.ph === 'X' &&
+              (mainPid == null || (ev.pid === mainPid && ev.tid === mainTid))) {
+            initEndAbsUs = ev.ts; break;
+          }
+        }
+
         const totalsByEvent = new Map();
         const totalsRendering = new Map();
         const totalsJS = new Map();
+        const totalsJSNoise = new Map();
         const totalsThree = new Map();
         const longTasks = [];
-
-        let eventsParsed = 0;
-        let totalMainDurUs = 0;
+        let eventsParsed = 0, totalMainDurUs = 0;
+        let noiseDropTotalUs = 0, noiseDropCount = 0;
 
         const get = (obj, path) => {
           const parts = path.split('.');
           let cur = obj;
-          for (const p of parts) {
-            if (cur == null) return undefined;
-            cur = cur[p];
-          }
+          for (const p of parts) { if (cur == null) return undefined; cur = cur[p]; }
           return cur;
         };
 
+        // Pass B: aggregate
         for (const ev of events) {
           eventsParsed++;
           if (USE_ONLY_COMPLETE_EVENTS && ev.ph !== 'X') continue;
-
           const isMain = (ev.pid === mainPid && ev.tid === mainTid);
           if (onlyMain && !isMain) continue;
 
           const dur = ev.dur || 0;
+          const ts = ev.ts || 0;
+          const isInit = ts < initEndAbsUs;
 
           if (isMain) totalMainDurUs += dur;
+          addToMap(totalsByEvent, ev.name, dur, isInit);
 
-          addToMap(totalsByEvent, ev.name, dur);
+          if (RENDER_EVENTS.has(ev.name)) addToMap(totalsRendering, ev.name, dur, isInit);
 
-          if (['AnimationFrame','AnimationFrame::Start','AnimationFrame::Fire','AnimationFrame::Process',
-               'Layout','RecalculateStyles','RecalculateStyle','Paint','RasterTask',
-               'CompositeLayers','UpdateLayerTree','HitTest','ParseHTML',
-               'BeginMainThreadFrame','BeginMainFrame','Commit','ActivateLayerTree'].includes(ev.name)) {
-            addToMap(totalsRendering, ev.name, dur);
+          // Long tasks: skip wrappers (RunTask wraps everything) — single leaf events only
+          if (!WRAPPER_NAMES.has(ev.name) && isLongTaskName(ev.name) && dur >= longTaskThresholdUs) {
+            longTasks.push({ name: ev.name, startUs: ts, durUs: dur, isInit, pid: ev.pid, tid: ev.tid });
           }
 
-          if (isLongTaskName(ev.name) && dur >= longTaskThresholdUs) {
-            longTasks.push({ name: ev.name, startUs: ev.ts || 0, durUs: dur, pid: ev.pid, tid: ev.tid });
-          }
-
-          const hasJsName = ['FunctionCall','EvaluateScript','V8.Execute','v8.run','CompileCode','JSEvaluate'].includes(ev.name);
           const url = get(ev, 'args.data.url') || get(ev, 'args.beginData.url') || '';
           const fn = get(ev, 'args.data.functionName') || get(ev, 'args.beginData.functionName') || '';
           const line = get(ev, 'args.data.lineNumber') ?? get(ev, 'args.beginData.lineNumber');
           const col = get(ev, 'args.data.columnNumber') ?? get(ev, 'args.beginData.columnNumber');
-          const loc = (line != null) ? \`:\${line}\${col!=null?':'+col:''}\` : '';
+          const loc = (line != null) ? (':' + line + (col != null ? ':' + col : '')) : '';
+          const hasJsName = JS_EVENT_NAMES.has(ev.name);
           const jsKey = hasJsName || url || fn
             ? [fn || '', url || '', ev.name].filter(Boolean).join(' @ ') + (loc || '')
             : null;
 
-          if (jsKey) addToMap(totalsJS, jsKey, dur);
+          if (jsKey) {
+            const isNoise = NOISE_URL_RE.test(url) || NOISE_URL_RE.test(jsKey);
+            if (isNoise) {
+              noiseDropTotalUs += dur; noiseDropCount += 1;
+              addToMap(totalsJSNoise, jsKey, dur, isInit);
+            } else {
+              addToMap(totalsJS, jsKey, dur, isInit);
+            }
+          }
 
           if ((url && /three(\\.module)?\\.js|threejs/i.test(url)) || /three/i.test(fn)) {
             const key = [fn || ev.name, url || ''].filter(Boolean).join(' @ ') + (loc || '');
-            addToMap(totalsThree, key, dur);
+            addToMap(totalsThree, key, dur, isInit);
           }
         }
 
-        const toArray = (m) => Array.from(m.entries()).map(([name, v]) => ({ name, totalUs: v.total, count: v.count }));
+        const finishItem = ([name, v]) => ({
+          name,
+          totalUs: v.total, count: v.count,
+          initTotalUs: v.initTotal, initCount: v.initCount,
+          steadyTotalUs: v.steadyTotal, steadyCount: v.steadyCount,
+          medianUs: percentile(v.durs, 0.5), p95Us: percentile(v.durs, 0.95), p99Us: percentile(v.durs, 0.99),
+          isWrapper: WRAPPER_NAMES.has(name),
+        });
+        const finishJs = ([key, v]) => ({
+          key,
+          totalUs: v.total, count: v.count,
+          initTotalUs: v.initTotal, initCount: v.initCount,
+          steadyTotalUs: v.steadyTotal, steadyCount: v.steadyCount,
+          medianUs: percentile(v.durs, 0.5), p95Us: percentile(v.durs, 0.95), p99Us: percentile(v.durs, 0.99),
+        });
         const sortDesc = (a, b) => b.totalUs - a.totalUs;
 
-        const topEvents = toArray(totalsByEvent).sort(sortDesc).slice(0, topN);
-        const rendering = toArray(totalsRendering).sort(sortDesc).slice(0, topN);
-        const topJs = Array.from(totalsJS.entries()).map(([key, v]) => ({ key, totalUs: v.total, count: v.count })).sort(sortDesc).slice(0, topN);
-        const three = Array.from(totalsThree.entries()).map(([key, v]) => ({ key, totalUs: v.total, count: v.count })).sort(sortDesc).slice(0, topN);
+        const allEvents = Array.from(totalsByEvent.entries()).map(finishItem).sort(sortDesc);
+        const topEvents = allEvents.filter(e => !e.isWrapper).slice(0, topN);
+        const wrappers = allEvents.filter(e => e.isWrapper).slice(0, 10);
+        const rendering = Array.from(totalsRendering.entries()).map(finishItem).sort(sortDesc).slice(0, topN);
+        const topJs = Array.from(totalsJS.entries()).map(finishJs).sort(sortDesc).slice(0, topN);
+        const topJsNoise = Array.from(totalsJSNoise.entries()).map(finishJs).sort(sortDesc).slice(0, 10);
+        const three = Array.from(totalsThree.entries()).map(finishJs).sort(sortDesc).slice(0, topN);
 
-        longTasks.sort((a,b)=> b.durUs - a.durUs);
-        const longTasksTop = longTasks.slice(0, topN);
-
+        longTasks.sort((a, b) => b.durUs - a.durUs);
         return {
-          eventsParsed,
-          totalsByEvent: topEvents,
-          totalsRendering: rendering,
-          totalsJS: topJs,
-          totalsThree: three,
-          longTasks: longTasksTop,
-          totalMainDurUs,
-          debug: { counts: { eventsParsed, longTasks: longTasks.length } }
+          eventsParsed, initEndAbsUs, traceMinUs,
+          topEvents, wrappers, rendering, topJs, topJsNoise, three,
+          longTasks: longTasks.slice(0, topN),
+          totalMainDurUs, noiseDropTotalUs, noiseDropCount,
+          debug: { counts: { eventsParsed, longTasksFound: longTasks.length, jsNoiseKeys: totalsJSNoise.size, noiseDropMs: (noiseDropTotalUs/1000).toFixed(1) } }
         };
       }
 
-      function addToMap(map, key, dur) {
-        const cur = map.get(key) || { total: 0, count: 0 };
+      function addToMap(map, key, dur, isInit) {
+        let cur = map.get(key);
+        if (!cur) {
+          cur = { total: 0, count: 0, initTotal: 0, initCount: 0, steadyTotal: 0, steadyCount: 0, durs: [] };
+          map.set(key, cur);
+        }
         cur.total += dur;
         cur.count += 1;
-        map.set(key, cur);
+        if (isInit) { cur.initTotal += dur; cur.initCount += 1; }
+        else { cur.steadyTotal += dur; cur.steadyCount += 1; }
+        if (cur.durs.length < PERCENTILE_SAMPLE_CAP) cur.durs.push(dur);
+      }
+
+      function percentile(durs, q) {
+        if (!durs || durs.length === 0) return 0;
+        const sorted = durs.slice().sort((a, b) => a - b);
+        const idx = Math.min(sorted.length - 1, Math.floor(sorted.length * q));
+        return sorted[idx];
       }
 
       function isLongTaskName(name) {
-        return /Task|RunTask|ProcessTask|EventDispatch|MessageLoop/i.test(name);
+        return /Task|ProcessTask|EventDispatch|MessageLoop/i.test(name);
       }
 
       function buildOutput(agg, meta) {
@@ -460,11 +499,19 @@
             processName: meta.processName,
             totalWindowUs: meta.totalWindowUs,
             totalMainDurUs: agg.totalMainDurUs,
+            traceMinUs: agg.traceMinUs,
+            initEndAbsUs: agg.initEndAbsUs,
+            initWindowUs: Math.max(0, agg.initEndAbsUs - agg.traceMinUs),
+            steadyWindowUs: Math.max(0, meta.totalWindowUs - (agg.initEndAbsUs - agg.traceMinUs)),
+            noiseDropTotalUs: agg.noiseDropTotalUs,
+            noiseDropCount: agg.noiseDropCount,
           },
-          topEvents: agg.totalsByEvent,
-          rendering: agg.totalsRendering,
-          topJs: agg.totalsJS,
-          three: agg.totalsThree,
+          topEvents: agg.topEvents,
+          wrappers: agg.wrappers,
+          rendering: agg.rendering,
+          topJs: agg.topJs,
+          topJsNoise: agg.topJsNoise,
+          three: agg.three,
           longTasks: agg.longTasks,
           debug: agg.debug,
         };
@@ -530,43 +577,58 @@
 
     async function getAiSummary(data){
       // Pollinations.ai: free, no key, no login, CORS-enabled.
-      // Two key prompt-engineering choices:
-      //  1) Pre-convert all times to ms in the text we send. The model never
-      //     sees `totalUs` field names, so it can't hallucinate "kµs" or read
-      //     ms as seconds. Killed every unit error during testing.
-      //  2) Force severity tags ([CRITICAL]/[HIGH]/[LOW]/[NOISE]) instead of
-      //     asking "what to optimize". Without rules, LLMs default to
-      //     "always something to optimize" — generic cargo-cult advice.
-      //     The rubric forces them to call out noise + healthy items as
-      //     such, which is what makes the summary actually useful.
+      // The CPU-side aggregator already pre-filters chrome-extension/userscript/host-CDN
+      // noise, separates wrappers (RunTask etc.), and splits init vs steady-state.
+      // The prompt uses ms-formatted numbers + rules-in-order rubric to force
+      // the LLM to honour those distinctions instead of pattern-matching big
+      // numbers as bottlenecks.
       const ms = us => (us/1000).toFixed(2);
-      const avgMs = (us, n) => (us/1000/Math.max(1,n)).toFixed(3);
+      const avg = (us, n) => (us/1000/Math.max(1,n)).toFixed(3);
       const trim = (s, n=72) => s && s.length > n ? s.slice(0,n)+'…' : s;
-      const fmtJs = items => items.slice(0,6).map(i =>
-        `  ${trim(i.key)} | total=${ms(i.totalUs)} ms | avg=${avgMs(i.totalUs,i.count)} ms/call | x${i.count}`
+      const tStart = data.meta.traceMinUs || 0;
+      const fmtJs = items => items.slice(0,8).map(i => {
+        const initMs = ms(i.initTotalUs||0), steadyMs = ms(i.steadyTotalUs||0);
+        const medMs = ms(i.medianUs||0), p95Ms = ms(i.p95Us||0);
+        return `  ${trim(i.key)}\n    total=${ms(i.totalUs)} ms x${i.count} | mean=${avg(i.totalUs,i.count)} median=${medMs} p95=${p95Ms} ms | init=${initMs}/x${i.initCount||0} steady=${steadyMs}/x${i.steadyCount||0}`;
+      }).join('\n');
+      const fmtRender = items => items.slice(0,6).map(i =>
+        `  ${i.name} | total=${ms(i.totalUs)} ms x${i.count} | init=${ms(i.initTotalUs||0)}/x${i.initCount||0} steady=${ms(i.steadyTotalUs||0)}/x${i.steadyCount||0}`
       ).join('\n');
-      const fmtRender = items => items.slice(0,5).map(i =>
-        `  ${i.name} | total=${ms(i.totalUs)} ms | x${i.count}`
+      const fmtLong = items => items.slice(0,5).map(i => {
+        const phase = i.isInit ? 'INIT' : 'STEADY';
+        const at = ms((i.startUs||0) - tStart);
+        return `  [${phase}] ${i.name} | dur=${ms(i.durUs)} ms at t+${at} ms`;
+      }).join('\n');
+      const fmtWrap = items => items.slice(0,5).map(i =>
+        `  ${i.name} (wrapper, total=${ms(i.totalUs)} ms x${i.count}) — ignore for ranking`
       ).join('\n');
-      const fmtLong = items => items.slice(0,5).map(i =>
-        `  ${i.name} | dur=${ms(i.durUs)} ms`
-      ).join('\n');
+      const noiseLine = data.meta.noiseDropCount
+        ? `(pre-filtered: chrome-extension/userscript/host-CDN — ${ms(data.meta.noiseDropTotalUs)} ms across ${data.meta.noiseDropCount} events were dropped)`
+        : '(no noise URLs found)';
 
       const prompt =
-        `You are a senior web-perf engineer reviewing a Chrome trace.\n` +
-        `Tag EACH finding with EXACTLY ONE of: [CRITICAL] [HIGH] [LOW] [NOISE]\n` +
-        `Rules:\n` +
-        `  [NOISE]    = DevTools recording itself (v8::Debugger::*, CDP, profiler), chrome-extension://*, or per-call avg < 2 ms during animation\n` +
-        `  [LOW]      = init-only work (ParseHTML, ScriptCompiled, EvaluateScript on first load), or cumulative total from many fast calls\n` +
-        `  [HIGH]     = per-call avg > 5 ms during animation, OR a single long-task > 50 ms in steady state\n` +
-        `  [CRITICAL] = consistent frame work > 16.67 ms (60 Hz miss), or memory-leak signs\n\n` +
-        `Output 3-5 tagged lines: \`[TAG] one-line evidence — concrete fix\`. Reply in under ${AI_MAX_WORDS} words total. ` +
-        `End with one final line: \`verdict: <fine | minor wins | needs work>\`. No headers, no preamble, no markdown bold.\n\n` +
+        `You are a senior web-perf engineer reviewing a pre-cleaned Chrome trace.\n` +
+        `Apply tags IN ORDER, FIRST MATCH WINS:\n` +
+        `  1. [NOISE]    if name contains "Debugger" / "CDP" / "Profiler", or it's listed in the Wrappers section below\n` +
+        `  2. [LOW]      if name is one of {ParseHTML, ScriptCompiled, EvaluateScript, v8.compile, v8.run, v8.evaluateModule} (these are init/load-only by definition)\n` +
+        `  3. [LOW]      if steady_count == 0 (init-only work, regardless of total or avg)\n` +
+        `  4. [LOW]      if steady_count >= 100 AND p95 < 5 ms (steady-state animation hot path running healthy)\n` +
+        `  5. [HIGH]     if p95 > 5 ms in steady state, OR a [STEADY] long-task > 50 ms\n` +
+        `  6. [CRITICAL] if median > 16.67 ms in steady state (consistently blowing the 60 Hz frame budget)\n\n` +
+        `Heuristics:\n` +
+        `  - low call count (1-10) ⇒ init-only, regardless of avg\n` +
+        `  - high call count (>100) ⇒ steady-state; only HIGH/CRITICAL if p95 is genuinely large\n` +
+        `  - mean lies under outliers; trust median and p95 over mean\n` +
+        `  - long tasks marked [INIT] are page-load artifacts → [LOW]; only [STEADY] long tasks block real-time\n\n` +
+        `Output 3-5 tagged lines in the form: \`[TAG] one-line evidence — concrete fix\`. ` +
+        `Reply in under ${AI_MAX_WORDS} words total. End with one final line: \`verdict: <fine | minor wins | needs work>\`. ` +
+        `No headers, no preamble, no markdown bold.\n\n` +
         `Frame budget at 60 Hz = 16.67 ms. ALL TIMES BELOW ARE IN MILLISECONDS.\n\n` +
-        `Total main-thread time: ${ms(data.meta.totalWindowUs)} ms (${data.meta.eventsParsed||'?'} events).\n\n` +
-        `TopJS:\n${fmtJs(data.topJs)}\n\n` +
+        `Trace window: ${ms(data.meta.totalWindowUs)} ms total (init=${ms(data.meta.initWindowUs)} ms, steady=${ms(data.meta.steadyWindowUs)} ms). ${noiseLine}\n\n` +
+        `TopJS (page code only, noise filtered):\n${fmtJs(data.topJs)}\n\n` +
         `Rendering:\n${fmtRender(data.rendering)}\n\n` +
-        `Long tasks:\n${fmtLong(data.longTasks)}`;
+        `Long tasks:\n${fmtLong(data.longTasks)}\n\n` +
+        `Wrappers (listed for transparency only — do NOT use as bottlenecks; their dur is the sum of children):\n${fmtWrap(data.wrappers||[])}`;
 
       try {
         const res = await fetch('https://text.pollinations.ai/openai/v1/chat/completions', {
@@ -605,14 +667,38 @@
       return rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
     }
     function buildLog(r){
-      const line = (name, totalUs, count)=> `${name} | total=${(totalUs/1000).toFixed(3)}ms | avg=${(totalUs/1000/Math.max(1,count)).toFixed(3)}ms | x${count}`;
+      const fmt = us => (us/1000).toFixed(3);
+      const enriched = (i) => {
+        const parts = [`total=${fmt(i.totalUs)}ms`, `mean=${fmt(i.totalUs/Math.max(1,i.count))}ms`, `x${i.count}`];
+        if (i.medianUs != null) parts.push(`med=${fmt(i.medianUs)}ms`, `p95=${fmt(i.p95Us)}ms`);
+        if (i.steadyCount != null && (i.initCount + i.steadyCount > 0)) {
+          parts.push(`init=${fmt(i.initTotalUs||0)}/x${i.initCount||0}`,
+                     `steady=${fmt(i.steadyTotalUs||0)}/x${i.steadyCount||0}`);
+        }
+        return parts.join(' | ');
+      };
+      const tStart = (r.meta && r.meta.traceMinUs) || 0;
       const parts = [];
       parts.push('# Operations (sorted within sections)');
-      r.topJs.forEach(i=>parts.push(`TopJS: ${line(i.key,i.totalUs,i.count)}`));
-      r.rendering.forEach(i=>parts.push(`Rendering: ${line(i.name,i.totalUs,i.count)}`));
-      r.topEvents.forEach(i=>parts.push(`TopEvents: ${line(i.name,i.totalUs,i.count)}`));
-      r.three.forEach(i=>parts.push(`Three: ${line(i.key,i.totalUs,i.count)}`));
-      r.longTasks.forEach(i=>parts.push(`LongTask: ${i.name} | dur=${(i.durUs/1000).toFixed(3)}ms`));
+      if (r.meta && r.meta.noiseDropCount) {
+        parts.push(`# noise pre-filtered: ${fmt(r.meta.noiseDropTotalUs)} ms across ${r.meta.noiseDropCount} events ` +
+                   `(chrome-extension://*, userscript.html, websim host-CDN/analytics)`);
+      }
+      if (r.meta && r.meta.initWindowUs != null) {
+        parts.push(`# init window: ${fmt(r.meta.initWindowUs)} ms | steady window: ${fmt(r.meta.steadyWindowUs)} ms`);
+      }
+      r.topJs.forEach(i=>parts.push(`TopJS: ${i.key} | ${enriched(i)}`));
+      r.rendering.forEach(i=>parts.push(`Rendering: ${i.name} | ${enriched(i)}`));
+      r.topEvents.forEach(i=>parts.push(`TopEvents: ${i.name} | ${enriched(i)}`));
+      if (r.wrappers && r.wrappers.length) {
+        parts.push('# Wrappers (their dur = sum of children, do NOT rank)');
+        r.wrappers.forEach(i=>parts.push(`Wrapper: ${i.name} | ${enriched(i)}`));
+      }
+      r.three.forEach(i=>parts.push(`Three: ${i.key} | ${enriched(i)}`));
+      r.longTasks.forEach(i=>{
+        const phase = i.isInit ? 'INIT' : 'STEADY';
+        parts.push(`LongTask: [${phase}] ${i.name} | dur=${fmt(i.durUs)}ms at t+${fmt((i.startUs||0)-tStart)}ms`);
+      });
       return parts.join('\n');
     }
 
@@ -658,7 +744,8 @@
         <div class="stat"><div class="label">Window / Work</div>
           <div class="value mono">${ms(r.meta.totalWindowUs)}</div>
           <div class="muted mono">Main 'X' total: ${ms(r.meta.totalMainDurUs)}</div>
-          <div class="muted mono">Events: ${r.meta.eventsParsed.toLocaleString()}</div>
+          ${r.meta.initWindowUs != null ? `<div class="muted mono">Init: ${ms(r.meta.initWindowUs)} | Steady: ${ms(r.meta.steadyWindowUs)}</div>` : ''}
+          <div class="muted mono">Events: ${r.meta.eventsParsed.toLocaleString()}${r.meta.noiseDropCount ? ` <span style="color:#ff8a4c">(${r.meta.noiseDropCount} noise events / ${ms(r.meta.noiseDropTotalUs)} filtered)</span>` : ''}</div>
         </div>`;
 
       renderList(topJs, r.topJs, {
