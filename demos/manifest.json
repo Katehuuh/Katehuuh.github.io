@@ -1,6 +1,12 @@
 {
   "demos": [
     {
+      "name": "[SHOW]-A-Star-Pathfinding-Map",
+      "type": "file",
+      "filename": "[SHOW]-A-Star-Pathfinding-Map.html",
+      "first_seen": "2026-04-28T09:32:34+02:00"
+    },
+    {
       "name": "[GAME]-2d-racer",
       "type": "file",
       "filename": "[GAME]-2d-racer.html",
