@@ -16,29 +16,14 @@ home page reads it from the binary it's already fetching for <img>.
 from __future__ import annotations
 
 import json
-import subprocess
 import sys
 from pathlib import Path
+
+from git_helpers import first_commit_iso
 
 ROOT = Path(__file__).resolve().parent.parent
 DEMOS_DIR = ROOT / "demos"
 OUT = DEMOS_DIR / "manifest.json"
-
-
-def first_commit_iso(rel_path: str) -> str:
-    """Used only for sort order — newest demos at the top of the manifest.
-    Not written into the manifest itself."""
-    try:
-        result = subprocess.run(
-            ["git", "log", "--reverse", "--format=%aI", "--", rel_path],
-            capture_output=True, text=True, cwd=ROOT, check=False,
-        )
-        first = (result.stdout or "").strip().split("\n", 1)[0].strip()
-        if first:
-            return first
-    except Exception:
-        pass
-    return ""
 
 
 def main() -> int:
@@ -55,9 +40,9 @@ def main() -> int:
             if (entry / ".gallery-exclude").exists():
                 continue
             if (entry / "index.html").is_file():
-                items.append((first_commit_iso(rel), {"name": entry.name, "type": "dir"}))
+                items.append((first_commit_iso(rel, ROOT) or "", {"name": entry.name, "type": "dir"}))
         elif entry.is_file() and entry.suffix.lower() in (".html", ".htm"):
-            items.append((first_commit_iso(rel),
+            items.append((first_commit_iso(rel, ROOT) or "",
                           {"name": entry.stem, "type": "file", "filename": entry.name}))
 
     items.sort(key=lambda kv: kv[0], reverse=True)

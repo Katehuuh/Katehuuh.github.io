@@ -11,9 +11,10 @@ COM marker is one of the few that's free-form text; we just inject one.
 """
 from __future__ import annotations
 
-import subprocess
 import sys
 from pathlib import Path
+
+from git_helpers import first_commit_iso
 
 ROOT = Path(__file__).resolve().parent.parent
 THUMBS = ROOT / "assets" / "thumbs"
@@ -22,16 +23,9 @@ DEMOS = ROOT / "demos"
 SOI = b"\xff\xd8"
 COM_MARKER = 0xFE
 SOS_MARKER = 0xDA
+# JPEG markers that occupy 2 bytes total (no length field): SOI/EOI, RST0-RST7, TEM.
+# DRI (0xDD) is length-prefixed (payload = 4 bytes) — do NOT add it here.
 STANDALONE = {0xD0, 0xD1, 0xD2, 0xD3, 0xD4, 0xD5, 0xD6, 0xD7, 0xD8, 0xD9, 0x01}
-
-
-def first_commit_iso(rel_path: str) -> str | None:
-    r = subprocess.run(
-        ["git", "log", "--reverse", "--format=%aI", "--", rel_path],
-        capture_output=True, text=True, cwd=ROOT, check=False,
-    )
-    line = (r.stdout or "").strip().split("\n", 1)[0].strip()
-    return line or None
 
 
 def strip_existing_coms(data: bytes) -> bytes:
@@ -87,18 +81,24 @@ def main() -> int:
     if not THUMBS.is_dir():
         print("no thumbs directory")
         return 0
-    count = 0
+    count, skipped = 0, []
     for jpg in sorted(THUMBS.glob("*.jpg")):
         demo = find_demo_html(jpg.stem)
         if not demo:
+            skipped.append((jpg.name, "no matching demo HTML"))
             continue
         rel = demo.relative_to(ROOT).as_posix()
-        date = first_commit_iso(rel)
+        date = first_commit_iso(rel, ROOT)
         if not date:
+            skipped.append((jpg.name, "no git history"))
             continue
         if embed_jpeg_comment(jpg, date):
             count += 1
+        else:
+            skipped.append((jpg.name, "not a JPEG / payload too large"))
     print(f"embedded dates into {count} thumbnails")
+    for name, reason in skipped:
+        print(f"  skipped {name}: {reason}", file=sys.stderr)
     return 0
 
 

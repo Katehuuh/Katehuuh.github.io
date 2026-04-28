@@ -901,7 +901,8 @@ async function readJpegEmbeddedDate(thumbUrl) {
   const stored = localStorage.getItem(cacheKey);
   if (stored) return stored;
   try {
-    const r = await fetch(thumbUrl);
+    // force-cache shares the response with the <img> request — no double fetch.
+    const r = await fetch(thumbUrl, { cache: 'force-cache' });
     if (!r.ok) return null;
     const buf = new Uint8Array(await r.arrayBuffer());
     const iso = scanJpegComMarker(buf);
