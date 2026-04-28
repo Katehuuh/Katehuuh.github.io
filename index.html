@@ -1064,6 +1064,15 @@ function puterReady(timeoutMs = 5000) {
 // hit this because it makes one call after a user gesture, by which
 // time the WS is already up; the home page fires many in parallel on
 // page load, so we need to gate them.
+// Silence puter SDK's internal "WebSocket Still in CONNECTING state" noise.
+// The SDK fires-and-forgets some queued operations that reject when the
+// underlying socket wasn't ready; our retries handle the real failure path,
+// so these residual rejections are pure log spam.
+window.addEventListener('unhandledrejection', (e) => {
+  const msg = String((e && e.reason && (e.reason.message || e.reason)) || '');
+  if (/Still in CONNECTING state/i.test(msg)) e.preventDefault();
+});
+
 // Race a promise against a timeout — every network call is timeboxed
 // because puter's WS can hang indefinitely on transient relay issues,
 // which would otherwise leave every like button stuck on "·" forever.
@@ -1081,12 +1090,13 @@ async function ensurePuterReady() {
     if (!(await puterReady())) return false;
     // Warm the WS with a benign request. Retry up to 4x with a per-call
     // timeout so a hanging relay can't block the entire page-load fetch.
+    // 5s per attempt — slow-connection-tolerant; total worst-case 20s.
     for (let i = 0; i < 4; i++) {
       try {
-        const r = await withTimeout(puter.net.fetch('https://api.github.com/'), 2500, 'puter warmup');
+        const r = await withTimeout(puter.net.fetch('https://api.github.com/'), 5000, 'puter warmup');
         if (r && r.ok) return true;
       } catch { /* retry */ }
-      await new Promise(r => setTimeout(r, 200 + i * 150));
+      await new Promise(r => setTimeout(r, 250 + i * 200));
     }
     return false;
   })();
@@ -1113,12 +1123,12 @@ async function likesApi(path) {
   };
   if (await ensurePuterReady()) {
     try {
-      const out = await parse(await withTimeout(puter.net.fetch(url), 4000, 'puter likes'));
+      const out = await parse(await withTimeout(puter.net.fetch(url), 7000, 'puter likes'));
       if (out !== undefined) return out;
     } catch { /* fall through */ }
   }
   try {
-    const out = await parse(await withTimeout(fetch(url), 3000, 'direct likes'));
+    const out = await parse(await withTimeout(fetch(url), 4000, 'direct likes'));
     if (out !== undefined) return out;
   } catch { /* both failed */ }
   return null;
