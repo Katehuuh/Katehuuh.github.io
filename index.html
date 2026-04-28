@@ -302,6 +302,37 @@ section h2 {
     inset 0 -1px 0 rgba(0, 0, 0, 0.20),
     0 0 14px -3px rgba(255, 138, 76, 0.32);
 }
+/* Separator between filter toggles and the sort toggle */
+.tag-filter .sort-sep {
+  display: inline-block;
+  width: 1px;
+  align-self: stretch;
+  margin: 4px 4px;
+  background: rgba(255, 255, 255, 0.14);
+}
+.tag-filter button#sort-by-likes {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: .4rem .7rem;
+  letter-spacing: 0;
+  font-size: .82rem;
+  text-transform: none;
+}
+.tag-filter button#sort-by-likes .heart-glyph {
+  font-size: .9rem;
+  line-height: 1;
+}
+.tag-filter button#sort-by-likes .arrow-glyph {
+  font-size: .85rem;
+  line-height: 1;
+  display: inline-block;
+  transition: transform .25s ease, opacity .25s ease;
+  opacity: .55;
+}
+.tag-filter button#sort-by-likes.active .arrow-glyph {
+  opacity: 1;
+}
 .is-hidden-by-filter { display: none !important; }
 
 .vibe-grid { display: grid; grid-template-columns: 1fr; gap: 1rem; }
@@ -496,6 +527,10 @@ section.compact { display: grid; gap: .6rem; }
         <button data-tag="tool" class="active" aria-pressed="true">tool</button>
         <button data-tag="game" class="active" aria-pressed="true">game</button>
         <button data-tag="show" class="active" aria-pressed="true">show</button>
+        <span class="sort-sep" aria-hidden="true"></span>
+        <button id="sort-by-likes" type="button" aria-pressed="false" title="sort by likes (off = newest first)" aria-label="sort by likes">
+          <span class="heart-glyph" aria-hidden="true">♥</span><span class="arrow-glyph" aria-hidden="true">↓</span>
+        </button>
       </span>
       <input type="search" id="site-search" class="inline-search" placeholder="" aria-label="search">
     </h2>
@@ -521,13 +556,16 @@ section.compact { display: grid; gap: .6rem; }
   renderProjects(projects);
   setupSearch();
   setupTagFilter();
+  setupSortByLikes();
   populateHeroPopovers(data);
 })();
 
 function setupTagFilter() {
   const root = document.getElementById('tag-filter');
   if (!root) return;
-  const buttons = [...root.querySelectorAll('button')];
+  // Scope to [data-tag] so the sort-by-likes button (also inside .tag-filter)
+  // doesn't get treated as a category toggle.
+  const buttons = [...root.querySelectorAll('button[data-tag]')];
   // The three toggles cover these category tags. Cards whose tags don't
   // include any of these (descriptive-only tags like "webrtc", "p2p") are
   // shown regardless — the toggles don't affect them.
@@ -848,7 +886,60 @@ function projectCard(p) {
     meta,
   ]);
   const link = el('a', { class: 'card-link', href: p.url }, [thumb, body]);
-  return el('div', { class: 'vibe-card' }, link);
+  return el('div', { class: 'vibe-card', 'data-slug': slug }, link);
+}
+
+// ─── Sort by likes (toggle) ──────────────────────────────────────────
+// Counts are populated per-card by makeLikeButton's background fetch.
+// When the toggle flips on, we DOM-reorder cards by count desc; when off,
+// we restore the natural order (newest demos first, captured at render).
+const LIKE_COUNTS = new Map();
+let sortByLikesActive = false;
+let originalCardOrder = [];
+
+function notifyLikeCountLoaded(slug, n) {
+  LIKE_COUNTS.set(slug, n);
+  if (sortByLikesActive) applyLikesSort();
+}
+
+function setupSortByLikes() {
+  const btn = document.getElementById('sort-by-likes');
+  const root = document.getElementById('projects-grid');
+  if (!btn || !root) return;
+  // Snapshot the natural order once, after first render.
+  originalCardOrder = [...root.children];
+  btn.addEventListener('click', () => {
+    sortByLikesActive = !sortByLikesActive;
+    btn.classList.toggle('active', sortByLikesActive);
+    btn.setAttribute('aria-pressed', sortByLikesActive ? 'true' : 'false');
+    if (sortByLikesActive) applyLikesSort();
+    else restoreNaturalOrder();
+  });
+}
+
+function applyLikesSort() {
+  const root = document.getElementById('projects-grid');
+  if (!root) return;
+  // Stable secondary sort by original index keeps unloaded cards in their
+  // natural relative order while the loaded ones float to the top.
+  const indexOf = new Map(originalCardOrder.map((c, i) => [c, i]));
+  const sorted = [...root.children].sort((a, b) => {
+    const aN = LIKE_COUNTS.get(a.dataset.slug);
+    const bN = LIKE_COUNTS.get(b.dataset.slug);
+    const aHas = typeof aN === 'number';
+    const bHas = typeof bN === 'number';
+    if (aHas && bHas && aN !== bN) return bN - aN;
+    if (aHas && !bHas) return -1;
+    if (!aHas && bHas) return 1;
+    return (indexOf.get(a) ?? 0) - (indexOf.get(b) ?? 0);
+  });
+  for (const c of sorted) root.appendChild(c);
+}
+
+function restoreNaturalOrder() {
+  const root = document.getElementById('projects-grid');
+  if (!root) return;
+  for (const c of originalCardOrder) root.appendChild(c);
 }
 
 // ─── Likes (anonymous, no signup) ────────────────────────────────────
@@ -890,6 +981,7 @@ function makeLikeButton(slug) {
   fetchLikeCount(slug).then(n => {
     if (n === null) { btn.style.display = 'none'; return; }
     btn.querySelector('.count').textContent = n;
+    notifyLikeCountLoaded(slug, n);
   });
   return btn;
 }
@@ -1001,12 +1093,17 @@ async function handleLikeClick(btn) {
   const d = await likesApi(`${slug}/${op}`);
   if (d && typeof d.count === 'number') {
     countEl.textContent = d.count;
+    notifyLikeCountLoaded(slug, d.count);
   } else if (d === null) {
     // Both transports blocked — revert optimistic UI
     btn.classList.toggle('liked', wasLiked);
     countEl.textContent = curSafe;
     if (wasLiked) localStorage.setItem(`liked-${slug}`, '1');
     else localStorage.removeItem(`liked-${slug}`);
+  } else {
+    // Optimistic value is what we have; reflect it in the sort map.
+    const n = parseInt(countEl.textContent, 10);
+    if (isFinite(n)) notifyLikeCountLoaded(slug, n);
   }
   btn.dataset.busy = '0';
 }
