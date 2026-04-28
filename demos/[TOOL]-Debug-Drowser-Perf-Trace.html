@@ -243,7 +243,13 @@
         'CompositeLayers','UpdateLayerTree','HitTest','ParseHTML',
         'BeginMainThreadFrame','BeginMainFrame','Commit','ActivateLayerTree',
       ]);
-      const WRAPPER_NAMES = new Set(['RunTask','RunMicrotasks','v8.callFunction','FireAnimationFrame']);
+      const WRAPPER_NAMES = new Set([
+        'RunTask','RunMicrotasks','v8.callFunction','FireAnimationFrame',
+        // v8::Debugger::AsyncTaskRun wraps the timer/microtask runs while DevTools
+        // is attached — its dur is the sum of the real children. Treating it as
+        // a leaf event makes it dominate Long Tasks even though it isn't real work.
+        'v8::Debugger::AsyncTaskRun','v8::Debugger::AsyncTaskScheduled'
+      ]);
       const NOISE_URL_RE = /^chrome-extension:\\/\\/|userscript\\.html|^https?:\\/\\/[^\\/]*\\.wbsm\\.ai\\/|^https?:\\/\\/websim\\.com\\/assets\\//i;
       const INIT_FALLBACK_US = 1500 * 1000;
       const PERCENTILE_SAMPLE_CAP = 1000;
@@ -285,7 +291,10 @@
         let minTs = Number.POSITIVE_INFINITY;
         let maxTs = 0;
         for (const ev of events) {
-          if (ev.ts != null) {
+          // Only count complete ('X') events for the trace window. Metadata ('M')
+          // events often have ts=0 and would falsely stretch the window to seconds
+          // of "init" before the first real work.
+          if (ev.ph === 'X' && ev.ts != null) {
             minTs = Math.min(minTs, ev.ts);
             const endTs = ev.dur != null ? ev.ts + ev.dur : ev.ts;
             maxTs = Math.max(maxTs, endTs);
@@ -331,9 +340,13 @@
       function aggregate(events, opts) {
         const { mainPid, mainTid, onlyMain, longTaskThresholdUs, topN } = opts;
 
-        // Pass A: locate first FireAnimationFrame on main thread → init/steady boundary
+        // Pass A: locate first FireAnimationFrame on main thread → init/steady boundary.
+        // Only count 'X' (complete) events for trace start — metadata events at ts=0
+        // would otherwise stretch the init window by 100×.
         let traceMinUs = Number.POSITIVE_INFINITY;
-        for (const ev of events) if (ev.ts != null) traceMinUs = Math.min(traceMinUs, ev.ts);
+        for (const ev of events) {
+          if (ev.ph === 'X' && ev.ts != null) traceMinUs = Math.min(traceMinUs, ev.ts);
+        }
         if (!isFinite(traceMinUs)) traceMinUs = 0;
         let initEndAbsUs = traceMinUs + INIT_FALLBACK_US;
         for (const ev of events) {
