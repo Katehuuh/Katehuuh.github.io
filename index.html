@@ -79,13 +79,12 @@ a:hover { color: #ffb98d; }
   display: flex;
   flex-direction: column;
   gap: 0;
-  /* `width: max-content` makes the popover size to its natural content
-     width (one line per item via white-space: nowrap), capped by max-width
-     so it never extends past the viewport. min-width prevents collapse
-     on narrow content. max-height + scroll handles tall lists. */
+  /* `width: max-content` makes the popover hug its longest item exactly
+     (one line per item via white-space: nowrap), capped by max-width so
+     it never extends past the viewport. No min-width — short lists like
+     GitHub's 2 items shouldn't have empty space to the right. */
   white-space: nowrap;
   width: max-content;
-  min-width: 200px;
   max-width: min(380px, calc(100vw - 24px));
   max-height: calc(100vh - 120px);
   overflow-y: auto;
