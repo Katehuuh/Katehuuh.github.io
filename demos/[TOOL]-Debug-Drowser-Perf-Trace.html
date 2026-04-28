@@ -70,8 +70,14 @@
     .ai-box{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:var(--pad);margin-bottom:12px}
     .ai-box .ai-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px;font-weight:600}
     #aiSummary{font-family:'SF Mono','JetBrains Mono','Fira Code',Consolas,monospace;font-size:13px;line-height:1.6;white-space:pre-wrap;margin:0;color:var(--fg)}
-    .md-controls{display:flex;gap:8px;align-items:center;margin:0 0 8px}
-    .md-output{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px;font-family:'SF Mono','JetBrains Mono','Fira Code',Consolas,monospace;font-size:11.5px;line-height:1.55;white-space:pre;overflow:auto;color:var(--fg);max-height:70vh;tab-size:2}
+    .md-output-wrap{position:relative}
+    .md-output{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px;font-family:'SF Mono','JetBrains Mono','Fira Code',Consolas,monospace;font-size:11.5px;line-height:1.55;white-space:pre;overflow:auto;color:var(--fg);max-height:70vh;tab-size:2;margin:0}
+    /* StackOverflow-style copy: icon button anchored top-right of the code block */
+    .md-copy-btn{position:absolute;top:8px;right:8px;z-index:2;display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;padding:0;background:rgba(255,255,255,.06);border:1px solid var(--line);color:var(--muted);border-radius:8px;cursor:pointer;transition:background .15s,color .15s,border-color .15s,opacity .15s;opacity:.6}
+    .md-copy-btn:hover{opacity:1;color:var(--fg);background:rgba(255,255,255,.12)}
+    .md-copy-btn:active{transform:scale(.95)}
+    .md-copy-btn.copied{opacity:1;color:#22c55e;background:rgba(34,197,94,.1);border-color:rgba(34,197,94,.35)}
+    .md-copy-btn svg{width:16px;height:16px;display:block;pointer-events:none}
   </style>
 </head>
 <body>
@@ -118,17 +124,22 @@
     </div>
 
     <div id="summary" hidden>
-      <div class="md-meta" id="metaLine"></div>
       <div class="ai-box">
         <div class="ai-label">AI verdict</div>
         <pre id="aiSummary">Analyzing…</pre>
       </div>
-      <div class="md-controls">
-        <button class="primary" id="copyMd">Copy markdown</button>
-        <button class="ghost" id="dlMd">Download .md</button>
-        <span class="muted mono" id="mdSize" style="margin-left:auto;font-size:11px"></span>
+      <div class="md-output-wrap">
+        <button class="md-copy-btn" id="copyMd" type="button" aria-label="Copy markdown" title="Copy markdown">
+          <svg class="icon-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+          </svg>
+          <svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none">
+            <polyline points="20 6 9 17 4 12"/>
+          </svg>
+        </button>
+        <pre id="mdOutput" class="md-output"></pre>
       </div>
-      <pre id="mdOutput" class="md-output"></pre>
     </div>
   </div>
 
@@ -168,11 +179,10 @@
     const onlyMainEl = document.getElementById('onlyMain');
     const aiSummaryEl = document.getElementById('aiSummary');
     const summary = document.getElementById('summary');
-    const metaLine = document.getElementById('metaLine');
     const mdOutput = document.getElementById('mdOutput');
-    const mdSize = document.getElementById('mdSize');
     const copyMdBtn = document.getElementById('copyMd');
-    const dlMdBtn = document.getElementById('dlMd');
+    const copyIconCopy = copyMdBtn.querySelector('.icon-copy');
+    const copyIconCheck = copyMdBtn.querySelector('.icon-check');
 
     let selectedFile = null;
 
@@ -751,36 +761,28 @@
 
     function renderResults(r) {
       summary.hidden = false;
-      // Quick metadata strip above the AI box
-      const noiseFrag = r.meta.noiseDropCount
-        ? `<span class="noise">${r.meta.noiseDropCount} noise events / ${ms(r.meta.noiseDropTotalUs)} filtered</span>`
-        : '';
-      metaLine.innerHTML =
-        `<span><strong>File</strong> ${selectedFile?.name || '—'} (${(selectedFile.size/1024/1024).toFixed(1)} MB)</span>` +
-        `<span><strong>Thread</strong> ${r.meta.mainThread?.name || '?'} pid ${r.meta.mainThread?.pid}/${r.meta.mainThread?.tid}</span>` +
-        `<span><strong>Window</strong> ${ms(r.meta.totalWindowUs)} (init ${ms(r.meta.initWindowUs||0)} / steady ${ms(r.meta.steadyWindowUs||0)})</span>` +
-        `<span><strong>Events</strong> ${r.meta.eventsParsed.toLocaleString()}</span>` +
-        (noiseFrag ? `<span>${noiseFrag}</span>` : '');
-
+      // No separate metadata strip in the page UI — all stats live inside
+      // the markdown block (header bullets) so the copy-paste output is
+      // self-contained.
       const md = buildMarkdown(r);
       mdOutput.textContent = md;
-      mdSize.textContent = (md.length/1024).toFixed(1) + ' KB';
 
       copyMdBtn.onclick = async () => {
         try {
           await navigator.clipboard.writeText(md);
-          copyMdBtn.textContent = 'Copied!';
-          setTimeout(() => { copyMdBtn.textContent = 'Copy markdown'; }, 1500);
-        } catch (e) { copyMdBtn.textContent = 'Copy failed'; }
-      };
-      dlMdBtn.onclick = () => {
-        const blob = new Blob([md], { type: 'text/markdown' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = (selectedFile?.name || 'trace') + '.summary.md';
-        document.body.appendChild(a); a.click(); a.remove();
-        URL.revokeObjectURL(url);
+          copyMdBtn.classList.add('copied');
+          copyIconCopy.style.display = 'none';
+          copyIconCheck.style.display = 'block';
+          copyMdBtn.title = 'Copied!';
+          setTimeout(() => {
+            copyMdBtn.classList.remove('copied');
+            copyIconCopy.style.display = 'block';
+            copyIconCheck.style.display = 'none';
+            copyMdBtn.title = 'Copy markdown';
+          }, 1500);
+        } catch {
+          copyMdBtn.title = 'Copy failed';
+        }
       };
     }
   </script>
