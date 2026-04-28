@@ -104,6 +104,10 @@ a:hover { color: #ffb98d; }
 .icon-pop-wrap .reveal-list li {
   display: block !important;
   width: 100% !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  background: transparent !important;
+  border: 0 !important;
 }
 .icon-pop-wrap .reveal-list a {
   display: block !important;
@@ -112,7 +116,30 @@ a:hover { color: #ffb98d; }
   white-space: nowrap !important;
   overflow: hidden;
   text-overflow: ellipsis;
+  margin: 0 !important;
+  padding: 4px 6px !important;
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 4px !important;
+  line-height: 1.35 !important;
+  min-height: 0 !important;
+  height: auto !important;
 }
+.icon-pop-wrap .reveal-list a:hover {
+  background: rgba(255, 138, 76, 0.08) !important;
+  color: var(--accent) !important;
+}
+.icon-pop-wrap .reveal-list .pop-name {
+  display: block !important;
+  font-size: 12px !important;
+  font-weight: 400 !important;
+  line-height: 1.35 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  background: transparent !important;
+  border: 0 !important;
+}
+.icon-pop-wrap .reveal-list .pop-desc { display: none !important; }
 .icon-pop-wrap.show-pop .reveal-list,
 .icon-pop-wrap:focus-within .reveal-list {
   opacity: 1;
