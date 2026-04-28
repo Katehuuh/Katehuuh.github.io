@@ -99,20 +99,18 @@ a:hover { color: #ffb98d; }
   transition: opacity 0.18s ease, transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
   z-index: 200;
 }
-/* Flipped placement: when there isn't enough room ABOVE the icon, JS adds
-   `.below` so the popover anchors below instead. */
-.icon-pop-wrap.below .reveal-list {
-  bottom: auto;
-  top: calc(100% + 14px);
-  transform: translateX(-50%) translateY(-8px) scale(0.96);
+/* 2-column grid variant — used when a popover has many items (HF lists
+   datasets + models). Keeps the popover from extending too tall. Headers
+   span both columns so the section labels remain clear. */
+.icon-pop-wrap .reveal-list.grid-2col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 4px;
+  row-gap: 0;
+  width: min(380px, calc(100vw - 24px));
 }
-.icon-pop-wrap.below.show-pop .reveal-list {
-  transform: translateX(-50%) translateY(0) scale(1);
-}
-.icon-pop-wrap.below.show-pop::before {
-  bottom: auto;
-  top: 100%;
-  background: linear-gradient(to bottom, rgba(255, 138, 76, 0.55), rgba(255, 138, 76, 0));
+.icon-pop-wrap .reveal-list.grid-2col .section-header {
+  grid-column: 1 / -1;
 }
 .icon-pop-wrap.show-pop .reveal-list,
 .icon-pop-wrap:focus-within .reveal-list {
@@ -711,16 +709,6 @@ function populateHeroPopovers(data) {
       if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; }
       closeOthers(wrap);
       wrap.classList.add('show-pop');
-      // After paint, flip placement to BELOW the icon if the default
-      // (above) would overflow the top of the viewport.
-      requestAnimationFrame(() => {
-        if (!wrap.classList.contains('show-pop')) return;
-        const popover = wrap.querySelector('.reveal-list');
-        if (!popover) return;
-        wrap.classList.remove('below');
-        const r = popover.getBoundingClientRect();
-        if (r.top < 8) wrap.classList.add('below');
-      });
     };
     const scheduleHide = () => {
       if (hideTimer) clearTimeout(hideTimer);
@@ -755,6 +743,9 @@ function populateHeroPopovers(data) {
     if (sets.length || models.length) {
       const ul = document.createElement('ul');
       ul.className = 'reveal-list';
+      // Many items → 2-column grid so the popover stays compact above the icon
+      // instead of extending off the top of the viewport.
+      if (sets.length + models.length > 4) ul.classList.add('grid-2col');
       let idx = 0;
       if (sets.length) {
         ul.appendChild(buildHeader('Datasets', idx++));
