@@ -70,6 +70,51 @@ body {
   font-size: 20px; color: var(--text);
 }
 .year-value .num { color: var(--accent); font-weight: 600; }
+#abdicate-btn {
+  appearance: none;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: var(--text-3);
+  font: inherit;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .14em;
+  padding: 4px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: color .15s, border-color .15s, background-color .15s;
+}
+#abdicate-btn:hover {
+  color: var(--accent);
+  border-color: rgba(255, 138, 76, 0.4);
+  background: rgba(255, 138, 76, 0.06);
+}
+
+/* Risk meter — single bar from max(|stat-50|)*2. Pulses red when high. */
+.risk-row {
+  display: flex; align-items: center; gap: 10px;
+  margin-top: 6px;
+  font-family: var(--serif);
+}
+.risk-label {
+  font-size: 10.5px; color: var(--text-3); text-transform: uppercase;
+  letter-spacing: .18em; flex-shrink: 0;
+}
+.risk-bar {
+  flex: 1; height: 4px; border-radius: 2px;
+  background: rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+}
+.risk-fill {
+  height: 100%; width: 0%;
+  background: linear-gradient(90deg, #6dd49b 0%, #ffb46a 55%, #ff6f6f 100%);
+  transition: width .45s cubic-bezier(.2,.9,.2,1.05);
+}
+.risk-fill.high { animation: risk-pulse 1.4s ease-in-out infinite; }
+@keyframes risk-pulse {
+  0%, 100% { box-shadow: 0 0 0 rgba(255, 111, 111, 0); }
+  50% { box-shadow: 0 0 8px rgba(255, 111, 111, 0.55); }
+}
 
 .factions {
   display: grid;
@@ -389,6 +434,11 @@ body {
     <div class="year-row">
       <span class="year-label">Reign</span>
       <span class="year-value">Year <span class="num" id="year">1</span></span>
+      <button id="abdicate-btn" type="button" title="Abdicate the throne and end your reign" aria-label="Abdicate">Abdicate</button>
+    </div>
+    <div class="risk-row" title="How close any faction is to a deadly extreme">
+      <span class="risk-label">Stability</span>
+      <div class="risk-bar"><div class="risk-fill" id="risk-fill"></div></div>
     </div>
     <div class="factions" id="factions">
       <div class="faction" data-key="church">
@@ -554,6 +604,8 @@ const FALLBACK_CARDS = [
 /* ---------- Elements ---------- */
 const el = {
   year: document.getElementById('year'),
+  riskFill: document.getElementById('risk-fill'),
+  abdicateBtn: document.getElementById('abdicate-btn'),
   factions: document.querySelectorAll('.faction'),
   card: document.getElementById('card'),
   cardImage: document.getElementById('card-image'),
@@ -670,9 +722,32 @@ async function generateCard(state) {
   return JSON.parse(JSON.stringify(choice)); // clone so mutations don't poison the pool
 }
 
+/* Narrative naming — gives the death its evocative one-word label,
+   adapted from the user's earlier prototype. */
+function narrativeName(faction, direction) {
+  if (faction === 'abdication') return 'abdication';
+  if (faction === 'treasury') return direction === 'low' ? 'bankruptcy' : 'decadence';
+  if (faction === 'army')     return 'rebellion';
+  if (faction === 'people')   return 'revolution';
+  if (faction === 'church')   return 'assassination';
+  return 'collapse';
+}
+
 /* End-message LLM call — we want a punchy single line, in-world, mentioning
    how the failed faction did the player in. No JSON wrapping; just plain text. */
 async function generateDeathMessage(faction, direction, year, lastCardMsg) {
+  const fate = narrativeName(faction, direction);
+  if (faction === 'abdication') {
+    const sys = `You write the final epitaph for a Reigns-style medieval game when the monarch voluntarily abdicates. ONE sentence, vivid, in-world, max 28 words. No quotes, no meta.`;
+    const user = `After ${year} year(s) on the throne, the monarch lays down the crown of their own accord. Last decision shown: "${lastCardMsg || 'a quiet hour'}".\nWrite the abdication line.`;
+    try {
+      const raw = await callLLM([{ role: 'system', content: sys }, { role: 'user', content: user }], false);
+      const line = String(raw || '').trim().replace(/^["'`]+|["'`]+$/g, '').replace(/\s+/g, ' ');
+      if (line && line.length >= 12 && line.length <= 280) return line;
+    } catch (err) { console.warn('Abdication message failed:', err); }
+    return 'Crown set down at last; the throne sits empty as a scribe records the date in red ink.';
+  }
+
   const dirText = direction === 'low' ? 'collapsed to nothing' : 'swelled past the breaking point';
   const flavor = {
     church:   direction === 'low' ? 'lost faith and excommunicated the throne' : 'grew fanatical and seized the throne for theocracy',
@@ -681,7 +756,7 @@ async function generateDeathMessage(faction, direction, year, lastCardMsg) {
     treasury: direction === 'low' ? 'was emptied; creditors and mercenaries closed in' : 'overflowed and sparked deadly intrigue among nobles for the coffers',
   }[faction] || 'spelled the kingdom\'s end';
 
-  const sys = `You write the final epitaph for a Reigns-style medieval game. Output exactly ONE sentence — vivid, in-world, present-tense or simple-past, no meta, no JSON, no quotes, max 28 words. Do not name the player. Do not say "you have died" or "your reign has ended" verbatim — describe the manner of overthrow or death.`;
+  const sys = `You write the final epitaph for a Reigns-style medieval game. Output exactly ONE sentence — vivid, in-world, present-tense or simple-past, no meta, no JSON, no quotes, max 28 words. Do not name the player. Do not say "you have died" or "your reign has ended" verbatim — describe the manner of overthrow or death. The fate is "${fate}" — make the line embody that idea.`;
   const user =
     `The faction "${FACTION_LABELS[faction]}" ${dirText} after ${year} year(s) on the throne. Specifically: the ${FACTION_LABELS[faction].toLowerCase()} ${flavor}.\n` +
     `Last decision shown: "${lastCardMsg || 'a routine matter of court'}".\n` +
@@ -751,6 +826,7 @@ function loadImageInto(elem, url) {
 /* ---------- Rendering ---------- */
 function renderMeters(deltas) {
   el.year.textContent = state.year;
+  let maxDeviation = 0;
   for (const node of el.factions) {
     const key = node.dataset.key;
     const v = state.meters[key];
@@ -760,17 +836,21 @@ function renderMeters(deltas) {
     valNode.textContent = v;
     if (v <= 15 || v >= 85) node.classList.add('danger');
     else node.classList.remove('danger');
+    maxDeviation = Math.max(maxDeviation, Math.abs(v - 50));
 
     if (deltas && typeof deltas[key] === 'number' && deltas[key] !== 0) {
       const d = node.querySelector('.delta');
       d.textContent = (deltas[key] > 0 ? '+' : '') + deltas[key];
       d.classList.toggle('bad', deltas[key] < 0);
-      // Restart animation
       d.classList.remove('show');
-      // force reflow
       void d.offsetWidth;
       d.classList.add('show');
     }
+  }
+  if (el.riskFill) {
+    const pct = Math.min(100, maxDeviation * 2);
+    el.riskFill.style.width = pct + '%';
+    el.riskFill.classList.toggle('high', pct >= 70);
   }
 }
 
@@ -1016,6 +1096,15 @@ el.beginBtn.addEventListener('click', async () => {
   await startGame();
 });
 el.restartBtn.addEventListener('click', () => { startGame(); });
+
+if (el.abdicateBtn) {
+  el.abdicateBtn.addEventListener('click', async () => {
+    if (state.ended || state.busy) return;
+    if (!confirm('Abdicate the throne and end your reign now?')) return;
+    state.ended = true;
+    triggerEnd({ faction: 'abdication', direction: 'self' }, state.currentCard?.message || '');
+  });
+}
 
 /* ---------- Event wiring ---------- */
 // Prefer pointer events; fall back to mouse + touch if PointerEvent isn't supported.

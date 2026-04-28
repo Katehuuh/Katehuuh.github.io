@@ -71,36 +71,50 @@ a:hover { color: #ffb98d; }
 .icon-pop-wrap { position: relative; display: inline-flex; }
 .icon-pop-wrap .reveal-list {
   position: absolute;
-  bottom: calc(100% + 18px);
+  bottom: calc(100% + 14px);
   left: 50%;
   list-style: none;
   margin: 0;
-  padding: 7px 12px;
+  padding: 6px 10px;
   display: flex;
   flex-direction: column;
   gap: 0;
   /* `width: max-content` makes the popover hug its longest item exactly
      (one line per item via white-space: nowrap), capped by max-width so
-     it never extends past the viewport. No min-width — short lists like
-     GitHub's 2 items shouldn't have empty space to the right. */
+     it never extends past the viewport. */
   white-space: nowrap;
   width: max-content;
-  max-width: min(380px, calc(100vw - 24px));
-  max-height: calc(100vh - 120px);
+  max-width: min(360px, calc(100vw - 24px));
+  max-height: 50vh;
   overflow-y: auto;
   background: rgba(22, 22, 26, 0.94);
   -webkit-backdrop-filter: blur(14px);
   backdrop-filter: blur(14px);
   border: 1px solid rgba(255, 138, 76, 0.18);
-  border-radius: 12px;
+  border-radius: 10px;
   box-shadow: 0 18px 38px -12px rgba(0, 0, 0, 0.6);
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 400;
   opacity: 0;
   pointer-events: none;
   transform: translateX(-50%) translateY(8px) scale(0.96);
   transition: opacity 0.18s ease, transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
   z-index: 200;
+}
+/* Flipped placement: when there isn't enough room ABOVE the icon, JS adds
+   `.below` so the popover anchors below instead. */
+.icon-pop-wrap.below .reveal-list {
+  bottom: auto;
+  top: calc(100% + 14px);
+  transform: translateX(-50%) translateY(-8px) scale(0.96);
+}
+.icon-pop-wrap.below.show-pop .reveal-list {
+  transform: translateX(-50%) translateY(0) scale(1);
+}
+.icon-pop-wrap.below.show-pop::before {
+  bottom: auto;
+  top: 100%;
+  background: linear-gradient(to bottom, rgba(255, 138, 76, 0.55), rgba(255, 138, 76, 0));
 }
 .icon-pop-wrap.show-pop .reveal-list,
 .icon-pop-wrap:focus-within .reveal-list {
@@ -127,8 +141,6 @@ a:hover { color: #ffb98d; }
   opacity: 0;
   transform: translateY(6px);
   transition: opacity 0.22s ease, transform 0.32s cubic-bezier(0.34, 1.56, 0.64, 1);
-  display: flex;
-  justify-content: center;
 }
 .icon-pop-wrap.show-pop .reveal-list li,
 .icon-pop-wrap:focus-within .reveal-list li {
@@ -142,30 +154,24 @@ a:hover { color: #ffb98d; }
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: rgba(255, 138, 76, 0.9);
-  padding: 3px 0 1px;
+  padding: 4px 0 1px;
   cursor: default;
-  text-align: center;
 }
 .icon-pop-wrap .reveal-list .section-header:first-child { padding-top: 0; }
-/* Each link is its own pill that hugs its text — no half-empty rows when one
-   name is shorter than another. Centered in the row. */
+/* Plain text rows — no per-item bubble, no orange circle around the text.
+   The popover container is the bubble; items inside are just compact rows. */
 .icon-pop-wrap .reveal-list a {
   color: rgba(244, 244, 246, 0.88);
   text-decoration: none;
-  display: inline-block;
-  padding: 3px 10px;
-  margin: 1px 0;
+  display: block;
+  padding: 1px 2px;
   line-height: 1.35;
-  background: rgba(255, 138, 76, 0.04);
-  border: 1px solid rgba(255, 138, 76, 0.14);
-  border-radius: 999px;
-  transition: color 0.14s, background-color 0.14s, border-color 0.14s;
+  border-radius: 3px;
+  transition: color 0.14s, background-color 0.14s;
 }
 .icon-pop-wrap .reveal-list a:hover {
   color: var(--accent);
-  background: rgba(255, 138, 76, 0.12);
-  border-color: rgba(255, 138, 76, 0.36);
-  transform: none;
+  background: rgba(255, 138, 76, 0.08);
 }
 
 /* Inline search field that lives next to the tag-filter pill */
@@ -679,6 +685,16 @@ function populateHeroPopovers(data) {
       if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; }
       closeOthers(wrap);
       wrap.classList.add('show-pop');
+      // After paint, flip placement to BELOW the icon if the default
+      // (above) would overflow the top of the viewport.
+      requestAnimationFrame(() => {
+        if (!wrap.classList.contains('show-pop')) return;
+        const popover = wrap.querySelector('.reveal-list');
+        if (!popover) return;
+        wrap.classList.remove('below');
+        const r = popover.getBoundingClientRect();
+        if (r.top < 8) wrap.classList.add('below');
+      });
     };
     const scheduleHide = () => {
       if (hideTimer) clearTimeout(hideTimer);
