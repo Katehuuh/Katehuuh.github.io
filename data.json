@@ -5,7 +5,7 @@
       "url": "https://katehuuh.github.io/static-p2p-pong/",
       "repo": "https://github.com/Katehuuh/static-p2p-pong",
       "description": "Pong with rollback netcode, peer to peer over WebRTC. No backend, just two browsers and PeerJS finding each other.",
-      "tags": ["webrtc", "p2p", "rollback"],
+      "tags": ["game", "webrtc", "p2p", "rollback"],
       "thumb": "assets/thumbs/static-p2p-pong.jpg",
       "screenshot_from": "https://katehuuh.github.io/static-p2p-pong/"
     },
@@ -14,7 +14,7 @@
       "url": "https://katehuuh.github.io/curvecrash-RL/",
       "repo": "https://github.com/Katehuuh/curvecrash-RL",
       "description": "Trained an RL bot to play CurveCrash. Self-play PPO, IMPALA encoder, exported to TF.js. Race it with arrow keys.",
-      "tags": ["rl", "ppo", "tfjs"],
+      "tags": ["game", "rl", "ppo", "tfjs"],
       "thumb": "assets/thumbs/curvecrash-RL.jpg",
       "screenshot_from": "https://katehuuh.github.io/curvecrash-RL/"
     },
@@ -23,7 +23,7 @@
       "url": "https://katehuuh.github.io/FlexVoice/",
       "repo": "https://github.com/Katehuuh/FlexVoice",
       "description": "Real-time voice to voice. Every link in the chain swaps out. VAD, STT, LLM, TTS, all running local.",
-      "tags": ["voice", "local"],
+      "tags": ["show", "voice", "local"],
       "thumb": "assets/thumbs/FlexVoice.jpg",
       "screenshot_from": "https://katehuuh.github.io/FlexVoice/"
     }

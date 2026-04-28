@@ -324,6 +324,9 @@ section.compact { display: grid; gap: .6rem; }
         </svg>
       </a>
       <a href="https://huggingface.co/Nekochu" aria-label="Hugging Face" title="Hugging Face"><span class="emoji">🤗</span></a>
+      <a href="https://websim.com/" aria-label="Websim" title="Websim — more vibe-coded sites" target="_blank" rel="noopener">
+        <img src="https://websim.com/favicon.ico" alt="" width="22" height="22" loading="lazy" style="display:block;border-radius:4px;background:rgba(255,255,255,.04)">
+      </a>
       <a href="demos/CatBench/" aria-label="CatBench" title="CatBench"><span class="emoji">🐱</span></a>
     </nav>
   </header>
@@ -412,7 +415,10 @@ function setupTagFilter() {
   });
 
   // Mouse-tracked specular: rotate the conic-gradient highlight on the
-  // glass pill so it points roughly at the cursor. rAF-throttled.
+  // glass pill so it points roughly at the cursor. Listener is on `root`
+  // (not document) so the gloss only animates when the cursor is actually
+  // over the pill — no global cursor-following everywhere on the page.
+  // On leave, the angle eases back to the default 90deg.
   let rafId = 0;
   const onMove = (e) => {
     if (rafId) return;
@@ -425,7 +431,8 @@ function setupTagFilter() {
       root.style.setProperty('--gloss-angle', `${ang + 90}deg`);
     });
   };
-  document.addEventListener('mousemove', onMove, { passive: true });
+  root.addEventListener('mousemove', onMove, { passive: true });
+  root.addEventListener('mouseleave', () => root.style.setProperty('--gloss-angle', '90deg'));
 }
 
 function setupSearch() {
