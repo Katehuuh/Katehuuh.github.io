@@ -312,22 +312,19 @@ section h2 {
 .tag-filter button#sort-by-likes {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
-  padding: .4rem .7rem;
-  letter-spacing: 0;
-  font-size: .82rem;
-  text-transform: none;
+  gap: 4px;
+  padding: .35rem .6rem;
 }
-.tag-filter button#sort-by-likes .heart-glyph {
-  font-size: .9rem;
-  line-height: 1;
+.tag-filter button#sort-by-likes .heart-glyph,
+.tag-filter button#sort-by-likes .arrow-glyph {
+  display: block;
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
 }
 .tag-filter button#sort-by-likes .arrow-glyph {
-  font-size: .85rem;
-  line-height: 1;
-  display: inline-block;
-  transition: transform .25s ease, opacity .25s ease;
   opacity: .55;
+  transition: opacity .25s ease, transform .25s ease;
 }
 .tag-filter button#sort-by-likes.active .arrow-glyph {
   opacity: 1;
@@ -528,7 +525,8 @@ section.compact { display: grid; gap: .6rem; }
         <button data-tag="show" class="active" aria-pressed="true">show</button>
         <span class="sort-sep" aria-hidden="true"></span>
         <button id="sort-by-likes" type="button" aria-pressed="false" title="sort by likes (off = newest first)" aria-label="sort by likes">
-          <span class="heart-glyph" aria-hidden="true">♥</span><span class="arrow-glyph" aria-hidden="true">↓</span>
+          <svg class="heart-glyph" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+          <svg class="arrow-glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14m-6-6 6 6 6-6"/></svg>
         </button>
       </span>
       <input type="search" id="site-search" class="inline-search" placeholder="" aria-label="search">
