@@ -290,6 +290,7 @@ section h2 {
 .vibe-card:hover { border-color: var(--accent-line); transform: translateY(-2px); }
 .vibe-card a.card-link { color: inherit; display: flex; flex-direction: column; flex: 1; }
 .vibe-card a.card-link:hover { color: inherit; }
+.thumb-wrap { position: relative; }
 .thumb {
   aspect-ratio: 16 / 9; background: var(--bg-2);
   width: 100%; display: block; object-fit: cover;
@@ -298,6 +299,59 @@ section h2 {
 .thumb.placeholder {
   display: flex; align-items: center; justify-content: center;
   color: var(--text-3); font-family: var(--mono); font-size: .82rem; letter-spacing: .04em;
+}
+
+/* Like button — sits at bottom-right of the thumbnail. Click toggles
+   localStorage flag + bumps a public counter via counterapi.dev. Filled
+   orange when this browser has already liked. Number of total likes is
+   shown next to the heart. */
+.like-btn {
+  position: absolute;
+  bottom: .55rem;
+  right: .55rem;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  padding: .28rem .6rem;
+  background: rgba(20, 20, 24, 0.7);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: rgba(244, 244, 246, 0.85);
+  border-radius: 999px;
+  font-family: var(--mono);
+  font-size: .85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background .18s ease, border-color .18s ease, color .18s ease, transform .12s ease;
+}
+.like-btn:hover {
+  background: rgba(20, 20, 24, 0.92);
+  border-color: var(--accent-line);
+  color: var(--accent);
+}
+.like-btn:active { transform: scale(0.94); }
+.like-btn.liked {
+  background: rgba(255, 138, 76, 0.14);
+  border-color: rgba(255, 138, 76, 0.55);
+  color: var(--accent);
+}
+.like-btn .heart {
+  width: 16px; height: 16px;
+  fill: none; stroke: currentColor; stroke-width: 2;
+  stroke-linecap: round; stroke-linejoin: round;
+  transition: fill .18s ease, transform .2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.like-btn.liked .heart {
+  fill: var(--accent);
+  transform: scale(1.05);
+}
+.like-btn .count {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+  min-width: 1ch;
+  text-align: right;
 }
 .card-body { padding: 1.05rem 1.2rem 1.2rem; }
 .card-body h3 {
@@ -712,12 +766,14 @@ function renderProjects(projects) {
 }
 
 function projectCard(p) {
+  const slug = slugifyForLikes(p.name);
   const thumb = p.thumb
     ? el('img', {
         class: 'thumb', src: p.thumb, alt: '', loading: 'lazy',
         onerror: "this.replaceWith(Object.assign(document.createElement('div'), {className:'thumb placeholder', textContent:'building'}))"
       })
     : el('div', { class: 'thumb placeholder' }, 'building');
+  const thumbWrap = el('div', { class: 'thumb-wrap' }, [thumb, makeLikeButton(slug)]);
   const meta = el('div', { class: 'card-meta' }, [
     p.repo ? el('a', { href: p.repo, title: 'source' }, 'src') : null,
     ...(p.tags || []).map(t => el('span', null, t)),
@@ -727,8 +783,90 @@ function projectCard(p) {
     el('p', null, p.description || ''),
     meta,
   ]);
-  const link = el('a', { class: 'card-link', href: p.url }, [thumb, body]);
+  const link = el('a', { class: 'card-link', href: p.url }, [thumbWrap, body]);
   return el('div', { class: 'vibe-card' }, link);
+}
+
+// ─── Likes (anonymous, no signup) ────────────────────────────────────
+// Counter-only via counterapi.dev (free, no key, /up + /down both work).
+// Per-browser identity via localStorage — same person on different
+// browsers can like multiple times, which is acceptable for a portfolio.
+// (IP-hashing was considered but adds complexity and false-positives on
+//  shared NATs without much real benefit. Easy to add later.)
+const LIKES_NS = 'katehuuh-likes';
+const LIKES_API = 'https://api.counterapi.dev/v1';
+
+function slugifyForLikes(name) {
+  return String(name || '').toLowerCase().replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '') || 'untitled';
+}
+
+function makeLikeButton(slug) {
+  const heart = `<svg class="heart" viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+  </svg>`;
+  const btn = el('button', {
+    class: 'like-btn',
+    type: 'button',
+    'aria-label': `like ${slug}`,
+    title: 'like'
+  });
+  btn.innerHTML = heart + '<span class="count">·</span>';
+  btn.dataset.slug = slug;
+  // Optimistic local state from previous visits
+  if (localStorage.getItem(`liked-${slug}`) === '1') btn.classList.add('liked');
+  // Click handler — must stop propagation since the parent <a> would
+  // navigate to the project URL otherwise.
+  btn.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    handleLikeClick(btn);
+  });
+  // Background fetch of the global count
+  fetchLikeCount(slug).then(n => {
+    btn.querySelector('.count').textContent = n;
+  });
+  return btn;
+}
+
+async function fetchLikeCount(slug) {
+  try {
+    const r = await fetch(`${LIKES_API}/${LIKES_NS}/${slug}/`);
+    if (!r.ok) return 0;
+    const d = await r.json();
+    return d.count || 0;
+  } catch { return 0; }
+}
+
+async function handleLikeClick(btn) {
+  const slug = btn.dataset.slug;
+  if (!slug || btn.dataset.busy === '1') return;
+  btn.dataset.busy = '1';
+  const wasLiked = btn.classList.contains('liked');
+  const countEl = btn.querySelector('.count');
+  const cur = parseInt(countEl.textContent, 10);
+  const curSafe = isFinite(cur) ? cur : 0;
+  // Optimistic UI
+  btn.classList.toggle('liked', !wasLiked);
+  countEl.textContent = wasLiked ? Math.max(0, curSafe - 1) : curSafe + 1;
+  if (wasLiked) localStorage.removeItem(`liked-${slug}`);
+  else localStorage.setItem(`liked-${slug}`, '1');
+  try {
+    const op = wasLiked ? 'down' : 'up';
+    const r = await fetch(`${LIKES_API}/${LIKES_NS}/${slug}/${op}`);
+    if (r.ok) {
+      const d = await r.json();
+      if (typeof d.count === 'number') countEl.textContent = d.count;
+    }
+  } catch {
+    // Network error — revert optimistic UI
+    btn.classList.toggle('liked', wasLiked);
+    countEl.textContent = curSafe;
+    if (wasLiked) localStorage.setItem(`liked-${slug}`, '1');
+    else localStorage.removeItem(`liked-${slug}`);
+  } finally {
+    btn.dataset.busy = '0';
+  }
 }
 
 function renderChips(id, items) {
