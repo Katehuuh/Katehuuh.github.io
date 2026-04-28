@@ -48,7 +48,7 @@ a:hover { color: #ffb98d; }
   margin: 0 auto .9rem;
   box-shadow: 0 0 0 1px var(--line), 0 30px 60px -20px rgba(255, 107, 53, 0.18);
 }
-.icon-nav { display: inline-flex; gap: .45rem; justify-content: center; }
+.icon-nav { display: inline-flex; gap: .25rem; justify-content: center; }
 .icon-nav a {
   display: inline-flex; align-items: center; justify-content: center;
   width: 48px; height: 48px; border-radius: 999px;
@@ -71,7 +71,7 @@ a:hover { color: #ffb98d; }
 .icon-pop-wrap { position: relative; display: inline-flex; }
 .icon-pop-wrap .reveal-list {
   position: absolute;
-  bottom: calc(100% + 22px);     /* sits above the icon, gap reserved for tree trunk */
+  bottom: calc(100% + 18px);     /* sits above the icon, gap covered by ::after hit area */
   left: 50%;
   list-style: none;
   margin: 0;
@@ -80,7 +80,7 @@ a:hover { color: #ffb98d; }
   flex-direction: column;
   gap: 3px;
   min-width: 200px;
-  max-width: 340px;
+  max-width: min(380px, calc(100vw - 32px));   /* responsive: never overflow viewport */
   background: rgba(22, 22, 26, 0.94);
   -webkit-backdrop-filter: blur(14px);
   backdrop-filter: blur(14px);
@@ -89,7 +89,8 @@ a:hover { color: #ffb98d; }
   box-shadow: 0 18px 38px -12px rgba(0, 0, 0, 0.6);
   font-size: 12px;
   font-weight: 400;
-  white-space: nowrap;
+  white-space: normal;            /* allow long names to wrap rather than overflow */
+  word-break: break-word;
   opacity: 0;
   pointer-events: none;
   transform: translateX(-50%) translateY(8px) scale(0.96);
@@ -102,16 +103,23 @@ a:hover { color: #ffb98d; }
   pointer-events: auto;
   transform: translateX(-50%) translateY(0) scale(1);
 }
-/* Trunk: thin orange line from popover bottom down to icon top */
+/* Trunk: thin orange line that ALSO acts as a hover-bridge so the cursor
+   can travel from icon → popover without losing :hover state on the
+   wrapper. Visible 1px line is centered (background); the surrounding
+   30px wide area is invisible-but-hit-active. */
 .icon-pop-wrap .reveal-list::after {
   content: '';
   position: absolute;
   top: 100%;
   left: 50%;
-  width: 1px;
+  transform: translateX(-50%);
+  width: 30px;
   height: 22px;
-  background: linear-gradient(to bottom, rgba(255, 138, 76, 0.55), rgba(255, 138, 76, 0));
-  pointer-events: none;
+  background-image: linear-gradient(to bottom, rgba(255, 138, 76, 0.55), rgba(255, 138, 76, 0));
+  background-position: center top;
+  background-size: 1px 100%;
+  background-repeat: no-repeat;
+  /* pointer-events default = auto — that's what makes this a hit bridge */
 }
 .icon-pop-wrap .reveal-list li {
   position: relative;
@@ -314,29 +322,33 @@ section h2 {
   color: var(--text-3); font-family: var(--mono); font-size: .82rem; letter-spacing: .04em;
 }
 
-/* Like button — sits at bottom-right of the thumbnail. Click toggles
-   localStorage flag + bumps a public counter via counterapi.dev. Filled
-   orange when this browser has already liked. Number of total likes is
+/* Title row containing the h3 plus the like button on the right. */
+.title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .8rem;
+  margin-bottom: .28rem;
+}
+.title-row h3 { margin: 0; flex: 1; min-width: 0; }
+
+/* Like button — sits next to the title (no longer overlay on thumbnail).
+   Click adds your like; orange-filled when you've liked. Public count
    shown next to the heart. */
 .like-btn {
-  position: absolute;
-  bottom: .55rem;
-  right: .55rem;
-  z-index: 2;
   display: inline-flex;
   align-items: center;
   gap: .35rem;
-  padding: .28rem .6rem;
-  background: rgba(20, 20, 24, 0.7);
-  -webkit-backdrop-filter: blur(8px);
-  backdrop-filter: blur(8px);
+  padding: .22rem .55rem;
+  background: rgba(20, 20, 24, 0.5);
   border: 1px solid rgba(255, 255, 255, 0.14);
-  color: rgba(244, 244, 246, 0.85);
+  color: rgba(244, 244, 246, 0.75);
   border-radius: 999px;
   font-family: var(--mono);
-  font-size: .85rem;
+  font-size: .8rem;
   font-weight: 500;
   cursor: pointer;
+  flex-shrink: 0;
   transition: background .18s ease, border-color .18s ease, color .18s ease, transform .12s ease;
 }
 .like-btn:hover {
@@ -489,21 +501,6 @@ section.compact { display: grid; gap: .6rem; }
     </div>
   </section>
 
-  <section class="rise compact" data-d="3">
-    <div class="compact-row">
-      <h3>Datasets</h3>
-      <ul id="datasets-chips" class="chips"></ul>
-    </div>
-    <div class="compact-row">
-      <h3>Models</h3>
-      <ul id="models-chips" class="chips"></ul>
-    </div>
-    <div class="compact-row">
-      <h3>Code</h3>
-      <ul id="repos-chips" class="chips"></ul>
-    </div>
-  </section>
-
 </main>
 
 <script>
@@ -519,9 +516,6 @@ section.compact { display: grid; gap: .6rem; }
   const projects = data.projects || [];
   await liveAugmentDemos(projects);
   renderProjects(projects);
-  renderChips('datasets-chips', data.datasets || []);
-  renderChips('models-chips', data.models || []);
-  renderChips('repos-chips', data.repos || []);
   setupSearch();
   setupTagFilter();
   populateHeroPopovers(data);
@@ -802,17 +796,20 @@ function projectCard(p) {
         onerror: "this.replaceWith(Object.assign(document.createElement('div'), {className:'thumb placeholder', textContent:'building'}))"
       })
     : el('div', { class: 'thumb placeholder' }, 'building');
-  const thumbWrap = el('div', { class: 'thumb-wrap' }, [thumb, makeLikeButton(slug)]);
+  const titleRow = el('div', { class: 'title-row' }, [
+    el('h3', null, p.name),
+    makeLikeButton(slug),
+  ]);
   const meta = el('div', { class: 'card-meta' }, [
     p.repo ? el('a', { href: p.repo, title: 'source' }, 'src') : null,
     ...(p.tags || []).map(t => el('span', null, t)),
   ]);
   const body = el('div', { class: 'card-body' }, [
-    el('h3', null, p.name),
+    titleRow,
     el('p', null, p.description || ''),
     meta,
   ]);
-  const link = el('a', { class: 'card-link', href: p.url }, [thumbWrap, body]);
+  const link = el('a', { class: 'card-link', href: p.url }, [thumb, body]);
   return el('div', { class: 'vibe-card' }, link);
 }
 
@@ -859,9 +856,8 @@ function makeLikeButton(slug) {
   return btn;
 }
 
-// Wait briefly for the puter SDK if it's still loading (it was added to
-// <head> as async). Resolves true if puter is available, false if it never
-// loaded (e.g. puter.com itself blocked by adblock).
+// Wait briefly for the puter SDK to finish loading (it was added to
+// <head> as async). Resolves true if available, false if it never loaded.
 function puterReady(timeoutMs = 1500) {
   if (window.puter && window.puter.net && window.puter.net.fetch) return Promise.resolve(true);
   return new Promise((resolve) => {
@@ -875,15 +871,33 @@ function puterReady(timeoutMs = 1500) {
   });
 }
 
-// Returns the JSON, or null if all transports failed. PUTER FIRST so that
-// adblock-equipped visitors (counterapi.dev on filter lists) get a
-// working request: puter routes via its own relay, the browser's network
-// tab shows a request to puter.com, and the adblock filter on
-// counterapi.dev never matches. Direct fetch is the fallback for the
-// rare case puter SDK itself didn't load.
+// Warm the puter WebSocket BEFORE firing parallel calls. Without this,
+// each of N parallel `puter.net.fetch()` calls tries to open its own WS
+// and N-1 fail with "Still in CONNECTING state" (same race we hit in
+// the sphere demo). One throwaway request establishes the WS, then
+// subsequent calls reuse it.
+let puterWarmPromise = null;
+async function warmPuter() {
+  if (puterWarmPromise) return puterWarmPromise;
+  puterWarmPromise = (async () => {
+    if (!(await puterReady())) return false;
+    try { await puter.net.fetch('https://www.gstatic.com/generate_204'); }
+    catch { /* errors are fine — we just want the WS to open */ }
+    return true;
+  })();
+  return puterWarmPromise;
+}
+
+// Returns the JSON, or null if all transports failed. Routes via puter
+// first to bypass adblock filters on counterapi.dev (uBlock + EasyPrivacy
+// flag it as a tracker; the actual outbound request from puter goes to
+// puter.com which is typically not on filterlists). nvd-chat uses the
+// same trick — it works there because it does ONE call after user gesture,
+// so the WS is already warm. We must warm explicitly here because we fire
+// many parallel like-count fetches on page load.
 async function likesApi(path) {
   const url = `${LIKES_API}/${LIKES_NS}/${path}`;
-  if (await puterReady()) {
+  if (await warmPuter()) {
     try {
       const r = await puter.net.fetch(url);
       if (r.ok) return await r.json();
