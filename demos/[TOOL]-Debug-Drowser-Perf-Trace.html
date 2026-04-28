@@ -579,7 +579,7 @@
         return `  ${trim(i.key)}\n    total=${ms(i.totalUs)} ms x${i.count} | mean=${avg(i.totalUs,i.count)} median=${medMs} p95=${p95Ms} ms | init=${initMs}/x${i.initCount||0} steady=${steadyMs}/x${i.steadyCount||0}`;
       }).join('\n');
       const fmtRender = items => items.slice(0,6).map(i =>
-        `  ${i.name} | total=${ms(i.totalUs)} ms x${i.count} | init=${ms(i.initTotalUs||0)}/x${i.initCount||0} steady=${ms(i.steadyTotalUs||0)}/x${i.steadyCount||0}`
+        `  ${i.name} | total=${ms(i.totalUs)} ms x${i.count} | mean=${avg(i.totalUs,i.count)} ms/call | init=${ms(i.initTotalUs||0)}/x${i.initCount||0} steady=${ms(i.steadyTotalUs||0)}/x${i.steadyCount||0}`
       ).join('\n');
       const fmtLong = items => items.slice(0,5).map(i => {
         const phase = i.isInit ? 'INIT' : 'STEADY';
@@ -606,7 +606,9 @@
         `  - low call count (1-10) ⇒ init-only, regardless of avg\n` +
         `  - high call count (>100) ⇒ steady-state; only HIGH/CRITICAL if p95 is genuinely large\n` +
         `  - mean lies under outliers; trust median and p95 over mean\n` +
-        `  - long tasks marked [INIT] are page-load artifacts → [LOW]; only [STEADY] long tasks block real-time\n\n` +
+        `  - CRITICAL: each row shows BOTH total= and mean=. The total is the SUM across all N calls. The mean (or per-call avg) is the bottleneck signal, not the total. e.g. "Paint total=84 ms x308" means 308 paints averaging 0.27 ms each — that's healthy, NOT a 84 ms paint.\n` +
+        `  - long tasks marked [INIT] are page-load artifacts → [LOW]; only [STEADY] long tasks block real-time\n` +
+        `  - long-task recurrence matters: 1 long task in 7 s of steady = rare → [LOW]; multiple long tasks per second = recurring → [HIGH]/[CRITICAL]\n\n` +
         `Output 3-5 tagged lines in the form: \`[TAG] one-line evidence — concrete fix\`. ` +
         `Reply in under ${AI_MAX_WORDS} words total. End with one final line: \`verdict: <fine | minor wins | needs work>\`. ` +
         `No headers, no preamble, no markdown bold.\n\n` +
@@ -711,27 +713,30 @@
         out.push('');
       }
 
-      // Rendering / Layout
+      // Rendering / Layout — show per-call mean so readers don't misread totals.
+      // (e.g. Paint 84 ms across 308 calls is 0.27 ms/call, healthy.)
       if (r.rendering && r.rendering.length) {
         const max = r.rendering[0].totalUs || 1;
         out.push('## Rendering / Layout');
         out.push('```');
         for (const i of r.rendering) {
+          const mean = (i.totalUs / Math.max(1, i.count) / 1000).toFixed(2);
           out.push(i.name.padEnd(22) + ' [' + bar(i.totalUs, max) + '] ' +
-                   fmt(i.totalUs) + ' ms x' + i.count);
+                   fmt(i.totalUs) + ' ms x' + i.count + ' (mean=' + mean + ')');
         }
         out.push('```');
         out.push('');
       }
 
-      // Top events (real, wrappers excluded)
+      // Top events (real, wrappers excluded) — same mean clarity.
       if (r.topEvents && r.topEvents.length) {
         const max = r.topEvents[0].totalUs || 1;
         out.push('## Top events (wrappers excluded)');
         out.push('```');
         for (const i of r.topEvents.slice(0, 18)) {
+          const mean = (i.totalUs / Math.max(1, i.count) / 1000).toFixed(2);
           out.push(i.name.padEnd(34) + ' [' + bar(i.totalUs, max) + '] ' +
-                   fmt(i.totalUs) + ' ms x' + i.count);
+                   fmt(i.totalUs) + ' ms x' + i.count + ' (mean=' + mean + ')');
         }
         out.push('```');
         out.push('');
