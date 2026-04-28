@@ -180,19 +180,24 @@ a:hover { color: #ffb98d; }
 }
 
 /* 2-column grid for HF popover: shows only project NAMES (descriptions
-   would force columns too narrow). Halves the popover height so it fits
-   above the icon instead of overflowing the viewport top. */
+   would force columns too narrow). Names wrap to 2 lines if needed —
+   never ellipsis-truncated to "Lu…", which is unreadable. */
 .icon-pop-wrap .reveal-list.grid-2col {
   display: grid;
   grid-template-columns: 1fr 1fr;
   grid-auto-flow: row;
   column-gap: 4px;
-  width: min(380px, calc(100vw - 24px));
+  width: min(360px, calc(100vw - 24px));
 }
 .icon-pop-wrap .reveal-list.grid-2col > .section-header {
   grid-column: 1 / -1;
 }
 .icon-pop-wrap .reveal-list.grid-2col .pop-desc { display: none; }
+.icon-pop-wrap .reveal-list.grid-2col .pop-name {
+  white-space: normal;
+  word-break: break-word;
+  line-height: 1.2;
+}
 
 /* Inline search field that lives next to the tag-filter pill */
 .inline-search {
