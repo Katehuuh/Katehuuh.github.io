@@ -79,12 +79,14 @@ a:hover { color: #ffb98d; }
   display: flex;
   flex-direction: column;
   gap: 0;
-  /* Single-column simple list. Width hugs content (max-content) up to a
-     viewport-bound cap. Scrolls if content exceeds 50vh. */
-  white-space: nowrap;
-  width: max-content;
-  max-width: min(340px, calc(100vw - 24px));
+  /* Single-column simple list. Fixed width — wide enough for the longest
+     project name on one line; long names that don't fit wrap to a second
+     line. overflow-x is explicitly hidden so cached/stale CSS can't
+     accidentally produce a horizontal scrollbar. */
+  white-space: normal;
+  width: min(300px, calc(100vw - 24px));
   max-height: 50vh;
+  overflow-x: hidden;
   overflow-y: auto;
   background: rgba(22, 22, 26, 0.94);
   -webkit-backdrop-filter: blur(14px);
