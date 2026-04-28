@@ -7,13 +7,6 @@
   <title>Trace Summarizer</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;600;700&display=swap" rel="stylesheet">
-  <script type="importmap">
-  {
-    "imports": {
-      "@google/genai": "https://aistudiocdn.com/@google/genai@^1.20.0"
-    }
-  }
-  </script>
   <style>
     :root{
       --bg:#0b0b0b; --panel:#111; --fg:#f5f5f5; --muted:#9aa0a6; --line:#222; --accent:#4c8dff;
@@ -179,8 +172,8 @@
     let DEFAULT_LONG_TASK_MS = 50;
     /* @tweakable debounce delay for auto re-run (ms) */
     const DEBOUNCE_MS = 250;
-    /* @tweakable AI model to use */
-    const AI_MODEL = "gemini-2.5-flash";
+    /* @tweakable Pollinations text model — openai (gpt-4o-mini), openai-large (gpt-4o), mistral, qwen, llama, deepseek-reasoner */
+    const AI_MODEL = "openai";
     /* @tweakable max words in AI summary */
     const AI_MAX_WORDS = 100;
 
@@ -534,12 +527,24 @@
     onlyMainEl.addEventListener('change', rerun);
 
     async function getAiSummary(data){
+      // Pollinations.ai: free, no key, no login, CORS-enabled. POST to
+      // /openai with OpenAI-compatible chat-completions schema.
       const prompt = `You are a senior web perf engineer. Summarize primary bottlenecks under ${AI_MAX_WORDS} words with 2-3 actionable bullets.\n` +
         `TopJS: ${JSON.stringify(data.topJs.slice(0,5))}\nRender: ${JSON.stringify(data.rendering.slice(0,5))}\n` +
         `LongTasks: ${JSON.stringify(data.longTasks.slice(0,5))}\nTotal: ${(data.meta.totalWindowUs/1000).toFixed(2)} ms`;
       try {
-        const completion = await websim.chat.completions.create({ messages:[{role:'user',content:prompt}] });
-        return (completion.content || '').trim() || 'No summary produced.';
+        const res = await fetch('https://text.pollinations.ai/openai/v1/chat/completions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: AI_MODEL,
+            messages: [{ role: 'user', content: prompt }],
+          }),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const json = await res.json();
+        const content = json?.choices?.[0]?.message?.content || '';
+        return content.trim() || 'No summary produced.';
       } catch (e) {
         console.error(e); return 'AI summary unavailable.';
       }
