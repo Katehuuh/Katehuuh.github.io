@@ -30,11 +30,6 @@
       "filename": "[SHOW]-SpeakOfMusicBit.html"
     },
     {
-      "name": "[TOOL]-bubble-level-mobile",
-      "type": "file",
-      "filename": "[TOOL]-bubble-level-mobile.html"
-    },
-    {
       "name": "[TOOL]-Claude-Code-history-inspector",
       "type": "file",
       "filename": "[TOOL]-Claude-Code-history-inspector.html"
@@ -50,14 +45,19 @@
       "filename": "[TOOL]-Desloppify.html"
     },
     {
-      "name": "[TOOL]-min-nvd-chat",
-      "type": "file",
-      "filename": "[TOOL]-min-nvd-chat.html"
-    },
-    {
       "name": "[TOOL]-PBR-viewer",
       "type": "file",
       "filename": "[TOOL]-PBR-viewer.html"
+    },
+    {
+      "name": "[TOOL]-bubble-level-mobile",
+      "type": "file",
+      "filename": "[TOOL]-bubble-level-mobile.html"
+    },
+    {
+      "name": "[TOOL]-min-nvd-chat",
+      "type": "file",
+      "filename": "[TOOL]-min-nvd-chat.html"
     }
   ]
 }
