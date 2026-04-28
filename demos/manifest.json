@@ -1,16 +1,16 @@
 {
   "demos": [
     {
-      "name": "[GAME]-Reigns",
-      "type": "file",
-      "filename": "[GAME]-Reigns.html",
-      "first_seen": "2026-04-28T15:42:18+02:00"
-    },
-    {
       "name": "[GAME]-Mom-Chat",
       "type": "file",
       "filename": "[GAME]-Mom-Chat.html",
-      "first_seen": "2026-04-28T11:12:36+02:00"
+      "first_seen": "2026-04-28T12:54:37+02:00"
+    },
+    {
+      "name": "[GAME]-Reigns",
+      "type": "file",
+      "filename": "[GAME]-Reigns.html",
+      "first_seen": "2026-04-28T12:54:37+02:00"
     },
     {
       "name": "[SHOW]-A-Star-Pathfinding-Map",
