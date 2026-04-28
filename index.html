@@ -118,103 +118,49 @@ a:hover { color: #ffb98d; }
 .icon-nav svg { display: block; }
 .icon-nav .emoji { font-size: 1.35rem; line-height: 1; display: inline-block; -webkit-text-fill-color: initial; }
 
-/* Sims-4-style popover. Sits ABOVE the icon, items cascade in from behind
-   the avatar with a stagger. Tree-line connector visually anchors each
-   item back to the icon. The popover is a SIBLING of the link inside
-   `.icon-pop-wrap` (not nested in the <a>) so clicks on items navigate
-   to the item's href, not the icon's href. Hover-stable: the wrapper
-   contains both link and popover so cursor can travel freely. */
+/* Popover anchored above icon; items cascade-in with a stagger. Sibling
+   of the icon-link (not nested) so item clicks don't fire the icon's href.
+   .grid-2col is the wide variant (HF list with >4 items). */
 .icon-pop-wrap { position: relative; display: inline-flex; }
 .icon-pop-wrap .reveal-list {
   position: absolute;
-  bottom: calc(100% + 14px);
-  left: 50%;
-  list-style: none;
-  margin: 0;
-  padding: 6px 8px;
-  /* Block layout (NOT flex) — flex column was causing items to shrink to
-     min-content width when paired with stale `width: max-content` rules.
-     Block + box-sizing + explicit width is bulletproof. */
-  display: block !important;
-  box-sizing: border-box !important;
-  width: 280px !important;
-  max-width: calc(100vw - 24px) !important;
-  white-space: nowrap !important;
+  bottom: calc(100% + 14px); left: 50%;
+  width: 280px;
+  max-width: calc(100vw - 24px);
   max-height: 50vh;
-  overflow-x: hidden;
-  overflow-y: auto;
+  margin: 0; padding: var(--sp-2);
+  list-style: none;
   background: rgba(22, 22, 26, 0.94);
-  -webkit-backdrop-filter: blur(14px);
-  backdrop-filter: blur(14px);
-  border: 1px solid rgba(255, 138, 76, 0.18);
-  border-radius: 10px;
-  box-shadow: 0 18px 38px -12px rgba(0, 0, 0, 0.6);
-  font-size: var(--fs-sm);
-  font-family: var(--sans);
-  font-weight: 400;
-  opacity: 0;
-  pointer-events: none;
+  -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+  border: 1px solid var(--accent-line);
+  border-radius: var(--r-sm);
+  box-shadow: var(--shadow-3);
+  font: 400 var(--fs-sm)/var(--lh-tight) var(--sans);
+  overflow-x: hidden; overflow-y: auto;
+  opacity: 0; pointer-events: none;
   transform: translateX(-50%) translateY(8px) scale(0.96);
-  transition: opacity 0.18s ease, transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: opacity .18s ease, transform .22s cubic-bezier(.34, 1.56, .64, 1);
   z-index: 200;
 }
-.icon-pop-wrap .reveal-list li {
-  display: block !important;
-  width: 100% !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  background: transparent !important;
-  border: 0 !important;
-}
+.icon-pop-wrap .reveal-list li { display: block; }
 .icon-pop-wrap .reveal-list a {
-  display: block !important;
-  width: 100% !important;
-  box-sizing: border-box !important;
-  white-space: nowrap !important;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  margin: 0 !important;
-  padding: var(--sp-1) var(--sp-2) !important;
-  background: transparent !important;
-  border: 0 !important;
-  border-radius: var(--r-xs) !important;
-  line-height: var(--lh-tight) !important;
-  min-height: 0 !important;
-  height: auto !important;
+  display: block;
+  padding: var(--sp-1) var(--sp-2);
+  border-radius: var(--r-xs);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  color: var(--text);
+  transition: background .14s, color .14s;
 }
-.icon-pop-wrap .reveal-list a:hover {
-  background: var(--accent-soft) !important;
-  color: var(--accent) !important;
-}
-.icon-pop-wrap .reveal-list .pop-name {
-  display: block !important;
-  font-size: var(--fs-sm) !important;
-  font-family: var(--sans) !important;
-  font-weight: 400 !important;
-  line-height: var(--lh-tight) !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  background: transparent !important;
-  border: 0 !important;
-}
-.icon-pop-wrap .reveal-list .pop-desc { display: none !important; }
+.icon-pop-wrap .reveal-list a:hover { background: var(--accent-soft); color: var(--accent); }
 
-/* 2-column grid for HF (when items > 4). Halves the popover height so it
-   doesn't extend off the top of the viewport. Section headers span both
-   columns. Wider popover so names don't ellipsis-truncate too aggressively. */
 .icon-pop-wrap .reveal-list.grid-2col {
-  display: grid !important;
-  grid-template-columns: 1fr 1fr !important;
-  column-gap: 4px !important;
-  width: min(380px, calc(100vw - 24px)) !important;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: var(--sp-1);
+  width: min(380px, calc(100vw - 24px));
 }
-.icon-pop-wrap .reveal-list.grid-2col > .section-header {
-  grid-column: 1 / -1 !important;
-}
-.icon-pop-wrap .reveal-list.grid-2col .pop-name {
-  font-size: var(--fs-xs) !important;
-  text-align: left !important;
-}
+.icon-pop-wrap .reveal-list.grid-2col > .section-header { grid-column: 1 / -1; }
+.icon-pop-wrap .reveal-list.grid-2col a { font-size: var(--fs-xs); }
 .icon-pop-wrap.show-pop .reveal-list,
 .icon-pop-wrap:focus-within .reveal-list {
   opacity: 1;
@@ -548,6 +494,10 @@ section h2 {
   border-radius: 999px; color: inherit;
 }
 .card-meta a:hover { border-color: var(--accent-line); color: var(--accent); }
+.card-meta time.card-date {
+  margin-left: auto; border: 0; padding: 0;
+  color: var(--text-3); font-size: var(--fs-xs);
+}
 
 section.compact { display: grid; gap: .6rem; }
 .compact-row {
@@ -753,16 +703,8 @@ function populateHeroPopovers(data) {
     a.href = entry.url;
     a.target = '_blank';
     a.rel = 'noopener';
-    const name = document.createElement('span');
-    name.className = 'pop-name';
-    name.textContent = entry.name;
-    a.appendChild(name);
-    if (entry.description) {
-      const desc = document.createElement('span');
-      desc.className = 'pop-desc';
-      desc.textContent = entry.description;
-      a.appendChild(desc);
-    }
+    a.textContent = entry.name;
+    if (entry.description) a.title = entry.description;
     li.appendChild(a);
     return li;
   };
@@ -974,6 +916,44 @@ async function fetchCached(key, ttl, fetcher) {
   } catch { return null; }
 }
 
+/* First-commit date for a repo file (the demo's HTML), via GitHub API.
+   Cached for 7 days — commit history doesn't change after the fact. */
+async function fetchFirstCommitDate(repoPath) {
+  const host = location.hostname;
+  if (!/\.github\.io$/i.test(host)) return null;
+  const owner = host.split('.')[0], repo = host;
+  const data = await fetchCached(`commit:${repoPath}`, 7 * 24 * 60 * 60_000,
+    () => fetch(`https://api.github.com/repos/${owner}/${repo}/commits?path=${encodeURIComponent(repoPath)}&per_page=100`,
+                { headers: { 'Accept': 'application/vnd.github+json' } }));
+  if (!Array.isArray(data) || !data.length) return null;
+  return data[data.length - 1].commit?.author?.date || null;
+}
+
+function formatRelativeDate(iso) {
+  const days = (Date.now() - new Date(iso)) / 86400000;
+  if (days < 1)   return 'today';
+  if (days < 7)   return `${Math.floor(days)}d ago`;
+  if (days < 30)  return `${Math.floor(days / 7)}w ago`;
+  if (days < 365) return `${Math.floor(days / 30)}mo ago`;
+  return `${Math.floor(days / 365)}y ago`;
+}
+
+/* Fire-and-forget — append a relative date to a card's meta row once the
+   GitHub commits API resolves. Skipped for non-demo projects (no repo file). */
+async function annotateCardDate(card, project) {
+  if (!project.url || !project.url.startsWith('demos/')) return;
+  const filePath = project.url.endsWith('/') ? `${project.url}index.html` : project.url;
+  const iso = await fetchFirstCommitDate(filePath);
+  if (!iso) return;
+  const meta = card.querySelector('.card-meta');
+  if (!meta) return;
+  meta.appendChild(el('time', {
+    class: 'card-date',
+    datetime: iso,
+    title: new Date(iso).toLocaleString(),
+  }, formatRelativeDate(iso)));
+}
+
 function el(tag, attrs, children) {
   const e = document.createElement(tag);
   if (attrs) for (const [k, v] of Object.entries(attrs)) {
@@ -992,7 +972,12 @@ function el(tag, attrs, children) {
 function renderProjects(projects) {
   const root = document.getElementById('projects-grid');
   if (!root) return;
-  root.replaceChildren(...projects.map(projectCard));
+  const cards = projects.map(p => {
+    const card = projectCard(p);
+    annotateCardDate(card, p);
+    return card;
+  });
+  root.replaceChildren(...cards);
 }
 
 function projectCard(p) {
