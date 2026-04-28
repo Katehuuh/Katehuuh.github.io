@@ -75,10 +75,10 @@ a:hover { color: #ffb98d; }
   left: 50%;
   list-style: none;
   margin: 0;
-  padding: 10px 14px;
+  padding: 7px 12px;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 0;
   /* `width: max-content` makes the popover size to its natural content
      width (one line per item via white-space: nowrap), capped by max-width
      so it never extends past the viewport. min-width prevents collapse
@@ -146,7 +146,7 @@ a:hover { color: #ffb98d; }
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: rgba(255, 138, 76, 0.9);
-  padding-top: 4px;
+  padding: 3px 0 1px;
   cursor: default;
 }
 .icon-pop-wrap .reveal-list .section-header:first-child { padding-top: 0; }
@@ -154,7 +154,8 @@ a:hover { color: #ffb98d; }
   color: rgba(244, 244, 246, 0.88);
   text-decoration: none;
   display: block;
-  padding: 2px 0;
+  padding: 1px 0;
+  line-height: 1.35;
   transition: color 0.14s;
 }
 .icon-pop-wrap .reveal-list a:hover { color: var(--accent); transform: none; }
@@ -617,6 +618,11 @@ function populateHeroPopovers(data) {
   // CSS :hover loses state the moment the cursor leaves the icon's box,
   // before it can land on a hover-bridge — JS grace period fixes that.
   const HIDE_DELAY_MS = 220;
+  // Only one popover open at a time — opening one closes the others.
+  const allWraps = [];
+  const closeOthers = (current) => {
+    for (const w of allWraps) if (w !== current) w.__closeNow();
+  };
   const wrapWithPopover = (link, ul) => {
     const wrap = document.createElement('span');
     wrap.className = 'icon-pop-wrap';
@@ -627,6 +633,7 @@ function populateHeroPopovers(data) {
     let hideTimer = null;
     const show = () => {
       if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; }
+      closeOthers(wrap);
       wrap.classList.add('show-pop');
     };
     const scheduleHide = () => {
@@ -636,12 +643,17 @@ function populateHeroPopovers(data) {
         hideTimer = null;
       }, HIDE_DELAY_MS);
     };
+    wrap.__closeNow = () => {
+      if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; }
+      wrap.classList.remove('show-pop');
+    };
     // Listen on the wrapper — events bubble from icon, popover, and bridge.
     wrap.addEventListener('mouseenter', show);
     wrap.addEventListener('mouseleave', scheduleHide);
     // Touch / focus: tap on icon shows, blur hides
     link.addEventListener('focus', show);
     link.addEventListener('blur', scheduleHide);
+    allWraps.push(wrap);
   };
 
   if (ghLink && Array.isArray(data.repos) && data.repos.length) {
