@@ -75,14 +75,15 @@ a:hover { color: #ffb98d; }
   left: 50%;
   list-style: none;
   margin: 0;
-  padding: 8px 10px;
+  padding: 6px 10px;
   display: flex;
   flex-direction: column;
   gap: 0;
-  /* Items are 2-line: project name on top, description below. Width is a
-     comfortable fixed range so descriptions wrap nicely and short names
-     don't sit in a half-empty container. */
-  width: min(320px, calc(100vw - 24px));
+  /* Single-column simple list. Width hugs content (max-content) up to a
+     viewport-bound cap. Scrolls if content exceeds 50vh. */
+  white-space: nowrap;
+  width: max-content;
+  max-width: min(340px, calc(100vw - 24px));
   max-height: 50vh;
   overflow-y: auto;
   background: rgba(22, 22, 26, 0.94);
@@ -141,15 +142,16 @@ a:hover { color: #ffb98d; }
   cursor: default;
 }
 .icon-pop-wrap .reveal-list .section-header:first-child { padding-top: 0; }
-/* Each row is the project NAME stacked over its DESCRIPTION so users don't
-   have to hover the title attribute to read what each link is. The whole
-   row is a single anchor for one click target. */
+/* Simple single-column list. Each row = one project link, names full
+   length on one line. The popover container hugs the longest item exactly
+   (max-content) so there's no half-empty padding on either side. */
 .icon-pop-wrap .reveal-list a {
   color: rgba(244, 244, 246, 0.88);
   text-decoration: none;
   display: block;
-  padding: 5px 8px;
-  border-radius: 5px;
+  padding: 3px 6px;
+  border-radius: 4px;
+  line-height: 1.4;
   transition: color 0.14s, background-color 0.14s;
 }
 .icon-pop-wrap .reveal-list a:hover {
@@ -158,46 +160,9 @@ a:hover { color: #ffb98d; }
 }
 .icon-pop-wrap .reveal-list .pop-name {
   display: block;
-  font-weight: 500;
   font-size: 12px;
-  line-height: 1.25;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
-.icon-pop-wrap .reveal-list .pop-desc {
-  display: block;
-  margin-top: 1px;
-  font-size: 10px;
-  line-height: 1.3;
-  color: rgba(244, 244, 246, 0.5);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.icon-pop-wrap .reveal-list a:hover .pop-desc {
-  color: rgba(244, 244, 246, 0.75);
-}
-
-/* 2-column grid for HF popover: shows only project NAMES (descriptions
-   would force columns too narrow). Names wrap to 2 lines if needed —
-   never ellipsis-truncated to "Lu…", which is unreadable. */
-.icon-pop-wrap .reveal-list.grid-2col {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  grid-auto-flow: row;
-  column-gap: 4px;
-  width: min(360px, calc(100vw - 24px));
-}
-.icon-pop-wrap .reveal-list.grid-2col > .section-header {
-  grid-column: 1 / -1;
-}
-.icon-pop-wrap .reveal-list.grid-2col .pop-desc { display: none; }
-.icon-pop-wrap .reveal-list.grid-2col .pop-name {
-  white-space: normal;
-  word-break: break-word;
-  line-height: 1.2;
-}
+.icon-pop-wrap .reveal-list .pop-desc { display: none; }
 
 /* Inline search field that lives next to the tag-filter pill */
 .inline-search {
@@ -752,10 +717,6 @@ function populateHeroPopovers(data) {
     if (sets.length || models.length) {
       const ul = document.createElement('ul');
       ul.className = 'reveal-list';
-      // Many items → 2-col grid (names only, no descriptions) so popover
-      // fits above the icon. Single-col with descriptions would overflow
-      // the viewport top on the home page where icons sit ~200px down.
-      if (sets.length + models.length > 4) ul.classList.add('grid-2col');
       let idx = 0;
       if (sets.length) {
         ul.appendChild(buildHeader('Datasets', idx++));
