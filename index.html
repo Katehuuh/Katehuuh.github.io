@@ -909,18 +909,29 @@ async function ensurePuterReady() {
 // Returns the JSON, or null if all transports failed. Puter-first to
 // bypass adblock filters on counterapi.dev — the actual outbound request
 // goes to puter.com / puter.cafe (the relay) which isn't on standard
-// filter lists.
+// filter lists. 400 "record not found" means the counter has zero hits
+// yet — treat as { count: 0 } so fresh slugs show 0 instead of hiding.
 async function likesApi(path) {
   const url = `${LIKES_API}/${LIKES_NS}/${path}`;
+  const parse = async (r) => {
+    if (r && r.ok) return await r.json();
+    if (r && r.status === 400) {
+      try {
+        const j = await r.json();
+        if (j && /record not found/i.test(j.message || '')) return { count: 0 };
+      } catch { /* not json */ }
+    }
+    return undefined;
+  };
   if (await ensurePuterReady()) {
     try {
-      const r = await puter.net.fetch(url);
-      if (r && r.ok) return await r.json();
+      const out = await parse(await puter.net.fetch(url));
+      if (out !== undefined) return out;
     } catch { /* fall through */ }
   }
   try {
-    const r = await fetch(url);
-    if (r.ok) return await r.json();
+    const out = await parse(await fetch(url));
+    if (out !== undefined) return out;
   } catch { /* both failed */ }
   return null;
 }
