@@ -59,6 +59,19 @@
     .item-bar{height:100%;background:var(--accent);border-radius:3px;transition:width .2s ease}
     li .name{color:var(--fg)}
     li .meta{font-size:11px;color:var(--muted)}
+
+    /* Markdown-output layout (replaces the panel grid). The point of this
+       page is to dump LLM-ready markdown — render exactly that, with a few
+       quick stats above and an AI verdict box. Everything else is one big
+       <pre> the user can copy. */
+    .md-meta{font-size:12px;color:var(--muted);margin:8px 0 12px;display:flex;flex-wrap:wrap;gap:6px 18px}
+    .md-meta strong{color:var(--fg)}
+    .md-meta .noise{color:#ff8a4c}
+    .ai-box{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:var(--pad);margin-bottom:12px}
+    .ai-box .ai-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px;font-weight:600}
+    #aiSummary{font-family:'SF Mono','JetBrains Mono','Fira Code',Consolas,monospace;font-size:13px;line-height:1.6;white-space:pre-wrap;margin:0;color:var(--fg)}
+    .md-controls{display:flex;gap:8px;align-items:center;margin:0 0 8px}
+    .md-output{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px;font-family:'SF Mono','JetBrains Mono','Fira Code',Consolas,monospace;font-size:11.5px;line-height:1.55;white-space:pre;overflow:auto;color:var(--fg);max-height:70vh;tab-size:2}
   </style>
 </head>
 <body>
@@ -104,60 +117,18 @@
       <div class="bar"><div class="bar-fill" id="barFill" style="width:0%"></div></div>
     </div>
 
-    <div class="grid" id="summary" hidden>
-      <div class="panel" style="grid-column: span 12;">
-        <h3><span style="display:inline-flex;align-items:center;gap:8px">
-          <span class="pill">AI Summary</span>
-        </span></h3>
-        <div id="aiSummary" class="muted">Analyzing...</div>
+    <div id="summary" hidden>
+      <div class="md-meta" id="metaLine"></div>
+      <div class="ai-box">
+        <div class="ai-label">AI verdict</div>
+        <pre id="aiSummary">Analyzing…</pre>
       </div>
-      <div class="panel" style="grid-column: span 12;">
-        <div class="row">
-          <h3>Export</h3>
-          <div style="display:flex;gap:8px">
-            <button id="copyCsv" class="ghost">Copy CSV</button>
-            <button id="copyLog" class="ghost">Copy .log</button>
-            <button id="downloadCsv" class="ghost">Download CSV</button>
-          </div>
-        </div>
-        <pre id="plainLog" class="mono" style="white-space:pre-wrap;margin-top:8px;color:var(--muted)"></pre>
+      <div class="md-controls">
+        <button class="primary" id="copyMd">Copy markdown</button>
+        <button class="ghost" id="dlMd">Download .md</button>
+        <span class="muted mono" id="mdSize" style="margin-left:auto;font-size:11px"></span>
       </div>
-      <div class="panel stats" id="fileInfo"></div>
-      <div class="panel stats" id="threadInfo"></div>
-      <div class="panel stats" id="timeInfo"></div>
-
-      <div class="panel list wide">
-        <h3>Top JavaScript</h3>
-        <ol id="topJs"></ol>
-      </div>
-      <div class="panel list slim">
-        <h3>Top Events</h3>
-        <ol id="topEvents"></ol>
-      </div>
-
-      <div class="panel list slim">
-        <h3>Long Tasks</h3>
-        <ol id="longTasks"></ol>
-      </div>
-      <div class="panel list wide">
-        <h3>Rendering & Layout</h3>
-        <ol id="rendering"></ol>
-      </div>
-
-      <div class="panel list">
-        <div class="row">
-          <h3>Three.js Hotspots</h3>
-          <button id="downloadCsv" class="ghost">Download CSV</button>
-        </div>
-        <ol id="threeHotspots"></ol>
-      </div>
-
-      <div class="panel">
-        <details>
-          <summary>Debug aggregates</summary>
-          <pre id="rawOut" class="mono" style="white-space:pre-wrap"></pre>
-        </details>
-      </div>
+      <pre id="mdOutput" class="md-output"></pre>
     </div>
   </div>
 
@@ -196,21 +167,12 @@
     const longTaskMsEl = document.getElementById('longTaskMs');
     const onlyMainEl = document.getElementById('onlyMain');
     const aiSummaryEl = document.getElementById('aiSummary');
-
     const summary = document.getElementById('summary');
-    const fileInfo = document.getElementById('fileInfo');
-    const threadInfo = document.getElementById('threadInfo');
-    const timeInfo = document.getElementById('timeInfo');
-    const topJs = document.getElementById('topJs');
-    const longTasks = document.getElementById('longTasks');
-    const rendering = document.getElementById('rendering');
-    const topEvents = document.getElementById('topEvents');
-    const threeHotspots = document.getElementById('threeHotspots');
-    const rawOut = document.getElementById('rawOut');
-    const downloadCsv = document.getElementById('downloadCsv');
-    const copyCsvBtn = document.getElementById('copyCsv');
-    const copyLogBtn = document.getElementById('copyLog');
-    const plainLog = document.getElementById('plainLog');
+    const metaLine = document.getElementById('metaLine');
+    const mdOutput = document.getElementById('mdOutput');
+    const mdSize = document.getElementById('mdSize');
+    const copyMdBtn = document.getElementById('copyMd');
+    const dlMdBtn = document.getElementById('dlMd');
 
     let selectedFile = null;
 
@@ -656,129 +618,169 @@
       }
     }
 
-    function buildCsv(r){
-      const rows = [['Section','Operation Name','Total Time (ms)','Avg Time (ms)','Occurrences']];
-      const push = (section, name, totalUs, count)=> rows.push([section, name, (totalUs/1000).toFixed(3), (totalUs/1000/Math.max(1,count)).toFixed(3), count]);
-      r.topJs.forEach(i=>push('TopJS', i.key, i.totalUs, i.count));
-      r.rendering.forEach(i=>push('Rendering', i.name, i.totalUs, i.count));
-      r.topEvents.forEach(i=>push('TopEvents', i.name, i.totalUs, i.count));
-      r.three.forEach(i=>push('Three', i.key, i.totalUs, i.count));
-      r.longTasks.forEach(i=>rows.push(['LongTask', i.name, (i.durUs/1000).toFixed(3), (i.durUs/1000).toFixed(3), 1]));
-      return rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
-    }
-    function buildLog(r){
-      const fmt = us => (us/1000).toFixed(3);
-      const enriched = (i) => {
-        const parts = [`total=${fmt(i.totalUs)}ms`, `mean=${fmt(i.totalUs/Math.max(1,i.count))}ms`, `x${i.count}`];
-        if (i.medianUs != null) parts.push(`med=${fmt(i.medianUs)}ms`, `p95=${fmt(i.p95Us)}ms`);
-        if (i.steadyCount != null && (i.initCount + i.steadyCount > 0)) {
-          parts.push(`init=${fmt(i.initTotalUs||0)}/x${i.initCount||0}`,
-                     `steady=${fmt(i.steadyTotalUs||0)}/x${i.steadyCount||0}`);
-        }
-        return parts.join(' | ');
-      };
-      const tStart = (r.meta && r.meta.traceMinUs) || 0;
-      const parts = [];
-      parts.push('# Operations (sorted within sections)');
-      if (r.meta && r.meta.noiseDropCount) {
-        parts.push(`# noise pre-filtered: ${fmt(r.meta.noiseDropTotalUs)} ms across ${r.meta.noiseDropCount} events ` +
-                   `(chrome-extension://*, userscript.html, websim host-CDN/analytics)`);
-      }
-      if (r.meta && r.meta.initWindowUs != null) {
-        parts.push(`# init window: ${fmt(r.meta.initWindowUs)} ms | steady window: ${fmt(r.meta.steadyWindowUs)} ms`);
-      }
-      r.topJs.forEach(i=>parts.push(`TopJS: ${i.key} | ${enriched(i)}`));
-      r.rendering.forEach(i=>parts.push(`Rendering: ${i.name} | ${enriched(i)}`));
-      r.topEvents.forEach(i=>parts.push(`TopEvents: ${i.name} | ${enriched(i)}`));
-      if (r.wrappers && r.wrappers.length) {
-        parts.push('# Wrappers (their dur = sum of children, do NOT rank)');
-        r.wrappers.forEach(i=>parts.push(`Wrapper: ${i.name} | ${enriched(i)}`));
-      }
-      r.three.forEach(i=>parts.push(`Three: ${i.key} | ${enriched(i)}`));
-      r.longTasks.forEach(i=>{
-        const phase = i.isInit ? 'INIT' : 'STEADY';
-        parts.push(`LongTask: [${phase}] ${i.name} | dur=${fmt(i.durUs)}ms at t+${fmt((i.startUs||0)-tStart)}ms`);
-      });
-      return parts.join('\n');
+    /* ASCII bar — solid block + dotted remainder. Width is character count. */
+    function bar(value, max, width=22) {
+      if (max <= 0) return ' '.repeat(width);
+      const filled = Math.max(0, Math.min(width, Math.round((value / max) * width)));
+      return '█'.repeat(filled) + '░'.repeat(width - filled);
     }
 
-    function renderList(ol, items, formatter, totalKey='totalUs'){
-      ol.innerHTML = '';
-      if(!items?.length) return;
-      const max = Math.max(...items.map(i => (i[totalKey] ?? i.totalUs ?? 0)));
-      items.forEach((i) => {
-        const val = i[totalKey] ?? i.totalUs ?? 0;
-        const pct = max ? Math.max(2, (val / max) * 100) : 0;
-        const li = document.createElement('li');
-        li.innerHTML = `
-          <div class="row" style="gap:12px">
-            <div style="flex:1;min-width:0">
-              <div class="name">${formatter.primary(i)}</div>
-              <div class="meta">${formatter.meta(i)}</div>
-            </div>
-            <div class="item-bar-bg"><div class="item-bar" style="width:${pct.toFixed(1)}%"></div></div>
-          </div>`;
-        ol.appendChild(li);
-      });
+    /* The whole point of this page: dump a clean, copy-paste-ready markdown
+       block that any LLM (Claude, ChatGPT, local Ollama) can ingest and reason
+       over. ASCII bars give a human reader proportions at a glance without
+       needing the page UI to be visible. Sections are stable headings so a
+       downstream LLM can address them by name ("look at TopJS line 3"). */
+    function buildMarkdown(r) {
+      const fmt = us => (us/1000).toFixed(2);
+      const tStart = (r.meta && r.meta.traceMinUs) || 0;
+      const out = [];
+
+      // Header / summary
+      out.push('# Trace summary');
+      out.push('');
+      out.push('- **File**: `' + (selectedFile && selectedFile.name || '?') + '` (' +
+               ((selectedFile && selectedFile.size || 0)/1024/1024).toFixed(1) + ' MB)');
+      out.push('- **Thread**: ' + (r.meta.mainThread && r.meta.mainThread.name || '?') +
+               ' (pid ' + (r.meta.mainThread && r.meta.mainThread.pid) +
+               ', tid ' + (r.meta.mainThread && r.meta.mainThread.tid) + ')');
+      out.push('- **Window**: ' + fmt(r.meta.totalWindowUs) + ' ms total | init ' +
+               fmt(r.meta.initWindowUs||0) + ' ms | steady ' + fmt(r.meta.steadyWindowUs||0) + ' ms');
+      out.push('- **Main thread time**: ' + fmt(r.meta.totalMainDurUs) + ' ms');
+      out.push('- **Events**: ' + r.meta.eventsParsed.toLocaleString() +
+               (r.meta.noiseDropCount ? ' (' + r.meta.noiseDropCount + ' noise events / ' +
+                fmt(r.meta.noiseDropTotalUs) + ' ms filtered: chrome-extension, userscript, host-CDN)' : ''));
+      out.push('');
+
+      // Top JS (page code, noise filtered)
+      if (r.topJs && r.topJs.length) {
+        const max = r.topJs[0].totalUs || 1;
+        out.push('## Top JavaScript (page code, noise-filtered)');
+        out.push('```');
+        for (const i of r.topJs) {
+          const trimmed = i.key.length > 44 ? i.key.slice(0,41) + '...' : i.key;
+          const padded = trimmed.padEnd(44);
+          const meanS = fmt(i.totalUs/Math.max(1,i.count));
+          const medS = fmt(i.medianUs||0);
+          const p95S = fmt(i.p95Us||0);
+          const phase = (i.steadyCount > 0)
+            ? `init=${fmt(i.initTotalUs||0)}/x${i.initCount||0}, steady=${fmt(i.steadyTotalUs||0)}/x${i.steadyCount||0}`
+            : `init-only x${i.initCount||0}`;
+          out.push(padded + ' [' + bar(i.totalUs, max) + '] ' + fmt(i.totalUs) + ' ms x' + i.count +
+                   ' | mean=' + meanS + ' med=' + medS + ' p95=' + p95S + ' | ' + phase);
+        }
+        out.push('```');
+        out.push('');
+      }
+
+      // Long tasks (with init/steady marker)
+      if (r.longTasks && r.longTasks.length) {
+        out.push('## Long tasks (above ' + ((r.longTasks[0]?.durUs||0) ? '50' : '?') + ' ms threshold)');
+        out.push('```');
+        for (const t of r.longTasks) {
+          const phase = t.isInit ? 'INIT  ' : 'STEADY';
+          out.push('[' + phase + '] ' + t.name.padEnd(28) + ' dur=' + fmt(t.durUs) + ' ms at t+' +
+                   fmt((t.startUs||0)-tStart) + ' ms');
+        }
+        out.push('```');
+        out.push('');
+      }
+
+      // Rendering / Layout
+      if (r.rendering && r.rendering.length) {
+        const max = r.rendering[0].totalUs || 1;
+        out.push('## Rendering / Layout');
+        out.push('```');
+        for (const i of r.rendering) {
+          out.push(i.name.padEnd(22) + ' [' + bar(i.totalUs, max) + '] ' +
+                   fmt(i.totalUs) + ' ms x' + i.count);
+        }
+        out.push('```');
+        out.push('');
+      }
+
+      // Top events (real, wrappers excluded)
+      if (r.topEvents && r.topEvents.length) {
+        const max = r.topEvents[0].totalUs || 1;
+        out.push('## Top events (wrappers excluded)');
+        out.push('```');
+        for (const i of r.topEvents.slice(0, 18)) {
+          out.push(i.name.padEnd(34) + ' [' + bar(i.totalUs, max) + '] ' +
+                   fmt(i.totalUs) + ' ms x' + i.count);
+        }
+        out.push('```');
+        out.push('');
+      }
+
+      // Wrappers (transparency, do not rank)
+      if (r.wrappers && r.wrappers.length) {
+        out.push('## Wrappers (do NOT rank — their dur is the sum of children)');
+        out.push('```');
+        for (const i of r.wrappers) {
+          out.push(i.name.padEnd(28) + ' ' + fmt(i.totalUs) + ' ms x' + i.count);
+        }
+        out.push('```');
+        out.push('');
+      }
+
+      // Three.js (if any)
+      if (r.three && r.three.length) {
+        out.push('## Three.js hotspots');
+        out.push('```');
+        for (const i of r.three) {
+          const trimmed = i.key.length > 60 ? i.key.slice(0,57) + '...' : i.key;
+          out.push(trimmed.padEnd(60) + ' ' + fmt(i.totalUs) + ' ms x' + i.count);
+        }
+        out.push('```');
+        out.push('');
+      }
+
+      // Filtered noise (transparency)
+      if (r.topJsNoise && r.topJsNoise.length) {
+        out.push('## Filtered noise (chrome-extension, userscript, host-CDN/analytics)');
+        out.push('```');
+        for (const i of r.topJsNoise.slice(0, 8)) {
+          const trimmed = i.key.length > 70 ? i.key.slice(0,67) + '...' : i.key;
+          out.push(trimmed + ' | ' + fmt(i.totalUs) + ' ms x' + i.count);
+        }
+        out.push('```');
+        out.push('');
+      }
+
+      return out.join('\n');
     }
 
     function renderResults(r) {
-      document.getElementById('summary').hidden = false;
-      const csvText = buildCsv(r);
-      const logText = buildLog(r);
-      plainLog.textContent = logText;
+      summary.hidden = false;
+      // Quick metadata strip above the AI box
+      const noiseFrag = r.meta.noiseDropCount
+        ? `<span class="noise">${r.meta.noiseDropCount} noise events / ${ms(r.meta.noiseDropTotalUs)} filtered</span>`
+        : '';
+      metaLine.innerHTML =
+        `<span><strong>File</strong> ${selectedFile?.name || '—'} (${(selectedFile.size/1024/1024).toFixed(1)} MB)</span>` +
+        `<span><strong>Thread</strong> ${r.meta.mainThread?.name || '?'} pid ${r.meta.mainThread?.pid}/${r.meta.mainThread?.tid}</span>` +
+        `<span><strong>Window</strong> ${ms(r.meta.totalWindowUs)} (init ${ms(r.meta.initWindowUs||0)} / steady ${ms(r.meta.steadyWindowUs||0)})</span>` +
+        `<span><strong>Events</strong> ${r.meta.eventsParsed.toLocaleString()}</span>` +
+        (noiseFrag ? `<span>${noiseFrag}</span>` : '');
 
-      fileInfo.innerHTML = `
-        <div class="stat"><div class="label">File</div>
-          <div class="value">${selectedFile?.name || '—'}</div>
-          <div class="muted mono">${(selectedFile.size/1024/1024).toFixed(1)} MB</div>
-        </div>`;
+      const md = buildMarkdown(r);
+      mdOutput.textContent = md;
+      mdSize.textContent = (md.length/1024).toFixed(1) + ' KB';
 
-      threadInfo.innerHTML = `
-        <div class="stat"><div class="label">Thread</div>
-          <div class="value">${r.meta.mainThread?.name || 'unknown'}</div>
-          <div class="muted mono">pid ${r.meta.mainThread?.pid}, tid ${r.meta.mainThread?.tid}</div>
-        </div>`;
-
-      timeInfo.innerHTML = `
-        <div class="stat"><div class="label">Window / Work</div>
-          <div class="value mono">${ms(r.meta.totalWindowUs)}</div>
-          <div class="muted mono">Main 'X' total: ${ms(r.meta.totalMainDurUs)}</div>
-          ${r.meta.initWindowUs != null ? `<div class="muted mono">Init: ${ms(r.meta.initWindowUs)} | Steady: ${ms(r.meta.steadyWindowUs)}</div>` : ''}
-          <div class="muted mono">Events: ${r.meta.eventsParsed.toLocaleString()}${r.meta.noiseDropCount ? ` <span style="color:#ff8a4c">(${r.meta.noiseDropCount} noise events / ${ms(r.meta.noiseDropTotalUs)} filtered)</span>` : ''}</div>
-        </div>`;
-
-      renderList(topJs, r.topJs, {
-        primary: (i)=> i.key,
-        meta: (i)=> `${ms(i.totalUs)} (${i.count}×)`
-      });
-      renderList(longTasks, r.longTasks, {
-        primary: (i)=> `${i.name} (tid ${i.tid})`,
-        meta: (i)=> `${ms(i.durUs)} at ${ms(i.startUs)}`
-      }, 'durUs');
-      renderList(rendering, r.rendering, {
-        primary: (i)=> i.name,
-        meta: (i)=> `${ms(i.totalUs)} (${i.count}×)`
-      });
-      renderList(topEvents, r.topEvents, {
-        primary: (i)=> i.name,
-        meta: (i)=> `${ms(i.totalUs)} (${i.count}×)`
-      });
-      renderList(threeHotspots, r.three, {
-        primary: (i)=> i.key,
-        meta: (i)=> `${ms(i.totalUs)} (${i.count}×)`
-      });
-
-      rawOut.textContent = JSON.stringify(r.debug, null, 2);
-
-      copyCsvBtn.onclick = async ()=>{ await navigator.clipboard.writeText(csvText); };
-      copyLogBtn.onclick = async ()=>{ await navigator.clipboard.writeText(logText); };
-      downloadCsv.onclick = () => {
-        const blob = new Blob([csvText], { type: 'text/csv' });
+      copyMdBtn.onclick = async () => {
+        try {
+          await navigator.clipboard.writeText(md);
+          copyMdBtn.textContent = 'Copied!';
+          setTimeout(() => { copyMdBtn.textContent = 'Copy markdown'; }, 1500);
+        } catch (e) { copyMdBtn.textContent = 'Copy failed'; }
+      };
+      dlMdBtn.onclick = () => {
+        const blob = new Blob([md], { type: 'text/markdown' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
-        a.href = url; a.download = `${selectedFile?.name || 'trace'}.summary.csv`;
-        document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+        a.href = url;
+        a.download = (selectedFile?.name || 'trace') + '.summary.md';
+        document.body.appendChild(a); a.click(); a.remove();
+        URL.revokeObjectURL(url);
       };
     }
   </script>
