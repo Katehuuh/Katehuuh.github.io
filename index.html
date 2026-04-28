@@ -82,6 +82,9 @@
   --shadow-3:    0 18px 38px -12px rgba(0, 0, 0, 0.6);
   --shadow-glow: 0 0 28px -6px rgba(255, 107, 53, 0.36);
 
+  /* === Motion ============================================================ */
+  --ease-bounce: cubic-bezier(.34, 1.56, .64, 1);   /* overshoot — popovers, cards on hover */
+
   /* === Layout ============================================================ */
   --max:    980px;
 }
@@ -142,7 +145,12 @@ a:hover { color: #ffb98d; }
   transition: opacity .18s ease, transform .22s cubic-bezier(.34, 1.56, .64, 1);
   z-index: 200;
 }
-.icon-pop-wrap .reveal-list li { display: block; }
+.icon-pop-wrap .reveal-list li {
+  position: relative;
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity .22s ease, transform .32s var(--ease-bounce);
+}
 .icon-pop-wrap .reveal-list a {
   display: block;
   padding: var(--sp-1) var(--sp-2);
@@ -152,6 +160,15 @@ a:hover { color: #ffb98d; }
   transition: background .14s, color .14s;
 }
 .icon-pop-wrap .reveal-list a:hover { background: var(--accent-soft); color: var(--accent); }
+.icon-pop-wrap .reveal-list .section-header {
+  padding: var(--sp-1) 0 2px;
+  font: 600 var(--fs-xs)/1 var(--mono);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--accent);
+  cursor: default;
+}
+.icon-pop-wrap .reveal-list .section-header:first-child { padding-top: 0; }
 
 .icon-pop-wrap .reveal-list.grid-2col {
   display: grid;
@@ -161,31 +178,12 @@ a:hover { color: #ffb98d; }
 }
 .icon-pop-wrap .reveal-list.grid-2col > .section-header { grid-column: 1 / -1; }
 .icon-pop-wrap .reveal-list.grid-2col a { font-size: var(--fs-xs); }
+
 .icon-pop-wrap.show-pop .reveal-list,
 .icon-pop-wrap:focus-within .reveal-list {
   opacity: 1;
   pointer-events: auto;
   transform: translateX(-50%) translateY(0) scale(1);
-}
-/* Tree-line connector — purely visual, sized to icon width so neighboring
-   wrappers don't overlap their bridges. Hover-stability is handled by the
-   JS grace period (220ms after mouseleave) — no need for a wide bridge. */
-.icon-pop-wrap.show-pop::before {
-  content: '';
-  position: absolute;
-  bottom: 100%;
-  left: 50%;
-  width: 1px;
-  height: 18px;
-  background: linear-gradient(to top, rgba(255, 138, 76, 0.55), rgba(255, 138, 76, 0));
-  pointer-events: none;
-  z-index: 199;
-}
-.icon-pop-wrap .reveal-list li {
-  position: relative;
-  opacity: 0;
-  transform: translateY(6px);
-  transition: opacity 0.22s ease, transform 0.32s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 .icon-pop-wrap.show-pop .reveal-list li,
 .icon-pop-wrap:focus-within .reveal-list li {
@@ -193,37 +191,15 @@ a:hover { color: #ffb98d; }
   transform: translateY(0);
   transition-delay: var(--idx, 0ms);
 }
-.icon-pop-wrap .reveal-list .section-header {
-  font-size: 9.5px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: rgba(255, 138, 76, 0.9);
-  padding: 4px 0 1px;
-  cursor: default;
+.icon-pop-wrap.show-pop::before {
+  content: '';
+  position: absolute;
+  bottom: 100%; left: 50%;
+  width: 1px; height: 18px;
+  background: linear-gradient(to top, var(--accent-line), transparent);
+  pointer-events: none;
+  z-index: 199;
 }
-.icon-pop-wrap .reveal-list .section-header:first-child { padding-top: 0; }
-/* Simple single-column list. Each row = one project link, names full
-   length on one line. The popover container hugs the longest item exactly
-   (max-content) so there's no half-empty padding on either side. */
-.icon-pop-wrap .reveal-list a {
-  color: rgba(244, 244, 246, 0.88);
-  text-decoration: none;
-  display: block;
-  padding: 3px 6px;
-  border-radius: 4px;
-  line-height: 1.4;
-  transition: color 0.14s, background-color 0.14s;
-}
-.icon-pop-wrap .reveal-list a:hover {
-  color: var(--accent);
-  background: rgba(255, 138, 76, 0.08);
-}
-.icon-pop-wrap .reveal-list .pop-name {
-  display: block;
-  font-size: 12px;
-}
-.icon-pop-wrap .reveal-list .pop-desc { display: none; }
 
 /* Inline search field that lives next to the tag-filter pill */
 .inline-search {
@@ -617,7 +593,7 @@ section.compact { display: grid; gap: .6rem; }
 (async () => {
   let data;
   try {
-    data = await fetch('data.json', { cache: 'no-store' }).then(r => r.json());
+    data = await fetch('data.json').then(r => r.json());
   } catch (e) {
     console.error('failed to load data.json', e);
     return;
@@ -876,7 +852,7 @@ async function loadDemosFromApi() {
   if (!/\.github\.io$/i.test(host)) return null;
   const owner = host.split('.')[0];
   const repo = host;
-  const ttl = 5 * 60_000;
+  const ttl = 60 * 60_000;
 
   const contents = await fetchCached(`demos:${owner}/${repo}`, ttl,
     () => fetch(`https://api.github.com/repos/${owner}/${repo}/contents/demos`,
@@ -917,16 +893,26 @@ async function fetchCached(key, ttl, fetcher) {
 }
 
 /* First-commit date for a repo file (the demo's HTML), via GitHub API.
-   Cached for 7 days — commit history doesn't change after the fact. */
+   Cached in localStorage forever — a file's first-touch commit doesn't change. */
 async function fetchFirstCommitDate(repoPath) {
   const host = location.hostname;
   if (!/\.github\.io$/i.test(host)) return null;
+  const cacheKey = `commit:${repoPath}`;
+  const stored = localStorage.getItem(cacheKey);
+  if (stored) return stored;
   const owner = host.split('.')[0], repo = host;
-  const data = await fetchCached(`commit:${repoPath}`, 7 * 24 * 60 * 60_000,
-    () => fetch(`https://api.github.com/repos/${owner}/${repo}/commits?path=${encodeURIComponent(repoPath)}&per_page=100`,
-                { headers: { 'Accept': 'application/vnd.github+json' } }));
-  if (!Array.isArray(data) || !data.length) return null;
-  return data[data.length - 1].commit?.author?.date || null;
+  try {
+    const r = await fetch(
+      `https://api.github.com/repos/${owner}/${repo}/commits?path=${encodeURIComponent(repoPath)}&per_page=100`,
+      { headers: { 'Accept': 'application/vnd.github+json' } }
+    );
+    if (!r.ok) return null;
+    const data = await r.json();
+    if (!Array.isArray(data) || !data.length) return null;
+    const iso = data[data.length - 1].commit?.author?.date;
+    if (iso) localStorage.setItem(cacheKey, iso);
+    return iso || null;
+  } catch { return null; }
 }
 
 function formatRelativeDate(iso) {
@@ -1145,14 +1131,24 @@ function withTimeout(p, ms, label) {
   ]);
 }
 
+// Skip the warm-up entirely if a previous session failed — saves a 20s
+// retry storm for users where puter.cafe is blocked. Re-attempts every
+// 24h in case the block clears.
+const PUTER_BROKEN_KEY = 'puter-broken-until';
+function puterRecentlyBroken() {
+  const until = parseInt(localStorage.getItem(PUTER_BROKEN_KEY) || '0', 10);
+  return Date.now() < until;
+}
+function markPuterBroken() {
+  localStorage.setItem(PUTER_BROKEN_KEY, String(Date.now() + 24 * 60 * 60_000));
+}
+
 let puterReadyPromise = null;
 async function ensurePuterReady() {
   if (puterReadyPromise) return puterReadyPromise;
+  if (puterRecentlyBroken()) return Promise.resolve(false);
   puterReadyPromise = (async () => {
-    if (!(await puterReady())) return false;
-    // Warm the WS with a benign request. Retry up to 4x with a per-call
-    // timeout so a hanging relay can't block the entire page-load fetch.
-    // 5s per attempt — slow-connection-tolerant; total worst-case 20s.
+    if (!(await puterReady())) { markPuterBroken(); return false; }
     for (let i = 0; i < 4; i++) {
       try {
         const r = await withTimeout(puter.net.fetch('https://api.github.com/'), 5000, 'puter warmup');
@@ -1160,6 +1156,7 @@ async function ensurePuterReady() {
       } catch { /* retry */ }
       await new Promise(r => setTimeout(r, 250 + i * 200));
     }
+    markPuterBroken();
     return false;
   })();
   return puterReadyPromise;
@@ -1234,13 +1231,6 @@ async function handleLikeClick(btn) {
   btn.dataset.busy = '0';
 }
 
-function renderChips(id, items) {
-  const root = document.getElementById(id);
-  if (!root) return;
-  root.replaceChildren(...items.map(i => el('li', null,
-    el('a', { href: i.url, title: i.description || '' }, i.name)
-  )));
-}
 </script>
 </body>
 </html>
