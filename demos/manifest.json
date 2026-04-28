@@ -1,6 +1,12 @@
 {
   "demos": [
     {
+      "name": "[SHOW]-Mom-Chat",
+      "type": "file",
+      "filename": "[SHOW]-Mom-Chat.html",
+      "first_seen": "2026-04-28T15:47:12+02:00"
+    },
+    {
       "name": "[SHOW]-A-Star-Pathfinding-Map",
       "type": "file",
       "filename": "[SHOW]-A-Star-Pathfinding-Map.html",
