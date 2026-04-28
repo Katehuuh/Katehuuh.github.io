@@ -892,27 +892,41 @@ async function fetchCached(key, ttl, fetcher) {
   } catch { return null; }
 }
 
-/* First-commit date for a repo file (the demo's HTML), via GitHub API.
-   Cached in localStorage forever — a file's first-touch commit doesn't change. */
-async function fetchFirstCommitDate(repoPath) {
-  const host = location.hostname;
-  if (!/\.github\.io$/i.test(host)) return null;
-  const cacheKey = `commit:${repoPath}`;
+/* First-commit date is embedded into each thumbnail JPEG's COM marker by
+   the build pipeline (scripts/embed_thumb_dates.py). We read the binary
+   the browser is already fetching for <img>, so this costs ~0 network —
+   shared HTTP cache between fetch() and <img>. No GitHub API hit. */
+async function readJpegEmbeddedDate(thumbUrl) {
+  const cacheKey = `jpgdate:${thumbUrl}`;
   const stored = localStorage.getItem(cacheKey);
   if (stored) return stored;
-  const owner = host.split('.')[0], repo = host;
   try {
-    const r = await fetch(
-      `https://api.github.com/repos/${owner}/${repo}/commits?path=${encodeURIComponent(repoPath)}&per_page=100`,
-      { headers: { 'Accept': 'application/vnd.github+json' } }
-    );
+    const r = await fetch(thumbUrl);
     if (!r.ok) return null;
-    const data = await r.json();
-    if (!Array.isArray(data) || !data.length) return null;
-    const iso = data[data.length - 1].commit?.author?.date;
+    const buf = new Uint8Array(await r.arrayBuffer());
+    const iso = scanJpegComMarker(buf);
     if (iso) localStorage.setItem(cacheKey, iso);
-    return iso || null;
+    return iso;
   } catch { return null; }
+}
+
+/* Walk JPEG segments looking for COM (FF FE). Stop at SOS — past metadata. */
+function scanJpegComMarker(buf) {
+  if (buf[0] !== 0xff || buf[1] !== 0xd8) return null;
+  const STANDALONE = new Set([0xd0, 0xd1, 0xd2, 0xd3, 0xd4, 0xd5, 0xd6, 0xd7, 0xd8, 0xd9, 0x01]);
+  let i = 2;
+  while (i + 3 < buf.length) {
+    if (buf[i] !== 0xff) return null;
+    const m = buf[i + 1];
+    if (m === 0xda) return null;             // SOS — entropy data follows
+    if (STANDALONE.has(m)) { i += 2; continue; }
+    const segLen = (buf[i + 2] << 8) | buf[i + 3];
+    if (m === 0xfe) {                         // COM marker
+      return new TextDecoder().decode(buf.slice(i + 4, i + 2 + segLen)) || null;
+    }
+    i += 2 + segLen;
+  }
+  return null;
 }
 
 function formatRelativeDate(iso) {
@@ -924,12 +938,10 @@ function formatRelativeDate(iso) {
   return `${Math.floor(days / 365)}y ago`;
 }
 
-/* Fire-and-forget — append a relative date to a card's meta row once the
-   GitHub commits API resolves. Skipped for non-demo projects (no repo file). */
+/* Skipped when the project has no thumbnail (no JPEG = no embedded date). */
 async function annotateCardDate(card, project) {
-  if (!project.url || !project.url.startsWith('demos/')) return;
-  const filePath = project.url.endsWith('/') ? `${project.url}index.html` : project.url;
-  const iso = await fetchFirstCommitDate(filePath);
+  if (!project.thumb) return;
+  const iso = await readJpegEmbeddedDate(project.thumb);
   if (!iso) return;
   const meta = card.querySelector('.card-meta');
   if (!meta) return;

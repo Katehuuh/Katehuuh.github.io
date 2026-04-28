@@ -80,6 +80,9 @@ jobs:
       - name: Screenshot demos + external URLs
         run: node scripts/screenshot_thumbs.mjs
 
+      - name: Embed first-commit dates into thumbnail JPEGs
+        run: python scripts/embed_thumb_dates.py
+
       - name: Commit regenerated artifacts
         run: |
           git config user.name "github-actions[bot]"
