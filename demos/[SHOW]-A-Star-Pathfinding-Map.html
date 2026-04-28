@@ -1,0 +1,1214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>A* Pathfinding - Real Street Networks</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --cafe-royale: #773009;
+  --pumpkin-skin: #ab610a;
+  --gold-tips: #e5b113;
+  --graphite: #120404;
+  --mahogany: #4d1506;
+  --wood-bark: #280505;
+  --rebel: #370b06;
+  --brown-derby: #55251c;
+  --hot-toddy: #b48408;
+  --jambalaya: #5c2c12;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: #130105;
+  overflow: hidden;
+}
+
+#map {
+  position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+  background: #130105; z-index: 1;
+}
+
+#glow-overlay {
+  position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+  pointer-events: none; z-index: 100; mix-blend-mode: screen;
+}
+
+#controls {
+  position: absolute; top: 14px; right: 14px;
+  background: rgba(18, 4, 4, 0.14);
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+  border: 1px solid rgba(229, 177, 19, 0.22);
+  border-radius: 10px;
+  padding: 10px 12px;
+  min-width: 250px;
+  z-index: 1000;
+  box-shadow: 0 8px 26px rgba(0,0,0,0.32);
+  transition: background 160ms ease;
+}
+#controls:hover { background: rgba(18, 4, 4, 0.24); }
+
+.control-header {
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+.control-header h2 {
+  font-size: 13.5px; font-weight: 600;
+  color: var(--gold-tips);
+  letter-spacing: 2px; margin-bottom: 4px;
+}
+.location-name {
+  font-size: 11px; color: #d9c39a;
+  letter-spacing: 0.6px; opacity: 0.92;
+}
+
+.control-buttons {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;
+}
+.btn {
+  padding: 7px 9px;
+  background: rgba(229, 177, 19, 0.05);
+  border: 1px solid rgba(229, 177, 19, 0.25);
+  color: #e5b113;
+  font-size: 10.5px; font-weight: 500;
+  letter-spacing: 0.8px; text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  border-radius: 6px;
+}
+.btn:hover {
+  background: rgba(229, 177, 19, 0.12);
+  border-color: rgba(229, 177, 19, 0.45);
+  color: #feeb09;
+}
+.btn.active {
+  background: rgba(229, 177, 19, 0.18);
+  border-color: rgba(229, 177, 19, 0.6);
+  color: #feeb09;
+  box-shadow: 0 0 10px rgba(254,235,9,0.25);
+}
+.btn.primary {
+  grid-column: 1 / -1;
+  background: linear-gradient(135deg, rgba(119,48,9,0.9), rgba(171,97,10,0.9));
+  border-color: rgba(229, 177, 19, 0.6);
+  color: #feeb09;
+  font-weight: 600;
+}
+.btn.primary:hover:not(:disabled) {
+  background: linear-gradient(135deg, rgba(171,97,10,0.95), rgba(229,177,19,0.95));
+  box-shadow: 0 0 18px rgba(254,235,9,0.35);
+  transform: translateY(-1px);
+}
+.btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+.stats {
+  display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px;
+  margin-bottom: 6px; padding: 6px;
+  background: rgba(40,5,5,0.22); border-radius: 6px;
+}
+.stat { text-align: center; }
+.stat .label {
+  display: block; font-size: 9px;
+  color: #c6a97a; text-transform: uppercase; margin-bottom: 3px;
+}
+.stat .value {
+  display: block; font-size: 13.5px; font-weight: 600; color: #feeb09;
+}
+
+.status {
+  padding: 7px;
+  background: rgba(55,11,6,0.22);
+  border-left: 3px solid rgba(229,177,19,0.6);
+  border-radius: 6px;
+  font-size: 10.5px; color: #e0b85b;
+}
+
+.loading {
+  position: fixed; top: 0; left: 0; width: 100%;
+  height: 100%; background: rgba(19,1,5,0.95);
+  display: none; align-items: center; justify-content: center; flex-direction: column; z-index: 10000;
+}
+.spinner {
+  width: 42px; height: 42px;
+  border: 3px solid rgba(77,21,6,0.9);
+  border-top: 3px solid var(--gold-tips);
+  border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 12px;
+}
+@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+.loading p { color: var(--gold-tips); font-size: 12.5px; letter-spacing: 1px; }
+
+.leaflet-container { background: #130105; }
+.leaflet-control-zoom { border: 1px solid rgba(77,21,6,0.7) !important; background: rgba(18,4,4,0.7) !important; }
+.leaflet-control-zoom a { background: transparent !important; color: var(--gold-tips) !important; border-bottom: 1px solid rgba(77,21,6,0.7) !important; }
+.leaflet-control-zoom a:hover { background: rgba(229,177,19,0.12) !important; }
+
+.marker-label {
+  background: rgba(18,4,4,0.8) !important;
+  border: 1px solid rgba(229,177,19,0.4) !important;
+  color: #feeb09 !important; font-size: 10px !important;
+  font-weight: 600 !important; letter-spacing: 1px !important;
+}
+
+.street-base { transition: none !important; }
+.explored-edge { filter: drop-shadow(0 0 6px currentColor); }
+.final-path { filter: drop-shadow(0 0 10px #feeb09); animation: pulse-path 2s ease-in-out infinite; }
+.final-path-glow { filter: blur(4px) drop-shadow(0 0 15px #fcf77f); animation: pulse-path 2s ease-in-out infinite; }
+@keyframes pulse-path { 0%, 100% { opacity: 0.6; } 50% { opacity: 1; } }
+</style>
+</head>
+<body>
+
+<div id="map"></div>
+<canvas id="glow-overlay"></canvas>
+
+<div id="controls">
+  <div class="control-header">
+    <h2>A* PATHFINDING</h2>
+    <div class="location-name" id="location-name">CHICAGO, USA • <span id="fps">-- fps</span></div>
+  </div>
+
+  <div class="control-buttons">
+    <button id="set-start" class="btn active">SET START</button>
+    <button id="set-end" class="btn">SET END</button>
+    <button id="find-path" class="btn primary" disabled>FIND PATH</button>
+    <button id="clear" class="btn">CLEAR</button>
+  </div>
+
+  <div class="stats">
+    <div class="stat">
+      <span class="label">Nodes</span>
+      <span class="value" id="nodes-count">0</span>
+    </div>
+    <div class="stat">
+      <span class="label">Distance</span>
+      <span class="value" id="distance">0 km</span>
+    </div>
+    <div class="stat">
+      <span class="label">Time</span>
+      <span class="value" id="time">0 ms</span>
+    </div>
+  </div>
+
+  <div class="status" id="status">Ready - click to set start point</div>
+</div>
+
+<div id="loading" class="loading">
+  <div class="spinner"></div>
+  <p>Loading street network...</p>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<!-- ───── astar.js (OSM graph + A* generator) ───────────────────────── -->
+<script>
+// OSM Node representing an intersection or a snapped vertex
+class OSMNode {
+  constructor(id, lat, lon) {
+    this.id = id;
+    this.lat = lat;
+    this.lon = lon;
+    this.connections = []; // { node, wayId, distance, highway, name }
+  }
+  addConnection(targetNode, wayId, distance, wayTags) {
+    if (!this.connections.find(c => c.node.id === targetNode.id)) {
+      this.connections.push({
+        node: targetNode,
+        wayId: wayId,
+        distance: distance,
+        highway: wayTags.highway || 'unclassified',
+        name: wayTags.name || 'Unnamed Road'
+      });
+    }
+  }
+}
+
+// Street Network from OSM data (real data, with robust intersection merging)
+class StreetNetwork {
+  constructor() {
+    this.nodes = new Map(); // id -> OSMNode
+    this.ways = new Map();  // wayId -> { id, nodes:[{id,lat,lon}], tags }
+    this.loadedChunks = new Set();
+    this.loadingChunks = new Set();
+    this.tileStepDeg = 0.05; // ~5.5 km at equator
+    this.overpassEndpoints = [
+      'https://overpass-api.de/api/interpreter',
+      'https://lz4.overpass-api.de/api/interpreter',
+      'https://overpass.kumi.systems/api/interpreter'
+    ];
+    this.backoffMs = 800;
+    this.nextSlot = 0;
+
+    // Spatial snap index for merging near-coincident vertices
+    this.snapIndex = new Map();
+    this.snapMeters = 3.0;
+    this.snapLatStepDeg = 3.0 / 111132;
+    this.snapLonStepDeg = 3.0 / 111320;
+    this._gid = 1;
+  }
+
+  async loadArea(bounds) {
+    const tile = this._quantizedBounds(bounds);
+    const chunkKey = this._chunkKey(tile);
+    if (this.loadedChunks.has(chunkKey) || this.loadingChunks.has(chunkKey)) {
+      return false;
+    }
+    this.loadingChunks.add(chunkKey);
+    try {
+      const elements = await this._fetchOverpass(tile);
+      this._ingestElements(tile, elements);
+      this.loadedChunks.add(chunkKey);
+      return true;
+    } catch (e) {
+      console.warn('OSM fetch failed for', chunkKey, e);
+      return false;
+    } finally {
+      this.loadingChunks.delete(chunkKey);
+    }
+  }
+
+  _quantizedBounds(bounds) {
+    const s = bounds.getSouth();
+    const n = bounds.getNorth();
+    const w = bounds.getWest();
+    const e = bounds.getEast();
+    const step = this.tileStepDeg;
+
+    const south = Math.floor(s / step) * step;
+    const west  = Math.floor(w / step) * step;
+    const north = Math.ceil(n / step) * step;
+    const east  = Math.ceil(e / step) * step;
+
+    const maxArea = 0.5;
+    const area = Math.abs((north - south) * (east - west));
+    if (area > maxArea) {
+      const cLat = (south + north) / 2;
+      const cLng = (west + east) / 2;
+      const span = Math.sqrt(maxArea);
+      const half = span / 2;
+      return { south: cLat - half, west: cLng - half, north: cLat + half, east: cLng + half };
+    }
+    return { south, west, north, east };
+  }
+
+  _chunkKey(tile) {
+    const p = 3;
+    return `${tile.south.toFixed(p)}_${tile.west.toFixed(p)}_${tile.north.toFixed(p)}_${tile.east.toFixed(p)}`;
+  }
+
+  async _fetchOverpass(tile) {
+    const s = tile.south.toFixed(6);
+    const w = tile.west.toFixed(6);
+    const n = tile.north.toFixed(6);
+    const e = tile.east.toFixed(6);
+
+    const ROAD_REGEX = '^(motorway|trunk|primary|secondary|tertiary|residential|unclassified|living_street|service|road|motorway_link|trunk_link|primary_link|secondary_link|tertiary_link|track|path|footway|cycleway)$';
+
+    const query = `
+      [out:json][timeout:25];
+      way["highway"~"${ROAD_REGEX}"](${s},${w},${n},${e});
+      (._;>;);
+      out body geom;
+    `.trim();
+
+    for (const ep of this.overpassEndpoints) {
+      try {
+        await this._rateSlot();
+        const data = await this._fetchWithTimeout(ep, query, 15000);
+        this.backoffMs = Math.max(400, Math.floor(this.backoffMs * 0.9));
+        return data.elements || [];
+      } catch (err) {
+        if (err && err.statusCode === 429) {
+          this.backoffMs = Math.min(8000, Math.floor(this.backoffMs * 1.6));
+          continue;
+        }
+      }
+    }
+    throw new Error('All Overpass endpoints failed');
+  }
+
+  async _rateSlot() {
+    const now = Date.now();
+    const wait = Math.max(0, this.nextSlot - now);
+    if (wait > 0) {
+      await new Promise(r => setTimeout(r, wait));
+    }
+    this.nextSlot = Date.now() + this.backoffMs;
+  }
+
+  _fetchWithTimeout(endpoint, body, timeoutMs) {
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), timeoutMs);
+    return fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
+      body: `data=${encodeURIComponent(body)}`,
+      signal: controller.signal
+    }).then(async (res) => {
+      clearTimeout(id);
+      if (!res.ok) {
+        const err = new Error(`Overpass ${res.status}`);
+        err.statusCode = res.status;
+        throw err;
+      }
+      return res.json();
+    });
+  }
+
+  _ingestElements(tile, elements) {
+    const midLat = (tile.south + tile.north) / 2;
+    const mPerDegLat = 111132;
+    const mPerDegLng = 111320 * Math.cos(midLat * Math.PI / 180);
+    this.snapLatStepDeg = this.snapMeters / mPerDegLat;
+    this.snapLonStepDeg = this.snapMeters / mPerDegLng;
+
+    const nodeCoords = new Map();
+    for (const el of elements) {
+      if (el.type === 'node') nodeCoords.set(el.id, { lat: el.lat, lon: el.lon });
+    }
+
+    const oneWayF = (tags) => tags && (tags.oneway === 'yes' || tags.oneway === '1' || tags.oneway === 'true' || tags.junction === 'roundabout' || tags.highway === 'motorway');
+    const oneWayR = (tags) => tags && (tags.oneway === '-1');
+
+    const getSnapKey = (lat, lon) => `${Math.round(lat / this.snapLatStepDeg)}|${Math.round(lon / this.snapLonStepDeg)}`;
+
+    const getOrCreateSnappedNode = (lat, lon) => {
+      const key = getSnapKey(lat, lon);
+      const existingId = this.snapIndex.get(key);
+      if (existingId && this.nodes.has(existingId)) {
+        return this.nodes.get(existingId);
+      }
+      const id = `g${this._gid++}`;
+      const node = new OSMNode(id, lat, lon);
+      this.nodes.set(id, node);
+      this.snapIndex.set(key, id);
+      return node;
+    };
+
+    const getOrCreateOsmNode = (nid) => {
+      const id = `n${nid}`;
+      if (this.nodes.has(id)) return this.nodes.get(id);
+      const coord = nodeCoords.get(nid);
+      if (!coord) return null;
+      const node = new OSMNode(id, coord.lat, coord.lon);
+      this.nodes.set(id, node);
+      this.snapIndex.set(getSnapKey(coord.lat, coord.lon), id);
+      return node;
+    };
+
+    for (const el of elements) {
+      if (el.type !== 'way' || !el.tags || !el.tags.highway) continue;
+
+      const wayId = `w${el.id}`;
+      const tags = el.tags;
+      const coords = [];
+
+      if (Array.isArray(el.nodes) && el.nodes.length > 1 && nodeCoords.size > 0) {
+        for (const nid of el.nodes) {
+          const c = nodeCoords.get(nid);
+          if (c) coords.push({ id: `n${nid}`, lat: c.lat, lon: c.lon, osm: true, nid });
+        }
+      } else if (Array.isArray(el.geometry) && el.geometry.length > 1) {
+        for (let i = 0; i < el.geometry.length; i++) {
+          const g = el.geometry[i];
+          coords.push({ id: `${wayId}_${i}`, lat: g.lat, lon: g.lon, osm: false });
+        }
+      } else continue;
+
+      if (coords.length < 2) continue;
+
+      const canonicalNodes = [];
+      for (const c of coords) {
+        let node = c.osm ? getOrCreateOsmNode(parseInt(c.id.slice(1), 10))
+                         : getOrCreateSnappedNode(c.lat, c.lon);
+        if (node) canonicalNodes.push(node);
+      }
+      if (canonicalNodes.length < 2) continue;
+
+      if (!this.ways.has(wayId)) {
+        this.ways.set(wayId, {
+          id: wayId,
+          nodes: canonicalNodes.map(n => ({ id: n.id, lat: n.lat, lon: n.lon })),
+          tags: { highway: tags.highway || 'unclassified' }
+        });
+      }
+
+      const forwardOnly = oneWayF(tags);
+      const reverseOnly = oneWayR(tags);
+
+      for (let i = 0; i < canonicalNodes.length - 1; i++) {
+        const A = canonicalNodes[i];
+        const B = canonicalNodes[i + 1];
+        const dist = this.haversineDistance(A.lat, A.lon, B.lat, B.lon);
+        if (dist <= 0.75) continue;
+
+        if (reverseOnly) B.addConnection(A, wayId, dist, tags);
+        else if (forwardOnly) A.addConnection(B, wayId, dist, tags);
+        else { A.addConnection(B, wayId, dist, tags); B.addConnection(A, wayId, dist, tags); }
+      }
+    }
+  }
+
+  haversineDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371000;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat/2) ** 2 +
+              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+              Math.sin(dLon/2) ** 2;
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+  }
+
+  findNearestNode(lat, lon, maxMeters = 500) {
+    let nearest = null;
+    let minDist = Infinity;
+    for (const node of this.nodes.values()) {
+      const dist = this.haversineDistance(lat, lon, node.lat, node.lon);
+      if (dist < minDist && dist <= maxMeters) { minDist = dist; nearest = node; }
+    }
+    return nearest;
+  }
+}
+
+// A* Pathfinding with visualization
+function* astarWithVisualization(network, startNode, endNode, onExplore) {
+  const openSet = new Map();
+  const closedSet = new Set();
+  const gScore = new Map();
+  const fScore = new Map();
+  const cameFrom = new Map();
+  const exploredEdges = new Map();
+
+  const h = (node) => network.haversineDistance(node.lat, node.lon, endNode.lat, endNode.lon);
+
+  openSet.set(startNode.id, startNode);
+  gScore.set(startNode.id, 0);
+  fScore.set(startNode.id, h(startNode));
+
+  let iterations = 0;
+  const startTime = Date.now();
+  const MAX_ITERS = 200000;
+  const YIELD_EVERY = 64;
+
+  while (openSet.size > 0 && iterations < MAX_ITERS) {
+    iterations++;
+
+    let current = null;
+    let lowestF = Infinity;
+    for (const [nodeId, node] of openSet) {
+      const f = fScore.get(nodeId) || Infinity;
+      if (f < lowestF) { lowestF = f; current = node; }
+    }
+    if (!current) break;
+
+    if (current.id === endNode.id) {
+      const path = [];
+      let node = endNode;
+      while (node) {
+        path.unshift(node);
+        const prevId = cameFrom.get(node.id);
+        node = prevId ? network.nodes.get(prevId) : null;
+      }
+      return {
+        type: 'found',
+        path,
+        distance: gScore.get(endNode.id),
+        iterations,
+        time: Date.now() - startTime,
+        exploredEdges
+      };
+    }
+
+    openSet.delete(current.id);
+    closedSet.add(current.id);
+
+    for (const connection of current.connections) {
+      const neighbor = connection.node;
+      if (!neighbor || closedSet.has(neighbor.id)) continue;
+
+      const gCur = gScore.get(current.id);
+      const tentative = (gCur === undefined ? Infinity : gCur) + connection.distance;
+
+      const edgeKey = [current.id, neighbor.id].sort().join('_');
+      if (!exploredEdges.has(edgeKey)) {
+        exploredEdges.set(edgeKey, {
+          from: current,
+          to: neighbor,
+          intensity: 1.0,
+          timestamp: Date.now()
+        });
+        if (onExplore) onExplore(current, neighbor, edgeKey);
+      }
+
+      const gN = gScore.get(neighbor.id);
+      if (gN !== undefined && tentative >= gN) continue;
+
+      cameFrom.set(neighbor.id, current.id);
+      gScore.set(neighbor.id, tentative);
+      fScore.set(neighbor.id, tentative + h(neighbor));
+
+      if (!openSet.has(neighbor.id)) openSet.set(neighbor.id, neighbor);
+    }
+
+    if (iterations % YIELD_EVERY === 0) {
+      yield {
+        type: 'exploring',
+        current,
+        openSet: Array.from(openSet.values()),
+        closedSet: Array.from(closedSet),
+        iterations,
+        exploredEdges
+      };
+    }
+  }
+
+  return {
+    type: 'not_found',
+    iterations,
+    time: Date.now() - startTime,
+    exploredEdges
+  };
+}
+
+window.OSM = { OSMNode, StreetNetwork, astarWithVisualization };
+</script>
+
+<!-- ───── main.js (map, UI, animation, worker route) ─────────────────── -->
+<script>
+let map;
+let network;
+let glowCanvas, glowCtx;
+
+let pathfindingGenerator = null;
+let isAnimating = false;
+
+let mode = 'start';
+let startMarker = null;
+let endMarker = null;
+let startNode = null;
+let endNode = null;
+
+let baseStreetLayer = null;
+let explorationLayer = null;
+let pathLayer = null;
+let markerLayer = null;
+let canvasRenderer = null;
+
+let exploredEdgesMap = new Map();
+let pathEdges = [];
+
+let fpsFrames = 0;
+let fpsLastTs = performance.now();
+
+const COLORS = {
+  background: '#130105',
+  roadBrightest: '#feeb09',
+  roadBright: '#dc9913',
+  roadDim: '#5d230c',
+  inactiveMinor: '#46160c',
+  inactiveMajor: '#fcf77f',
+  marker: '#fcf77f',
+  flashbang: '#7d333f'
+};
+
+const FLASH_MS = 120;
+const MID_FADE_MS = 2000;
+const TAIL_FADE_MS = 9000;
+
+let routeWorker = null;
+const WORKER_THRESHOLD_NODES = 10000;
+
+document.addEventListener('DOMContentLoaded', init);
+
+async function init() {
+  setupMap();
+  setupCanvas();
+  setupControls();
+  startFPSMeter();
+  await setupNetwork();
+  animateFading();
+}
+
+function startFPSMeter() {
+  function loop(ts) {
+    fpsFrames++;
+    if (ts - fpsLastTs >= 500) {
+      const fps = Math.round((fpsFrames * 1000) / (ts - fpsLastTs));
+      const el = document.getElementById('fps');
+      if (el) el.textContent = `${fps} fps`;
+      fpsFrames = 0;
+      fpsLastTs = ts;
+    }
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+}
+
+function setupMap() {
+  map = L.map('map', {
+    center: [41.8781, -87.6298],
+    zoom: 15,
+    zoomControl: true,
+    attributionControl: false
+  });
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    maxZoom: 19, opacity: 0.85
+  }).addTo(map);
+
+  canvasRenderer = L.canvas({ padding: 0.5 });
+
+  baseStreetLayer = L.layerGroup().addTo(map);
+  explorationLayer = L.layerGroup().addTo(map);
+  pathLayer = L.layerGroup().addTo(map);
+  markerLayer = L.layerGroup().addTo(map);
+
+  map.on('click', handleMapClick);
+  map.on('moveend', handleMapMove);
+
+  updateLocationName();
+}
+
+function setupCanvas() {
+  glowCanvas = document.getElementById('glow-overlay');
+  glowCtx = glowCanvas.getContext('2d');
+  resizeCanvas();
+  window.addEventListener('resize', resizeCanvas);
+}
+function resizeCanvas() {
+  glowCanvas.width = window.innerWidth;
+  glowCanvas.height = window.innerHeight;
+}
+
+function setupControls() {
+  document.getElementById('set-start').addEventListener('click', () => {
+    mode = 'start';
+    updateControlButtons();
+    updateStatus('Click on the map to set start point');
+  });
+  document.getElementById('set-end').addEventListener('click', () => {
+    mode = 'end';
+    updateControlButtons();
+    updateStatus('Click on the map to set end point');
+  });
+  document.getElementById('find-path').addEventListener('click', findPath);
+  document.getElementById('clear').addEventListener('click', clearAll);
+  updateControlButtons();
+}
+
+async function setupNetwork() {
+  network = new OSM.StreetNetwork();
+  await loadCurrentViewData();
+}
+
+async function loadCurrentViewData() {
+  showLoading(true);
+  updateStatus('Loading street network data...');
+  try {
+    const bounds = map.getBounds();
+    const newDataLoaded = await network.loadArea(bounds);
+    if (newDataLoaded) drawBaseStreets();
+    updateStatus('Ready - click to set start point');
+  } catch (e) {
+    updateStatus('Street data unavailable - pan/zoom and try again.');
+  } finally {
+    showLoading(false);
+  }
+}
+
+function drawBaseStreets() {
+  baseStreetLayer.clearLayers();
+  for (const way of network.ways.values()) {
+    if (!way.nodes || way.nodes.length < 2) continue;
+    const latLngs = way.nodes.map(n => [n.lat, n.lon]);
+    const hw = way.tags.highway || 'residential';
+    const isMajor = ['motorway','trunk','primary','secondary','motorway_link','trunk_link','primary_link','secondary_link'].includes(hw);
+    L.polyline(latLngs, {
+      color: isMajor ? COLORS.inactiveMajor : COLORS.inactiveMinor,
+      weight: isMajor ? 1.6 : 1.2,
+      opacity: isMajor ? 0.16 : 0.14,
+      className: 'street-base',
+      renderer: canvasRenderer
+    }).addTo(baseStreetLayer);
+  }
+  document.getElementById('nodes-count').textContent = String(network.nodes.size);
+}
+
+async function handleMapMove() {
+  await loadCurrentViewData();
+  redrawExploration();
+}
+
+function handleMapClick(e) {
+  if (isAnimating) return;
+  const lat = e.latlng.lat;
+  const lon = e.latlng.lng;
+
+  const maxSnap = dynamicSnapMaxMeters(map.getZoom());
+  const nearestNode = network.findNearestNode(lat, lon, maxSnap);
+  if (!nearestNode) {
+    updateStatus('No roads found nearby - try clicking closer to a street');
+    return;
+  }
+
+  if (mode === 'start') setStartPoint(nearestNode);
+  else setEndPoint(nearestNode);
+}
+
+function setStartPoint(node) {
+  if (startMarker) markerLayer.removeLayer(startMarker);
+  startNode = node;
+  startMarker = L.circleMarker([node.lat, node.lon], {
+    radius: 9,
+    fillColor: COLORS.marker,
+    color: COLORS.roadBrightest,
+    weight: 2,
+    opacity: 1,
+    fillOpacity: 0.9
+  }).addTo(markerLayer);
+  startMarker.bindTooltip('START', { permanent: true, direction: 'top', className: 'marker-label' }).openTooltip();
+  mode = 'end';
+  updateControlButtons();
+  updateStatus('Now click to set end point');
+}
+
+function setEndPoint(node) {
+  if (endMarker) markerLayer.removeLayer(endMarker);
+  endNode = node;
+  endMarker = L.circleMarker([node.lat, node.lon], {
+    radius: 9,
+    fillColor: COLORS.marker,
+    color: COLORS.roadBrightest,
+    weight: 2,
+    opacity: 1,
+    fillOpacity: 0.9
+  }).addTo(markerLayer);
+  endMarker.bindTooltip('END', { permanent: true, direction: 'top', className: 'marker-label' }).openTooltip();
+  updateControlButtons();
+  updateStatus('Ready to find path');
+}
+
+async function findPath() {
+  if (!startNode || !endNode || isAnimating) return;
+
+  await ensureCorridorLoaded(startNode, endNode);
+
+  isAnimating = true;
+  updateStatus('Finding optimal path...');
+  pathLayer.clearLayers();
+  pathEdges = [];
+  document.getElementById('distance').textContent = '0 km';
+  document.getElementById('time').textContent = '0 ms';
+
+  const t0 = performance.now();
+
+  if (window.Worker && network.nodes.size >= WORKER_THRESHOLD_NODES) {
+    routeWithWorker(t0);
+    return;
+  }
+
+  pathfindingGenerator = OSM.astarWithVisualization(network, startNode, endNode, (from, to, edgeKey) => {
+    if (!exploredEdgesMap.has(edgeKey)) {
+      exploredEdgesMap.set(edgeKey, { from, to, intensity: 1.0, timestamp: Date.now() });
+    } else {
+      const edge = exploredEdgesMap.get(edgeKey);
+      edge.intensity = 1.0;
+      edge.timestamp = Date.now();
+    }
+  });
+
+  animatePathfinding(t0);
+}
+
+function animatePathfinding(t0) {
+  if (!pathfindingGenerator) return;
+  const result = pathfindingGenerator.next();
+
+  if (result.done) {
+    const state = result.value;
+    if (state.type === 'found') {
+      document.getElementById('nodes-count').textContent = String(state.iterations);
+      document.getElementById('distance').textContent = (state.distance / 1000).toFixed(2) + ' km';
+      document.getElementById('time').textContent = Math.round(performance.now() - t0) + ' ms';
+      drawFinalPath(state.path);
+      triggerFlashbang(state.path);
+      updateStatus('Path found!');
+    } else {
+      updateStatus('No path found');
+    }
+    isAnimating = false;
+    updateControlButtons();
+    return;
+  }
+
+  const state = result.value;
+  if (state.type === 'exploring') {
+    document.getElementById('nodes-count').textContent = String(state.iterations);
+    redrawExploration();
+    setTimeout(() => animatePathfinding(t0), 16);
+  }
+}
+
+async function ensureCorridorLoaded(a, b) {
+  const minLat = Math.min(a.lat, b.lat);
+  const maxLat = Math.max(a.lat, b.lat);
+  const minLon = Math.min(a.lon, b.lon);
+  const maxLon = Math.max(a.lon, b.lon);
+
+  const padDeg = 0.01;
+  const bounds = L.latLngBounds(
+    [minLat - padDeg, minLon - padDeg],
+    [maxLat + padDeg, maxLon + padDeg]
+  );
+  const hadNew = await network.loadArea(bounds);
+  if (hadNew) drawBaseStreets();
+}
+
+function redrawExploration() {
+  explorationLayer.clearLayers();
+  const now = Date.now();
+
+  for (const [edgeKey, edge] of exploredEdgesMap) {
+    const age = now - edge.timestamp;
+    const i = intensityAtAge(age);
+    const color = colorForIntensity(i);
+    const weight = i > 0.7 ? 3 : 2;
+
+    L.polyline(
+      [[edge.from.lat, edge.from.lon], [edge.to.lat, edge.to.lon]],
+      {
+        color,
+        weight,
+        opacity: Math.min(1, i + 0.2),
+        className: 'explored-edge',
+        renderer: canvasRenderer
+      }
+    ).addTo(explorationLayer);
+  }
+}
+
+function intensityAtAge(ms) {
+  if (ms <= FLASH_MS) return 1.0;
+  if (ms <= FLASH_MS + MID_FADE_MS) {
+    const t = (ms - FLASH_MS) / MID_FADE_MS;
+    return 1.0 - t * (1.0 - 0.35);
+  }
+  const t2 = Math.min(1, (ms - FLASH_MS - MID_FADE_MS) / TAIL_FADE_MS);
+  return 0.35 - t2 * (0.35 - 0.20);
+}
+
+function colorForIntensity(i) {
+  const stops = [
+    { i: 1.0,  c: hexToRgb(COLORS.roadBrightest) },
+    { i: 0.8,  c: hexToRgb(COLORS.roadBright)   },
+    { i: 0.35, c: hexToRgb(COLORS.roadDim)      }
+  ];
+  if (i >= stops[0].i) return rgbStr(stops[0].c);
+  if (i <= stops[2].i) return rgbStr(stops[2].c);
+  let a, b;
+  if (i >= stops[1].i) { a = stops[0]; b = stops[1]; }
+  else { a = stops[1]; b = stops[2]; }
+  const t = (i - b.i) / (a.i - b.i);
+  const r = Math.round(b.c.r + (a.c.r - b.c.r) * t);
+  const g = Math.round(b.c.g + (a.c.g - b.c.g) * t);
+  const bl = Math.round(b.c.b + (a.c.b - b.c.b) * t);
+  return `rgb(${r},${g},${bl})`;
+}
+function hexToRgb(hex) { const h = hex.replace('#',''); const n = parseInt(h, 16); return { r:(n>>16)&255, g:(n>>8)&255, b:n&255 }; }
+function rgbStr(c) { return `rgb(${c.r},${c.g},${c.b})`; }
+
+function drawFinalPath(path) {
+  if (!path || path.length < 2) return;
+  pathLayer.clearLayers();
+  const latLngs = path.map(node => [node.lat, node.lon]);
+  for (let i = 0; i < path.length - 1; i++) pathEdges.push({ from: path[i], to: path[i + 1] });
+  L.polyline(latLngs, {
+    color: COLORS.roadBrightest,
+    weight: 6,
+    opacity: 0.9,
+    className: 'final-path',
+    renderer: canvasRenderer
+  }).addTo(pathLayer);
+  L.polyline(latLngs, {
+    color: COLORS.marker,
+    weight: 10,
+    opacity: 0.35,
+    className: 'final-path-glow',
+    renderer: canvasRenderer
+  }).addTo(pathLayer);
+}
+
+function triggerFlashbang(path) {
+  const duration = 3000;
+  const startTime = Date.now();
+  function animate() {
+    const elapsed = Date.now() - startTime;
+    if (elapsed > duration) {
+      glowCtx.clearRect(0, 0, glowCanvas.width, glowCanvas.height);
+      clearAll();
+      return;
+    }
+    const t = elapsed / duration;
+    glowCtx.clearRect(0, 0, glowCanvas.width, glowCanvas.height);
+
+    if (t < 0.1) {
+      glowCtx.fillStyle = `rgba(255, 255, 255, ${1 - t * 10})`;
+      glowCtx.fillRect(0, 0, glowCanvas.width, glowCanvas.height);
+    }
+
+    const intensity = t < 0.8 ? 0.9 : 0.9 * (1 - (t - 0.8) / 0.2);
+    if (path && path.length > 1) {
+      glowCtx.save();
+      const points = path.map(node => {
+        const p = map.latLngToContainerPoint([node.lat, node.lon]);
+        return {x: p.x, y: p.y};
+      });
+      for (let i = 3; i > 0; i--) {
+        glowCtx.strokeStyle = COLORS.flashbang;
+        glowCtx.lineWidth = 25 * i;
+        glowCtx.lineCap = 'round';
+        glowCtx.lineJoin = 'round';
+        glowCtx.shadowBlur = 40;
+        glowCtx.shadowColor = COLORS.flashbang;
+        glowCtx.globalAlpha = intensity / (i * 1.5);
+        glowCtx.beginPath();
+        glowCtx.moveTo(points[0].x, points[0].y);
+        for (let j = 1; j < points.length; j++) glowCtx.lineTo(points[j].x, points[j].y);
+        glowCtx.stroke();
+      }
+      glowCtx.restore();
+    }
+    requestAnimationFrame(animate);
+  }
+  animate();
+}
+window.triggerFlashbang = triggerFlashbang;
+
+function animateFading() {
+  redrawExploration();
+  requestAnimationFrame(animateFading);
+}
+
+function clearAll() {
+  if (startMarker) { markerLayer.removeLayer(startMarker); startMarker = null; }
+  if (endMarker)   { markerLayer.removeLayer(endMarker);   endMarker = null; }
+  startNode = null; endNode = null; isAnimating = false; pathfindingGenerator = null;
+  exploredEdgesMap.clear(); pathEdges = [];
+  explorationLayer.clearLayers(); pathLayer.clearLayers();
+  glowCtx.clearRect(0, 0, glowCanvas.width, glowCanvas.height);
+  mode = 'start'; updateControlButtons(); updateStatus('Click to set start point');
+  document.getElementById('nodes-count').textContent = '0';
+  document.getElementById('distance').textContent = '0 km';
+  document.getElementById('time').textContent = '0 ms';
+}
+
+function updateControlButtons() {
+  document.querySelectorAll('.btn').forEach(btn => btn.classList.remove('active'));
+  if (mode === 'start') document.getElementById('set-start').classList.add('active');
+  else document.getElementById('set-end').classList.add('active');
+  document.getElementById('find-path').disabled = !(startNode && endNode && !isAnimating);
+}
+
+function updateStatus(message) { document.getElementById('status').textContent = message; }
+function showLoading(show) { document.getElementById('loading').style.display = show ? 'flex' : 'none'; }
+
+async function updateLocationName() { /* keep static or wire real reverse geocode if desired */ }
+
+function dynamicSnapMaxMeters(zoom) {
+  const z = Math.max(3, Math.min(19, zoom || 12));
+  const base = 150;
+  const factor = Math.pow(2, 16 - z);
+  return Math.max(250, Math.min(15000, base * factor));
+}
+
+function routeWithWorker(t0) {
+  if (!routeWorker) routeWorker = createRouteWorker();
+
+  const nodes = [];
+  const adj = {};
+  network.nodes.forEach((n, id) => {
+    nodes.push({ id, lat: n.lat, lon: n.lon });
+    adj[id] = n.connections.map(c => ({ to: c.node.id, dist: c.distance }));
+  });
+
+  const payload = {
+    nodes,
+    adj,
+    startId: startNode.id,
+    endId: endNode.id,
+    heuristicWeight: 1.12,
+    yieldEvery: 350
+  };
+
+  routeWorker.onmessage = (e) => {
+    const { type } = e.data || {};
+    if (type === 'progress') {
+      const { edgesLit, iterations } = e.data;
+      if (edgesLit && edgesLit.length) {
+        const now = Date.now();
+        for (const { fromId, toId } of edgesLit) {
+          const A = network.nodes.get(fromId);
+          const B = network.nodes.get(toId);
+          if (!A || !B) continue;
+          const key = [fromId, toId].sort().join('_');
+          exploredEdgesMap.set(key, { from: A, to: B, intensity: 1.0, timestamp: now });
+        }
+        redrawExploration();
+      }
+      if (iterations != null) document.getElementById('nodes-count').textContent = String(iterations);
+    } else if (type === 'done') {
+      const { found, pathIdsExpanded, distance, iterations } = e.data;
+      if (iterations != null) document.getElementById('nodes-count').textContent = String(iterations);
+      document.getElementById('time').textContent = Math.round(performance.now() - t0) + ' ms';
+      if (found && pathIdsExpanded && pathIdsExpanded.length > 1) {
+        const path = pathIdsExpanded.map(id => network.nodes.get(id)).filter(Boolean);
+        document.getElementById('distance').textContent = (distance / 1000).toFixed(2) + ' km';
+        drawFinalPath(path);
+        triggerFlashbang(path);
+        updateStatus('Path found!');
+      } else {
+        updateStatus('No path found');
+      }
+      isAnimating = false;
+      updateControlButtons();
+    }
+  };
+
+  routeWorker.postMessage({ type: 'route', payload });
+}
+
+function createRouteWorker() {
+  const src = `
+  class MinHeap{constructor(){this.a=[];this.pos=new Map()}size(){return this.a.length}has(id){return this.pos.has(id)}push(id,f){this.a.push({id,f});this.pos.set(id,this.a.length-1);this._up(this.a.length-1)}pop(){if(this.a.length===0)return null;const t=this.a[0];const l=this.a.pop();this.pos.delete(t.id);if(this.a.length){this.a[0]=l;this.pos.set(l.id,0);this._down(0)}return t}update(id,f){const i=this.pos.get(id);if(i==null){this.push(id,f);return}const o=this.a[i].f;this.a[i].f=f;if(f<o)this._up(i);else this._down(i)}_up(i){while(i>0){const p=(i-1)>>1;if(this.a[i].f>=this.a[p].f)break;this._swap(i,p);i=p}}_down(i){for(;;){let l=i*2+1,r=l+1,m=i;if(l<this.a.length&&this.a[l].f<this.a[m].f)m=l;if(r<this.a.length&&this.a[r].f<this.a[m].f)m=r;if(m===i)break;this._swap(i,m);i=m}}_swap(i,j){const ai=this.a[i],aj=this.a[j];this.a[i]=aj;this.a[j]=ai;this.pos.set(ai.id,j);this.pos.set(aj.id,i)}}
+  function toRad(d){return d*Math.PI/180}
+  function distLL(a,b){const R=6371000;const phi1=toRad(a.lat),phi2=toRad(b.lat);const dphi=phi2-phi1;const dlam=toRad(b.lon-a.lon);const x=dlam*Math.cos((phi1+phi2)/2);const y=dphi;return Math.hypot(R*x,R*y)}
+  function buildGraph(nodes,adj){const map=new Map(nodes.map(n=>[n.id,n]));return {nodes:map,adj}}
+  function contractDegree2(graph,startId,endId){
+    const nodes=graph.nodes; const adj=graph.adj;
+    const bi=new Map();
+    nodes.forEach((_,id)=>{bi.set(id,new Set())});
+    nodes.forEach((_,u)=>{
+      const outs=adj[u]||[];
+      for(const e of outs){ const v=e.to; const back=(adj[v]||[]).some(x=>x.to===u); if(back){ bi.get(u).add(v); bi.get(v).add(u);} }
+    });
+    function w(u,v){const a=adj[u]||[]; for(const e of a){ if(e.to===v) return e.dist } return Infinity}
+    const visitedEdge=new Set();
+    const superAdj={};
+    const edgeMap={};
+    nodes.forEach((_,id)=>{superAdj[id]=[]});
+    function key(u,v){return u+"|"+v}
+    nodes.forEach((_,s)=>{
+      if(s===startId||s===endId||bi.get(s).size!==2){
+        for(const n of bi.get(s)||[]){
+          const eKey=key(s,n<s?n:s);
+          if(visitedEdge.has(eKey)) continue;
+          let u=s, v=n;
+          let seq=[u];
+          let total=w(u,v);
+          if(!isFinite(total)) continue;
+          seq.push(v);
+          visitedEdge.add(eKey);
+          while(bi.get(v).size===2 && v!==startId && v!==endId){
+            const it=[...bi.get(v)].filter(x=>x!==u);
+            if(it.length!==1) break;
+            const nxt=it[0];
+            const eK=key(v,nxt<v?nxt:v);
+            const ww=w(v,nxt);
+            const back=w(nxt,v);
+            if(!isFinite(ww)||!isFinite(back)) break;
+            total+=ww;
+            u=v; v=nxt;
+            seq.push(v);
+            visitedEdge.add(eK);
+          }
+          const a=seq[0], b=seq[seq.length-1];
+          if(a!==b){
+            superAdj[a].push({to:b,dist:total});
+            superAdj[b].push({to:a,dist:total});
+            edgeMap[key(a,b)]=seq.slice();
+            edgeMap[key(b,a)]=seq.slice().reverse();
+          }
+        }
+      }
+    });
+    nodes.forEach((_,u)=>{
+      const outs=adj[u]||[];
+      for(const e of outs){
+        const v=e.to;
+        if((superAdj[u]||[]).some(x=>x.to===v)) continue;
+        superAdj[u].push({to:v,dist:e.dist});
+        if(!edgeMap[key(u,v)]) edgeMap[key(u,v)]=[u,v];
+      }
+    });
+    return { nodes, superAdj, edgeMap };
+  }
+  function routeContracted(nodesArr,superAdj,startId,endId,edgeMap,w=1.12,yieldEvery=400){
+    const nodes=new Map(nodesArr.map(n=>[n.id,n]));
+    const open=new MinHeap(), g=new Map(), f=new Map(), came=new Map(), closed=new Set();
+    function h(id){const a=nodes.get(id), b=nodes.get(endId); return distLL({lat:a.lat,lon:a.lon},{lat:b.lat,lon:b.lon})}
+    g.set(startId,0); f.set(startId,w*h(startId)); open.push(startId,f.get(startId));
+    let expanded=0; let lit=[];
+    while(open.size()>0){
+      const cur=open.pop(); if(!cur) break; const cid=cur.id;
+      if(cid===endId){
+        if(lit.length){ postMessage({type:'progress', edgesLit:lit, iterations:expanded}); lit=[]; }
+        const contracted=[]; let x=cid;
+        while(x){ contracted.unshift(x); x=came.get(x)||null; }
+        const expandedPath=[];
+        for(let i=0;i<contracted.length-1;i++){
+          const u=contracted[i], v=contracted[i+1];
+          const seq=edgeMap[u+"|"+v]||[u,v];
+          if(i===0) expandedPath.push(...seq);
+          else expandedPath.push(...seq.slice(1));
+        }
+        let distSum=0;
+        for(let i=0;i<expandedPath.length-1;i++){
+          const a=nodes.get(expandedPath[i]), b=nodes.get(expandedPath[i+1]);
+          distSum+=distLL({lat:a.lat,lon:a.lon},{lat:b.lat,lon:b.lon});
+        }
+        return { found:true, pathIdsExpanded:expandedPath, iterations:expanded, distance:distSum };
+      }
+      if(closed.has(cid)) continue;
+      closed.add(cid);
+      const outs=superAdj[cid]||[];
+      for(const e of outs){
+        const nb=e.to;
+        if(closed.has(nb)) continue;
+        const gcur=g.get(cid)??Infinity;
+        const tentative=gcur+e.dist;
+        if((g.get(nb)??Infinity) <= tentative) continue;
+        came.set(nb,cid);
+        g.set(nb,tentative);
+        const fn=tentative+w*h(nb);
+        open.update(nb,fn);
+        lit.push({fromId:cid,toId:nb});
+        if(lit.length>=yieldEvery){ postMessage({type:'progress', edgesLit:lit, iterations:expanded}); lit=[]; }
+      }
+      expanded++;
+      if(expanded%yieldEvery===0){ postMessage({type:'progress', edgesLit:lit, iterations:expanded}); lit=[]; }
+    }
+    if(lit.length) postMessage({type:'progress', edgesLit:lit, iterations:expanded});
+    return { found:false, pathIdsExpanded:[], iterations:expanded, distance:0 };
+  }
+  onmessage=(e)=>{
+    const {type,payload}=e.data||{};
+    if(type==='route'){
+      const {nodes,adj,startId,endId,heuristicWeight,yieldEvery}=payload;
+      const G=buildGraph(nodes,adj);
+      const C=contractDegree2(G,startId,endId);
+      const res=routeContracted(nodes,C.superAdj,startId,endId,C.edgeMap,heuristicWeight,yieldEvery);
+      postMessage({type:'done', ...res});
+    }
+  }`;
+  const blob = new Blob([src], { type: 'application/javascript' });
+  return new Worker(URL.createObjectURL(blob));
+}
+</script>
+
+</body>
+</html>
