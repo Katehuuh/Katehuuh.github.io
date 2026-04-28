@@ -600,8 +600,13 @@
         `  2. [LOW]      if name is one of {ParseHTML, ScriptCompiled, EvaluateScript, v8.compile, v8.run, v8.evaluateModule} (these are init/load-only by definition)\n` +
         `  3. [LOW]      if steady_count == 0 (init-only work, regardless of total or avg)\n` +
         `  4. [LOW]      if steady_count >= 100 AND p95 < 5 ms (steady-state animation hot path running healthy)\n` +
-        `  5. [HIGH]     if p95 > 5 ms in steady state, OR a [STEADY] long-task > 50 ms\n` +
-        `  6. [CRITICAL] if median > 16.67 ms in steady state (consistently blowing the 60 Hz frame budget)\n\n` +
+        `  5. [LOW]      if there is exactly ONE [STEADY] long-task > 50 ms in the entire steady window (one-off events like async asset arrivals are NOT a recurring bottleneck)\n` +
+        `  6. [HIGH]     if p95 > 5 ms in steady state, OR multiple (>=2) [STEADY] long-tasks > 50 ms in the steady window (now it is recurring)\n` +
+        `  7. [CRITICAL] if median > 16.67 ms in steady state (consistently blowing the 60 Hz frame budget)\n\n` +
+        `Verdict mapping (apply LITERALLY, do not soften):\n` +
+        `  - "fine"        if 0 HIGH and 0 CRITICAL\n` +
+        `  - "minor wins"  if exactly 1 HIGH, 0 CRITICAL\n` +
+        `  - "needs work"  if 2+ HIGH, or 1+ CRITICAL\n\n` +
         `Heuristics:\n` +
         `  - low call count (1-10) ⇒ init-only, regardless of avg\n` +
         `  - high call count (>100) ⇒ steady-state; only HIGH/CRITICAL if p95 is genuinely large\n` +
