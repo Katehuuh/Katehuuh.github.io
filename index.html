@@ -449,6 +449,14 @@ section.compact { display: grid; gap: .6rem; }
   </defs>
 </svg>
 
+<!-- Puter SDK is loaded eagerly (async, doesn't block render). The like
+     buttons route their counter API calls through `puter.net.fetch()` so
+     the actual outbound HTTP request hits puter.com — not the underlying
+     counterapi.dev URL — which means uBlock + EasyPrivacy + similar filter
+     lists that flag counterapi.dev as a tracker never fire on these calls.
+     Direct fetch is kept as a last-resort fallback if puter itself fails. -->
+<script src="https://js.puter.com/v2/" async></script>
+
 <main>
 
   <header class="hero rise" data-d="1">
@@ -851,42 +859,41 @@ function makeLikeButton(slug) {
   return btn;
 }
 
-// Lazy-loaded puter fallback. Adblockers (uBlock + EasyList) flag
-// counterapi.dev as a tracker → ERR_BLOCKED_BY_CLIENT. We try direct
-// first; if it fails, lazy-load puter SDK and route through puter.net.fetch
-// (which goes to puter.com, not the blocked domain). Only adblock users
-// pay the puter SDK cost.
-let puterPromise = null;
-function loadPuterOnce() {
-  if (puterPromise) return puterPromise;
-  puterPromise = new Promise((resolve, reject) => {
-    if (window.puter && window.puter.net && window.puter.net.fetch) return resolve(true);
-    const s = document.createElement('script');
-    s.src = 'https://js.puter.com/v2/';
-    s.async = true;
-    s.onload = () => resolve(true);
-    s.onerror = () => reject(new Error('puter blocked'));
-    document.head.appendChild(s);
+// Wait briefly for the puter SDK if it's still loading (it was added to
+// <head> as async). Resolves true if puter is available, false if it never
+// loaded (e.g. puter.com itself blocked by adblock).
+function puterReady(timeoutMs = 1500) {
+  if (window.puter && window.puter.net && window.puter.net.fetch) return Promise.resolve(true);
+  return new Promise((resolve) => {
+    const t0 = Date.now();
+    const tick = () => {
+      if (window.puter && window.puter.net && window.puter.net.fetch) return resolve(true);
+      if (Date.now() - t0 >= timeoutMs) return resolve(false);
+      setTimeout(tick, 60);
+    };
+    tick();
   });
-  return puterPromise;
 }
 
-// Returns the JSON, or null if both direct + puter failed.
+// Returns the JSON, or null if all transports failed. PUTER FIRST so that
+// adblock-equipped visitors (counterapi.dev on filter lists) get a
+// working request: puter routes via its own relay, the browser's network
+// tab shows a request to puter.com, and the adblock filter on
+// counterapi.dev never matches. Direct fetch is the fallback for the
+// rare case puter SDK itself didn't load.
 async function likesApi(path) {
   const url = `${LIKES_API}/${LIKES_NS}/${path}`;
+  if (await puterReady()) {
+    try {
+      const r = await puter.net.fetch(url);
+      if (r.ok) return await r.json();
+    } catch { /* fall through to direct */ }
+  }
   try {
     const r = await fetch(url);
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    return await r.json();
-  } catch {
-    // direct blocked — try puter
-    try {
-      await loadPuterOnce();
-      const r = await puter.net.fetch(url);
-      if (!r.ok) return null;
-      return await r.json();
-    } catch { return null; }
-  }
+    if (r.ok) return await r.json();
+  } catch { /* both failed */ }
+  return null;
 }
 
 async function fetchLikeCount(slug) {
