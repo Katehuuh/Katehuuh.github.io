@@ -101,13 +101,15 @@ a:hover { color: #ffb98d; }
   box-shadow: 0 0 0 1px var(--line), 0 30px 60px -20px rgba(255, 107, 53, 0.18);
 }
 .icon-nav { display: inline-flex; gap: .25rem; justify-content: center; }
-.icon-nav a {
+/* Direct-child selectors only — descendant `.icon-nav a` would also match
+   popover pills and force them to 48x48 circles. */
+.icon-nav > a, .icon-nav > .icon-pop-wrap > a {
   display: inline-flex; align-items: center; justify-content: center;
   width: 48px; height: 48px; border-radius: 999px;
   border: 1px solid var(--line); color: var(--text);
   transition: border-color .18s ease, background-color .18s ease, color .18s ease, transform .18s ease;
 }
-.icon-nav a:hover {
+.icon-nav > a:hover, .icon-nav > .icon-pop-wrap > a:hover {
   border-color: var(--accent-line); background: var(--accent-soft);
   color: var(--accent); transform: translateY(-2px);
 }
