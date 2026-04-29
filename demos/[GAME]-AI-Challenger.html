@@ -1,0 +1,1060 @@
+<!--
+  ============================================================================
+  AI Challenger - guess what AI-generated content represents from 4 options.
+
+  UI:
+  - Dark, minimalist, mobile-first responsive. Background #121212. No
+    gradients on chrome.
+  - Top bar: score, streak, round number, mode label (small, mono).
+  - Main stage (~60% of viewport, flex-shrinkable, no rigid aspect ratio):
+    the AI-generated content for the round.
+  - Below the stage: exactly 4 answer buttons in a 2x2 grid on mobile /
+    1x4 row on wider screens.
+  - Sleek modern loading animation between rounds (shimmering bar +
+    pulsing ring; not a 1990s spinner).
+  - No category selector - modes auto-rotate.
+  - LocalStorage: high score, current streak, history of last 20 rounds.
+
+  Game loop:
+  1. Pick the next mode (round-robin across the 4 modes).
+  2. Call the text LLM to get { correct: { name, description },
+     distractors: [string, string, string] } - exactly one correct
+     real-brand/object name plus three plausible incorrect names.
+     Constraint in the prompt: the rendered image must NOT include the
+     brand name, wordmark, or any readable text giving the answer away.
+  3. Render the visual via the image API.
+  4. Show 4 shuffled buttons (1 correct + 3 distractors).
+  5. On click: lock buttons, mark correct (green) and wrong-pick if
+     applicable (red), update score/streak, ~1.5 s delay, advance.
+  6. Wrong answer resets streak to 0; correct answer +1 to score and
+     streak, with progressive difficulty (more abstract/stylised at
+     higher streak).
+
+  Four modes:
+  1. Website UI - image of a recognisable real-brand site's UI design
+     (Spotify, YouTube, Google, etc.) without any visible logos/wordmarks.
+  2. UI Elements - a single component (button, form, navbar, modal)
+     styled the way a known brand styles theirs, no labels.
+  3. Object Images - photorealistic image of a real-world object (chair,
+     kettle, rubber duck, sneaker - the LLM picks).
+  4. Logo Designs - abstract/simplified brand logo, no text.
+
+  Tech:
+  - Single self-contained HTML file. Inline CSS + JS. No React, no
+    Tailwind, no import maps.
+  - Pollinations.ai for both text and image. ~25 s image timeout,
+    ~15 s text timeout. Retry UI on failure but always allow advancing
+    past a broken round.
+  - Sanitise any inline SVG before injecting; if SVG fails to parse,
+    fall back to a placeholder.
+  - Keyboard nav: 1/2/3/4 number keys map to the 4 buttons. Tab/Enter
+    accessible. aria-live on the feedback message.
+
+  Layout pitfalls (avoid the cut-off bug from the iteration log):
+  - body { min-height: 100dvh; overflow-y: auto; } - let the page itself
+    scroll, never lock it.
+  - .stage has min-height + max-height: 70dvh (flexible, not rigid
+    aspect-ratio).
+  - .answers is flex-shrink: 0 so it always reserves its space.
+  - Topbar is position: sticky; top: 0 with backdrop.
+  ============================================================================
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>AI Challenger</title>
+<style>
+:root {
+    --bg: #121212;
+    --surface: #1c1c1c;
+    --surface-2: #242424;
+    --border: #2e2e2e;
+    --text: #ececec;
+    --muted: #8a8a8a;
+    --accent: #6ea8fe;
+    --good: #2ea043;
+    --good-bg: rgba(46, 160, 67, 0.18);
+    --bad: #f85149;
+    --bad-bg: rgba(248, 81, 73, 0.18);
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, "Cascadia Mono", monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+
+body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100dvh;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+}
+
+.app {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    width: 100%;
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 0 14px 18px;
+}
+
+.topbar {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 14px;
+    padding: 10px 4px;
+    background: rgba(18, 18, 18, 0.86);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--border);
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--muted);
+}
+
+.topbar .title {
+    font-weight: 600;
+    color: var(--text);
+    letter-spacing: 0.5px;
+    font-size: 13px;
+}
+
+.topbar .stat {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 5px;
+}
+.topbar .stat strong {
+    color: var(--text);
+    font-weight: 600;
+    font-size: 13px;
+}
+
+.topbar .spacer { flex: 1 1 auto; }
+
+.topbar .mode-pill {
+    padding: 3px 9px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--text);
+    font-size: 11px;
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+}
+
+.stage {
+    margin-top: 14px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    overflow: hidden;
+    position: relative;
+    width: 100%;
+    min-height: 240px;
+    max-height: 70dvh;
+    flex: 0 1 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.stage .visual {
+    width: 100%;
+    height: 100%;
+    min-height: inherit;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+}
+
+.stage img.gen-image {
+    display: block;
+    max-width: 100%;
+    max-height: 70dvh;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+}
+
+.stage svg.gen-svg {
+    display: block;
+    width: clamp(160px, 60%, 360px);
+    height: auto;
+    max-height: 60dvh;
+}
+
+.stage .loading {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 22px;
+    background: var(--surface);
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
+.stage .loading.hidden { display: none; }
+
+.ring {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.07);
+    border-top-color: var(--accent);
+    animation: ring-spin 1s linear infinite, ring-pulse 1.8s ease-in-out infinite;
+}
+@keyframes ring-spin { to { transform: rotate(360deg); } }
+@keyframes ring-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(110, 168, 254, 0.0); }
+    50%      { box-shadow: 0 0 0 8px rgba(110, 168, 254, 0.08); }
+}
+
+.shimmer {
+    width: min(60%, 280px);
+    height: 4px;
+    border-radius: 4px;
+    background: linear-gradient(
+        90deg,
+        rgba(255, 255, 255, 0.04) 0%,
+        rgba(255, 255, 255, 0.16) 50%,
+        rgba(255, 255, 255, 0.04) 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer-slide 1.4s ease-in-out infinite;
+}
+@keyframes shimmer-slide {
+    0%   { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+
+.stage .error {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    padding: 20px;
+    text-align: center;
+}
+.stage .error.hidden { display: none; }
+.stage .error p {
+    margin: 0;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+    max-width: 360px;
+    line-height: 1.5;
+}
+.stage .error button {
+    padding: 8px 18px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+    cursor: pointer;
+}
+.stage .error button:hover { border-color: var(--accent); }
+
+.feedback {
+    margin: 12px 2px 0;
+    min-height: 20px;
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--muted);
+    letter-spacing: 0.2px;
+}
+.feedback.correct { color: var(--good); }
+.feedback.wrong   { color: var(--bad); }
+
+.answers {
+    margin-top: 10px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    flex-shrink: 0;
+}
+@media (min-width: 760px) {
+    .answers { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+.answer {
+    appearance: none;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    padding: 14px 12px;
+    border-radius: 10px;
+    font-family: var(--sans);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s, transform 0.06s;
+    text-align: left;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 56px;
+    line-height: 1.3;
+}
+.answer:hover:not(:disabled) {
+    border-color: var(--accent);
+    background: var(--surface-2);
+}
+.answer:active:not(:disabled) { transform: translateY(1px); }
+.answer:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+.answer:disabled { cursor: default; }
+.answer .key {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 2px 6px;
+    flex: 0 0 auto;
+}
+.answer .label {
+    flex: 1 1 auto;
+    overflow-wrap: anywhere;
+}
+.answer.correct {
+    border-color: var(--good);
+    background: var(--good-bg);
+}
+.answer.correct .key {
+    border-color: var(--good);
+    color: var(--good);
+}
+.answer.wrong {
+    border-color: var(--bad);
+    background: var(--bad-bg);
+}
+.answer.wrong .key {
+    border-color: var(--bad);
+    color: var(--bad);
+}
+.answer.dim { opacity: 0.55; }
+
+.history {
+    margin-top: 16px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.history .label { letter-spacing: 0.4px; text-transform: uppercase; opacity: 0.7; }
+.history .pip {
+    width: 9px;
+    height: 9px;
+    border-radius: 2px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    display: inline-block;
+}
+.history .pip.win  { background: var(--good); border-color: var(--good); }
+.history .pip.loss { background: var(--bad); border-color: var(--bad); }
+
+@media (max-width: 480px) {
+    .topbar { font-size: 11px; gap: 10px; }
+    .topbar .stat strong { font-size: 12px; }
+    .answer { font-size: 13px; padding: 12px 10px; min-height: 52px; }
+    .stage { min-height: 200px; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+    <header class="topbar" role="banner">
+        <span class="title">AI Challenger</span>
+        <span class="stat">Score <strong id="stat-score">0</strong></span>
+        <span class="stat">Streak <strong id="stat-streak">0</strong></span>
+        <span class="stat">Best <strong id="stat-best">0</strong></span>
+        <span class="stat">Round <strong id="stat-round">1</strong></span>
+        <span class="spacer"></span>
+        <span class="mode-pill" id="mode-pill">Loading</span>
+    </header>
+
+    <main class="stage" id="stage" aria-label="Round visual">
+        <div class="visual" id="visual" aria-hidden="false"></div>
+        <div class="loading" id="loading" aria-live="polite">
+            <div class="ring" aria-hidden="true"></div>
+            <div class="shimmer" aria-hidden="true"></div>
+            <span id="loading-text">Generating challenge</span>
+        </div>
+        <div class="error hidden" id="error">
+            <p id="error-text">Couldn't reach the AI service. Try again or skip.</p>
+            <div style="display:flex; gap:8px;">
+                <button type="button" id="retry-btn">Retry</button>
+                <button type="button" id="skip-btn">Skip round</button>
+            </div>
+        </div>
+    </main>
+
+    <p class="feedback" id="feedback" aria-live="polite"></p>
+
+    <div class="answers" id="answers" role="group" aria-label="Choose an answer"></div>
+
+    <div class="history">
+        <span class="label">Last 20</span>
+        <span id="history-pips" style="display:flex; gap:4px; flex-wrap:wrap;"></span>
+    </div>
+
+</div>
+
+<script>
+(function () {
+    'use strict';
+
+    // ------------------------------------------------------------------
+    // Constants and storage
+    // ------------------------------------------------------------------
+
+    const TEXT_URL = 'https://text.pollinations.ai/openai/v1/chat/completions';
+    const TEXT_MODEL_PRIMARY = 'openai';
+    const IMAGE_BASE = 'https://image.pollinations.ai/prompt/';
+    const TEXT_TIMEOUT_MS = 15000;
+    const IMAGE_TIMEOUT_MS = 25000;
+    const FEEDBACK_DELAY_MS = 1500;
+    const HISTORY_MAX = 20;
+    const STORAGE_KEY = 'ai-challenger-state-v1';
+
+    const MODES = [
+        {
+            id: 'website',
+            label: 'Website UI',
+            difficulties: [
+                'a clean, recognisable home page screenshot',
+                'a slightly stylised dashboard view',
+                'a more abstract interpretation of the brand\'s look'
+            ]
+        },
+        {
+            id: 'ui-element',
+            label: 'UI Elements',
+            difficulties: [
+                'a clearly recognisable component',
+                'a moderately abstracted component',
+                'a strongly stylised component'
+            ]
+        },
+        {
+            id: 'object',
+            label: 'Object Images',
+            difficulties: [
+                'a clean photorealistic studio shot',
+                'a softer, ambient-lit photo',
+                'a more artistic, partial-view photo'
+            ]
+        },
+        {
+            id: 'logo',
+            label: 'Logo Designs',
+            difficulties: [
+                'a clean simplified silhouette',
+                'a more abstract reinterpretation',
+                'a heavily stylised abstract version'
+            ]
+        }
+    ];
+
+    const NEG_TEXT_CLAUSE =
+        'STRICT: do NOT render any text, letters, numbers, wordmarks, ' +
+        'logos with words, captions, watermarks, signage, brand names, ' +
+        'or readable typography of any kind. The image must give the ' +
+        'viewer a stylistic hint only.';
+
+    // ------------------------------------------------------------------
+    // State
+    // ------------------------------------------------------------------
+
+    const state = loadState();
+    let currentRound = null;     // { mode, correct, distractors, options, seed }
+    let answered = false;
+    let lastAbort = null;
+    let modeIndex = 0;
+
+    const els = {
+        score:    document.getElementById('stat-score'),
+        streak:   document.getElementById('stat-streak'),
+        best:     document.getElementById('stat-best'),
+        round:    document.getElementById('stat-round'),
+        modePill: document.getElementById('mode-pill'),
+        stage:    document.getElementById('stage'),
+        visual:   document.getElementById('visual'),
+        loading:  document.getElementById('loading'),
+        loadingText: document.getElementById('loading-text'),
+        error:    document.getElementById('error'),
+        errorText:document.getElementById('error-text'),
+        retry:    document.getElementById('retry-btn'),
+        skip:     document.getElementById('skip-btn'),
+        answers:  document.getElementById('answers'),
+        feedback: document.getElementById('feedback'),
+        pips:     document.getElementById('history-pips')
+    };
+
+    els.retry.addEventListener('click', () => startRound(true));
+    els.skip.addEventListener('click', () => {
+        recordHistory(false, true);
+        nextRound();
+    });
+
+    document.addEventListener('keydown', (ev) => {
+        if (answered || !currentRound) return;
+        const map = { '1': 0, '2': 1, '3': 2, '4': 3 };
+        if (map.hasOwnProperty(ev.key)) {
+            ev.preventDefault();
+            const btn = els.answers.children[map[ev.key]];
+            if (btn && !btn.disabled) btn.click();
+        }
+    });
+
+    renderStats();
+    renderHistory();
+    startRound(false);
+
+    // ------------------------------------------------------------------
+    // Round flow
+    // ------------------------------------------------------------------
+
+    function startRound(isRetry) {
+        answered = false;
+        if (lastAbort) { try { lastAbort.abort(); } catch (e) {} }
+        lastAbort = new AbortController();
+
+        const mode = MODES[modeIndex % MODES.length];
+        els.modePill.textContent = mode.label;
+        showLoading('Generating challenge');
+        clearAnswers();
+        clearVisual();
+        setFeedback('', '');
+
+        const seed = randInt(1, 9_999_999);
+        const difficulty = pickDifficulty(state.streak, mode.difficulties);
+
+        getChallenge(mode, difficulty, lastAbort.signal)
+            .then((challenge) => {
+                if (lastAbort.signal.aborted) return;
+                currentRound = {
+                    mode: mode,
+                    correct: challenge.correct,
+                    distractors: challenge.distractors,
+                    options: shuffle([
+                        challenge.correct.name,
+                        challenge.distractors[0],
+                        challenge.distractors[1],
+                        challenge.distractors[2]
+                    ]),
+                    seed: seed,
+                    difficulty: difficulty
+                };
+                return renderVisual(mode, challenge, seed, lastAbort.signal);
+            })
+            .then(() => {
+                if (!currentRound || lastAbort.signal.aborted) return;
+                hideLoading();
+                renderAnswers();
+            })
+            .catch((err) => {
+                if (lastAbort.signal.aborted) return;
+                console.warn('Round failed:', err);
+                showError(err && err.message ? err.message : 'Unknown error');
+            });
+    }
+
+    function nextRound() {
+        currentRound = null;
+        modeIndex += 1;
+        state.roundNum += 1;
+        saveState();
+        renderStats();
+        startRound(false);
+    }
+
+    function pickDifficulty(streak, list) {
+        if (streak >= 8)      return list[2];
+        else if (streak >= 4) return list[1];
+        else                  return list[0];
+    }
+
+    // ------------------------------------------------------------------
+    // Challenge fetch (text LLM)
+    // ------------------------------------------------------------------
+
+    async function getChallenge(mode, difficulty, signal) {
+        const prompt = buildTextPrompt(mode, difficulty, state.streak);
+        const body = {
+            model: TEXT_MODEL_PRIMARY,
+            messages: [
+                { role: 'system', content:
+                    'You are a generator for a guessing game. Always reply ' +
+                    'with valid JSON only - no markdown fences, no commentary. ' +
+                    'Pick well-known real-world brands or objects so players ' +
+                    'have a fair chance to guess.'
+                },
+                { role: 'user', content: prompt }
+            ],
+            response_format: { type: 'json_object' },
+            seed: Math.floor(Math.random() * 1_000_000)
+        };
+
+        const data = await fetchJSON(TEXT_URL, body, signal, TEXT_TIMEOUT_MS);
+        const content = data && data.choices && data.choices[0]
+            && data.choices[0].message && data.choices[0].message.content;
+        if (!content) throw new Error('Empty response from text API');
+
+        const parsed = parseLooseJSON(content);
+        validateChallenge(parsed);
+        return parsed;
+    }
+
+    function buildTextPrompt(mode, difficulty, streak) {
+        const difficultyHint =
+            'Difficulty hint: ' + difficulty + '. Streak so far: ' + streak + '.';
+
+        const schema =
+            'Return JSON shaped exactly:\n' +
+            '{\n' +
+            '  "correct":     { "name": "<short brand or object name>",\n' +
+            '                   "description": "<one short sentence>" },\n' +
+            '  "distractors": ["<wrong 1>", "<wrong 2>", "<wrong 3>"],\n' +
+            '  "image_prompt": "<detailed image-gen prompt>"\n' +
+            '}';
+
+        const negatives =
+            'The image_prompt MUST end with the literal sentence: ' +
+            '"' + NEG_TEXT_CLAUSE + '" ' +
+            'and must NOT name the correct answer or use any synonym a ' +
+            'viewer would read on the rendered image.';
+
+        if (mode.id === 'website') {
+            return [
+                'Pick ONE famous consumer website (e.g. Spotify, YouTube, ' +
+                'Amazon, Reddit, Twitch, Netflix, Airbnb, Wikipedia, Google ' +
+                'Search). Do not reuse popular guesses repeatedly.',
+                'Choose 3 plausible-but-incorrect distractor websites of the ' +
+                'same vibe (so picking by colour alone is hard).',
+                difficultyHint,
+                'image_prompt: describe a clean web UI screenshot in that ' +
+                'site\'s visual language - colour palette, layout, iconography, ' +
+                'typography style - WITHOUT the brand name, WITHOUT the logo, ' +
+                'WITHOUT any readable text, headings, or button labels. Use ' +
+                'placeholder shapes and lorem-ipsum-style blurred or unreadable ' +
+                'glyphs only.',
+                negatives,
+                schema
+            ].join('\n\n');
+        }
+
+        if (mode.id === 'ui-element') {
+            return [
+                'Pick ONE famous brand whose UI components are recognisable ' +
+                '(e.g. Apple iOS, Google Material, Microsoft Fluent, Discord, ' +
+                'Slack, Stripe, Notion). Pick one component type at random ' +
+                '(button, toggle, modal, navbar, slider, search bar).',
+                'Choose 3 distractor brand names whose component style is ' +
+                'similar enough to be plausible.',
+                difficultyHint,
+                'image_prompt: a single isolated UI component centred on a ' +
+                'neutral background, rendered exactly in that brand\'s design ' +
+                'language - colour, corner radius, shadow, iconography. ' +
+                'Absolutely NO readable text on the component (no labels, no ' +
+                'placeholder text, no captions). Use shape-only icons and ' +
+                'blurred/dummy glyphs if any text would normally be present.',
+                negatives,
+                schema
+            ].join('\n\n');
+        }
+
+        if (mode.id === 'object') {
+            return [
+                'Pick ONE everyday real-world object (e.g. rubber duck, ' +
+                'classic kettle, vinyl record, espresso cup, climbing shoe, ' +
+                'Eames lounge chair, Rubik\'s cube, Polaroid camera).',
+                'Choose 3 plausible-but-different distractor object names ' +
+                'from related categories.',
+                difficultyHint,
+                'image_prompt: a clean photorealistic studio shot of the ' +
+                'object centred on a soft neutral background, sharp focus, ' +
+                'natural lighting. No props with writing, no packaging, no ' +
+                'logos visible.',
+                negatives,
+                schema
+            ].join('\n\n');
+        }
+
+        // logo
+        return [
+            'Pick ONE famous brand with an iconic logo mark (e.g. Apple, ' +
+            'Nike, Twitter/X, Adidas, Shell, Pepsi, McDonald\'s, Audi, ' +
+            'Mastercard, Spotify).',
+            'Choose 3 distractor brand names from a similar industry whose ' +
+            'logos share visual cues (colour or shape).',
+            difficultyHint,
+            'image_prompt: a clean abstract simplified version of that brand\'s ' +
+            'logo MARK only (no wordmark, no company name, no tagline). Render ' +
+            'it as a flat vector-style illustration on a neutral background. ' +
+            'Keep the silhouette/colour recognisable but the image must contain ' +
+            'ZERO letters or numbers.',
+            negatives,
+            schema
+        ].join('\n\n');
+    }
+
+    function validateChallenge(c) {
+        if (!c || typeof c !== 'object') throw new Error('Bad JSON');
+        if (!c.correct || typeof c.correct.name !== 'string'
+            || !c.correct.name.trim())
+            throw new Error('Missing correct.name');
+        if (!Array.isArray(c.distractors) || c.distractors.length < 3)
+            throw new Error('Need 3 distractors');
+        c.distractors = c.distractors.slice(0, 3).map((d) => String(d).trim());
+        // Ensure uniqueness
+        const all = [c.correct.name.trim().toLowerCase()].concat(
+            c.distractors.map((d) => d.toLowerCase())
+        );
+        const uniq = new Set(all);
+        if (uniq.size < 4) throw new Error('Duplicate option detected');
+        if (typeof c.image_prompt !== 'string' || !c.image_prompt.trim())
+            throw new Error('Missing image_prompt');
+    }
+
+    // ------------------------------------------------------------------
+    // Visual render (image)
+    // ------------------------------------------------------------------
+
+    function renderVisual(mode, challenge, seed, signal) {
+        return new Promise((resolve, reject) => {
+            const promptText = appendNegatives(challenge.image_prompt);
+            const url =
+                IMAGE_BASE
+                + encodeURIComponent(promptText)
+                + '?width=768&height=768&nologo=true&seed=' + seed;
+
+            els.loadingText.textContent = 'Rendering image';
+
+            const img = new Image();
+            img.alt = 'AI-generated visual for the round';
+            img.className = 'gen-image';
+            img.decoding = 'async';
+            img.loading = 'eager';
+
+            const timer = setTimeout(() => {
+                img.src = '';
+                reject(new Error('Image timed out'));
+            }, IMAGE_TIMEOUT_MS);
+
+            const onAbort = () => {
+                clearTimeout(timer);
+                img.src = '';
+                reject(new Error('aborted'));
+            };
+            signal.addEventListener('abort', onAbort, { once: true });
+
+            img.onload = () => {
+                clearTimeout(timer);
+                signal.removeEventListener('abort', onAbort);
+                clearVisual();
+                els.visual.appendChild(img);
+                resolve();
+            };
+            img.onerror = () => {
+                clearTimeout(timer);
+                signal.removeEventListener('abort', onAbort);
+                reject(new Error('Image load failed'));
+            };
+
+            img.src = url;
+        });
+    }
+
+    function appendNegatives(prompt) {
+        // Belt-and-braces: the LLM is told to append the clause; we append it
+        // again so it is always present.
+        if (prompt.indexOf('no text') >= 0
+            && prompt.indexOf('wordmark') >= 0) {
+            return prompt;
+        }
+        return prompt + ' ' + NEG_TEXT_CLAUSE;
+    }
+
+    // ------------------------------------------------------------------
+    // Answer rendering and resolution
+    // ------------------------------------------------------------------
+
+    function renderAnswers() {
+        clearAnswers();
+        currentRound.options.forEach((opt, idx) => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'answer';
+            btn.setAttribute('aria-label', 'Answer ' + (idx + 1) + ': ' + opt);
+
+            const key = document.createElement('span');
+            key.className = 'key';
+            key.textContent = String(idx + 1);
+            const label = document.createElement('span');
+            label.className = 'label';
+            label.textContent = opt;
+
+            btn.appendChild(key);
+            btn.appendChild(label);
+            btn.addEventListener('click', () => onAnswer(idx, btn));
+            els.answers.appendChild(btn);
+        });
+    }
+
+    function onAnswer(idx, btn) {
+        if (answered || !currentRound) return;
+        answered = true;
+        const choice = currentRound.options[idx];
+        const isCorrect = norm(choice) === norm(currentRound.correct.name);
+
+        const buttons = Array.from(els.answers.children);
+        buttons.forEach((b) => { b.disabled = true; b.classList.add('dim'); });
+
+        // Mark correct
+        const correctIdx = currentRound.options.findIndex(
+            (o) => norm(o) === norm(currentRound.correct.name)
+        );
+        if (correctIdx >= 0) {
+            buttons[correctIdx].classList.add('correct');
+            buttons[correctIdx].classList.remove('dim');
+        }
+        if (!isCorrect) {
+            btn.classList.add('wrong');
+            btn.classList.remove('dim');
+        }
+
+        if (isCorrect) {
+            state.score += 1;
+            state.streak += 1;
+            if (state.streak > state.best) state.best = state.streak;
+            setFeedback(
+                'Correct - ' + currentRound.correct.name + '. '
+                + (currentRound.correct.description || ''),
+                'correct'
+            );
+        } else {
+            state.streak = 0;
+            setFeedback(
+                'Wrong. It was ' + currentRound.correct.name + '.',
+                'wrong'
+            );
+        }
+        recordHistory(isCorrect, false);
+        renderStats();
+        saveState();
+
+        setTimeout(() => { nextRound(); }, FEEDBACK_DELAY_MS);
+    }
+
+    function recordHistory(isCorrect, isSkip) {
+        state.history.unshift(
+            isSkip ? 'skip' : (isCorrect ? 'win' : 'loss')
+        );
+        if (state.history.length > HISTORY_MAX) {
+            state.history.length = HISTORY_MAX;
+        }
+        renderHistory();
+    }
+
+    // ------------------------------------------------------------------
+    // Rendering helpers
+    // ------------------------------------------------------------------
+
+    function renderStats() {
+        els.score.textContent  = String(state.score);
+        els.streak.textContent = String(state.streak);
+        els.best.textContent   = String(state.best);
+        els.round.textContent  = String(state.roundNum);
+    }
+
+    function renderHistory() {
+        els.pips.innerHTML = '';
+        for (let i = 0; i < HISTORY_MAX; i++) {
+            const pip = document.createElement('span');
+            pip.className = 'pip';
+            const v = state.history[i];
+            if (v === 'win')  pip.classList.add('win');
+            if (v === 'loss') pip.classList.add('loss');
+            els.pips.appendChild(pip);
+        }
+    }
+
+    function setFeedback(text, kind) {
+        els.feedback.textContent = text;
+        els.feedback.classList.remove('correct', 'wrong');
+        if (kind) els.feedback.classList.add(kind);
+    }
+
+    function clearAnswers() {
+        els.answers.innerHTML = '';
+    }
+
+    function clearVisual() {
+        els.visual.innerHTML = '';
+    }
+
+    function showLoading(text) {
+        els.loading.classList.remove('hidden');
+        els.error.classList.add('hidden');
+        if (text) els.loadingText.textContent = text;
+    }
+
+    function hideLoading() {
+        els.loading.classList.add('hidden');
+        els.error.classList.add('hidden');
+    }
+
+    function showError(msg) {
+        els.loading.classList.add('hidden');
+        els.error.classList.remove('hidden');
+        els.errorText.textContent =
+            msg
+            ? 'Round failed: ' + msg + '. Retry or skip.'
+            : 'Round failed. Retry or skip.';
+    }
+
+    // ------------------------------------------------------------------
+    // State persistence
+    // ------------------------------------------------------------------
+
+    function loadState() {
+        const blank = {
+            score: 0, streak: 0, best: 0, roundNum: 1, history: []
+        };
+        try {
+            const raw = localStorage.getItem(STORAGE_KEY);
+            if (!raw) return blank;
+            const parsed = JSON.parse(raw);
+            return {
+                score:    Number(parsed.score)    || 0,
+                streak:   Number(parsed.streak)   || 0,
+                best:     Number(parsed.best)     || 0,
+                roundNum: Number(parsed.roundNum) || 1,
+                history:  Array.isArray(parsed.history)
+                    ? parsed.history.slice(0, HISTORY_MAX)
+                    : []
+            };
+        } catch (e) {
+            return blank;
+        }
+    }
+
+    function saveState() {
+        try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        } catch (e) { /* quota; ignore */ }
+    }
+
+    // ------------------------------------------------------------------
+    // Network helpers
+    // ------------------------------------------------------------------
+
+    async function fetchJSON(url, body, signal, timeoutMs) {
+        const ctrl = new AbortController();
+        const onParentAbort = () => ctrl.abort();
+        if (signal) {
+            if (signal.aborted) ctrl.abort();
+            else signal.addEventListener('abort', onParentAbort, { once: true });
+        }
+        const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+        try {
+            const resp = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+                signal: ctrl.signal
+            });
+            if (!resp.ok) {
+                throw new Error('HTTP ' + resp.status);
+            }
+            return await resp.json();
+        } catch (err) {
+            if (err && err.name === 'AbortError') {
+                throw new Error('Text request timed out');
+            }
+            throw err;
+        } finally {
+            clearTimeout(timer);
+            if (signal) signal.removeEventListener('abort', onParentAbort);
+        }
+    }
+
+    function parseLooseJSON(text) {
+        // The model usually returns clean JSON; sometimes it wraps it in
+        // a fenced code block. Strip fences and locate the JSON object.
+        const cleaned = String(text)
+            .replace(/^\s*```(?:json)?\s*/i, '')
+            .replace(/\s*```\s*$/i, '')
+            .trim();
+        try { return JSON.parse(cleaned); } catch (e) { /* fallthrough */ }
+
+        // Find the first {...} balanced block.
+        const start = cleaned.indexOf('{');
+        const end   = cleaned.lastIndexOf('}');
+        if (start >= 0 && end > start) {
+            const slice = cleaned.slice(start, end + 1);
+            try { return JSON.parse(slice); } catch (e) {
+                throw new Error('Could not parse JSON: ' + e.message);
+            }
+        }
+        throw new Error('No JSON object in response');
+    }
+
+    // ------------------------------------------------------------------
+    // Misc utilities
+    // ------------------------------------------------------------------
+
+    function shuffle(arr) {
+        const a = arr.slice();
+        for (let i = a.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            const t = a[i]; a[i] = a[j]; a[j] = t;
+        }
+        return a;
+    }
+
+    function randInt(lo, hi) {
+        return Math.floor(Math.random() * (hi - lo + 1)) + lo;
+    }
+
+    function norm(s) {
+        return String(s || '').trim().toLowerCase();
+    }
+
+})();
+</script>
+</body>
+</html>
