@@ -216,11 +216,25 @@ section h2 {
   letter-spacing: -0.018em; margin: 0 0 .35rem;
   display: flex; align-items: center; gap: .9rem; flex-wrap: wrap;
 }
-/* Combined heading: "Katehuuh · Vibe code". The asterisk hovers a tooltip
-   revealing the alias (Nekochu) without spelling it out. */
+/* Combined heading: "Katehuuh · vibe code".
+   .me  — display serif name (inherits h2 clamp size + Fraunces).
+   .topic — small mono lowercase, mirrors the tagline rhythm.
+   .h2-dot — coral separator, sized between the two for an optical balance.
+   The asterisk hovers a tooltip revealing the alias (Nekochu) without spelling it out. */
+section h2 .vibe-heading { display: inline-flex; align-items: baseline; gap: .35em; flex-wrap: nowrap; }
 section h2 .me { color: var(--text); }
-section h2 .topic { color: var(--text-3); }
-section h2 .h2-dot { color: var(--accent); margin: 0 .15em; }
+section h2 .topic {
+  color: var(--text-3);
+  font: 500 var(--fs-sm)/1 var(--mono);
+  letter-spacing: .12em;
+  text-transform: lowercase;
+  align-self: center;
+}
+section h2 .h2-dot {
+  color: var(--accent);
+  font-weight: 500;
+  align-self: center;
+}
 section h2 .alias-mark {
   position: relative;
   top: -0.42em;
