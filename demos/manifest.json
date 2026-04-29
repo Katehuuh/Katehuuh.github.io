@@ -1,9 +1,10 @@
 {
   "demos": [
     {
-      "name": "[GAME]-AI-Challenger",
+      "name": "[GAME]-UI-Guesser",
       "type": "file",
-      "filename": "[GAME]-AI-Challenger.html"
+      "filename": "[GAME]-UI-Guesser.html",
+      "description": "Guess the name from the HTML, SVG, or image made by AI/LLM."
     },
     {
       "name": "[TOOL]-Dark-Editor",
