@@ -649,10 +649,15 @@ input, button { -webkit-tap-highlight-color: transparent; }
     // ------------------------------------------------------------------
     // Endpoints / constants
     // ------------------------------------------------------------------
-    const TEXT_URL  = 'https://text.pollinations.ai/openai/v1/chat/completions';
-    // Pollinations.openai can spike to 25s under load; 35s leaves headroom.
+    // We use Pollinations' simple GET endpoint instead of POST chat-completions
+    // because (a) GET avoids CORS preflight, (b) GET is more stable through
+    // puter.net.fetch's WASM TLS (POST chat-completions was throwing
+    // "tls handshake eof"), (c) GET responses are simpler text that our
+    // tolerant parser handles well.
+    //   https://text.pollinations.ai/{prompt}?model=...&json=true&seed=...
+    const TEXT_GET_BASE = 'https://text.pollinations.ai/';
     const TEXT_TIMEOUT_MS = 35000;
-    // First model is the default; on 429 we rotate to the next one on retry
+    // First model is the default; on 429 we rotate to the next on retry
     // (different upstream backends, different rate buckets).
     const TEXT_MODELS = ['mistral', 'openai', 'llama'];
 
@@ -1151,23 +1156,15 @@ input, button { -webkit-tap-highlight-color: transparent; }
         let lastRejected = null;       // most recent rejected attempt (used for semantic fallback)
         const triedRejections = [];    // accumulates EVERY rejected emoji this call so the LLM can't re-pick
         for (let attempt = 0; attempt < MAX_LLM_RETRIES_FOR_EMOJI; attempt++) {
-            const body = {
-                model: TEXT_MODELS[Math.min(attempt, TEXT_MODELS.length - 1)],
-                messages: [
-                    { role: 'system', content: SYS_PROMPT },
-                    { role: 'user',   content: buildUserPrompt(a, b, lastFeedback, triedRejections) }
-                ],
-                response_format: { type: 'json_object' },
-                temperature: 0.9,
-                // Small ceiling: our schema is ~80 tokens, anything more is the
-                // model padding its way to a slower response. Caps end-to-end
-                // latency well below the request timeout.
-                max_tokens: 220,
-                seed: Math.floor(Math.random() * 1_000_000)
-            };
+            const model = TEXT_MODELS[Math.min(attempt, TEXT_MODELS.length - 1)];
+            const userPrompt = buildUserPrompt(a, b, lastFeedback, triedRejections);
+            // Pollinations GET takes a single combined prompt. We prefix the
+            // system rules so the model still sees them.
+            const combinedPrompt = SYS_PROMPT + '\n\n' + userPrompt;
             const t0 = performance.now();
             const reqSummary = {
                 kind: 'combine', a: a.name, b: b.name,
+                model,
                 attempt: attempt + 1, retryFeedback: lastFeedback,
                 triedSoFar: triedRejections.map(r => r.emoji)
             };
@@ -1176,9 +1173,7 @@ input, button { -webkit-tap-highlight-color: transparent; }
             // exception message and the raw model output is lost).
             let content = null;
             try {
-                const data = await fetchJSON(TEXT_URL, body, null, TEXT_TIMEOUT_MS);
-                content = data && data.choices && data.choices[0]
-                    && data.choices[0].message && data.choices[0].message.content;
+                content = await fetchTextGET(combinedPrompt, model, TEXT_TIMEOUT_MS);
                 if (!content) throw new Error('Empty content from text API');
                 const parsed = parseLooseJSON(content);
                 const v = validateLLMResult(parsed);
@@ -1277,6 +1272,30 @@ input, button { -webkit-tap-highlight-color: transparent; }
             description: (lastRejected && lastRejected.description)
                          || ('A mix of ' + a.name + ' and ' + b.name + '.')
         };
+    }
+
+    // GET against Pollinations' simple text endpoint. Returns the raw response
+    // body as a string (Pollinations replies with plain text or JSON-as-text;
+    // our tolerant parseLooseJSON handles either).
+    async function fetchTextGET(prompt, model, timeoutMs) {
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+        try {
+            const seed = Math.floor(Math.random() * 1_000_000);
+            const url = TEXT_GET_BASE
+                + encodeURIComponent(prompt)
+                + '?model=' + encodeURIComponent(model)
+                + '&json=true'
+                + '&seed=' + seed;
+            const resp = await relayFetch(url, { method: 'GET', signal: ctrl.signal });
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+            return await resp.text();
+        } catch (err) {
+            if (err && err.name === 'AbortError') throw new Error('Request timed out');
+            throw err;
+        } finally {
+            clearTimeout(timer);
+        }
     }
 
     async function fetchJSON(url, body, signal, timeoutMs) {
