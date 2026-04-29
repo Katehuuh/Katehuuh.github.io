@@ -1,10 +1,10 @@
 {
   "demos": [
     {
-      "name": "[GAME]-Infinite-Craft",
+      "name": "[GAME]-Element-Fusion",
       "type": "file",
-      "filename": "[GAME]-Infinite-Craft.html",
-      "description": "Infinite Craft clone \u2014 drag two elements to discover a new one, generated live by AI."
+      "filename": "[GAME]-Element-Fusion.html",
+      "description": "Inspired by the game Infinite Craft: neal.fun/infinite-craft"
     },
     {
       "name": "[GAME]-UI-Guesser",
