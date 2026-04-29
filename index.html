@@ -708,6 +708,11 @@ function populateHeroPopovers(data) {
     const show = () => {
       if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; }
       closeOthers(wrap);
+      // Clamp popover height to available space above the icon so its top
+      // edge never crosses the viewport top — opens-up positioning means a
+      // tall popover would otherwise spill off-screen at top on small viewports.
+      const space = wrap.getBoundingClientRect().top - 14 - 16; // anchor gap + viewport buffer
+      ul.style.maxHeight = Math.max(120, Math.min(window.innerHeight * 0.5, space)) + 'px';
       wrap.classList.add('show-pop');
     };
     const scheduleHide = () => {
