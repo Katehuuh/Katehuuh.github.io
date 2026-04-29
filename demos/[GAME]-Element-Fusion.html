@@ -649,17 +649,12 @@ input, button { -webkit-tap-highlight-color: transparent; }
     // ------------------------------------------------------------------
     // Endpoints / constants
     // ------------------------------------------------------------------
-    // We use Pollinations' simple GET endpoint instead of POST chat-completions
-    // because (a) GET avoids CORS preflight, (b) GET is more stable through
-    // puter.net.fetch's WASM TLS (POST chat-completions was throwing
-    // "tls handshake eof"), (c) GET responses are simpler text that our
-    // tolerant parser handles well.
-    //   https://text.pollinations.ai/{prompt}?model=...&json=true&seed=...
-    const TEXT_GET_BASE = 'https://text.pollinations.ai/';
+    // LLM via puter.ai.chat (JS API, no CORS, no Pollinations rate limit).
     const TEXT_TIMEOUT_MS = 35000;
-    // First model is the default; on 429 we rotate to the next on retry
-    // (different upstream backends, different rate buckets).
-    const TEXT_MODELS = ['mistral', 'openai', 'llama'];
+    // Models supported by puter.ai.chat. First is default; rotation on retry
+    // gives a different upstream if one model errors out. undefined = puter's
+    // default (currently gpt-4o-mini equivalent).
+    const TEXT_MODELS = [undefined, 'gpt-4o-mini', 'claude-3-haiku'];
 
     // Shared discovery cache (JSONBlob). Verified live: POST 201 Created
     // with Location: /api/jsonBlob/{id}; GET 200; PUT 200. CORS open.
@@ -1165,13 +1160,10 @@ input, button { -webkit-tap-highlight-color: transparent; }
         for (let attempt = 0; attempt < MAX_LLM_RETRIES_FOR_EMOJI; attempt++) {
             const model = TEXT_MODELS[Math.min(attempt, TEXT_MODELS.length - 1)];
             const userPrompt = buildUserPrompt(a, b, lastFeedback, triedRejections);
-            // Pollinations GET takes a single combined prompt. We prefix the
-            // system rules so the model still sees them.
-            const combinedPrompt = SYS_PROMPT + '\n\n' + userPrompt;
             const t0 = performance.now();
             const reqSummary = {
                 kind: 'combine', a: a.name, b: b.name,
-                model,
+                model: model || 'default',
                 attempt: attempt + 1, retryFeedback: lastFeedback,
                 triedSoFar: triedRejections.map(r => r.emoji)
             };
@@ -1180,7 +1172,7 @@ input, button { -webkit-tap-highlight-color: transparent; }
             // exception message and the raw model output is lost).
             let content = null;
             try {
-                content = await fetchTextGET(combinedPrompt, model, TEXT_TIMEOUT_MS);
+                content = await fetchTextGET(SYS_PROMPT, userPrompt, model, TEXT_TIMEOUT_MS);
                 if (!content) throw new Error('Empty content from text API');
                 const parsed = parseLooseJSON(content);
                 const v = validateLLMResult(parsed);
@@ -1281,22 +1273,36 @@ input, button { -webkit-tap-highlight-color: transparent; }
         };
     }
 
-    // GET against Pollinations' simple text endpoint. Returns the raw response
-    // body as a string (Pollinations replies with plain text or JSON-as-text;
-    // our tolerant parseLooseJSON handles either).
-    async function fetchTextGET(prompt, model, timeoutMs) {
+    // Call puter.ai.chat directly (Puter's first-party LLM, not relayed
+    // Pollinations). Returns the assistant's content string. We pivoted to
+    // this after Pollinations + puter.net.fetch combo ran into:
+    //   - CORS preflight failures (POST chat-completions blocked)
+    //   - puter WASM TLS handshake EOF on POST
+    //   - HTTP 429 from Pollinations across all models / proxies (Cloudflare
+    //     rate-limit on the shared puter relay IP)
+    // puter.ai.chat is JS-API not HTTP-from-page so no CORS, and its rate
+    // bucket is independent from Pollinations.
+    async function fetchTextGET(systemPrompt, userPrompt, model, timeoutMs) {
+        if (typeof puter === 'undefined' || !puter.ai || typeof puter.ai.chat !== 'function') {
+            throw new Error('puter.ai unavailable');
+        }
         const ctrl = new AbortController();
         const timer = setTimeout(() => ctrl.abort(), timeoutMs);
         try {
-            const seed = Math.floor(Math.random() * 1_000_000);
-            const url = TEXT_GET_BASE
-                + encodeURIComponent(prompt)
-                + '?model=' + encodeURIComponent(model)
-                + '&json=true'
-                + '&seed=' + seed;
-            const resp = await relayFetch(url, { method: 'GET', signal: ctrl.signal });
-            if (!resp.ok) throw new Error('HTTP ' + resp.status);
-            return await resp.text();
+            // puter.ai.chat accepts OpenAI-style message arrays.
+            const messages = [
+                { role: 'system', content: systemPrompt },
+                { role: 'user',   content: userPrompt }
+            ];
+            // Race against a manual abort for parity with the old fetch timeout.
+            const chatPromise = puter.ai.chat(messages, model ? { model } : undefined);
+            const aborted = new Promise((_, rej) => {
+                ctrl.signal.addEventListener('abort', () => rej(new Error('Request timed out')), { once: true });
+            });
+            const resp = await Promise.race([chatPromise, aborted]);
+            const content = resp && resp.message && resp.message.content;
+            if (typeof content !== 'string' || !content) throw new Error('Empty content from text API');
+            return content;
         } catch (err) {
             if (err && err.name === 'AbortError') throw new Error('Request timed out');
             throw err;
