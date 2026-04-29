@@ -125,8 +125,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Infinite Craft</title>
-<meta name="description" content="Infinite Craft clone — drag two elements to discover a new one, generated live by AI." />
+<title>element-fusion</title>
+<meta name="description" content="Inspired by the game Infinite Craft: neal.fun/infinite-craft" />
 <!-- Puter SDK relays JSONBlob requests server-side, bypassing CORS that
      blocks direct browser-to-jsonblob.com calls from github.io origins. -->
 <script src="https://js.puter.com/v2/" async></script>
@@ -687,12 +687,12 @@ input, button { -webkit-tap-highlight-color: transparent; }
     }
 
     const MAX_LLM_RETRIES_FOR_EMOJI = 3;
-    // Small models choke on a 200-emoji context dump — they skim and miss.
+    // Small models choke on a 200-emoji context dump - they skim and miss.
     // 60 is enough to bias the first call away from common collisions; per-call
     // rejections accumulate as an explicit "do NOT pick these" list on retries.
     const MAX_USED_LIST = 60;
 
-    // Semantic emoji groups — when the LLM keeps picking a taken emoji we
+    // Semantic emoji groups: when the LLM keeps picking a taken emoji we
     // search the same group for an unused one before falling back to the
     // sparkle disambiguation. Hand-curated for control + tiny size; no CDN
     // dependency. Order inside a group is fallback priority (commonest first).
@@ -1114,7 +1114,7 @@ input, button { -webkit-tap-highlight-color: transparent; }
         // rejected. Stops the model from looping back to the same picks.
         if (triedRejections && triedRejections.length > 0) {
             const banned = triedRejections.map(r => r.emoji + ' (taken for "' + r.conflictName + '")').join(', ');
-            lines.push('You ALREADY tried these emojis this turn — they are NOT VALID. Do NOT pick them again: ' + banned + '.');
+            lines.push('You ALREADY tried these emojis this turn - they are NOT VALID. Do NOT pick them again: ' + banned + '.');
         }
         if (feedback) lines.push('Last attempt: ' + feedback);
         lines.push('Return JSON for the result.');
@@ -1142,9 +1142,13 @@ input, button { -webkit-tap-highlight-color: transparent; }
                 attempt: attempt + 1, retryFeedback: lastFeedback,
                 triedSoFar: triedRejections.map(r => r.emoji)
             };
+            // `content` lives outside the try so the catch can include it in
+            // the error log entry (otherwise a parse failure leaves only the
+            // exception message and the raw model output is lost).
+            let content = null;
             try {
                 const data = await fetchJSON(TEXT_URL, body, null, TEXT_TIMEOUT_MS);
-                const content = data && data.choices && data.choices[0]
+                content = data && data.choices && data.choices[0]
                     && data.choices[0].message && data.choices[0].message.content;
                 if (!content) throw new Error('Empty content from text API');
                 const parsed = parseLooseJSON(content);
@@ -1181,7 +1185,10 @@ input, button { -webkit-tap-highlight-color: transparent; }
                 }
             } catch (err) {
                 const elapsed = performance.now() - t0;
-                logEntry('error', reqSummary, { message: String(err && err.message || err) }, elapsed);
+                logEntry('error', reqSummary, {
+                    message: String(err && err.message || err),
+                    raw: typeof content === 'string' ? content.slice(0, 800) : null,
+                }, elapsed);
                 throw err;
             }
         }
@@ -1496,7 +1503,7 @@ input, button { -webkit-tap-highlight-color: transparent; }
             const banner = document.createElement('div');
             banner.className = 'error-banner';
             const msg = document.createElement('span');
-            msg.textContent = 'Couldn\'t combine these — ' + state.lastError;
+            msg.textContent = 'Couldn\'t combine these: ' + state.lastError;
             const grp = document.createElement('div');
             grp.style.display = 'flex'; grp.style.gap = '8px';
             const retry = document.createElement('button');
@@ -1591,7 +1598,7 @@ input, button { -webkit-tap-highlight-color: transparent; }
             }
         });
 
-        if (el.description) wireTooltip(card, el.description + (el.discoveredBy && el.discoveredBy !== 'starter' && el.discoveredBy !== state.userId ? '\n— ' + el.discoveredBy : ''));
+        if (el.description) wireTooltip(card, el.description + (el.discoveredBy && el.discoveredBy !== 'starter' && el.discoveredBy !== state.userId ? '\nby ' + el.discoveredBy : ''));
         return card;
     }
 
