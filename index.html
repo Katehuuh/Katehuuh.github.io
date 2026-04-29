@@ -123,7 +123,7 @@ a:hover { color: #ffb98d; }
 
 /* Popover anchored above icon; items cascade-in with a stagger. Sibling
    of the icon-link (not nested) so item clicks don't fire the icon's href.
-   .grid-2col is the wide variant (HF list with >4 items). */
+   Single-column always — long lists scroll inside the popover. */
 .icon-pop-wrap { position: relative; display: inline-flex; }
 .icon-pop-wrap .reveal-list {
   position: absolute;
@@ -169,15 +169,6 @@ a:hover { color: #ffb98d; }
   cursor: default;
 }
 .icon-pop-wrap .reveal-list .section-header:first-child { padding-top: 0; }
-
-.icon-pop-wrap .reveal-list.grid-2col {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  column-gap: var(--sp-1);
-  width: min(380px, calc(100vw - 24px));
-}
-.icon-pop-wrap .reveal-list.grid-2col > .section-header { grid-column: 1 / -1; }
-.icon-pop-wrap .reveal-list.grid-2col a { font-size: var(--fs-xs); }
 
 .icon-pop-wrap.show-pop .reveal-list,
 .icon-pop-wrap:focus-within .reveal-list {
@@ -750,7 +741,6 @@ function populateHeroPopovers(data) {
     if (sets.length || models.length) {
       const ul = document.createElement('ul');
       ul.className = 'reveal-list';
-      if (sets.length + models.length > 4) ul.classList.add('grid-2col');
       let idx = 0;
       if (sets.length) {
         ul.appendChild(buildHeader('Datasets', idx++));
