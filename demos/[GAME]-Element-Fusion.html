@@ -175,8 +175,8 @@ body {
     background: var(--bg);
     color: var(--text);
     font-family: -apple-system, BlinkMacSystemFont, "Inter", "SF Pro Text", "Segoe UI", Roboto, system-ui, sans-serif;
-    font-size: 15px;
-    line-height: 1.45;
+    font-size: 18px;
+    line-height: 1.5;
     min-height: 100dvh;
     overflow-y: auto;
     -webkit-font-smoothing: antialiased;
@@ -387,12 +387,12 @@ input, button { -webkit-tap-highlight-color: transparent; }
     white-space: nowrap;
     width: 100%;
 }
-.card.size-sm { width: 80px; height: 80px; border-radius: var(--radius-md); padding: 6px; }
-.card.size-sm .emoji { font-size: 28px; }
-.card.size-sm .name  { font-size: 11px; }
-.card.size-lg { width: 140px; height: 140px; border-radius: 22px; }
-.card.size-lg .emoji { font-size: 52px; }
-.card.size-lg .name  { font-size: 14px; }
+.card.size-sm { width: 104px; height: 104px; border-radius: var(--radius-md); padding: 8px; }
+.card.size-sm .emoji { font-size: 38px; }
+.card.size-sm .name  { font-size: 14px; }
+.card.size-lg { width: 168px; height: 168px; border-radius: 22px; }
+.card.size-lg .emoji { font-size: 64px; }
+.card.size-lg .name  { font-size: 17px; }
 
 /* Discoverer initials chip */
 .card .discoverer {
@@ -585,6 +585,90 @@ input, button { -webkit-tap-highlight-color: transparent; }
 }
 .tooltip.is-visible { opacity: 1; transform: translateY(0); }
 
+/* Per-attempt LLM call log shown in the workspace below the slots. Compact,
+   monospace numerals so the times line up. */
+.attempts-log {
+    font: 500 14px/1.5 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    color: var(--muted);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 6px 12px;
+    margin-top: 6px;
+    overflow-x: auto;
+    white-space: nowrap;
+}
+
+/* Magic "+" card: rainbow gradient border + sparkle. Only shown when the
+   user has earned >= POINTS_REVEAL_AT discoveries. */
+.card.magic-add {
+    background: linear-gradient(135deg, rgba(255, 80, 120, 0.15), rgba(255, 200, 60, 0.15), rgba(60, 220, 160, 0.15), rgba(80, 140, 255, 0.15), rgba(200, 100, 255, 0.15));
+    border: 2px solid transparent;
+    background-clip: padding-box;
+    position: relative;
+    cursor: pointer;
+}
+.card.magic-add::before {
+    content: "";
+    position: absolute; inset: -2px;
+    border-radius: inherit;
+    padding: 2px;
+    background: linear-gradient(135deg, #ff5078, #ffc83c, #3cdca0, #508cff, #c864ff);
+    mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+            mask-composite: exclude;
+    pointer-events: none;
+    animation: magicShimmer 6s linear infinite;
+}
+.card.magic-add .emoji { filter: drop-shadow(0 0 6px rgba(255, 200, 100, 0.5)); }
+.card.magic-add .name  { color: var(--text); font-weight: 600; }
+@keyframes magicShimmer { 0% { filter: hue-rotate(0deg); } 100% { filter: hue-rotate(360deg); } }
+
+/* Custom-element modal */
+.modal-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    display: grid; place-items: center;
+    z-index: 1000;
+    animation: modalFade 0.18s ease-out both;
+}
+.modal-dialog {
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
+    border-radius: 16px;
+    padding: 22px 22px 18px;
+    width: min(92vw, 420px);
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.45);
+}
+.modal-dialog h3 { margin: 0 0 4px; font-size: 22px; }
+.modal-sub { margin: 0 0 14px; color: var(--muted); font-size: 14px; }
+.modal-input {
+    width: 100%; padding: 12px 14px;
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--border-strong);
+    border-radius: 10px;
+    font: inherit; font-size: 18px;
+    outline: none;
+}
+.modal-input:focus { border-color: var(--accent, #6c8eff); }
+.modal-btns { display: flex; gap: 10px; justify-content: flex-end; margin-top: 14px; }
+.modal-btns .btn { padding: 10px 16px; font-size: 16px; }
+.modal-btns .btn.primary { background: var(--accent, #6c8eff); color: #000; font-weight: 600; }
+@keyframes modalFade { from { opacity: 0; } to { opacity: 1; } }
+
+/* Mobile: stack workspace + grid, bigger touch targets */
+@media (max-width: 720px) {
+    body { font-size: 17px; }
+    .card.size-sm { width: 96px; height: 96px; }
+    .card.size-sm .emoji { font-size: 36px; }
+    .card.size-lg { width: 140px; height: 140px; }
+    .card.size-lg .emoji { font-size: 52px; }
+}
+
 /* Reduced motion */
 @media (prefers-reduced-motion: reduce) {
     * { animation-duration: 0.001s !important; transition-duration: 0.001s !important; }
@@ -696,9 +780,9 @@ input, button { -webkit-tap-highlight-color: transparent; }
 
     const MAX_LLM_RETRIES_FOR_EMOJI = 3;
     // We now use local Qwen3 (32k ctx) + puter.ai gpt-4o-mini (128k ctx) so
-    // dumping the full taken-emoji list every call is fine. Cap at 200 just
-    // so the prompt doesn't bloat absurdly; sample randomly above that.
-    const MAX_USED_LIST = 200;
+    // dumping the full taken-emoji list every call is fine. 400 is enough to
+    // cover most realistic discovery sets; sample randomly above that.
+    const MAX_USED_LIST = 400;
 
     // Semantic emoji groups: when the LLM keeps picking a taken emoji we
     // search the same group for an unused one before falling back to the
@@ -759,7 +843,12 @@ input, button { -webkit-tap-highlight-color: transparent; }
     const LS_DEBUG    = 'infiniteCraft.debug.v1';
     const LS_USER_ID  = 'infiniteCraft.userId.v1';
     const LS_BLOB_ID  = 'infiniteCraft.blobId.v1';
+    const LS_POINTS   = 'infiniteCraft.points.v1';
     const DEBUG_MAX   = 100;
+    // The "+" magic card in the Elements panel only appears once the user
+    // has accumulated this many points (= first-discoveries) -> it's a
+    // surprise reveal, not visible from the start.
+    const POINTS_REVEAL_AT = 3;
 
     // Starter elements (always present, name-keyed)
     const STARTERS = [
@@ -782,6 +871,13 @@ input, button { -webkit-tap-highlight-color: transparent; }
         history:  [],   // last 8 lowercased names (newest first)
         comboInFlight: null,
         lastError: null,
+        // Per-combine attempt log (visible in the UI, not just debug):
+        // each entry { n, path:'local'|'puter', elapsedMs, ok, error? }
+        comboAttempts: [],
+        comboLastSummary: null,         // { attempts: [...], totalMs }
+        // 1 point per genuine first-discovery; spendable to "Add Element"
+        // (custom name -> LLM-generated emoji+description).
+        points: 0,
 
         // Sync
         blobId: null,                  // resolved blob id (constant or LS override)
@@ -839,6 +935,11 @@ input, button { -webkit-tap-highlight-color: transparent; }
         // Debug
         state.debug = readJSON(LS_DEBUG, []) || [];
         if (!Array.isArray(state.debug)) state.debug = [];
+
+        // Points (1 per genuine first-discovery). Survives DEBUG=true since
+        // it's a persistent reward, not a state cache.
+        const ptRaw = parseInt(localStorage.getItem(LS_POINTS), 10);
+        state.points = Number.isFinite(ptRaw) && ptRaw >= 0 ? ptRaw : 0;
 
         // Theme
         const t = localStorage.getItem(LS_THEME);
@@ -1187,6 +1288,8 @@ input, button { -webkit-tap-highlight-color: transparent; }
                         raw: typeof content === 'string' ? content.slice(0, 400) : null,
                         accepted: { name: v.element.name, emoji: v.element.emoji, forced: !!v.forced }
                     }, elapsed);
+                    state.comboAttempts.push({ n: attempt + 1, path, elapsedMs: elapsed, ok: true });
+                    renderWorkspace();
                     return v.element;
                 } else {
                     logEntry('text', reqSummary, {
@@ -1194,6 +1297,8 @@ input, button { -webkit-tap-highlight-color: transparent; }
                         raw: typeof content === 'string' ? content.slice(0, 400) : null,
                         rejected: v.reason
                     }, elapsed);
+                    state.comboAttempts.push({ n: attempt + 1, path, elapsedMs: elapsed, ok: false, error: 'rejected: ' + v.reason });
+                    renderWorkspace();
                     lastFeedback = v.reason;
                     if (v.conflictEmoji && parsed && parsed.name) {
                         lastRejected = {
@@ -1220,6 +1325,8 @@ input, button { -webkit-tap-highlight-color: transparent; }
                     message: msg,
                     raw: typeof content === 'string' ? content.slice(0, 800) : null,
                 }, elapsed);
+                state.comboAttempts.push({ n: attempt + 1, path, elapsedMs: elapsed, ok: false, error: msg });
+                renderWorkspace();
                 // Retry on parse failure (model gave prose) or transient
                 // timeout (Pollinations busy); both often clear on a second
                 // attempt. Network 5xx and DNS errors propagate so the user
@@ -1589,6 +1696,8 @@ input, button { -webkit-tap-highlight-color: transparent; }
         const cKey = comboKey(a.name, b.name);
         state.comboInFlight = cKey;
         state.lastError = null;
+        state.comboAttempts = [];
+        state.comboLastSummary = null;
         renderWorkspace();
         try {
             const result = await callCombineLLM(a, b);
@@ -1611,8 +1720,16 @@ input, button { -webkit-tap-highlight-color: transparent; }
             writeJSON(LS_COMBOS, state.combos);
 
             state.comboInFlight = null;
+            state.comboLastSummary = {
+                attempts: state.comboAttempts.slice(),
+                totalMs: state.comboAttempts.reduce((s, a) => s + (a.elapsedMs || 0), 0),
+            };
             // First-discovery = locally new AND not already known via remote merge
             const isFirstDiscovery = wasNewLocally && !wasInRemote;
+            if (isFirstDiscovery) {
+                state.points = (state.points || 0) + 1;
+                try { localStorage.setItem(LS_POINTS, String(state.points)); } catch (_) {}
+            }
             await playFusion(k, isFirstDiscovery, /*remoteHit*/ wasInRemote);
 
             // Schedule shared-cache push
@@ -1743,7 +1860,7 @@ input, button { -webkit-tap-highlight-color: transparent; }
             ? allKeys.filter(k => state.elements[k].name.toLowerCase().includes(searchQuery))
             : allKeys;
 
-        counter.textContent = allKeys.length + ' total';
+        counter.textContent = allKeys.length + ' total · ' + (state.points || 0) + ' pts';
 
         if (!filtered.length) {
             host.classList.add('is-empty');
@@ -1752,6 +1869,11 @@ input, button { -webkit-tap-highlight-color: transparent; }
         }
         host.classList.remove('is-empty');
         const frag = document.createDocumentFragment();
+        // Magic "+" card: only appears once the user has accumulated enough
+        // points to spend. Surprise reveal, deliberately not visible at start.
+        if ((state.points || 0) >= POINTS_REVEAL_AT && !searchQuery) {
+            frag.appendChild(buildAddElementCard());
+        }
         for (const k of filtered) {
             frag.appendChild(buildCard(k, { size: 'sm', context: 'grid' }));
         }
@@ -1798,6 +1920,24 @@ input, button { -webkit-tap-highlight-color: transparent; }
             }
         }
 
+        // Per-attempt timing + path log (visible while in flight and after).
+        // Format: "1: local 8.2s  ·  2: puter 14.1s rejected  ·  3: puter 9.5s ok"
+        const showAttempts = (state.comboAttempts && state.comboAttempts.length)
+            || (state.comboLastSummary && state.comboLastSummary.attempts.length);
+        const list = state.comboInFlight
+            ? state.comboAttempts
+            : (state.comboLastSummary ? state.comboLastSummary.attempts : []);
+        if (showAttempts && list.length) {
+            const log = document.createElement('div');
+            log.className = 'attempts-log';
+            log.textContent = list.map(a => {
+                const sec = (a.elapsedMs / 1000).toFixed(1);
+                const status = a.ok ? 'ok' : (/rejected/.test(a.error || '') ? 'rejected' : 'err');
+                return a.n + ': ' + (a.path || '?') + ' ' + sec + 's ' + status;
+            }).join('  ·  ');
+            actions.appendChild(log);
+        }
+
         if (state.lastError) {
             const banner = document.createElement('div');
             banner.className = 'error-banner';
@@ -1831,6 +1971,126 @@ input, button { -webkit-tap-highlight-color: transparent; }
         for (const k of state.history) {
             if (!state.elements[k]) continue;
             host.appendChild(buildCard(k, { size: 'sm', context: 'history' }));
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Magic "+" card: appears in the elements panel once the user has
+    // accumulated POINTS_REVEAL_AT discoveries. Click -> small dialog asks
+    // for a name, OK or Enter spends 3 points and the LLM generates the
+    // emoji + description for that name.
+    // ------------------------------------------------------------------
+    function buildAddElementCard() {
+        const card = document.createElement('div');
+        card.className = 'card size-sm magic-add';
+        card.setAttribute('role', 'button');
+        card.setAttribute('tabindex', '0');
+        const e = document.createElement('div');
+        e.className = 'emoji';
+        e.textContent = '✨';
+        const n = document.createElement('div');
+        n.className = 'name';
+        n.textContent = 'Add element';
+        card.appendChild(e);
+        card.appendChild(n);
+        const onActivate = async () => {
+            if ((state.points || 0) < 3) {
+                showToast('Need 3 pts. Discover 3 more elements.');
+                return;
+            }
+            const name = await promptForElementName();
+            if (!name) return; // cancel: no points spent
+            state.points -= 3;
+            try { localStorage.setItem(LS_POINTS, String(state.points)); } catch (_) {}
+            await createCustomElement(name);
+        };
+        card.addEventListener('click', onActivate);
+        card.addEventListener('keydown', (ev) => {
+            if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); onActivate(); }
+        });
+        return card;
+    }
+
+    function promptForElementName() {
+        return new Promise((resolve) => {
+            const overlay = document.createElement('div');
+            overlay.className = 'modal-overlay';
+            const dlg = document.createElement('div');
+            dlg.className = 'modal-dialog';
+            const h = document.createElement('h3');
+            h.textContent = 'Conjure new element';
+            const sub = document.createElement('p');
+            sub.className = 'modal-sub';
+            sub.textContent = 'Type a name. The emoji + description are AI-generated.';
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.className = 'modal-input';
+            input.placeholder = 'e.g. Rainbow Cat';
+            input.maxLength = 40;
+            const row = document.createElement('div');
+            row.className = 'modal-btns';
+            const cancel = document.createElement('button');
+            cancel.className = 'btn'; cancel.type = 'button'; cancel.textContent = 'Cancel';
+            const ok = document.createElement('button');
+            ok.className = 'btn primary'; ok.type = 'button'; ok.textContent = 'OK -3 pts';
+            row.appendChild(cancel); row.appendChild(ok);
+            dlg.appendChild(h); dlg.appendChild(sub); dlg.appendChild(input); dlg.appendChild(row);
+            overlay.appendChild(dlg);
+            document.body.appendChild(overlay);
+            setTimeout(() => input.focus(), 50);
+            const done = (val) => { if (overlay.parentNode) overlay.parentNode.removeChild(overlay); resolve(val); };
+            cancel.addEventListener('click', () => done(null));
+            ok.addEventListener('click', () => done(input.value.trim() || null));
+            input.addEventListener('keydown', (ev) => {
+                if (ev.key === 'Enter') { ev.preventDefault(); done(input.value.trim() || null); }
+                else if (ev.key === 'Escape') { ev.preventDefault(); done(null); }
+            });
+            overlay.addEventListener('click', (ev) => { if (ev.target === overlay) done(null); });
+        });
+    }
+
+    async function createCustomElement(name) {
+        const userPrompt =
+            'Create a NEW element named "' + name + '". Pick a single emoji that fits the name and is NOT already used for any element below. Reply ONLY with JSON {"name":"' + name + '","emoji":"<single emoji>","description":"<one short sentence>"}.\n' +
+            'Already-used emojis (do NOT pick any of these): ' + buildUsedList().join(', ');
+        state.comboInFlight = 'custom:' + name;
+        state.comboAttempts = [];
+        state.comboLastSummary = null;
+        state.lastError = null;
+        renderWorkspace();
+        const t0 = performance.now();
+        try {
+            const got = await fetchTextGET(SYS_PROMPT, userPrompt, undefined, TEXT_TIMEOUT_MS);
+            const elapsed = performance.now() - t0;
+            state.comboAttempts.push({ n: 1, path: got.path, elapsedMs: elapsed, ok: true });
+            const parsed = parseLooseJSON(got.content);
+            const v = validateLLMResult(parsed);
+            if (!v || !v.element) throw new Error((v && v.reason) || 'invalid result');
+            const k = nameKey(v.element.name);
+            if (state.elements[k]) throw new Error('Element "' + v.element.name + '" already exists');
+            state.elements[k] = {
+                name: v.element.name,
+                emoji: v.element.emoji,
+                description: v.element.description || '',
+                parents: null,
+                createdAt: Date.now(),
+                discoveredBy: state.userId
+            };
+            state.history.unshift(k);
+            if (state.history.length > 8) state.history.pop();
+            state.comboInFlight = null;
+            state.comboLastSummary = { attempts: state.comboAttempts.slice(), totalMs: elapsed };
+            writeJSON(LS_ELEMENTS, state.elements);
+            scheduleSyncPush();
+            renderAll();
+            showToast('Conjured: ' + v.element.name + ' ' + v.element.emoji, { isDiscovery: true });
+        } catch (e) {
+            state.comboInFlight = null;
+            state.lastError = String(e && e.message || e);
+            // Refund - the conjuring failed, the user shouldn't lose pts.
+            state.points += 3;
+            try { localStorage.setItem(LS_POINTS, String(state.points)); } catch (_) {}
+            renderAll();
         }
     }
 
