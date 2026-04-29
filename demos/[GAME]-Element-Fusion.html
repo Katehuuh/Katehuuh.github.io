@@ -605,10 +605,6 @@ input, button { -webkit-tap-highlight-color: transparent; }
             <span id="themeIcon">🌙</span>
             <span id="themeLabel">Dark</span>
         </button>
-        <button class="btn" id="copyDebug" type="button" title="Copy debug log to clipboard">
-            <span>📋</span>
-            <span>Copy debug log</span>
-        </button>
     </div>
 </header>
 
@@ -656,7 +652,9 @@ input, button { -webkit-tap-highlight-color: transparent; }
     const TEXT_URL  = 'https://text.pollinations.ai/openai/v1/chat/completions';
     // Pollinations.openai can spike to 25s under load; 35s leaves headroom.
     const TEXT_TIMEOUT_MS = 35000;
-    const TEXT_MODEL = 'openai';
+    // First model is the default; on 429 we rotate to the next one on retry
+    // (different upstream backends, different rate buckets).
+    const TEXT_MODELS = ['mistral', 'openai', 'llama'];
 
     // Shared discovery cache (JSONBlob). Verified live: POST 201 Created
     // with Location: /api/jsonBlob/{id}; GET 200; PUT 200. CORS open.
@@ -670,20 +668,29 @@ input, button { -webkit-tap-highlight-color: transparent; }
     const SYNC_BACKOFF_BASE   = 1500;
     const SYNC_BACKOFF_MAX_MS = 30000;
 
-    // jsonblob.com doesn't serve Access-Control-Allow-Origin to github.io.
-    // puter.net.fetch makes the request server-side and returns the response,
-    // bypassing CORS the same way the home page's like-counter does.
+    // jsonblob.com and text.pollinations.ai don't serve Access-Control-Allow-Origin
+    // to github.io, so direct fetch fails CORS preflight. puter.net.fetch makes
+    // the request server-side and returns the response, bypassing CORS.
+    //
+    // Pitfalls already learned: puter's underlying socket can flip to CLOSED
+    // after some idle time, and any subsequent puter.net.fetch will reject with
+    // 'WebSocket is already in CLOSING or CLOSED state'. We catch that and fall
+    // through to direct fetch (which will fail on CORS for these origins, but
+    // at least surfaces a clean error instead of leaving the UI hanging).
     async function relayFetch(url, opts) {
-      // Wait briefly for the async-loaded puter SDK to be ready (~500ms typical).
       for (let i = 0; i < 30; i++) {
         if (typeof puter !== 'undefined' && puter && puter.net && typeof puter.net.fetch === 'function') break;
         await new Promise(r => setTimeout(r, 100));
       }
-      if (typeof puter !== 'undefined' && puter && puter.net && typeof puter.net.fetch === 'function') {
-        return puter.net.fetch(url, opts);
+      const puterReady = typeof puter !== 'undefined' && puter && puter.net && typeof puter.net.fetch === 'function';
+      if (puterReady) {
+        try {
+          return await puter.net.fetch(url, opts);
+        } catch (e) {
+          // Puter's socket is dead or refused. Try direct as last resort.
+          console.warn('[relayFetch] puter relay failed, falling back to direct fetch:', e && e.message || e);
+        }
       }
-      // Fallback: direct fetch (will hit CORS on most cross-origin endpoints
-      // but lets the demo run when puter is blocked too).
       return fetch(url, opts);
     }
 
@@ -892,12 +899,29 @@ input, button { -webkit-tap-highlight-color: transparent; }
             localStorage.setItem(LS_THEME, next);
             applyTheme();
         });
-        document.getElementById('copyDebug').addEventListener('click', copyDebugLog);
-        document.getElementById('syncStatus').addEventListener('click', () => {
-            // Manual nudge: try a fresh sync round
-            if (state.sync.state === 'off') initSync();
-            else if (state.sync.dirty) flushSyncNow();
-            else doRemoteRefresh();
+        // Debug log access from the browser devtools console:
+        //   window.dumpDebug()         -> array of last 100 entries
+        //   window.copyDebug()         -> serialise + copy to clipboard
+        // No on-screen button to avoid topbar clutter.
+        window.dumpDebug = () => state.debug.slice();
+        window.copyDebug = copyDebugLog;
+        console.info('[element-fusion] dumpDebug()/copyDebug() available in console.');
+        document.getElementById('syncStatus').addEventListener('click', async () => {
+            // Manual nudge: try a fresh sync round. Error handling is critical
+            // here because the puter relay can throw mid-call (its WebSocket
+            // sometimes flips to CLOSED), and an uncaught reject leaves the
+            // status pill stuck on "Connecting...".
+            if (state.sync.state === 'off') { initSync(); return; }
+            if (state.sync.dirty) { flushSyncNow(); return; }
+            setSyncState('pending', 'Syncing...');
+            try {
+                await doRemoteRefresh();
+                setSyncState('ok', 'Synced');
+            } catch (e) {
+                logEntry('error', { kind: 'sync.manual.get', blobId: state.blobId },
+                         { message: String(e && e.message || e) });
+                setSyncState('off', 'Offline');
+            }
         });
 
         if (window.matchMedia) {
@@ -1128,7 +1152,7 @@ input, button { -webkit-tap-highlight-color: transparent; }
         const triedRejections = [];    // accumulates EVERY rejected emoji this call so the LLM can't re-pick
         for (let attempt = 0; attempt < MAX_LLM_RETRIES_FOR_EMOJI; attempt++) {
             const body = {
-                model: TEXT_MODEL,
+                model: TEXT_MODELS[Math.min(attempt, TEXT_MODELS.length - 1)],
                 messages: [
                     { role: 'system', content: SYS_PROMPT },
                     { role: 'user',   content: buildUserPrompt(a, b, lastFeedback, triedRejections) }
