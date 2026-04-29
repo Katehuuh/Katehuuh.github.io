@@ -37,36 +37,14 @@
   --sans:      "Manrope", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   --mono:      ui-monospace, "JetBrains Mono", "SF Mono", Consolas, monospace;
 
-  /* === Type scale (use these, don't sprinkle pixel values) =============== */
-  --fs-xs:    14px;       /* tiny labels, timestamps, footnote (was 11) */
-  --fs-sm:    16px;       /* small UI text, popover items, chips (was 12.5) */
-  --fs-md:    17px;       /* secondary body, button text (was 14.5) */
-  --fs-base:  16px;       /* body default */
-  --fs-lg:    19px;       /* card titles, subheadings */
-  --fs-xl:    24px;       /* section h2 */
-  --fs-2xl:   32px;       /* page h1 */
-  --fs-3xl:   44px;       /* display */
-
+  /* === Type — single token for small UI text; headings use inline rem ==== */
+  --fs-sm:     17px;
   --lh-tight:  1.2;
-  --lh-base:   1.5;
-  --lh-loose:  1.75;
 
-  /* === Spacing scale (×4 base) =========================================== */
-  --sp-1: 4px;
-  --sp-2: 8px;
-  --sp-3: 12px;
-  --sp-4: 16px;
-  --sp-5: 24px;
-  --sp-6: 32px;
-  --sp-7: 48px;
-  --sp-8: 64px;
-
-  /* === Radii ============================================================= */
-  --r-xs:   6px;
+  /* === Spacing & radii — only what's used ================================ */
+  --sp-2:   8px;
   --r-sm:   10px;
-  --r:      16px;
   --r-lg:   22px;
-  --r-xl:   32px;
   --r-pill: 999px;
 
   /* === Elevation ========================================================= */
@@ -122,14 +100,14 @@ a:hover { color: #ffb98d; }
 .icon-pop-wrap { position: relative; display: inline-flex; }
 .icon-pop-wrap .pop-list {
   position: absolute;
-  bottom: calc(100% + 14px); left: 50%;
+  bottom: calc(100% + 6px); left: 50%;
   width: max-content; max-width: min(540px, calc(100vw - 24px));
   max-height: 50vh;
-  margin: 0; padding: var(--sp-2);
+  margin: 0; padding: 6px;
   list-style: none;
   display: grid; grid-template-columns: auto auto;
   justify-content: center; justify-items: center;
-  column-gap: 6px; row-gap: 3px;
+  column-gap: 6px; row-gap: 2px;
   background: rgba(22, 22, 26, 0.94);
   -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
   border: 1px solid var(--accent-line);
@@ -149,7 +127,7 @@ a:hover { color: #ffb98d; }
 }
 .icon-pop-wrap .pop-list a {
   display: inline-block;
-  padding: 4px 12px;
+  padding: 3px 12px;
   border-radius: var(--r-pill);
   background: var(--accent-soft);
   border: 1px solid var(--accent-line);
@@ -168,8 +146,8 @@ a:hover { color: #ffb98d; }
   grid-column: 1 / -1;
 }
 .icon-pop-wrap .pop-list .section-header {
-  padding: 3px 0 1px;
-  font: 600 var(--fs-xs)/1 var(--mono);
+  padding: 2px 0 0;
+  font: 600 var(--fs-sm)/1 var(--mono);
   letter-spacing: .08em;
   text-transform: uppercase;
   color: var(--accent);
@@ -194,9 +172,9 @@ a:hover { color: #ffb98d; }
   content: '';
   position: absolute;
   bottom: 100%; left: calc(50% - 0.5px);
-  width: 1px; height: 14px;
+  width: 1px; height: 6px;
   background-image: linear-gradient(to top, var(--accent), var(--accent) 50%, transparent 50%);
-  background-size: 100% 4px;
+  background-size: 100% 3px;
   pointer-events: none;
   z-index: 199;
   transform-origin: bottom;
@@ -475,7 +453,7 @@ section h2 {
 .card-meta a:hover { border-color: var(--accent-line); color: var(--accent); }
 .card-meta time.card-date {
   margin-left: auto; border: 0; padding: 0;
-  color: var(--text-3); font-size: var(--fs-xs);
+  color: var(--text-3); font-size: var(--fs-sm);
 }
 
 section.compact { display: grid; gap: .6rem; }
@@ -720,7 +698,7 @@ function populateHeroPopovers(data) {
       // Clamp popover height to available space above the icon so its top
       // edge never crosses the viewport top — opens-up positioning means a
       // tall popover would otherwise spill off-screen at top on small viewports.
-      const space = wrap.getBoundingClientRect().top - 14 - 16; // anchor gap + viewport buffer
+      const space = wrap.getBoundingClientRect().top - 6 - 8; // anchor gap + viewport buffer
       ul.style.maxHeight = Math.max(120, Math.min(window.innerHeight * 0.5, space)) + 'px';
       wrap.classList.add('show-pop');
     };
