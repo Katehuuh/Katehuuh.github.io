@@ -203,7 +203,13 @@ async function shoot(page, name, url) {
   console.log(`local static server: ${BASE_URL}`);
 
   const browser = await chromium.launch();
-  const ctx = await browser.newContext({ viewport: VIEWPORT, deviceScaleFactor: 1 });
+  // Match the site's dark aesthetic: pages that listen to prefers-color-scheme
+  // (e.g. the AMOLED editor, Infinite Craft) render in dark mode for the thumb.
+  const ctx = await browser.newContext({
+    viewport: VIEWPORT,
+    deviceScaleFactor: 1,
+    colorScheme: 'dark',
+  });
   ctx.on('page', p => p.on('dialog', d => d.dismiss().catch(() => {})));
   const page = await ctx.newPage();
   page.on('dialog', d => d.dismiss().catch(() => {}));
