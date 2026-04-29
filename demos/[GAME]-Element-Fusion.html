@@ -695,10 +695,10 @@ input, button { -webkit-tap-highlight-color: transparent; }
     }
 
     const MAX_LLM_RETRIES_FOR_EMOJI = 3;
-    // Small models choke on a 200-emoji context dump - they skim and miss.
-    // 60 is enough to bias the first call away from common collisions; per-call
-    // rejections accumulate as an explicit "do NOT pick these" list on retries.
-    const MAX_USED_LIST = 60;
+    // We now use local Qwen3 (32k ctx) + puter.ai gpt-4o-mini (128k ctx) so
+    // dumping the full taken-emoji list every call is fine. Cap at 200 just
+    // so the prompt doesn't bloat absurdly; sample randomly above that.
+    const MAX_USED_LIST = 200;
 
     // Semantic emoji groups: when the LLM keeps picking a taken emoji we
     // search the same group for an unused one before falling back to the
@@ -1134,19 +1134,19 @@ input, button { -webkit-tap-highlight-color: transparent; }
         const lines = [
             'Combine: "' + a.name + '" (' + a.emoji + ') + "' + b.name + '" (' + b.emoji + ').'
         ];
-        // First-call hint: a small slice of "already-used" so the model is
-        // biased away from the obvious collisions. We do NOT dump all 500+
-        // (small models can't scan that). Per-retry, the explicit "do NOT
-        // pick these" list below carries the actual constraint.
-        if (!triedRejections || triedRejections.length === 0) {
-            const used = buildUsedList().join(', ');
-            if (used) lines.push('Sample of already-used emojis (avoid for a NEW name): ' + used + '.');
+        // ALWAYS send the full list of "already used" emojis on every attempt,
+        // not just the first - so retries explicitly accumulate the ban list
+        // and the model stops looping back to picks it just tried. With local
+        // Qwen3 + puter.ai.chat we have the context window to spare.
+        const used = buildUsedList().join(', ');
+        if (used) {
+            lines.push('Here are ALL emojis YOU MUST NOT take (each is already bound to a different element): ' + used + '.');
         }
-        // Hard constraint: emojis the LLM has already tried THIS call and we
-        // rejected. Stops the model from looping back to the same picks.
+        // Per-call rejections, called out explicitly so the model gets a
+        // sharper signal than the long "already used" list.
         if (triedRejections && triedRejections.length > 0) {
             const banned = triedRejections.map(r => r.emoji + ' (taken for "' + r.conflictName + '")').join(', ');
-            lines.push('You ALREADY tried these emojis this turn - they are NOT VALID. Do NOT pick them again: ' + banned + '.');
+            lines.push('Plus, you already tried these emojis earlier in this same turn - DO NOT pick them again: ' + banned + '.');
         }
         if (feedback) lines.push('Last attempt: ' + feedback);
         lines.push('Return JSON for the result.');
