@@ -11,15 +11,8 @@
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500&family=Manrope:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%20100%20100%22%3E%3Ctext%20y%3D%2280%22%20font-size%3D%2280%22%3E%F0%9F%90%B1%3C/text%3E%3C/svg%3E">
 <style>
-/* ═════════════════════════════════════════════════════════════════════════
-   DESIGN TOKENS — single source of truth for the whole portfolio.
-   Same tokens duplicated in `assets/theme.css` for demos to consume via
-   <link>. If you change one here, change the other.
-
-   Vibe: warm-tone dark mode, coral-orange primary, soft rose secondary.
-   Fonts: Fraunces (serif display), Manrope (sans body), JetBrains (mono).
-   Type scale: modular, ~1.22 ratio. Spacing scale: linear ×4.
-   ═════════════════════════════════════════════════════════════════════════ */
+/* Design tokens. Warm-tone dark mode, coral-orange primary, soft rose secondary.
+   Fraunces (display), Manrope (body), JetBrains Mono (mono). 1.22 type ratio. */
 :root {
   /* === Colors ============================================================ */
   --bg:        #0a0a0e;                      /* page bg, slight blue undertone */
@@ -121,22 +114,18 @@ a:hover { color: #ffb98d; }
 .icon-nav svg { display: block; }
 .icon-nav .emoji { font-size: 1.35rem; line-height: 1; display: inline-block; -webkit-text-fill-color: initial; }
 
-/* Popover anchored above icon; items cascade-in with a stagger. Sibling
-   of the icon-link (not nested) so item clicks don't fire the icon's href.
-   Single-column always — long lists scroll inside the popover. */
+/* Popover above icon, sibling of icon-link so item clicks don't fire icon's href.
+   Pills flow with flex-wrap; flex:0 0 auto on <li> stops them shrinking to circles.
+   Section headers claim full row via flex-basis:100%. */
 .icon-pop-wrap { position: relative; display: inline-flex; }
-/* Popover uses flex-wrap so pills flow naturally like tags — 2 per row
-   on HF, single row on GitHub. No CSS Grid (was causing overlap bugs).
-   Section headers force a new row via flex-basis:100%. */
 .icon-pop-wrap .pop-list {
   position: absolute;
   bottom: calc(100% + 14px); left: 50%;
-  width: 420px;
-  max-width: calc(100vw - 24px);
+  width: max-content; max-width: min(440px, calc(100vw - 24px));
   max-height: 50vh;
   margin: 0; padding: var(--sp-2);
   list-style: none;
-  display: flex; flex-wrap: wrap; justify-content: center; gap: 4px;
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 6px;
   background: rgba(22, 22, 26, 0.94);
   -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
   border: 1px solid var(--accent-line);
@@ -149,11 +138,14 @@ a:hover { color: #ffb98d; }
   transition: opacity .18s ease, transform .22s var(--ease-bounce);
   z-index: 200;
 }
-/* <li> is invisible wrapper — <a> is the visual flex-item pill. This avoids
-   <li> interfering with flex-wrap sizing (was making pills shrink to circles). */
-.icon-pop-wrap .pop-list li { display: contents; }
+.icon-pop-wrap .pop-list li {
+  flex: 0 0 auto;
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity .22s ease, transform .32s var(--ease-bounce);
+}
 .icon-pop-wrap .pop-list a {
-  display: inline-block;
+  display: block;
   padding: 4px 12px;
   border-radius: var(--r-pill);
   background: var(--accent-soft);
@@ -161,10 +153,7 @@ a:hover { color: #ffb98d; }
   color: var(--text);
   white-space: nowrap;
   text-decoration: none;
-  opacity: 0;
-  transform: translateY(6px);
-  transition: opacity .22s ease, transform .32s var(--ease-bounce),
-              background .14s, color .14s, border-color .14s;
+  transition: background .14s, color .14s, border-color .14s;
 }
 .icon-pop-wrap .pop-list a:hover {
   background: rgba(255, 107, 53, 0.22);
@@ -172,13 +161,12 @@ a:hover { color: #ffb98d; }
   border-color: var(--accent);
 }
 .icon-pop-wrap .pop-list .section-header {
-  flex-basis: 100%;
+  flex: 0 0 100%;
   padding: var(--sp-1) 0 2px;
   font: 600 var(--fs-xs)/1 var(--mono);
   letter-spacing: .08em;
   text-transform: uppercase;
   color: var(--accent);
-  cursor: default;
   text-align: center;
 }
 .icon-pop-wrap .pop-list .section-header:first-child { padding-top: 0; }
@@ -189,8 +177,8 @@ a:hover { color: #ffb98d; }
   pointer-events: auto;
   transform: translateX(-50%) translateY(0) scale(1);
 }
-.icon-pop-wrap.show-pop .pop-list a,
-.icon-pop-wrap:focus-within .pop-list a {
+.icon-pop-wrap.show-pop .pop-list li,
+.icon-pop-wrap:focus-within .pop-list li {
   opacity: 1;
   transform: translateY(0);
   transition-delay: var(--idx, 0ms);
@@ -678,17 +666,17 @@ function populateHeroPopovers(data) {
 
   const buildItem = (entry, idx) => {
     const li = document.createElement('li');
+    li.style.setProperty('--idx', `${idx * STAGGER_MS}ms`);
     const a = document.createElement('a');
     a.href = entry.url;
     a.target = '_blank';
     a.rel = 'noopener';
     a.textContent = entry.name;
-    a.style.setProperty('--idx', `${idx * STAGGER_MS}ms`);
     if (entry.description) a.title = entry.description;
     li.appendChild(a);
     return li;
   };
-  const buildHeader = (label, idx) => {
+  const buildHeader = (label) => {
     const li = document.createElement('li');
     li.className = 'section-header';
     li.textContent = label;
@@ -755,11 +743,11 @@ function populateHeroPopovers(data) {
       ul.className = 'pop-list';
       let idx = 0;
       if (sets.length) {
-        ul.appendChild(buildHeader('Datasets', idx++));
+        ul.appendChild(buildHeader('Datasets'));
         for (const d of sets) ul.appendChild(buildItem(d, idx++));
       }
       if (models.length) {
-        ul.appendChild(buildHeader('Models', idx++));
+        ul.appendChild(buildHeader('Models'));
         for (const m of models) ul.appendChild(buildItem(m, idx++));
       }
       wrapWithPopover(hfLink, ul);
