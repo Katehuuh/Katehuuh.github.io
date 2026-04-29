@@ -216,6 +216,29 @@ section h2 {
   letter-spacing: -0.018em; margin: 0 0 .35rem;
   display: flex; align-items: center; gap: .9rem; flex-wrap: wrap;
 }
+/* Combined heading: "Katehuuh · Vibe code". The asterisk hovers a tooltip
+   revealing the alias (Nekochu) without spelling it out. */
+section h2 .me { color: var(--text); }
+section h2 .topic { color: var(--text-3); }
+section h2 .h2-dot { color: var(--accent); margin: 0 .15em; }
+section h2 .alias-mark {
+  position: relative;
+  top: -0.42em;
+  display: inline-block;
+  margin-left: .05em;
+  color: var(--accent);
+  font: 500 .42em/1 var(--mono);
+  letter-spacing: 0;
+  cursor: help;
+  text-decoration: none;
+  border: 0;
+  transform-origin: bottom left;
+  animation: mark-pop .55s var(--ease-bounce) .55s both;
+}
+@keyframes mark-pop {
+  from { opacity: 0; transform: scale(0) rotate(-25deg); }
+  to   { opacity: 1; transform: scale(1) rotate(0); }
+}
 
 /* ─── Liquid-glass tag filter ─────────────────────────────────────────
    Three layers stacked to fake Apple's "lip profile" + Snell-law bezel
@@ -627,7 +650,7 @@ section.compact { display: grid; gap: .6rem; }
   </header>
 
   <section class="rise" data-d="2">
-    <h2>Vibe code
+    <h2><span class="vibe-heading"><span class="me">Katehuuh<abbr class="alias-mark" title="aka Nekochu on Hugging Face">*</abbr></span><span class="h2-dot">·</span><span class="topic">Vibe code</span></span>
       <span class="tag-filter" id="tag-filter" role="group" aria-label="filter by tag">
         <button data-tag="tool" class="active" aria-pressed="true">tool</button>
         <button data-tag="game" class="active" aria-pressed="true">game</button>
