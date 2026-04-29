@@ -1884,6 +1884,29 @@ input, button { -webkit-tap-highlight-color: transparent; }
         const remoteEls = (remote.elements && typeof remote.elements === 'object') ? remote.elements : {};
         const remoteCombos = (remote.combos && typeof remote.combos === 'object') ? remote.combos : {};
 
+        // On the boot fetch (recordKnown), prune local entries that came from
+        // a previous seed snapshot but no longer exist in the current remote.
+        // The user's own discoveries and other users' shared entries survive
+        // because their discoveredBy is not 'seed'.
+        if (recordKnown) {
+            for (const k of Object.keys(state.elements)) {
+                if (isStarter(k)) continue;
+                const el = state.elements[k];
+                if (el && el.discoveredBy === 'seed' && !remoteEls[k]) {
+                    delete state.elements[k];
+                }
+            }
+            // Drop combos that reference a now-missing element (orphaned
+            // pointer or pair-key that includes a pruned name).
+            for (const cKey of Object.keys(state.combos)) {
+                const target = state.combos[cKey];
+                const [a, b] = cKey.split('+');
+                if (!state.elements[target] || !state.elements[a] || !state.elements[b]) {
+                    delete state.combos[cKey];
+                }
+            }
+        }
+
         // Elements: remote wins when conflict (its emoji is the canonical
         // one for that name). Local-only elements are kept.
         for (const k of Object.keys(remoteEls)) {
