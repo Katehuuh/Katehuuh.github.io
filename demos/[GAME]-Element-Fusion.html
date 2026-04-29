@@ -1201,10 +1201,13 @@ input, button { -webkit-tap-highlight-color: transparent; }
                 // sees a real outage instead of three slow waits.
                 const isParseError   = /JSON|parse/i.test(msg);
                 const isTimeoutError = /timed out/i.test(msg);
-                if ((isParseError || isTimeoutError) && attempt < MAX_LLM_RETRIES_FOR_EMOJI - 1) {
-                    lastFeedback = isParseError
-                        ? 'Previous response was not valid JSON. Reply with ONLY the JSON object matching the schema, no prose, no markdown.'
-                        : 'Previous attempt timed out. Reply with the smallest possible JSON.';
+                const isEmptyContent = /empty content/i.test(msg);
+                if ((isParseError || isTimeoutError || isEmptyContent) && attempt < MAX_LLM_RETRIES_FOR_EMOJI - 1) {
+                    lastFeedback = isTimeoutError
+                        ? 'Previous attempt timed out. Reply with the smallest possible JSON.'
+                        : isEmptyContent
+                            ? 'Previous response was empty. Reply with a complete JSON object matching the schema.'
+                            : 'Previous response was not valid JSON. Reply with ONLY the JSON object matching the schema, no prose, no markdown.';
                     continue;
                 }
                 throw err;
@@ -1269,6 +1272,38 @@ input, button { -webkit-tap-highlight-color: transparent; }
         }
     }
 
+    // Pollinations.openai sometimes wraps real JSON in junk like
+    // `{"{"name":"X"...}` or buries it inside whitespace. Walk forward from
+    // a known schema key (`"name"`) and brace-balance to recover the inner
+    // valid object. Returns the slice or null.
+    function findKeyedObject(text, key) {
+        const tag = '"' + key + '"';
+        let idx = text.indexOf(tag);
+        if (idx < 0) return null;
+        // Walk backward over whitespace/comma to the opening brace.
+        let i = idx - 1;
+        while (i >= 0 && /[\s,]/.test(text[i])) i--;
+        if (text[i] !== '{') return null;
+        // Walk forward, tracking depth and string state, to the matching }.
+        let depth = 0, inStr = false, esc = false;
+        for (let j = i; j < text.length; j++) {
+            const c = text[j];
+            if (esc) { esc = false; continue; }
+            if (inStr) {
+                if (c === '\\') esc = true;
+                else if (c === '"') inStr = false;
+                continue;
+            }
+            if (c === '"') inStr = true;
+            else if (c === '{') depth++;
+            else if (c === '}') {
+                depth--;
+                if (depth === 0) return text.slice(i, j + 1);
+            }
+        }
+        return null;
+    }
+
     function parseLooseJSON(text) {
         const raw = String(text || '');
         const cleaned = raw
@@ -1279,28 +1314,38 @@ input, button { -webkit-tap-highlight-color: transparent; }
         // 1. Straight parse.
         try { return JSON.parse(cleaned); } catch (_) {}
 
-        // 2. Slice between first { and last }, optionally repaired.
+        // 2. Walk from `"name"` to the smallest balanced object that
+        //    contains it. Catches the `{"{"name":"X"...}` envelope bug.
+        const inner = findKeyedObject(cleaned, 'name');
+        if (inner) {
+            try { return JSON.parse(inner); } catch (_) {
+                // Fall through to repair attempts on the inner slice.
+                const repairs = [
+                    inner.replace(/,(\s*[}\]])/g, '$1'),
+                    inner.replace(/(['])((?:[^'\\]|\\.)*?)(['])/g, '"$2"'),
+                ];
+                for (const c of repairs) { try { return JSON.parse(c); } catch (_) {} }
+            }
+        }
+
+        // 3. Slice between first { and last }, with repairs (legacy path
+        //    for cases where keys other than "name" come first).
         const start = cleaned.indexOf('{');
         const end   = cleaned.lastIndexOf('}');
         if (start >= 0 && end > start) {
             const slice = cleaned.slice(start, end + 1);
             const repairs = [
                 slice,
-                // Strip trailing commas before } or ]
                 slice.replace(/,(\s*[}\]])/g, '$1'),
-                // Naive single-to-double quote (only the outer ones)
                 slice.replace(/(['])((?:[^'\\]|\\.)*?)(['])/g, '"$2"'),
-                // Both at once
-                slice
-                    .replace(/(['])((?:[^'\\]|\\.)*?)(['])/g, '"$2"')
-                    .replace(/,(\s*[}\]])/g, '$1'),
+                slice.replace(/(['])((?:[^'\\]|\\.)*?)(['])/g, '"$2"').replace(/,(\s*[}\]])/g, '$1'),
             ];
             for (const candidate of repairs) {
                 try { return JSON.parse(candidate); } catch (_) {}
             }
         }
 
-        // 3. Regex-extract from prose: tolerates "name: X, emoji: Y" or
+        // 4. Regex-extract from prose: tolerates "name: X, emoji: Y" or
         //    markdown like "**Name:** X". Last-ditch when the model
         //    refused JSON entirely.
         const nameM  = raw.match(/(?:"?name"?|\*\*name\*\*)\s*[:=]\s*["']?([^"',\n*}]{1,40})/i);
