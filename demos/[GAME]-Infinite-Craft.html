@@ -687,7 +687,10 @@ input, button { -webkit-tap-highlight-color: transparent; }
     }
 
     const MAX_LLM_RETRIES_FOR_EMOJI = 3;
-    const MAX_USED_LIST = 200;
+    // Small models choke on a 200-emoji context dump — they skim and miss.
+    // 60 is enough to bias the first call away from common collisions; per-call
+    // rejections accumulate as an explicit "do NOT pick these" list on retries.
+    const MAX_USED_LIST = 60;
 
     // Semantic emoji groups — when the LLM keeps picking a taken emoji we
     // search the same group for an unused one before falling back to the
@@ -1095,26 +1098,39 @@ input, button { -webkit-tap-highlight-color: transparent; }
         return items;
     }
 
-    function buildUserPrompt(a, b, feedback) {
-        const used = buildUsedList().join(', ');
+    function buildUserPrompt(a, b, feedback, triedRejections) {
         const lines = [
-            'Combine: "' + a.name + '" (' + a.emoji + ') + "' + b.name + '" (' + b.emoji + ').',
-            'Already-used emojis (do not reuse for a new name): ' + (used || '<none>') + '.'
+            'Combine: "' + a.name + '" (' + a.emoji + ') + "' + b.name + '" (' + b.emoji + ').'
         ];
-        if (feedback) lines.push('Previous attempt rejected: ' + feedback + ' Try again with a different emoji.');
+        // First-call hint: a small slice of "already-used" so the model is
+        // biased away from the obvious collisions. We do NOT dump all 500+
+        // (small models can't scan that). Per-retry, the explicit "do NOT
+        // pick these" list below carries the actual constraint.
+        if (!triedRejections || triedRejections.length === 0) {
+            const used = buildUsedList().join(', ');
+            if (used) lines.push('Sample of already-used emojis (avoid for a NEW name): ' + used + '.');
+        }
+        // Hard constraint: emojis the LLM has already tried THIS call and we
+        // rejected. Stops the model from looping back to the same picks.
+        if (triedRejections && triedRejections.length > 0) {
+            const banned = triedRejections.map(r => r.emoji + ' (taken for "' + r.conflictName + '")').join(', ');
+            lines.push('You ALREADY tried these emojis this turn — they are NOT VALID. Do NOT pick them again: ' + banned + '.');
+        }
+        if (feedback) lines.push('Last attempt: ' + feedback);
         lines.push('Return JSON for the result.');
         return lines.join('\n');
     }
 
     async function callCombineLLM(a, b) {
         let lastFeedback = null;
-        let lastRejected = null; // { name, emoji, description } from the most recent rejected attempt
+        let lastRejected = null;       // most recent rejected attempt (used for semantic fallback)
+        const triedRejections = [];    // accumulates EVERY rejected emoji this call so the LLM can't re-pick
         for (let attempt = 0; attempt < MAX_LLM_RETRIES_FOR_EMOJI; attempt++) {
             const body = {
                 model: TEXT_MODEL,
                 messages: [
                     { role: 'system', content: SYS_PROMPT },
-                    { role: 'user',   content: buildUserPrompt(a, b, lastFeedback) }
+                    { role: 'user',   content: buildUserPrompt(a, b, lastFeedback, triedRejections) }
                 ],
                 response_format: { type: 'json_object' },
                 temperature: 0.9,
@@ -1123,7 +1139,8 @@ input, button { -webkit-tap-highlight-color: transparent; }
             const t0 = performance.now();
             const reqSummary = {
                 kind: 'combine', a: a.name, b: b.name,
-                attempt: attempt + 1, retryFeedback: lastFeedback
+                attempt: attempt + 1, retryFeedback: lastFeedback,
+                triedSoFar: triedRejections.map(r => r.emoji)
             };
             try {
                 const data = await fetchJSON(TEXT_URL, body, null, TEXT_TIMEOUT_MS);
@@ -1151,6 +1168,14 @@ input, button { -webkit-tap-highlight-color: transparent; }
                             emoji: v.conflictEmoji,
                             description: String(parsed.description || '').slice(0, 240)
                         };
+                        // Accumulate so the next retry's prompt explicitly bans
+                        // every emoji this call has already tried.
+                        if (!triedRejections.some(r => r.emoji === v.conflictEmoji)) {
+                            triedRejections.push({
+                                emoji: v.conflictEmoji,
+                                conflictName: v.conflictName || '?'
+                            });
+                        }
                     }
                     continue;
                 }
