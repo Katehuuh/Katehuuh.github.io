@@ -8,11 +8,11 @@
 <meta name="color-scheme" content="dark">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500&family=Manrope:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500&family=Geist+Mono:wght@400;500;600&family=Manrope:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%20100%20100%22%3E%3Ctext%20y%3D%2280%22%20font-size%3D%2280%22%3E%F0%9F%90%B1%3C/text%3E%3C/svg%3E">
 <style>
 /* Design tokens. Warm-tone dark mode, coral-orange primary, soft rose secondary.
-   Fraunces (display), Manrope (body), JetBrains Mono (mono). 1.22 type ratio. */
+   Fraunces (display), Manrope (body), Geist Mono (mono). */
 :root {
   /* === Colors ============================================================ */
   --bg:        #0a0a0e;                      /* page bg, slight blue undertone */
@@ -22,8 +22,8 @@
   --line:      rgba(255, 255, 255, 0.07);    /* hairlines */
   --line-2:    rgba(255, 255, 255, 0.13);    /* dividers */
   --text:      #f4f4f6;                      /* primary text */
-  --text-2:    rgba(244, 244, 246, 0.62);    /* secondary */
-  --text-3:    rgba(244, 244, 246, 0.36);    /* muted / labels */
+  --text-2:    rgba(244, 244, 246, 0.72);    /* secondary — bumped from .62 */
+  --text-3:    rgba(244, 244, 246, 0.55);    /* muted / labels — bumped from .36 (WCAG AA) */
   --accent:    #ff6b35;                      /* coral-orange — primary brand */
   --accent-2:  #ffa8b8;                      /* soft rose — secondary highlight */
   --accent-3:  #f5cf5e;                      /* warm gold — tertiary, sparingly */
@@ -35,7 +35,7 @@
   /* === Fonts ============================================================= */
   --serif:     "Fraunces", ui-serif, Georgia, serif;          /* display */
   --sans:      "Manrope", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-  --mono:      ui-monospace, "JetBrains Mono", "SF Mono", Consolas, monospace;
+  --mono:      "Geist Mono", ui-monospace, "JetBrains Mono", "SF Mono", Consolas, monospace;
 
   /* === Type — single token for small UI text; headings use inline rem ==== */
   --fs-sm:     17px;
@@ -52,6 +52,7 @@
   --shadow-2:    0 6px 20px -8px rgba(0, 0, 0, 0.5);
   --shadow-3:    0 18px 38px -12px rgba(0, 0, 0, 0.6);
   --shadow-glow: 0 0 28px -6px rgba(255, 107, 53, 0.36);
+  --shadow-coral:0 18px 44px -14px rgba(255, 107, 53, 0.42), 0 6px 18px -8px rgba(255, 107, 53, 0.18);
 
   /* === Motion ============================================================ */
   --ease-bounce: cubic-bezier(.34, 1.56, .64, 1);   /* overshoot — popovers, cards on hover */
@@ -85,7 +86,9 @@ a:hover { color: #ffb98d; }
   display: inline-flex; align-items: center; justify-content: center;
   width: 48px; height: 48px; border-radius: 999px;
   border: 1px solid var(--line); color: var(--text);
-  transition: border-color .18s ease, background-color .18s ease, color .18s ease, transform .18s ease;
+  /* `translate` (cursor-magnetic) composes with `transform: translateY(-2px)` (hover lift). */
+  translate: var(--mx, 0) var(--my, 0);
+  transition: border-color .18s ease, background-color .18s ease, color .18s ease, transform .18s ease, translate .35s cubic-bezier(.2, .65, .2, 1);
 }
 .icon-nav > a:hover, .icon-nav > .icon-pop-wrap > a:hover {
   border-color: var(--accent-line); background: var(--accent-soft);
@@ -188,13 +191,12 @@ a:hover { color: #ffb98d; }
   border: 1px solid rgba(255, 255, 255, 0.1);
   background: rgba(255, 255, 255, 0.04);
   border-radius: 999px;
-  padding: .4rem .95rem;
+  padding: .35rem .95rem;
   color: var(--text);
   font-family: var(--mono);
   font-size: var(--fs-sm);
-  letter-spacing: .1em;
-  text-transform: uppercase;
-  width: 130px;
+  letter-spacing: .04em;
+  width: 170px;
   -webkit-backdrop-filter: blur(12px) saturate(140%);
   backdrop-filter: blur(12px) saturate(140%);
   outline: none;
@@ -364,9 +366,15 @@ section h2 {
 .vibe-card {
   background: var(--bg-1); border: 1px solid var(--line); border-radius: var(--r-lg);
   overflow: hidden; display: flex; flex-direction: column;
-  transition: border-color .2s ease, transform .2s ease;
+  transition: border-color .2s ease, transform .2s ease, box-shadow .25s ease;
 }
-.vibe-card:hover { border-color: var(--accent-line); transform: translateY(-2px); }
+@media (hover: hover) {
+  .vibe-card:hover {
+    border-color: var(--accent-line);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-coral);
+  }
+}
 .vibe-card a.card-link { color: inherit; display: flex; flex-direction: column; flex: 1; }
 .vibe-card a.card-link:hover { color: inherit; }
 .thumb-wrap { position: relative; }
@@ -507,6 +515,109 @@ section.compact { display: grid; gap: .6rem; }
   .hero { margin-bottom: 2rem; }
   .avatar { width: 92px; height: 92px; margin-bottom: .8rem; }
   section { margin-block: 2.2rem; }
+  /* Bigger tap targets where text is dense. */
+  .tag-filter button { padding: 5px 12px; }
+  .chips li a { padding: .35rem .8rem; }
+}
+/* Touch devices: drop the magnetic icon transform and hover-only effects. */
+@media (hover: none) {
+  .icon-nav > a, .icon-nav > .icon-pop-wrap > a { transform: none !important; }
+}
+
+/* Scroll-driven reveal — replaces the time-based cascade where supported.
+   In Chrome/Edge cards animate as they enter the viewport, off-the-shelf, no JS. */
+@supports (animation-timeline: view()) {
+  .vibe-card.rise {
+    animation-timeline: view();
+    animation-range: cover 0% cover 22%;
+    animation-delay: 0s; /* timeline drives progress, not time */
+  }
+}
+
+/* Inline kbd hints — power-user signal next to search and Cmd+K trigger. */
+kbd {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 18px; padding: 0 5px; height: 19px;
+  border: 1px solid var(--line-2);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.04);
+  font: 600 11px/1 var(--mono);
+  color: var(--text-3);
+  letter-spacing: 0;
+  text-transform: none;
+}
+.search-wrap { position: relative; display: inline-flex; align-items: center; gap: 6px; }
+.search-wrap kbd { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); pointer-events: none; }
+.search-wrap .inline-search { padding-right: 34px; }
+
+/* Command palette — Cmd+K opens a centered modal that searches projects and
+   triggers filter toggles + scroll jumps. Lazily-built on first open. */
+.cmd-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+  display: none; align-items: flex-start; justify-content: center;
+  padding: 12vh 16px 16px;
+  z-index: 1000;
+  opacity: 0; transition: opacity .18s ease;
+}
+.cmd-overlay.open { display: flex; opacity: 1; }
+.cmd-panel {
+  width: min(560px, 100%);
+  max-height: 70vh;
+  background: var(--bg-1);
+  border: 1px solid var(--accent-line);
+  border-radius: 14px;
+  box-shadow: var(--shadow-3), 0 0 0 1px rgba(255, 107, 53, 0.10);
+  display: flex; flex-direction: column;
+  overflow: hidden;
+  transform: translateY(-8px) scale(0.98);
+  transition: transform .22s var(--ease-bounce);
+}
+.cmd-overlay.open .cmd-panel { transform: translateY(0) scale(1); }
+.cmd-input {
+  appearance: none; width: 100%;
+  padding: 16px 20px;
+  background: transparent;
+  border: 0; border-bottom: 1px solid var(--line);
+  color: var(--text);
+  font: 500 18px/1.4 var(--sans);
+  outline: none;
+}
+.cmd-input::placeholder { color: var(--text-3); }
+.cmd-list {
+  list-style: none;
+  margin: 0; padding: 6px;
+  overflow-y: auto;
+  scrollbar-width: thin; scrollbar-color: var(--line-2) transparent;
+}
+.cmd-list li {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  font: 500 var(--fs-sm)/1.3 var(--sans);
+}
+.cmd-list .label { flex: 1; color: var(--text); }
+.cmd-list .meta { color: var(--text-3); font: 600 11px/1 var(--mono); text-transform: uppercase; letter-spacing: .06em; }
+.cmd-list li[aria-selected="true"] { background: var(--accent-soft); }
+.cmd-list li[aria-selected="true"] .meta { color: var(--accent); }
+.cmd-list .empty { padding: 20px; text-align: center; color: var(--text-3); font: 500 var(--fs-sm)/1.3 var(--sans); cursor: default; }
+.cmd-trigger {
+  appearance: none; background: transparent; border: 1px solid var(--line-2);
+  color: var(--text-3);
+  border-radius: 999px;
+  padding: 4px 10px;
+  font: 500 var(--fs-sm)/1 var(--sans);
+  cursor: pointer;
+  display: inline-flex; align-items: center; gap: 8px;
+  transition: border-color .15s, color .15s;
+}
+.cmd-trigger:hover { color: var(--text); border-color: var(--accent-line); }
+@media (max-width: 600px) {
+  .cmd-overlay { padding: 8vh 12px 12px; }
+  .cmd-panel { max-height: 84vh; }
 }
 </style>
 </head>
@@ -561,7 +672,13 @@ section.compact { display: grid; gap: .6rem; }
           <svg class="arrow-glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14m-6-6 6 6 6-6"/></svg>
         </button>
       </span>
-      <input type="search" id="site-search" class="inline-search" placeholder="" aria-label="search">
+      <span class="search-wrap">
+        <input type="search" id="site-search" class="inline-search" placeholder="search" aria-label="search">
+        <kbd>/</kbd>
+      </span>
+      <button class="cmd-trigger" id="cmd-trigger" type="button" aria-label="open command palette">
+        <span>jump</span><kbd>⌘K</kbd>
+      </button>
     </h2>
     <div id="projects-grid" class="vibe-grid">
       <noscript><p>Browse <a href="https://github.com/Katehuuh">github.com/Katehuuh</a> directly.</p></noscript>
@@ -569,6 +686,13 @@ section.compact { display: grid; gap: .6rem; }
   </section>
 
 </main>
+
+<div class="cmd-overlay" id="cmd-overlay" role="dialog" aria-modal="true" aria-label="command palette" hidden>
+  <div class="cmd-panel">
+    <input class="cmd-input" id="cmd-input" type="search" placeholder="search projects, toggle filters, jump…" autocomplete="off">
+    <ul class="cmd-list" id="cmd-list" role="listbox"></ul>
+  </div>
+</div>
 
 <script>
 (async () => {
@@ -587,7 +711,17 @@ section.compact { display: grid; gap: .6rem; }
   setupTagFilter();
   setupSortByLikes();
   populateHeroPopovers(data);
+  setupMagneticIcons();
+  setupCommandPalette(projects);
 })();
+
+// `document.startViewTransition(fn)` snapshots the DOM, runs fn, then crossfades
+// from old to new — turning a "snap" filter change into a smooth diff. Falls
+// back to a plain call where the API isn't shipped (Firefox at time of writing).
+function withVT(fn) {
+  if (document.startViewTransition) document.startViewTransition(fn);
+  else fn();
+}
 
 function setupTagFilter() {
   const root = document.getElementById('tag-filter');
@@ -612,14 +746,44 @@ function setupTagFilter() {
       const visible = cardCats.length === 0 || cardCats.some(t => enabled.has(t));
       card.classList.toggle('is-hidden-by-filter', !visible);
     }
+    writeHash();
   }
+
+  // Hash-route filter state — `#tags=game,show` is shareable and survives reload.
+  // Empty (all-on) hash drops the param so default URL stays clean.
+  function writeHash() {
+    const on = buttons.filter(b => b.classList.contains('active')).map(b => b.dataset.tag);
+    const all = on.length === buttons.length;
+    const target = all ? location.pathname + location.search : `#tags=${on.join(',')}`;
+    if (location.href.endsWith(target) || (all && !location.hash)) return;
+    history.replaceState(null, '', target);
+  }
+  function readHash() {
+    const m = location.hash.match(/(?:^|[#&])tags=([^&]*)/);
+    if (!m) return;
+    const want = new Set(m[1].split(',').filter(Boolean));
+    let changed = false;
+    for (const b of buttons) {
+      const on = want.has(b.dataset.tag);
+      if (b.classList.contains('active') !== on) {
+        b.classList.toggle('active', on);
+        b.setAttribute('aria-pressed', on ? 'true' : 'false');
+        changed = true;
+      }
+    }
+    if (changed) applyFilter();
+  }
+  readHash();
+  window.addEventListener('hashchange', readHash);
 
   buttons.forEach(btn => {
     btn.addEventListener('click', () => {
-      const on = !btn.classList.contains('active');
-      btn.classList.toggle('active', on);
-      btn.setAttribute('aria-pressed', on ? 'true' : 'false');
-      applyFilter();
+      withVT(() => {
+        const on = !btn.classList.contains('active');
+        btn.classList.toggle('active', on);
+        btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+        applyFilter();
+      });
     });
   });
 
@@ -759,6 +923,137 @@ function populateHeroPopovers(data) {
   }
 }
 
+// Subtle cursor-pull on the hero icons. The icon eases toward the cursor by a
+// small amount when the cursor is within a magnetic radius — gives the row a
+// liquid/responsive feel without affecting click targets (transform only).
+function setupMagneticIcons() {
+  if (matchMedia('(hover: none)').matches) return; // touch — skip entirely
+  const icons = document.querySelectorAll('.icon-nav > a, .icon-nav > .icon-pop-wrap > a');
+  const RADIUS = 90, STRENGTH = 0.28;
+  let raf = 0;
+  const onMove = (e) => {
+    if (raf) return;
+    raf = requestAnimationFrame(() => {
+      raf = 0;
+      for (const el of icons) {
+        const r = el.getBoundingClientRect();
+        const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+        const dx = e.clientX - cx, dy = e.clientY - cy;
+        const d = Math.hypot(dx, dy);
+        if (d < RADIUS) {
+          const k = (1 - d / RADIUS) * STRENGTH;
+          el.style.setProperty('--mx', `${dx * k}px`);
+          el.style.setProperty('--my', `${dy * k}px`);
+        } else {
+          el.style.setProperty('--mx', '0px');
+          el.style.setProperty('--my', '0px');
+        }
+      }
+    });
+  };
+  window.addEventListener('mousemove', onMove, { passive: true });
+}
+
+// Cmd+K command palette — searches projects and offers filter toggles + jumps.
+// Built lazily on first open so the cost doesn't hit initial paint.
+function setupCommandPalette(projects) {
+  const overlay = document.getElementById('cmd-overlay');
+  const input = document.getElementById('cmd-input');
+  const list = document.getElementById('cmd-list');
+  const trigger = document.getElementById('cmd-trigger');
+  if (!overlay || !input || !list) return;
+
+  let items = [];   // [{label, meta, run}]
+  let filtered = [];
+  let cursor = 0;
+
+  const buildItems = () => {
+    items = [];
+    for (const p of projects) {
+      items.push({
+        label: p.name,
+        meta: (p.tags?.[0] || 'project').toLowerCase(),
+        run: () => { if (p.url) window.open(p.url, p.url.startsWith('http') ? '_blank' : '_self'); },
+      });
+    }
+    const root = document.getElementById('tag-filter');
+    if (root) for (const b of root.querySelectorAll('button[data-tag]')) {
+      items.push({
+        label: `toggle: ${b.dataset.tag}`,
+        meta: 'filter',
+        run: () => b.click(),
+      });
+    }
+    items.push({ label: 'CatBench — kitten benchmark', meta: 'jump', run: () => location.assign('demos/CatBench/') });
+    items.push({ label: 'GitHub — Katehuuh', meta: 'jump', run: () => window.open('https://github.com/Katehuuh', '_blank') });
+    items.push({ label: 'Hugging Face — Nekochu', meta: 'jump', run: () => window.open('https://huggingface.co/Nekochu', '_blank') });
+  };
+
+  const render = () => {
+    list.innerHTML = '';
+    if (filtered.length === 0) {
+      const empty = document.createElement('li');
+      empty.className = 'empty';
+      empty.textContent = 'no matches';
+      list.appendChild(empty);
+      return;
+    }
+    filtered.forEach((it, i) => {
+      const li = document.createElement('li');
+      li.setAttribute('role', 'option');
+      if (i === cursor) li.setAttribute('aria-selected', 'true');
+      const label = document.createElement('span');
+      label.className = 'label'; label.textContent = it.label;
+      const meta = document.createElement('span');
+      meta.className = 'meta'; meta.textContent = it.meta;
+      li.append(label, meta);
+      li.addEventListener('mouseenter', () => { cursor = i; updateSelection(); });
+      li.addEventListener('click', () => { it.run(); close(); });
+      list.appendChild(li);
+    });
+  };
+  const updateSelection = () => {
+    [...list.children].forEach((el, i) => el.toggleAttribute('aria-selected', i === cursor));
+  };
+  const apply = () => {
+    const q = input.value.toLowerCase().trim();
+    filtered = !q ? items.slice(0, 12)
+      : items.filter(it => it.label.toLowerCase().includes(q) || it.meta.includes(q)).slice(0, 12);
+    cursor = 0;
+    render();
+  };
+
+  const open = () => {
+    if (!items.length) buildItems();
+    overlay.hidden = false;
+    requestAnimationFrame(() => overlay.classList.add('open'));
+    input.value = '';
+    apply();
+    input.focus();
+  };
+  const close = () => {
+    overlay.classList.remove('open');
+    setTimeout(() => { overlay.hidden = true; }, 200);
+  };
+
+  trigger?.addEventListener('click', open);
+  input.addEventListener('input', apply);
+  input.addEventListener('keydown', e => {
+    if (e.key === 'ArrowDown') { e.preventDefault(); cursor = Math.min(filtered.length - 1, cursor + 1); updateSelection(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); cursor = Math.max(0, cursor - 1); updateSelection(); }
+    else if (e.key === 'Enter') { const it = filtered[cursor]; if (it) { it.run(); close(); } }
+    else if (e.key === 'Escape') { close(); }
+  });
+  overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+
+  window.addEventListener('keydown', e => {
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+      e.preventDefault();
+      overlay.classList.contains('open') ? close() : open();
+    }
+  });
+}
+
 function setupSearch() {
   const input = document.getElementById('site-search');
   if (!input) return;
@@ -766,20 +1061,24 @@ function setupSearch() {
     ...document.querySelectorAll('.vibe-card'),
     ...document.querySelectorAll('.chips li'),
   ];
-  input.addEventListener('input', () => {
+  const apply = () => {
     const q = input.value.toLowerCase().trim();
-    let anyHidden = false;
     for (const el of targets) {
       const text = el.textContent.toLowerCase();
-      const match = !q || text.includes(q);
-      el.classList.toggle('is-hidden-by-search', !match);
-      if (!match) anyHidden = true;
+      el.classList.toggle('is-hidden-by-search', !!q && !text.includes(q));
     }
-    // hide compact-rows whose chips are all filtered out
     for (const row of document.querySelectorAll('.compact-row')) {
       const chips = [...row.querySelectorAll('.chips li')];
       const visible = chips.some(li => !li.classList.contains('is-hidden-by-search'));
-      row.classList.toggle('is-hidden-by-search', q && !visible);
+      row.classList.toggle('is-hidden-by-search', !!q && !visible);
+    }
+  };
+  input.addEventListener('input', () => withVT(apply));
+  // `/` global hotkey jumps to search (skipped when typing in another field).
+  window.addEventListener('keydown', e => {
+    if (e.key === '/' && !e.metaKey && !e.ctrlKey && !e.altKey
+      && !/^(INPUT|TEXTAREA)$/.test(e.target.tagName)) {
+      e.preventDefault(); input.focus(); input.select();
     }
   });
 }
