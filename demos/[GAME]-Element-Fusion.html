@@ -1255,7 +1255,10 @@ input, button { -webkit-tap-highlight-color: transparent; }
         }
         const timer = setTimeout(() => ctrl.abort(), timeoutMs);
         try {
-            const resp = await fetch(url, {
+            // Route through puter.net.fetch so Pollinations' missing CORS
+            // headers don't block the POST preflight from github.io. Same
+            // relay used for jsonblob.
+            const resp = await relayFetch(url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(body),
