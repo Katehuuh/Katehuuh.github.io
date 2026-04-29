@@ -654,7 +654,8 @@ input, button { -webkit-tap-highlight-color: transparent; }
     // Endpoints / constants
     // ------------------------------------------------------------------
     const TEXT_URL  = 'https://text.pollinations.ai/openai/v1/chat/completions';
-    const TEXT_TIMEOUT_MS = 18000;
+    // Pollinations.openai can spike to 25s under load; 35s leaves headroom.
+    const TEXT_TIMEOUT_MS = 35000;
     const TEXT_MODEL = 'openai';
 
     // Shared discovery cache (JSONBlob). Verified live: POST 201 Created
@@ -1134,6 +1135,10 @@ input, button { -webkit-tap-highlight-color: transparent; }
                 ],
                 response_format: { type: 'json_object' },
                 temperature: 0.9,
+                // Small ceiling: our schema is ~80 tokens, anything more is the
+                // model padding its way to a slower response. Caps end-to-end
+                // latency well below the request timeout.
+                max_tokens: 220,
                 seed: Math.floor(Math.random() * 1_000_000)
             };
             const t0 = performance.now();
@@ -1190,13 +1195,16 @@ input, button { -webkit-tap-highlight-color: transparent; }
                     message: msg,
                     raw: typeof content === 'string' ? content.slice(0, 800) : null,
                 }, elapsed);
-                // Distinguish parse failure (retry-able, the model just spoke
-                // prose) from network failure (re-throw, the user sees the
-                // outage). Parse failures feed back to the next attempt with
-                // an explicit "JSON only" reminder.
-                const isParseError = /JSON|parse/i.test(msg);
-                if (isParseError && attempt < MAX_LLM_RETRIES_FOR_EMOJI - 1) {
-                    lastFeedback = 'Previous response was not valid JSON. Reply with ONLY the JSON object matching the schema, no prose, no markdown.';
+                // Retry on parse failure (model gave prose) or transient
+                // timeout (Pollinations busy); both often clear on a second
+                // attempt. Network 5xx and DNS errors propagate so the user
+                // sees a real outage instead of three slow waits.
+                const isParseError   = /JSON|parse/i.test(msg);
+                const isTimeoutError = /timed out/i.test(msg);
+                if ((isParseError || isTimeoutError) && attempt < MAX_LLM_RETRIES_FOR_EMOJI - 1) {
+                    lastFeedback = isParseError
+                        ? 'Previous response was not valid JSON. Reply with ONLY the JSON object matching the schema, no prose, no markdown.'
+                        : 'Previous attempt timed out. Reply with the smallest possible JSON.';
                     continue;
                 }
                 throw err;
