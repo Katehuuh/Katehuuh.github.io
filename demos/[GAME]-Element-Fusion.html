@@ -1167,24 +1167,30 @@ input, button { -webkit-tap-highlight-color: transparent; }
                 attempt: attempt + 1, retryFeedback: lastFeedback,
                 triedSoFar: triedRejections.map(r => r.emoji)
             };
-            // `content` lives outside the try so the catch can include it in
-            // the error log entry (otherwise a parse failure leaves only the
-            // exception message and the raw model output is lost).
+            // `content` and `path` live outside the try so the catch can
+            // include them in the error log entry (otherwise a parse failure
+            // leaves only the exception message and the raw model output is
+            // lost). `path` is 'local' (Qwen3 on-device) or 'puter' (fallback).
             let content = null;
+            let path = null;
             try {
-                content = await fetchTextGET(SYS_PROMPT, userPrompt, model, TEXT_TIMEOUT_MS);
+                const got = await fetchTextGET(SYS_PROMPT, userPrompt, model, TEXT_TIMEOUT_MS);
+                content = got.content;
+                path = got.path;
                 if (!content) throw new Error('Empty content from text API');
                 const parsed = parseLooseJSON(content);
                 const v = validateLLMResult(parsed);
                 const elapsed = performance.now() - t0;
                 if (v.ok) {
                     logEntry('text', reqSummary, {
+                        path,
                         raw: typeof content === 'string' ? content.slice(0, 400) : null,
                         accepted: { name: v.element.name, emoji: v.element.emoji, forced: !!v.forced }
                     }, elapsed);
                     return v.element;
                 } else {
                     logEntry('text', reqSummary, {
+                        path,
                         raw: typeof content === 'string' ? content.slice(0, 400) : null,
                         rejected: v.reason
                     }, elapsed);
@@ -1210,6 +1216,7 @@ input, button { -webkit-tap-highlight-color: transparent; }
                 const elapsed = performance.now() - t0;
                 const msg = String(err && err.message || err);
                 logEntry('error', reqSummary, {
+                    path,
                     message: msg,
                     raw: typeof content === 'string' ? content.slice(0, 800) : null,
                 }, elapsed);
@@ -1273,42 +1280,172 @@ input, button { -webkit-tap-highlight-color: transparent; }
         };
     }
 
-    // Call puter.ai.chat directly (Puter's first-party LLM, not relayed
-    // Pollinations). Returns the assistant's content string. We pivoted to
-    // this after Pollinations + puter.net.fetch combo ran into:
-    //   - CORS preflight failures (POST chat-completions blocked)
-    //   - puter WASM TLS handshake EOF on POST
-    //   - HTTP 429 from Pollinations across all models / proxies (Cloudflare
-    //     rate-limit on the shared puter relay IP)
-    // puter.ai.chat is JS-API not HTTP-from-page so no CORS, and its rate
-    // bucket is independent from Pollinations.
-    async function fetchTextGET(systemPrompt, userPrompt, model, timeoutMs) {
+    // ----------------------------------------------------------------
+    // Local LLM via transformers.js + Qwen3-0.6B (WebGPU, falls back to
+    // WASM). Same pattern as the Dark Editor demo. We try local first;
+    // puter.ai.chat is the secondary fallback only.
+    //
+    // Why local first: it's free forever, no quota, no auth, runs on the
+    // user's GPU. Puter.ai is the parachute - it works today but anonymous
+    // users have a small daily credit allowance.
+    //
+    // First load downloads ~600 MB to the browser's HF cache. Subsequent
+    // boots are instant. The combine flow falls back to puter while the
+    // model is still downloading (so the demo is usable from the first
+    // click instead of waiting for the model).
+    // ----------------------------------------------------------------
+    const LOCAL_WORKER_SRC = `
+      import {
+        AutoTokenizer,
+        AutoModelForCausalLM,
+        InterruptableStoppingCriteria
+      } from "https://cdn.jsdelivr.net/npm/@huggingface/transformers@latest/+esm";
+      const MODEL_ID = "onnx-community/Qwen3-0.6B-ONNX";
+      let tokenizer = null, model = null, loadingPromise = null, device = "wasm";
+      const stopping = new InterruptableStoppingCriteria();
+
+      async function pickDevice() {
+        if (typeof navigator !== "undefined" && navigator.gpu) {
+          try { const adapter = await navigator.gpu.requestAdapter(); if (adapter) return "webgpu"; } catch (_) {}
+        }
+        return "wasm";
+      }
+      async function ensureLoaded() {
+        if (tokenizer && model) return;
+        if (loadingPromise) return loadingPromise;
+        loadingPromise = (async () => {
+          device = await pickDevice();
+          self.postMessage({ type: "status", phase: "loading", device });
+          const progressCallback = (p) => self.postMessage({ type: "progress", payload: p });
+          tokenizer = await AutoTokenizer.from_pretrained(MODEL_ID, { progress_callback: progressCallback });
+          try {
+            model = await AutoModelForCausalLM.from_pretrained(MODEL_ID, { dtype: "q4f16", device, progress_callback: progressCallback });
+          } catch (err) {
+            if (device === "webgpu") {
+              device = "wasm";
+              model = await AutoModelForCausalLM.from_pretrained(MODEL_ID, { dtype: "q4f16", device: "wasm", progress_callback: progressCallback });
+            } else { throw err; }
+          }
+          self.postMessage({ type: "status", phase: "ready", device });
+        })();
+        try { await loadingPromise; } catch (e) { loadingPromise = null; throw e; }
+      }
+      async function runChat(id, system, user) {
+        await ensureLoaded();
+        const messages = [
+          { role: "system", content: system },
+          { role: "user", content: user }
+        ];
+        const inputs = tokenizer.apply_chat_template(messages, {
+          add_generation_prompt: true, return_dict: true, enable_thinking: false
+        });
+        stopping.reset();
+        const output = await model.generate({
+          ...inputs, max_new_tokens: 256, do_sample: false, stopping_criteria: stopping
+        });
+        const seqLen = inputs.input_ids.dims[1];
+        const generated = output.slice(null, [seqLen, null]);
+        const decoded = tokenizer.batch_decode(generated, { skip_special_tokens: true });
+        let text = (decoded && decoded[0]) || "";
+        text = text.replace(/<think>[\\s\\S]*?<\\/think>/gi, "").trim();
+        self.postMessage({ type: "done", id, text });
+      }
+      self.onmessage = async (ev) => {
+        const m = ev.data || {};
+        if (m.type === "warmup") { try { await ensureLoaded(); } catch (e) { self.postMessage({ type: "error", id: null, message: String(e && e.message || e) }); } return; }
+        if (m.type === "run") { try { await runChat(m.id, m.system, m.user); } catch (e) { self.postMessage({ type: "error", id: m.id, message: String(e && e.message || e) }); } return; }
+        if (m.type === "interrupt") { stopping.interrupt(); }
+      };
+    `;
+    let localWorker = null;
+    let localReady = false;        // model finished downloading + loaded
+    let localBroken = false;       // a fatal error means we stop trying local
+    const localPending = new Map(); // id -> { resolve, reject, timer }
+    function bootLocalWorker() {
+        try {
+            const url = URL.createObjectURL(new Blob([LOCAL_WORKER_SRC], { type: 'text/javascript' }));
+            localWorker = new Worker(url, { type: 'module' });
+            localWorker.addEventListener('message', (ev) => {
+                const m = ev.data || {};
+                if (m.type === 'status' && m.phase === 'ready') localReady = true;
+                if ((m.type === 'done' || m.type === 'error') && m.id != null && localPending.has(m.id)) {
+                    const p = localPending.get(m.id);
+                    localPending.delete(m.id);
+                    clearTimeout(p.timer);
+                    if (m.type === 'done') p.resolve(m.text || '');
+                    else p.reject(new Error(m.message || 'local worker error'));
+                }
+                if (m.type === 'error' && m.id == null) {
+                    // warmup failure -> mark broken so we stop trying
+                    localBroken = true;
+                }
+            });
+            localWorker.addEventListener('error', () => { localBroken = true; });
+            localWorker.postMessage({ type: 'warmup' });
+        } catch (e) {
+            localBroken = true;
+        }
+    }
+    bootLocalWorker();
+
+    function tryLocalChat(systemPrompt, userPrompt, timeoutMs) {
+        return new Promise((resolve, reject) => {
+            if (localBroken) return reject(new Error('local broken'));
+            if (!localReady)  return reject(new Error('local not ready'));
+            if (!localWorker) return reject(new Error('local worker missing'));
+            const id = Math.random().toString(36).slice(2);
+            const timer = setTimeout(() => {
+                if (localPending.has(id)) {
+                    localPending.delete(id);
+                    reject(new Error('local timed out'));
+                }
+            }, timeoutMs);
+            localPending.set(id, { resolve, reject, timer });
+            localWorker.postMessage({ type: 'run', id, system: systemPrompt, user: userPrompt });
+        });
+    }
+
+    async function tryPuterChat(systemPrompt, userPrompt, model, timeoutMs) {
         if (typeof puter === 'undefined' || !puter.ai || typeof puter.ai.chat !== 'function') {
             throw new Error('puter.ai unavailable');
         }
         const ctrl = new AbortController();
         const timer = setTimeout(() => ctrl.abort(), timeoutMs);
         try {
-            // puter.ai.chat accepts OpenAI-style message arrays.
             const messages = [
                 { role: 'system', content: systemPrompt },
                 { role: 'user',   content: userPrompt }
             ];
-            // Race against a manual abort for parity with the old fetch timeout.
             const chatPromise = puter.ai.chat(messages, model ? { model } : undefined);
             const aborted = new Promise((_, rej) => {
                 ctrl.signal.addEventListener('abort', () => rej(new Error('Request timed out')), { once: true });
             });
             const resp = await Promise.race([chatPromise, aborted]);
             const content = resp && resp.message && resp.message.content;
-            if (typeof content !== 'string' || !content) throw new Error('Empty content from text API');
+            if (typeof content !== 'string' || !content) throw new Error('Empty content from puter.ai');
             return content;
-        } catch (err) {
-            if (err && err.name === 'AbortError') throw new Error('Request timed out');
-            throw err;
         } finally {
             clearTimeout(timer);
         }
+    }
+
+    // Returns { content, path } where path = 'local' | 'puter'.
+    // Tries local Qwen3 first (free, on-device). If local isn't ready or
+    // errors, falls back to puter.ai.chat. The caller logs `path`.
+    async function fetchTextGET(systemPrompt, userPrompt, model, timeoutMs) {
+        if (localReady && !localBroken) {
+            try {
+                const content = await tryLocalChat(systemPrompt, userPrompt, timeoutMs);
+                return { content, path: 'local' };
+            } catch (e) {
+                // Fall through to puter.
+                if (/timed out|out of memory|webgpu|unsupported/i.test(String(e && e.message || e))) {
+                    localBroken = true; // don't keep trying after fatal
+                }
+            }
+        }
+        const content = await tryPuterChat(systemPrompt, userPrompt, model, timeoutMs);
+        return { content, path: 'puter' };
     }
 
     async function fetchJSON(url, body, signal, timeoutMs) {
