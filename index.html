@@ -181,17 +181,26 @@ a:hover { color: #ffb98d; }
 }
 .icon-pop-wrap .pop-list .section-header:first-child { padding-top: 0; }
 
-/* HF popover with >4 items: 2-col grid where each column auto-sizes to its
-   widest pill (max-content), so nothing truncates and pills hug their text. */
+/* HF popover with >4 items: 2-col grid. Each column auto-sizes to fit its
+   widest pill. `align-items: start` keeps each pill at the top of its row
+   so neighboring rows don't overlap during the cascade-in animation. */
 .icon-pop-wrap .pop-list.grid-2col {
   display: grid;
-  grid-template-columns: max-content max-content;
+  grid-template-columns: auto auto;
+  grid-auto-flow: row;
   justify-content: center;
+  align-items: start;
   column-gap: var(--sp-2);
   row-gap: 3px;
 }
-.icon-pop-wrap .pop-list.grid-2col > .section-header { grid-column: 1 / -1; }
-.icon-pop-wrap .pop-list.grid-2col > li { display: block; }
+.icon-pop-wrap .pop-list.grid-2col > li {
+  display: flex;
+  justify-content: center;
+}
+.icon-pop-wrap .pop-list.grid-2col > .section-header {
+  grid-column: 1 / -1;
+  display: block;
+}
 
 .icon-pop-wrap.show-pop .pop-list,
 .icon-pop-wrap:focus-within .pop-list {
