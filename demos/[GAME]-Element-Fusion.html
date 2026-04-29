@@ -864,11 +864,18 @@ input, button { -webkit-tap-highlight-color: transparent; }
         state.blobId = lsBlob || (SHARED_BLOB_ID === 'TODO_GENERATE_ON_FIRST_LOAD' ? null : SHARED_BLOB_ID);
     }
 
+    // DEBUG=true makes every reload behave like a fresh visit: no localStorage
+    // reads, no localStorage writes, no persisted cache. Useful while tuning
+    // seeds/prompts so a normal browser refresh actually reflects current state
+    // without a hard reload (Ctrl+Shift+R) every time. Flip to false to ship.
+    const DEBUG = true;
     function readJSON(key, fallback) {
+        if (DEBUG) return fallback;
         try { const s = localStorage.getItem(key); return s ? JSON.parse(s) : fallback; }
         catch (e) { return fallback; }
     }
     function writeJSON(key, value) {
+        if (DEBUG) return;
         try { localStorage.setItem(key, JSON.stringify(value)); }
         catch (e) { /* quota: silently drop */ }
     }
@@ -1739,6 +1746,15 @@ input, button { -webkit-tap-highlight-color: transparent; }
             if (context === 'slot') removeFromSlots(opts.slotIndex || 0);
             else placeIntoSlots(k);
         });
+        // Explicit double-click: also places. Useful as an automation-friendly
+        // alternative to drag-and-drop for tests, and produces a quick
+        // self-combine when used on a grid card (slot 0 then slot 1).
+        if (context === 'grid') {
+            card.addEventListener('dblclick', (ev) => {
+                ev.stopPropagation();
+                placeIntoSlots(k);
+            });
+        }
         card.addEventListener('keydown', (ev) => {
             if (ev.key === 'Enter' || ev.key === ' ') {
                 ev.preventDefault();
