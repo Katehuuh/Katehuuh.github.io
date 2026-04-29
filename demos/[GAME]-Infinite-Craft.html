@@ -689,6 +689,59 @@ input, button { -webkit-tap-highlight-color: transparent; }
     const MAX_LLM_RETRIES_FOR_EMOJI = 3;
     const MAX_USED_LIST = 200;
 
+    // Semantic emoji groups — when the LLM keeps picking a taken emoji we
+    // search the same group for an unused one before falling back to the
+    // sparkle disambiguation. Hand-curated for control + tiny size; no CDN
+    // dependency. Order inside a group is fallback priority (commonest first).
+    const EMOJI_GROUPS = [
+      ['☀️','🌞','🔆','⭐','✨','💫','🌟','🌠'],     // sun / bright
+      ['🌙','🌛','🌜','🌚','🌝','🌑','🌒','🌓','🌔','🌕','🌖','🌗','🌘'], // moon
+      ['💧','💦','🌊','🚰','🫧','🥛'],               // water
+      ['🔥','🌋','💥','☄️','💢'],                    // fire / impact
+      ['🌍','🌎','🌏','🪨','⛰️','🗿','🏔️','🌐'],     // earth / globe
+      ['🌬️','💨','🌪️','🍃','♨️'],                   // wind / vapour
+      ['☁️','⛅','🌫️','🌤️','🌥️','🌦️'],             // cloud
+      ['🌧️','⛈️','🌩️','⚡'],                         // rain / storm
+      ['❄️','☃️','⛄','🌨️','🧊'],                    // snow / ice
+      ['🌱','🌿','🍀','🌾','🪴','🥬'],               // plant / leaf
+      ['🌳','🌲','🎄','🌴','🪵'],                    // tree / wood
+      ['🌸','🌺','🌹','🌷','💐','🌼','🪷'],          // flower
+      ['🍎','🍐','🍊','🍋','🍌','🍇','🍉','🍓','🍒','🍑','🍍','🥥','🥝'], // fruit
+      ['🥖','🍞','🥐','🥯','🧈'],                    // bread
+      ['🐶','🐱','🐭','🐹','🐰','🐺','🦊','🐻','🐼','🐨','🦝'], // mammal
+      ['🐦','🦅','🦆','🦉','🦜','🐔','🦢'],          // bird
+      ['🐠','🐟','🐡','🦈','🐳','🐋','🐬'],          // fish / sea
+      ['🐝','🦋','🐞','🐛','🦟','🐜'],               // insect
+      ['🐍','🦎','🐢','🐊','🦖','🦕'],               // reptile
+      ['👶','👦','👧','🧒'],                          // child
+      ['👨','👩','🧑','🧔','👴','👵'],                // adult
+      ['💀','☠️','👻','🪦'],                          // death / spirit
+      ['😀','😁','😃','😄','😊','🙂','😺'],          // happy
+      ['😢','😭','😞','😔','🥺'],                    // sad
+      ['❤️','🧡','💛','💚','💙','💜','🤍','🖤','🤎'],// heart
+      ['🏠','🏡','🏘️','🏚️'],                        // home
+      ['🏰','🏯','🗼','⛩️'],                         // landmark
+      ['🛸','👽','🚀','🪐','🌌'],                    // space
+      ['💎','💍','👑','💰'],                          // treasure
+      ['🎭','🎨','🖼️','🎬','🎮'],                    // art / play
+      ['⚔️','🗡️','🔫','🏹','🛡️'],                    // weapon
+      ['🍳','🍲','🍜','🍱','🥘','🍛'],               // dish
+      ['📚','📖','📕','📗','📘','📙'],               // book
+      ['⏰','⌛','⏳','🕰️'],                          // time
+      ['💡','🔦','🕯️','🔥'],                         // light source
+    ];
+
+    function findRelatedUnusedEmoji(taken, usedSet) {
+      for (const group of EMOJI_GROUPS) {
+        if (!group.includes(taken)) continue;
+        for (const e of group) {
+          if (e !== taken && !usedSet.has(e)) return e;
+        }
+        return null; // group exhausted
+      }
+      return null;   // taken emoji not in any known group
+    }
+
     const LS_ELEMENTS = 'infiniteCraft.elements.v1';
     const LS_COMBOS   = 'infiniteCraft.combos.v1';
     const LS_THEME    = 'infiniteCraft.theme';
@@ -1055,6 +1108,7 @@ input, button { -webkit-tap-highlight-color: transparent; }
 
     async function callCombineLLM(a, b) {
         let lastFeedback = null;
+        let lastRejected = null; // { name, emoji, description } from the most recent rejected attempt
         for (let attempt = 0; attempt < MAX_LLM_RETRIES_FOR_EMOJI; attempt++) {
             const body = {
                 model: TEXT_MODEL,
@@ -1091,6 +1145,13 @@ input, button { -webkit-tap-highlight-color: transparent; }
                         rejected: v.reason
                     }, elapsed);
                     lastFeedback = v.reason;
+                    if (v.conflictEmoji && parsed && parsed.name) {
+                        lastRejected = {
+                            name: String(parsed.name).trim(),
+                            emoji: v.conflictEmoji,
+                            description: String(parsed.description || '').slice(0, 240)
+                        };
+                    }
                     continue;
                 }
             } catch (err) {
@@ -1099,15 +1160,36 @@ input, button { -webkit-tap-highlight-color: transparent; }
                 throw err;
             }
         }
-        // Last-resort: append a sparkle to disambiguate. Build a result
-        // from the most recent rejected attempt's name where possible.
-        // We don't have that name stored cleanly here - use a generic.
+        // Semantic-group fallback: keep the LLM's last-rejected name (often a
+        // good real-world concept) and substitute a related-but-unused emoji
+        // from the same hand-curated group. Beats a generic sparkle.
+        if (lastRejected) {
+            const used = new Set();
+            for (const k of Object.keys(state.elements)) {
+                const el = state.elements[k];
+                if (el && el.emoji) used.add(el.emoji);
+            }
+            const related = findRelatedUnusedEmoji(lastRejected.emoji, used);
+            if (related) {
+                logEntry('text', { kind: 'combine.semantic-fallback', a: a.name, b: b.name },
+                         { swapped: lastRejected.emoji + ' -> ' + related,
+                           name: lastRejected.name });
+                return {
+                    name: prettifyName(lastRejected.name),
+                    emoji: related,
+                    description: lastRejected.description
+                                 || ('A combination of ' + a.name + ' and ' + b.name + '.')
+                };
+            }
+        }
+        // Last-resort: sparkle disambiguation.
         logEntry('error', { kind: 'combine', a: a.name, b: b.name },
-                 { message: 'Emoji uniqueness failed after retries; using ✨ disambiguation' });
+                 { message: 'Emoji uniqueness failed after retries + semantic fallback; using ✨' });
         return {
-            name: prettifyName(a.name + ' ' + b.name + ' Mix'),
+            name: prettifyName((lastRejected && lastRejected.name) || (a.name + ' ' + b.name + ' Mix')),
             emoji: '✨',
-            description: 'A mix of ' + a.name + ' and ' + b.name + '.'
+            description: (lastRejected && lastRejected.description)
+                         || ('A mix of ' + a.name + ' and ' + b.name + '.')
         };
     }
 
