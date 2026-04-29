@@ -1,6 +1,12 @@
 {
   "demos": [
     {
+      "name": "[GAME]-Infinite-Craft",
+      "type": "file",
+      "filename": "[GAME]-Infinite-Craft.html",
+      "description": "Infinite Craft clone \u2014 drag two elements to discover a new one, generated live by AI."
+    },
+    {
       "name": "[GAME]-UI-Guesser",
       "type": "file",
       "filename": "[GAME]-UI-Guesser.html",
