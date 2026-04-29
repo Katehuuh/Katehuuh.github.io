@@ -1,6 +1,6 @@
 <!--
   ============================================================================
-  AI Challenger - guess what AI-generated content represents from 4 options.
+  UI Guesser - guess the brand/object name from AI-generated HTML, SVG, or image.
 
   UI:
   - Dark, minimalist, mobile-first responsive. Background #121212. No
@@ -64,7 +64,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>AI Challenger</title>
+<title>UI Guesser</title>
+<meta name="description" content="Guess the name from the HTML, SVG, or image made by AI/LLM." />
 <style>
 :root {
     --bg: #121212;
@@ -612,7 +613,7 @@ body {
     // ------------------------------------------------------------------
 
     async function getChallenge(mode, difficulty, signal) {
-        const prompt = buildTextPrompt(mode, difficulty, state.streak);
+        const prompt = buildTextPrompt(mode, difficulty, state.streak, state.recentAnswers || []);
         const body = {
             model: TEXT_MODEL_PRIMARY,
             messages: [
@@ -620,11 +621,15 @@ body {
                     'You are a generator for a guessing game. Always reply ' +
                     'with valid JSON only - no markdown fences, no commentary. ' +
                     'Pick well-known real-world brands or objects so players ' +
-                    'have a fair chance to guess.'
+                    'have a fair chance to guess. Vary your picks aggressively; ' +
+                    'never repeat an item that appears in the avoid list.'
                 },
                 { role: 'user', content: prompt }
             ],
             response_format: { type: 'json_object' },
+            // Higher temperature + random seed pushes the model away from its
+            // 3-or-4 default favourites (Spotify/Google/YouTube on every round).
+            temperature: 1.0,
             seed: Math.floor(Math.random() * 1_000_000)
         };
 
@@ -638,9 +643,14 @@ body {
         return parsed;
     }
 
-    function buildTextPrompt(mode, difficulty, streak) {
+    function buildTextPrompt(mode, difficulty, streak, recentAnswers) {
+        const avoidLine = (recentAnswers && recentAnswers.length)
+            ? 'AVOID these recent picks (do not pick them or any near-synonym): '
+              + recentAnswers.join(', ') + '.'
+            : '';
         const difficultyHint =
-            'Difficulty hint: ' + difficulty + '. Streak so far: ' + streak + '.';
+            'Difficulty hint: ' + difficulty + '. Streak so far: ' + streak + '.'
+            + (avoidLine ? '\n' + avoidLine : '');
 
         const schema =
             'Return JSON shaped exactly:\n' +
@@ -873,6 +883,13 @@ body {
             );
         }
         recordHistory(isCorrect, false);
+        // Track recent correct answers (regardless of win/loss — the LLM
+        // generated this item, so it shouldn't be re-offered for a while).
+        if (currentRound.correct && currentRound.correct.name) {
+            state.recentAnswers = state.recentAnswers || [];
+            state.recentAnswers.unshift(currentRound.correct.name);
+            if (state.recentAnswers.length > 12) state.recentAnswers.length = 12;
+        }
         renderStats();
         saveState();
 
@@ -952,7 +969,8 @@ body {
 
     function loadState() {
         const blank = {
-            score: 0, streak: 0, best: 0, roundNum: 1, history: []
+            score: 0, streak: 0, best: 0, roundNum: 1, history: [],
+            recentAnswers: [] // last N correct answer names — fed to LLM as exclusion list to fight repetition
         };
         try {
             const raw = localStorage.getItem(STORAGE_KEY);
@@ -965,6 +983,9 @@ body {
                 roundNum: Number(parsed.roundNum) || 1,
                 history:  Array.isArray(parsed.history)
                     ? parsed.history.slice(0, HISTORY_MAX)
+                    : [],
+                recentAnswers: Array.isArray(parsed.recentAnswers)
+                    ? parsed.recentAnswers.slice(0, 12)
                     : []
             };
         } catch (e) {

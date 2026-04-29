@@ -1072,6 +1072,9 @@ async function liveAugmentDemos(projects) {
       url: href,
       thumb: `assets/thumbs/${rawName}.jpg`,
       tags: tag ? [tag] : ['demo'],
+      // Description is extracted from each demo's <meta name="description">
+      // by build_demos_manifest.py — present per-entry only when set.
+      description: it.description || undefined,
     });
   }
 
