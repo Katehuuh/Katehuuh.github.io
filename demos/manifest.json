@@ -1,6 +1,11 @@
 {
   "demos": [
     {
+      "name": "[TOOL]-Dark-Editor",
+      "type": "file",
+      "filename": "[TOOL]-Dark-Editor.html"
+    },
+    {
       "name": "[GAME]-Mom-Chat",
       "type": "file",
       "filename": "[GAME]-Mom-Chat.html"
