@@ -52,7 +52,7 @@ Enhancements (added beyond the original spec)
     --fg-mute: rgba(255, 255, 255, 0.4);
     --bg: #000000;
     --menu-radius: 14px;
-    --text-size: 20px; /* unified — editor + menu share this */
+    --text-size: 24px; /* unified — editor + menu share this */
   }
 
   * { box-sizing: border-box; }
@@ -768,11 +768,19 @@ Enhancements (added beyond the original spec)
     menuOpen = false;
   }
 
-  // Mouse-tracked specular highlight
+  // Mouse-tracked specular highlight + hover-bridge state for hold-Ctrl UX.
+  // When the user releases Ctrl, the menu stays open IF the cursor is hovering
+  // it (so the click/release dance works); leaves the moment cursor exits.
+  let menuHovered = false;
   menu.addEventListener("mousemove", (e) => {
     const r = menu.getBoundingClientRect();
     menu.style.setProperty("--mx", (e.clientX - r.left) + "px");
     menu.style.setProperty("--my", (e.clientY - r.top)  + "px");
+  });
+  menu.addEventListener("mouseenter", () => { menuHovered = true; });
+  menu.addEventListener("mouseleave", () => {
+    menuHovered = false;
+    if (menuOpen && !ctrlPressedLogical && !activeJob) hideMenu();
   });
 
   // ---------- Ctrl-only trigger + number-key shortcuts ----------
@@ -803,7 +811,11 @@ Enhancements (added beyond the original spec)
     }
   });
   document.addEventListener("keyup", (e) => {
-    if (e.key === "Control") ctrlPressedLogical = false;
+    if (e.key !== "Control") return;
+    ctrlPressedLogical = false;
+    // Hold-to-show: hide menu on release unless the cursor is over it
+    // (lets the user release Ctrl, then click) or a job is in flight.
+    if (menuOpen && !menuHovered && !activeJob) hideMenu();
   });
 
   // Click outside to close
