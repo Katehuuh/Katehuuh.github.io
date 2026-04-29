@@ -31,6 +31,13 @@ Apple Liquid Glass aesthetic for the context menu (the visual signature - must c
 - Chromatic-aberration edge: 1px multi-stop border-image gradient (subtle coral -> cyan -> soft-white), or layered box-shadow rings tinted with two complementary hues.
 - Smooth grow-in (transform: scale + translateY + opacity, with cubic-bezier overshoot ~(.34, 1.56, .64, 1)) and a quick fade-out.
 - No external images, no React, no Framer, no Tailwind. Vanilla CSS + JS only.
+
+Enhancements (added beyond the original spec)
+- Full-screen liquid-glass overlay: when the menu opens a fixed page-level overlay activates, rotating conic-gradient blended with plus-lighter so the whole canvas reads as glass not just the menu.
+- Auto-save: editor contents persist to localStorage (debounced 500ms). Restored on load.
+- Word/char counter pill bottom-right; shows selection counts when text is selected.
+- Number-key shortcuts when the menu is open: 1 = grammar, 2 = translate.
+- Stop button: while generating, the spinner area becomes a clickable Stop that signals the worker via InterruptableStoppingCriteria.
 -->
 <!DOCTYPE html>
 <html lang="en">
@@ -45,6 +52,7 @@ Apple Liquid Glass aesthetic for the context menu (the visual signature - must c
     --fg-mute: rgba(255, 255, 255, 0.4);
     --bg: #000000;
     --menu-radius: 14px;
+    --text-size: 20px; /* unified — editor + menu share this */
   }
 
   * { box-sizing: border-box; }
@@ -57,8 +65,8 @@ Apple Liquid Glass aesthetic for the context menu (the visual signature - must c
     background: var(--bg);
     color: var(--fg);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    font-size: 17px;
-    line-height: 1.65;
+    font-size: var(--text-size);
+    line-height: 1.6;
     overflow: hidden;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -203,9 +211,9 @@ Apple Liquid Glass aesthetic for the context menu (the visual signature - must c
     z-index: 1;
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 10px 14px;
-    font-size: 14px;
+    gap: 12px;
+    padding: 12px 18px;
+    font-size: var(--text-size);
     font-weight: 500;
     letter-spacing: 0.01em;
     color: var(--fg-strong);
@@ -225,9 +233,9 @@ Apple Liquid Glass aesthetic for the context menu (the visual signature - must c
   }
 
   .menu-item .icon {
-    width: 16px;
-    height: 16px;
-    flex: 0 0 16px;
+    width: 22px;
+    height: 22px;
+    flex: 0 0 22px;
     opacity: 0.85;
   }
 
@@ -236,9 +244,9 @@ Apple Liquid Glass aesthetic for the context menu (the visual signature - must c
     z-index: 1;
     display: none;
     align-items: center;
-    gap: 10px;
-    padding: 10px 14px;
-    font-size: 13px;
+    gap: 12px;
+    padding: 12px 18px;
+    font-size: var(--text-size);
     color: var(--fg);
   }
 
@@ -246,9 +254,9 @@ Apple Liquid Glass aesthetic for the context menu (the visual signature - must c
   .menu .menu-item.hidden { display: none; }
 
   .spinner {
-    width: 14px;
-    height: 14px;
-    border: 1.5px solid rgba(255, 255, 255, 0.18);
+    width: 18px;
+    height: 18px;
+    border: 2px solid rgba(255, 255, 255, 0.18);
     border-top-color: rgba(255, 255, 255, 0.85);
     border-radius: 50%;
     animation: spin 0.85s linear infinite;
@@ -321,6 +329,95 @@ Apple Liquid Glass aesthetic for the context menu (the visual signature - must c
     transition: opacity 600ms ease;
   }
   .hint.fade { opacity: 0; }
+
+  /* Full-screen liquid-glass overlay — activated when the menu opens.
+     Page-level rotating conic refraction + plus-lighter blend so the whole
+     canvas reads as glass, not just the menu. Doesn't block interaction. */
+  .glass-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9000;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 360ms ease;
+    background:
+      radial-gradient(60vmax 40vmax at var(--gx, 50%) var(--gy, 50%),
+        rgba(255, 255, 255, 0.10),
+        rgba(255, 255, 255, 0.03) 40%,
+        transparent 70%);
+    mix-blend-mode: plus-lighter;
+  }
+  .glass-overlay.visible { opacity: 1; }
+  .glass-overlay::before {
+    content: "";
+    position: absolute;
+    inset: -20%;
+    background: conic-gradient(
+      from 0deg at var(--gx, 50%) var(--gy, 50%),
+      rgba(120, 200, 255, 0.10) 0deg,
+      rgba(255, 110, 160, 0.10) 90deg,
+      rgba(220, 255, 160, 0.10) 180deg,
+      rgba(120, 200, 255, 0.10) 270deg,
+      rgba(120, 200, 255, 0.10) 360deg
+    );
+    filter: blur(40px) saturate(180%);
+    animation: overlayDrift 22s linear infinite;
+    opacity: 0.85;
+  }
+  @keyframes overlayDrift {
+    to { transform: rotate(360deg); }
+  }
+
+  /* Counter pill — bottom-right, soft glassy. Shows full-doc counts; switches
+     to selection counts when there's a non-collapsed selection. */
+  .counter {
+    position: fixed;
+    bottom: 14px;
+    right: 14px;
+    z-index: 9500;
+    padding: 6px 10px;
+    font-size: 11px;
+    font-feature-settings: "tnum";
+    color: var(--fg-mute);
+    background: rgba(20, 20, 24, 0.55);
+    border: 0.5px solid rgba(255, 255, 255, 0.10);
+    border-radius: 999px;
+    backdrop-filter: blur(10px) saturate(160%);
+    -webkit-backdrop-filter: blur(10px) saturate(160%);
+    pointer-events: none;
+    user-select: none;
+    transition: color 200ms ease, border-color 200ms ease;
+  }
+  .counter.has-selection {
+    color: var(--fg-strong);
+    border-color: rgba(120, 200, 255, 0.40);
+  }
+
+  /* Stop button — replaces the static spinner row while a job runs. Clickable. */
+  .stop-btn {
+    position: relative;
+    z-index: 1;
+    display: none;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    margin: 4px 6px;
+    font-size: var(--text-size);
+    color: var(--fg-strong);
+    background: rgba(255, 100, 110, 0.14);
+    border: 0.5px solid rgba(255, 130, 150, 0.45);
+    border-radius: 10px;
+    cursor: pointer;
+    transition: background 140ms ease, transform 120ms ease;
+  }
+  .stop-btn.active { display: flex; }
+  .stop-btn:hover { background: rgba(255, 100, 110, 0.22); }
+  .stop-btn:active { transform: scale(0.97); }
+  .stop-btn .square {
+    width: 12px; height: 12px;
+    border-radius: 2px;
+    background: rgba(255, 130, 150, 0.85);
+  }
 </style>
 </head>
 <body>
@@ -351,14 +448,22 @@ Apple Liquid Glass aesthetic for the context menu (the visual signature - must c
       <span class="spinner" aria-hidden="true"></span>
       <span id="menuStatusText">Processing...</span>
     </div>
+    <button type="button" class="stop-btn" id="stopBtn" aria-label="stop generation">
+      <span class="square" aria-hidden="true"></span>
+      <span>Stop</span>
+    </button>
   </div>
+
+  <div id="glassOverlay" class="glass-overlay" aria-hidden="true"></div>
 
   <div id="status" class="status" role="status" aria-live="polite">
     <span id="statusText">Idle</span>
     <span class="bar" id="statusBar"><i></i></span>
   </div>
 
-  <div id="hint" class="hint">Tap Ctrl on a selection</div>
+  <div id="counter" class="counter" aria-hidden="true">0 words · 0 chars</div>
+
+  <div id="hint" class="hint">Tap Ctrl on a selection · 1 grammar · 2 translate</div>
 
 <script type="module">
   // ---------- Worker source (inline, module worker via Blob URL) ----------
@@ -366,7 +471,8 @@ Apple Liquid Glass aesthetic for the context menu (the visual signature - must c
     import {
       AutoTokenizer,
       AutoModelForCausalLM,
-      TextStreamer
+      TextStreamer,
+      InterruptableStoppingCriteria
     } from "https://cdn.jsdelivr.net/npm/@huggingface/transformers@latest/+esm";
 
     const MODEL_ID = "onnx-community/Qwen3-0.6B-ONNX";
@@ -375,6 +481,7 @@ Apple Liquid Glass aesthetic for the context menu (the visual signature - must c
     let model = null;
     let loadingPromise = null;
     let device = "wasm";
+    const stopping = new InterruptableStoppingCriteria();
 
     async function pickDevice() {
       if (typeof navigator !== "undefined" && navigator.gpu) {
@@ -461,11 +568,13 @@ Apple Liquid Glass aesthetic for the context menu (the visual signature - must c
         }
       });
 
+      stopping.reset();
       const output = await model.generate({
         ...inputs,
         max_new_tokens: 512,
         do_sample: false,
-        streamer
+        streamer,
+        stopping_criteria: stopping
       });
 
       // Decode full output as a fallback in case the streamer missed pieces.
@@ -497,6 +606,11 @@ Apple Liquid Glass aesthetic for the context menu (the visual signature - must c
       if (msg.type === "run") {
         try { await runGenerate(msg.id, msg.action, msg.text); }
         catch (e) { self.postMessage({ type: "error", id: msg.id, message: String(e && e.message || e) }); }
+        return;
+      }
+      if (msg.type === "interrupt") {
+        stopping.interrupt();
+        return;
       }
     };
   `;
@@ -509,12 +623,49 @@ Apple Liquid Glass aesthetic for the context menu (the visual signature - must c
   const menu         = document.getElementById("menu");
   const menuStatus   = document.getElementById("menuStatus");
   const menuStatusText = document.getElementById("menuStatusText");
+  const stopBtn      = document.getElementById("stopBtn");
+  const overlay      = document.getElementById("glassOverlay");
+  const counter      = document.getElementById("counter");
   const status       = document.getElementById("status");
   const statusText   = document.getElementById("statusText");
   const statusBar    = document.getElementById("statusBar").firstElementChild;
   const hint         = document.getElementById("hint");
 
   const items = Array.from(menu.querySelectorAll(".menu-item"));
+
+  // ---------- Auto-save (debounced) ----------
+  // Persists editor contents to localStorage so a reload doesn't nuke work.
+  // Stored as innerHTML so newlines/structure survive (white-space: pre-wrap).
+  const STORAGE_KEY = "darkEditor.content.v1";
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved != null) editor.innerHTML = saved;
+  } catch (_) { /* localStorage may be disabled (incognito + cross-origin) */ }
+
+  let saveTimer = 0;
+  function scheduleSave() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+      try { localStorage.setItem(STORAGE_KEY, editor.innerHTML); }
+      catch (_) {}
+    }, 500);
+  }
+  editor.addEventListener("input", scheduleSave);
+
+  // ---------- Word/char counter ----------
+  function updateCounter() {
+    const sel = document.getSelection();
+    const selText = sel && !sel.isCollapsed ? sel.toString() : "";
+    const text = selText || editor.innerText || "";
+    const chars = text.length;
+    const words = text.trim() ? text.trim().split(/\s+/).length : 0;
+    const prefix = selText ? "selected: " : "";
+    counter.textContent = prefix + words + " words · " + chars + " chars";
+    counter.classList.toggle("has-selection", !!selText);
+  }
+  editor.addEventListener("input", updateCounter);
+  document.addEventListener("selectionchange", updateCounter);
+  updateCounter();
 
   // ---------- Status helpers ----------
   let statusHideTimer = null;
@@ -601,12 +752,19 @@ Apple Liquid Glass aesthetic for the context menu (the visual signature - must c
     menu.style.left = x + "px";
     menu.style.top  = y + "px";
 
+    // Activate the page-level glass overlay, anchoring its conic origin to the
+    // selection's centre so the refraction "blooms" from where the user looked.
+    overlay.style.setProperty("--gx", (rect.left + rect.width / 2) + "px");
+    overlay.style.setProperty("--gy", (rect.top  + rect.height / 2) + "px");
+    overlay.classList.add("visible");
+
     menuOpen = true;
   }
 
   function hideMenu() {
     menu.classList.remove("visible");
     menu.setAttribute("aria-hidden", "true");
+    overlay.classList.remove("visible");
     menuOpen = false;
   }
 
@@ -617,12 +775,19 @@ Apple Liquid Glass aesthetic for the context menu (the visual signature - must c
     menu.style.setProperty("--my", (e.clientY - r.top)  + "px");
   });
 
-  // ---------- Ctrl-only trigger ----------
+  // ---------- Ctrl-only trigger + number-key shortcuts ----------
   let ctrlPressedLogical = false;
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && menuOpen) {
       e.preventDefault();
+      if (activeJob) interruptJob();
       hideMenu();
+      return;
+    }
+    // While the menu is open, 1/2 trigger the actions for keyboard-first users.
+    if (menuOpen && !activeJob && (e.key === "1" || e.key === "2") && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      e.preventDefault();
+      startJob(e.key === "1" ? "grammar" : "translate");
       return;
     }
     if (e.key !== "Control") return;
@@ -684,8 +849,10 @@ Apple Liquid Glass aesthetic for the context menu (the visual signature - must c
   });
 
   function finishJob(text, error) {
+    stopBtn.classList.remove("active");
     if (error) {
-      showStatus("Error: " + error, { error: true });
+      const cancelled = /interrupt/i.test(error);
+      showStatus(cancelled ? "Stopped" : ("Error: " + error), { error: !cancelled });
       menuStatus.classList.remove("active");
       items.forEach(i => i.classList.remove("disabled", "hidden"));
       activeJob = null;
@@ -693,11 +860,22 @@ Apple Liquid Glass aesthetic for the context menu (the visual signature - must c
     }
     if (text != null) {
       replaceSelectionWith(text);
+      scheduleSave();
       hideMenu();
       showStatus("Replaced");
     }
     activeJob = null;
   }
+
+  function interruptJob() {
+    if (!activeJob) return;
+    worker.postMessage({ type: "interrupt" });
+  }
+  stopBtn.addEventListener("click", (e) => {
+    e.preventDefault();
+    interruptJob();
+  });
+  stopBtn.addEventListener("mousedown", (e) => e.preventDefault());
 
   // ---------- Replace selection (and restore caret) ----------
   function replaceSelectionWith(newText) {
@@ -730,6 +908,7 @@ Apple Liquid Glass aesthetic for the context menu (the visual signature - must c
     items.forEach(i => i.classList.add("disabled"));
     menuStatus.classList.add("active");
     menuStatusText.textContent = "Processing...";
+    stopBtn.classList.add("active");
     const id = Math.random().toString(36).slice(2);
     activeJob = { id, action, streamLen: 0 };
     worker.postMessage({ type: "run", id, action, text });
