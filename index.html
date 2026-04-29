@@ -128,11 +128,12 @@ a:hover { color: #ffb98d; }
 .icon-pop-wrap .pop-list {
   position: absolute;
   bottom: calc(100% + 14px); left: 50%;
-  width: 280px;
+  width: max-content;
   max-width: calc(100vw - 24px);
   max-height: 50vh;
   margin: 0; padding: var(--sp-2);
   list-style: none;
+  display: flex; flex-direction: column; gap: 3px;
   background: rgba(22, 22, 26, 0.94);
   -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
   border: 1px solid var(--accent-line);
@@ -142,24 +143,33 @@ a:hover { color: #ffb98d; }
   overflow-x: hidden; overflow-y: auto;
   opacity: 0; pointer-events: none;
   transform: translateX(-50%) translateY(8px) scale(0.96);
-  transition: opacity .18s ease, transform .22s cubic-bezier(.34, 1.56, .64, 1);
+  transition: opacity .18s ease, transform .22s var(--ease-bounce);
   z-index: 200;
 }
 .icon-pop-wrap .pop-list li {
   position: relative;
+  display: flex; justify-content: center;
   opacity: 0;
   transform: translateY(6px);
   transition: opacity .22s ease, transform .32s var(--ease-bounce);
 }
+/* Each item is its own pill — sized to its text, no ellipsis truncation. */
 .icon-pop-wrap .pop-list a {
-  display: block;
-  padding: var(--sp-1) var(--sp-2);
-  border-radius: var(--r-xs);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: var(--r-pill);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-line);
   color: var(--text);
-  transition: background .14s, color .14s;
+  white-space: nowrap;
+  text-decoration: none;
+  transition: background .14s, color .14s, border-color .14s;
 }
-.icon-pop-wrap .pop-list a:hover { background: var(--accent-soft); color: var(--accent); }
+.icon-pop-wrap .pop-list a:hover {
+  background: rgba(255, 107, 53, 0.22);
+  color: var(--accent);
+  border-color: var(--accent);
+}
 .icon-pop-wrap .pop-list .section-header {
   padding: var(--sp-1) 0 2px;
   font: 600 var(--fs-xs)/1 var(--mono);
@@ -167,8 +177,21 @@ a:hover { color: #ffb98d; }
   text-transform: uppercase;
   color: var(--accent);
   cursor: default;
+  text-align: center;
 }
 .icon-pop-wrap .pop-list .section-header:first-child { padding-top: 0; }
+
+/* HF popover with >4 items: 2-col grid where each column auto-sizes to its
+   widest pill (max-content), so nothing truncates and pills hug their text. */
+.icon-pop-wrap .pop-list.grid-2col {
+  display: grid;
+  grid-template-columns: max-content max-content;
+  justify-content: center;
+  column-gap: var(--sp-2);
+  row-gap: 3px;
+}
+.icon-pop-wrap .pop-list.grid-2col > .section-header { grid-column: 1 / -1; }
+.icon-pop-wrap .pop-list.grid-2col > li { display: block; }
 
 .icon-pop-wrap.show-pop .pop-list,
 .icon-pop-wrap:focus-within .pop-list {
@@ -663,19 +686,14 @@ function populateHeroPopovers(data) {
   const hfLink = document.querySelector('.icon-nav a[aria-label="Hugging Face"]');
   const STAGGER_MS = 55;
 
-  // Inline-style overrides defend against any stale CSS cache that might be
-  // applying older per-item-pill rules — JS-set styles always win over a stale
-  // <style> block. Cosmetic-only properties stay in CSS.
   const buildItem = (entry, idx) => {
     const li = document.createElement('li');
-    li.style.cssText = 'display:block;width:100%;margin:0;padding:0;background:transparent;border:0;list-style:none';
     li.style.setProperty('--idx', `${idx * STAGGER_MS}ms`);
     const a = document.createElement('a');
     a.href = entry.url;
     a.target = '_blank';
     a.rel = 'noopener';
     a.textContent = entry.name;
-    a.style.cssText = 'display:block;width:auto;box-sizing:border-box;background:transparent;border:0;border-radius:6px;padding:4px 8px;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:inherit;text-decoration:none';
     if (entry.description) a.title = entry.description;
     li.appendChild(a);
     return li;
@@ -746,6 +764,7 @@ function populateHeroPopovers(data) {
     if (sets.length || models.length) {
       const ul = document.createElement('ul');
       ul.className = 'pop-list';
+      if (sets.length + models.length > 4) ul.classList.add('grid-2col');
       let idx = 0;
       if (sets.length) {
         ul.appendChild(buildHeader('Datasets', idx++));
