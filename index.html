@@ -1144,28 +1144,35 @@ function withTimeout(p, ms, label) {
   ]);
 }
 
-// Skip the warm-up entirely if a previous session failed — saves a 20s
-// retry storm for users where puter.cafe is blocked. Re-attempts every
-// 24h in case the block clears.
+// Skip the long warm-up retry storm if a previous session failed, but always
+// do ONE quick probe per page load to detect recovery — otherwise users stay
+// stuck in fallback mode forever after a transient puter.cafe outage.
 const PUTER_BROKEN_KEY = 'puter-broken-until';
 function puterRecentlyBroken() {
   const until = parseInt(localStorage.getItem(PUTER_BROKEN_KEY) || '0', 10);
   return Date.now() < until;
 }
 function markPuterBroken() {
-  localStorage.setItem(PUTER_BROKEN_KEY, String(Date.now() + 24 * 60 * 60_000));
+  localStorage.setItem(PUTER_BROKEN_KEY, String(Date.now() + 60 * 60_000));
 }
+function clearPuterBroken() { localStorage.removeItem(PUTER_BROKEN_KEY); }
 
 let puterReadyPromise = null;
 async function ensurePuterReady() {
   if (puterReadyPromise) return puterReadyPromise;
-  if (puterRecentlyBroken()) return Promise.resolve(false);
   puterReadyPromise = (async () => {
     if (!(await puterReady())) { markPuterBroken(); return false; }
-    for (let i = 0; i < 4; i++) {
+    // Single fast probe — quick recovery check after a previous failure.
+    try {
+      const r = await withTimeout(puter.net.fetch('https://api.github.com/'), 3500, 'puter probe');
+      if (r && r.ok) { clearPuterBroken(); return true; }
+    } catch { /* fall through */ }
+    // Probe failed. If recently flagged, skip the heavy retry storm.
+    if (puterRecentlyBroken()) return false;
+    for (let i = 0; i < 3; i++) {
       try {
-        const r = await withTimeout(puter.net.fetch('https://api.github.com/'), 5000, 'puter warmup');
-        if (r && r.ok) return true;
+        const r = await withTimeout(puter.net.fetch('https://api.github.com/'), 4000, 'puter warmup');
+        if (r && r.ok) { clearPuterBroken(); return true; }
       } catch { /* retry */ }
       await new Promise(r => setTimeout(r, 250 + i * 200));
     }
