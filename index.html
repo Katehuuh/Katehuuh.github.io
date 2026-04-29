@@ -149,12 +149,9 @@ a:hover { color: #ffb98d; }
   transition: opacity .18s ease, transform .22s var(--ease-bounce);
   z-index: 200;
 }
-.icon-pop-wrap .pop-list li {
-  position: relative;
-  opacity: 0;
-  transform: translateY(6px);
-  transition: opacity .22s ease, transform .32s var(--ease-bounce);
-}
+/* <li> is invisible wrapper — <a> is the visual flex-item pill. This avoids
+   <li> interfering with flex-wrap sizing (was making pills shrink to circles). */
+.icon-pop-wrap .pop-list li { display: contents; }
 .icon-pop-wrap .pop-list a {
   display: inline-block;
   padding: 4px 12px;
@@ -164,7 +161,10 @@ a:hover { color: #ffb98d; }
   color: var(--text);
   white-space: nowrap;
   text-decoration: none;
-  transition: background .14s, color .14s, border-color .14s;
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity .22s ease, transform .32s var(--ease-bounce),
+              background .14s, color .14s, border-color .14s;
 }
 .icon-pop-wrap .pop-list a:hover {
   background: rgba(255, 107, 53, 0.22);
@@ -189,8 +189,8 @@ a:hover { color: #ffb98d; }
   pointer-events: auto;
   transform: translateX(-50%) translateY(0) scale(1);
 }
-.icon-pop-wrap.show-pop .pop-list li,
-.icon-pop-wrap:focus-within .pop-list li {
+.icon-pop-wrap.show-pop .pop-list a,
+.icon-pop-wrap:focus-within .pop-list a {
   opacity: 1;
   transform: translateY(0);
   transition-delay: var(--idx, 0ms);
@@ -678,12 +678,12 @@ function populateHeroPopovers(data) {
 
   const buildItem = (entry, idx) => {
     const li = document.createElement('li');
-    li.style.setProperty('--idx', `${idx * STAGGER_MS}ms`);
     const a = document.createElement('a');
     a.href = entry.url;
     a.target = '_blank';
     a.rel = 'noopener';
     a.textContent = entry.name;
+    a.style.setProperty('--idx', `${idx * STAGGER_MS}ms`);
     if (entry.description) a.title = entry.description;
     li.appendChild(a);
     return li;
@@ -692,7 +692,6 @@ function populateHeroPopovers(data) {
     const li = document.createElement('li');
     li.className = 'section-header';
     li.textContent = label;
-    li.style.setProperty('--idx', `${idx * STAGGER_MS}ms`);
     return li;
   };
 
