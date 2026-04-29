@@ -86,9 +86,7 @@ a:hover { color: #ffb98d; }
   display: inline-flex; align-items: center; justify-content: center;
   width: 48px; height: 48px; border-radius: 999px;
   border: 1px solid var(--line); color: var(--text);
-  /* `translate` (cursor-magnetic) composes with `transform: translateY(-2px)` (hover lift). */
-  translate: var(--mx, 0) var(--my, 0);
-  transition: border-color .18s ease, background-color .18s ease, color .18s ease, transform .18s ease, translate .35s cubic-bezier(.2, .65, .2, 1);
+  transition: border-color .18s ease, background-color .18s ease, color .18s ease, transform .18s ease;
 }
 .icon-nav > a:hover, .icon-nav > .icon-pop-wrap > a:hover {
   border-color: var(--accent-line); background: var(--accent-soft);
@@ -519,11 +517,6 @@ section.compact { display: grid; gap: .6rem; }
   .tag-filter button { padding: 5px 12px; }
   .chips li a { padding: .35rem .8rem; }
 }
-/* Touch devices: drop the magnetic icon transform and hover-only effects. */
-@media (hover: none) {
-  .icon-nav > a, .icon-nav > .icon-pop-wrap > a { transform: none !important; }
-}
-
 /* Scroll-driven reveal — replaces the time-based cascade where supported.
    In Chrome/Edge cards animate as they enter the viewport, off-the-shelf, no JS. */
 @supports (animation-timeline: view()) {
@@ -534,25 +527,9 @@ section.compact { display: grid; gap: .6rem; }
   }
 }
 
-/* Inline kbd hints — power-user signal next to search and Cmd+K trigger. */
-kbd {
-  display: inline-flex; align-items: center; justify-content: center;
-  min-width: 18px; padding: 0 5px; height: 19px;
-  border: 1px solid var(--line-2);
-  border-bottom-width: 2px;
-  border-radius: 5px;
-  background: rgba(255, 255, 255, 0.04);
-  font: 600 11px/1 var(--mono);
-  color: var(--text-3);
-  letter-spacing: 0;
-  text-transform: none;
-}
-.search-wrap { position: relative; display: inline-flex; align-items: center; gap: 6px; }
-.search-wrap kbd { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); pointer-events: none; }
-.search-wrap .inline-search { padding-right: 34px; }
-
-/* Command palette — Cmd+K opens a centered modal that searches projects and
-   triggers filter toggles + scroll jumps. Lazily-built on first open. */
+/* Command palette — Ctrl/Cmd+K opens a centered modal scoped to navigation
+   jumps and filter toggles (project search lives in the inline search field).
+   Lazily-built on first open so the cost doesn't hit initial paint. */
 .cmd-overlay {
   position: fixed; inset: 0;
   background: rgba(0, 0, 0, 0.55);
@@ -604,17 +581,6 @@ kbd {
 .cmd-list li[aria-selected="true"] { background: var(--accent-soft); }
 .cmd-list li[aria-selected="true"] .meta { color: var(--accent); }
 .cmd-list .empty { padding: 20px; text-align: center; color: var(--text-3); font: 500 var(--fs-sm)/1.3 var(--sans); cursor: default; }
-.cmd-trigger {
-  appearance: none; background: transparent; border: 1px solid var(--line-2);
-  color: var(--text-3);
-  border-radius: 999px;
-  padding: 4px 10px;
-  font: 500 var(--fs-sm)/1 var(--sans);
-  cursor: pointer;
-  display: inline-flex; align-items: center; gap: 8px;
-  transition: border-color .15s, color .15s;
-}
-.cmd-trigger:hover { color: var(--text); border-color: var(--accent-line); }
 @media (max-width: 600px) {
   .cmd-overlay { padding: 8vh 12px 12px; }
   .cmd-panel { max-height: 84vh; }
@@ -672,13 +638,7 @@ kbd {
           <svg class="arrow-glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14m-6-6 6 6 6-6"/></svg>
         </button>
       </span>
-      <span class="search-wrap">
-        <input type="search" id="site-search" class="inline-search" placeholder="search" aria-label="search">
-        <kbd>/</kbd>
-      </span>
-      <button class="cmd-trigger" id="cmd-trigger" type="button" aria-label="open command palette">
-        <span>jump</span><kbd>⌘K</kbd>
-      </button>
+      <input type="search" id="site-search" class="inline-search" placeholder="search" aria-label="search">
     </h2>
     <div id="projects-grid" class="vibe-grid">
       <noscript><p>Browse <a href="https://github.com/Katehuuh">github.com/Katehuuh</a> directly.</p></noscript>
@@ -711,8 +671,7 @@ kbd {
   setupTagFilter();
   setupSortByLikes();
   populateHeroPopovers(data);
-  setupMagneticIcons();
-  setupCommandPalette(projects);
+  setupCommandPalette();
 })();
 
 // `document.startViewTransition(fn)` snapshots the DOM, runs fn, then crossfades
@@ -923,44 +882,13 @@ function populateHeroPopovers(data) {
   }
 }
 
-// Subtle cursor-pull on the hero icons. The icon eases toward the cursor by a
-// small amount when the cursor is within a magnetic radius — gives the row a
-// liquid/responsive feel without affecting click targets (transform only).
-function setupMagneticIcons() {
-  if (matchMedia('(hover: none)').matches) return; // touch — skip entirely
-  const icons = document.querySelectorAll('.icon-nav > a, .icon-nav > .icon-pop-wrap > a');
-  const RADIUS = 90, STRENGTH = 0.28;
-  let raf = 0;
-  const onMove = (e) => {
-    if (raf) return;
-    raf = requestAnimationFrame(() => {
-      raf = 0;
-      for (const el of icons) {
-        const r = el.getBoundingClientRect();
-        const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
-        const dx = e.clientX - cx, dy = e.clientY - cy;
-        const d = Math.hypot(dx, dy);
-        if (d < RADIUS) {
-          const k = (1 - d / RADIUS) * STRENGTH;
-          el.style.setProperty('--mx', `${dx * k}px`);
-          el.style.setProperty('--my', `${dy * k}px`);
-        } else {
-          el.style.setProperty('--mx', '0px');
-          el.style.setProperty('--my', '0px');
-        }
-      }
-    });
-  };
-  window.addEventListener('mousemove', onMove, { passive: true });
-}
-
-// Cmd+K command palette — searches projects and offers filter toggles + jumps.
-// Built lazily on first open so the cost doesn't hit initial paint.
-function setupCommandPalette(projects) {
+// Ctrl/Cmd+K command palette — keyboard-only navigation list (no visible button).
+// Scoped to filter toggles + outbound jumps; project search lives in the inline
+// search field. Built lazily on first open.
+function setupCommandPalette() {
   const overlay = document.getElementById('cmd-overlay');
   const input = document.getElementById('cmd-input');
   const list = document.getElementById('cmd-list');
-  const trigger = document.getElementById('cmd-trigger');
   if (!overlay || !input || !list) return;
 
   let items = [];   // [{label, meta, run}]
@@ -969,13 +897,6 @@ function setupCommandPalette(projects) {
 
   const buildItems = () => {
     items = [];
-    for (const p of projects) {
-      items.push({
-        label: p.name,
-        meta: (p.tags?.[0] || 'project').toLowerCase(),
-        run: () => { if (p.url) window.open(p.url, p.url.startsWith('http') ? '_blank' : '_self'); },
-      });
-    }
     const root = document.getElementById('tag-filter');
     if (root) for (const b of root.querySelectorAll('button[data-tag]')) {
       items.push({
@@ -1074,13 +995,6 @@ function setupSearch() {
     }
   };
   input.addEventListener('input', () => withVT(apply));
-  // `/` global hotkey jumps to search (skipped when typing in another field).
-  window.addEventListener('keydown', e => {
-    if (e.key === '/' && !e.metaKey && !e.ctrlKey && !e.altKey
-      && !/^(INPUT|TEXTAREA)$/.test(e.target.tagName)) {
-      e.preventDefault(); input.focus(); input.select();
-    }
-  });
 }
 
 // Pick up anything dropped under /demos/ (flat .html or subdir with
