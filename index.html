@@ -125,7 +125,7 @@ a:hover { color: #ffb98d; }
    of the icon-link (not nested) so item clicks don't fire the icon's href.
    Single-column always — long lists scroll inside the popover. */
 .icon-pop-wrap { position: relative; display: inline-flex; }
-.icon-pop-wrap .reveal-list {
+.icon-pop-wrap .pop-list {
   position: absolute;
   bottom: calc(100% + 14px); left: 50%;
   width: 280px;
@@ -145,13 +145,13 @@ a:hover { color: #ffb98d; }
   transition: opacity .18s ease, transform .22s cubic-bezier(.34, 1.56, .64, 1);
   z-index: 200;
 }
-.icon-pop-wrap .reveal-list li {
+.icon-pop-wrap .pop-list li {
   position: relative;
   opacity: 0;
   transform: translateY(6px);
   transition: opacity .22s ease, transform .32s var(--ease-bounce);
 }
-.icon-pop-wrap .reveal-list a {
+.icon-pop-wrap .pop-list a {
   display: block;
   padding: var(--sp-1) var(--sp-2);
   border-radius: var(--r-xs);
@@ -159,8 +159,8 @@ a:hover { color: #ffb98d; }
   color: var(--text);
   transition: background .14s, color .14s;
 }
-.icon-pop-wrap .reveal-list a:hover { background: var(--accent-soft); color: var(--accent); }
-.icon-pop-wrap .reveal-list .section-header {
+.icon-pop-wrap .pop-list a:hover { background: var(--accent-soft); color: var(--accent); }
+.icon-pop-wrap .pop-list .section-header {
   padding: var(--sp-1) 0 2px;
   font: 600 var(--fs-xs)/1 var(--mono);
   letter-spacing: .08em;
@@ -168,16 +168,16 @@ a:hover { color: #ffb98d; }
   color: var(--accent);
   cursor: default;
 }
-.icon-pop-wrap .reveal-list .section-header:first-child { padding-top: 0; }
+.icon-pop-wrap .pop-list .section-header:first-child { padding-top: 0; }
 
-.icon-pop-wrap.show-pop .reveal-list,
-.icon-pop-wrap:focus-within .reveal-list {
+.icon-pop-wrap.show-pop .pop-list,
+.icon-pop-wrap:focus-within .pop-list {
   opacity: 1;
   pointer-events: auto;
   transform: translateX(-50%) translateY(0) scale(1);
 }
-.icon-pop-wrap.show-pop .reveal-list li,
-.icon-pop-wrap:focus-within .reveal-list li {
+.icon-pop-wrap.show-pop .pop-list li,
+.icon-pop-wrap:focus-within .pop-list li {
   opacity: 1;
   transform: translateY(0);
   transition-delay: var(--idx, 0ms);
@@ -730,7 +730,7 @@ function populateHeroPopovers(data) {
 
   if (ghLink && Array.isArray(data.repos) && data.repos.length) {
     const ul = document.createElement('ul');
-    ul.className = 'reveal-list';
+    ul.className = 'pop-list';
     data.repos.forEach((r, i) => ul.appendChild(buildItem(r, i)));
     wrapWithPopover(ghLink, ul);
   }
@@ -740,7 +740,7 @@ function populateHeroPopovers(data) {
     const models = Array.isArray(data.models) ? data.models : [];
     if (sets.length || models.length) {
       const ul = document.createElement('ul');
-      ul.className = 'reveal-list';
+      ul.className = 'pop-list';
       let idx = 0;
       if (sets.length) {
         ul.appendChild(buildHeader('Datasets', idx++));
