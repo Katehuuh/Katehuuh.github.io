@@ -38,9 +38,9 @@
   --mono:      ui-monospace, "JetBrains Mono", "SF Mono", Consolas, monospace;
 
   /* === Type scale (use these, don't sprinkle pixel values) =============== */
-  --fs-xs:    11px;       /* tiny labels, timestamps, footnote */
-  --fs-sm:    12.5px;     /* small UI text, popover items, chips */
-  --fs-md:    14.5px;     /* secondary body, button text */
+  --fs-xs:    14px;       /* tiny labels, timestamps, footnote (was 11) */
+  --fs-sm:    16px;       /* small UI text, popover items, chips (was 12.5) */
+  --fs-md:    17px;       /* secondary body, button text (was 14.5) */
   --fs-base:  16px;       /* body default */
   --fs-lg:    19px;       /* card titles, subheadings */
   --fs-xl:    24px;       /* section h2 */
@@ -117,17 +117,19 @@ a:hover { color: #ffb98d; }
 .icon-nav .emoji { font-size: 1.35rem; line-height: 1; display: inline-block; -webkit-text-fill-color: initial; }
 
 /* Popover above icon, sibling of icon-link so item clicks don't fire icon's href.
-   Pills flow with flex-wrap; flex:0 0 auto on <li> stops them shrinking to circles.
-   Section headers claim full row via flex-basis:100%. */
+   2-col grid with content-sized columns keeps rows visually balanced (no orphan
+   long pill stranded on its own row). Section headers + orphan items span both. */
 .icon-pop-wrap { position: relative; display: inline-flex; }
 .icon-pop-wrap .pop-list {
   position: absolute;
   bottom: calc(100% + 14px); left: 50%;
-  width: max-content; max-width: min(440px, calc(100vw - 24px));
+  width: max-content; max-width: min(540px, calc(100vw - 24px));
   max-height: 50vh;
   margin: 0; padding: var(--sp-2);
   list-style: none;
-  display: flex; flex-wrap: wrap; justify-content: center; gap: 6px;
+  display: grid; grid-template-columns: auto auto;
+  justify-content: center; justify-items: center;
+  column-gap: 6px; row-gap: 3px;
   background: rgba(22, 22, 26, 0.94);
   -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
   border: 1px solid var(--accent-line);
@@ -141,7 +143,6 @@ a:hover { color: #ffb98d; }
   z-index: 200;
 }
 .icon-pop-wrap .pop-list li {
-  flex: 0 0 auto;
   opacity: 0;
   transform: translateY(6px);
   transition: opacity .22s ease, transform .32s var(--ease-bounce);
@@ -162,14 +163,16 @@ a:hover { color: #ffb98d; }
   color: var(--accent);
   border-color: var(--accent);
 }
+.icon-pop-wrap .pop-list .section-header,
+.icon-pop-wrap .pop-list .section-orphan {
+  grid-column: 1 / -1;
+}
 .icon-pop-wrap .pop-list .section-header {
-  flex: 0 0 100%;
-  padding: var(--sp-1) 0 2px;
+  padding: 3px 0 1px;
   font: 600 var(--fs-xs)/1 var(--mono);
   letter-spacing: .08em;
   text-transform: uppercase;
   color: var(--accent);
-  text-align: center;
 }
 .icon-pop-wrap .pop-list .section-header:first-child { padding-top: 0; }
 
@@ -185,15 +188,21 @@ a:hover { color: #ffb98d; }
   transform: translateY(0);
   transition-delay: var(--idx, 0ms);
 }
+/* Decorative chain-line connecting icon to popover. Animated grow on open;
+   removed when .show-pop is gone (no separate fade-out needed). */
 .icon-pop-wrap.show-pop::before {
   content: '';
   position: absolute;
-  bottom: 100%; left: 50%;
-  width: 1px; height: 18px;
-  background: linear-gradient(to top, var(--accent-line), transparent);
+  bottom: 100%; left: calc(50% - 0.5px);
+  width: 1px; height: 14px;
+  background-image: linear-gradient(to top, var(--accent), var(--accent) 50%, transparent 50%);
+  background-size: 100% 4px;
   pointer-events: none;
   z-index: 199;
+  transform-origin: bottom;
+  animation: tree-chain-grow .25s var(--ease-bounce);
 }
+@keyframes tree-chain-grow { from { transform: scaleY(0); } to { transform: scaleY(1); } }
 
 /* Inline search field that lives next to the tag-filter pill */
 .inline-search {
@@ -735,10 +744,20 @@ function populateHeroPopovers(data) {
     allWraps.push(wrap);
   };
 
+  // Tag last item of an odd-count section so CSS can span it across both
+  // grid columns — otherwise it sits alone in column 1 with empty col 2.
+  const appendItems = (ul, items, startIdx = 0) => {
+    items.forEach((item, i) => {
+      const li = buildItem(item, startIdx + i);
+      if (items.length % 2 === 1 && i === items.length - 1) li.classList.add('section-orphan');
+      ul.appendChild(li);
+    });
+  };
+
   if (ghLink && Array.isArray(data.repos) && data.repos.length) {
     const ul = document.createElement('ul');
     ul.className = 'pop-list';
-    data.repos.forEach((r, i) => ul.appendChild(buildItem(r, i)));
+    appendItems(ul, data.repos);
     wrapWithPopover(ghLink, ul);
   }
 
@@ -751,11 +770,11 @@ function populateHeroPopovers(data) {
       let idx = 0;
       if (sets.length) {
         ul.appendChild(buildHeader('Datasets'));
-        for (const d of sets) ul.appendChild(buildItem(d, idx++));
+        appendItems(ul, sets, idx); idx += sets.length;
       }
       if (models.length) {
         ul.appendChild(buildHeader('Models'));
-        for (const m of models) ul.appendChild(buildItem(m, idx++));
+        appendItems(ul, models, idx); idx += models.length;
       }
       wrapWithPopover(hfLink, ul);
     }
