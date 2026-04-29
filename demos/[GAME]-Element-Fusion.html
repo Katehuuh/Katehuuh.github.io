@@ -1202,12 +1202,21 @@ input, button { -webkit-tap-highlight-color: transparent; }
                 const isParseError   = /JSON|parse/i.test(msg);
                 const isTimeoutError = /timed out/i.test(msg);
                 const isEmptyContent = /empty content/i.test(msg);
-                if ((isParseError || isTimeoutError || isEmptyContent) && attempt < MAX_LLM_RETRIES_FOR_EMOJI - 1) {
+                const isRateLimit    = /HTTP 429/i.test(msg);
+                if ((isParseError || isTimeoutError || isEmptyContent || isRateLimit)
+                    && attempt < MAX_LLM_RETRIES_FOR_EMOJI - 1) {
+                    if (isRateLimit) {
+                        // Pollinations throttle — exponential backoff (1.5s, 3s, 6s).
+                        const wait = 1500 * Math.pow(2, attempt);
+                        await new Promise(r => setTimeout(r, wait));
+                    }
                     lastFeedback = isTimeoutError
                         ? 'Previous attempt timed out. Reply with the smallest possible JSON.'
                         : isEmptyContent
                             ? 'Previous response was empty. Reply with a complete JSON object matching the schema.'
-                            : 'Previous response was not valid JSON. Reply with ONLY the JSON object matching the schema, no prose, no markdown.';
+                            : isRateLimit
+                                ? null // no LLM-side feedback for rate limit, just retry after sleep
+                                : 'Previous response was not valid JSON. Reply with ONLY the JSON object matching the schema, no prose, no markdown.';
                     continue;
                 }
                 throw err;
