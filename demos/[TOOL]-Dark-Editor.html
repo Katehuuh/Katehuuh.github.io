@@ -1,0 +1,758 @@
+<!--
+Minimalist full-screen text editor with private in-browser AI grammar correction and translation-to-English.
+
+UI
+- AMOLED-friendly: pure #000 background, rgba(255,255,255,0.7) text, black scrollbar (webkit + firefox).
+- Single contenteditable area filling the viewport. Placeholder when empty. Caret colour matches text.
+
+Interaction
+- User selects text and presses Ctrl alone (no Alt/Shift/Meta, ignore key repeats) -> small dark context menu opens near the selection (clamped inside the viewport).
+- Menu options: Correct Grammar, Translate to English.
+- Clicking an option -> run the model on the selected text -> replace the selection with the result.
+- While processing: both options disabled, spinner + "Processing..." shown. Errors restore the menu and surface a toast.
+- Click outside / Escape closes the menu.
+
+Privacy
+- 100% client-side inference. The only network calls are loading the Transformers.js library and the model weights from HuggingFace's CDN. No selection text leaves the browser.
+
+AI backend
+- Library: https://cdn.jsdelivr.net/npm/@huggingface/transformers@latest/+esm (the maintained fork; @xenova/transformers is deprecated).
+- Model: onnx-community/Qwen3-0.6B-ONNX with dtype: "q4f16", device: "webgpu" when navigator.gpu exists, else fall back to wasm.
+- Inference runs in a Web Worker (built inline via Blob URL, instantiated with { type: "module" }). Use AutoTokenizer + AutoModelForCausalLM + TextStreamer (streamed tokens flow back via postMessage).
+- Chat-template prompts (single user message, no thinking):
+  - Grammar: "Return only the grammatically corrected version of the following text. Do not add explanations or quotes.\n\n<TEXT>"
+  - Translate: "Translate the following text to English. Return only the translated text, no explanations or quotes.\n\n<TEXT>"
+- Greedy decode (do_sample: false) with max_new_tokens: 512. Strip surrounding quotes/whitespace from the output before replacement.
+
+Apple Liquid Glass aesthetic for the context menu (the visual signature - must clearly read as more than a blur)
+- Layered: translucent dark base + backdrop-filter: blur as one of several layers, not the whole effect.
+- Gradient-based refraction simulation: conic + radial gradients in ::before / ::after pseudo-elements, blended with mix-blend-mode: screen or overlay.
+- Mouse-tracked specular highlight: mousemove on the menu writes --mx/--my CSS custom properties; a soft white radial-gradient on a pseudo-element follows them.
+- Chromatic-aberration edge: 1px multi-stop border-image gradient (subtle coral -> cyan -> soft-white), or layered box-shadow rings tinted with two complementary hues.
+- Smooth grow-in (transform: scale + translateY + opacity, with cubic-bezier overshoot ~(.34, 1.56, .64, 1)) and a quick fade-out.
+- No external images, no React, no Framer, no Tailwind. Vanilla CSS + JS only.
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Dark Editor</title>
+<style>
+  :root {
+    --fg: rgba(255, 255, 255, 0.7);
+    --fg-strong: rgba(255, 255, 255, 0.92);
+    --fg-mute: rgba(255, 255, 255, 0.4);
+    --bg: #000000;
+    --menu-radius: 14px;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-size: 17px;
+    line-height: 1.65;
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Black scrollbar everywhere */
+  * { scrollbar-color: #111 #000; scrollbar-width: thin; }
+  *::-webkit-scrollbar { width: 10px; height: 10px; background: #000; }
+  *::-webkit-scrollbar-thumb { background: #1a1a1a; border-radius: 6px; }
+  *::-webkit-scrollbar-thumb:hover { background: #2a2a2a; }
+  *::-webkit-scrollbar-track { background: #000; }
+
+  ::selection { background: rgba(255, 255, 255, 0.18); color: var(--fg-strong); }
+
+  #editor {
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    height: 100vh;
+    padding: clamp(24px, 6vw, 96px) clamp(20px, 8vw, 140px);
+    overflow-y: auto;
+    overflow-x: hidden;
+    color: var(--fg);
+    caret-color: var(--fg);
+    outline: none;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    background: var(--bg);
+  }
+
+  #editor:empty::before {
+    content: attr(data-placeholder);
+    color: var(--fg-mute);
+    pointer-events: none;
+  }
+
+  /* ---------------- Liquid Glass context menu ---------------- */
+  .menu {
+    --mx: 50%;
+    --my: 50%;
+    position: fixed;
+    z-index: 9999;
+    min-width: 220px;
+    padding: 6px;
+    border-radius: var(--menu-radius);
+    background: linear-gradient(160deg, rgba(28, 28, 32, 0.55), rgba(10, 10, 14, 0.75));
+    color: var(--fg-strong);
+    backdrop-filter: blur(22px) saturate(180%) brightness(1.05);
+    -webkit-backdrop-filter: blur(22px) saturate(180%) brightness(1.05);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.08) inset,
+      0 0 0 0.5px rgba(255, 255, 255, 0.12) inset,
+      0 8px 24px rgba(0, 0, 0, 0.55),
+      0 2px 8px rgba(255, 90, 120, 0.06),
+      0 -2px 8px rgba(120, 220, 255, 0.05);
+    overflow: hidden;
+    isolation: isolate;
+    opacity: 0;
+    transform: scale(0.86) translateY(8px);
+    transform-origin: top left;
+    transition: opacity 220ms ease, transform 320ms cubic-bezier(.34, 1.56, .64, 1);
+    pointer-events: none;
+    user-select: none;
+  }
+
+  .menu.visible {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+    pointer-events: auto;
+  }
+
+  /* Layer 2: gradient refraction (conic + radial), screen-blended */
+  .menu::before {
+    content: "";
+    position: absolute;
+    inset: -40%;
+    z-index: -2;
+    background:
+      conic-gradient(
+        from 210deg at 30% 30%,
+        rgba(255, 110, 140, 0.16),
+        rgba(120, 200, 255, 0.14),
+        rgba(180, 255, 200, 0.10),
+        rgba(255, 200, 130, 0.13),
+        rgba(255, 110, 140, 0.16)
+      ),
+      radial-gradient(140% 90% at 80% 100%, rgba(80, 180, 255, 0.18), transparent 60%),
+      radial-gradient(120% 80% at 0% 0%, rgba(255, 120, 160, 0.16), transparent 55%);
+    filter: blur(18px) saturate(160%);
+    mix-blend-mode: screen;
+    opacity: 0.95;
+    pointer-events: none;
+    animation: glassDrift 14s linear infinite;
+  }
+
+  /* Layer 3: mouse-tracked specular highlight */
+  .menu::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background:
+      radial-gradient(180px 120px at var(--mx) var(--my),
+        rgba(255, 255, 255, 0.22),
+        rgba(255, 255, 255, 0.06) 40%,
+        transparent 70%);
+    mix-blend-mode: overlay;
+    pointer-events: none;
+    transition: background 60ms linear;
+  }
+
+  /* Layer 4: chromatic-aberration edge */
+  .menu .edge {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background:
+      linear-gradient(135deg,
+        rgba(255, 130, 150, 0.55) 0%,
+        rgba(255, 255, 255, 0.18) 35%,
+        rgba(120, 230, 255, 0.55) 70%,
+        rgba(255, 255, 255, 0.10) 100%);
+    -webkit-mask:
+      linear-gradient(#000, #000) content-box,
+      linear-gradient(#000, #000);
+    -webkit-mask-composite: xor;
+            mask-composite: exclude;
+    pointer-events: none;
+    opacity: 0.85;
+    z-index: 0;
+  }
+
+  @keyframes glassDrift {
+    0%   { transform: rotate(0deg)   translate(0, 0); }
+    50%  { transform: rotate(180deg) translate(-2%, 2%); }
+    100% { transform: rotate(360deg) translate(0, 0); }
+  }
+
+  .menu-item {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    font-size: 14px;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    color: var(--fg-strong);
+    border-radius: 10px;
+    cursor: pointer;
+    transition: background 140ms ease, color 140ms ease;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  }
+
+  .menu-item:hover:not(.disabled) {
+    background: rgba(255, 255, 255, 0.10);
+  }
+
+  .menu-item.disabled {
+    color: var(--fg-mute);
+    cursor: default;
+  }
+
+  .menu-item .icon {
+    width: 16px;
+    height: 16px;
+    flex: 0 0 16px;
+    opacity: 0.85;
+  }
+
+  .menu-status {
+    position: relative;
+    z-index: 1;
+    display: none;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    font-size: 13px;
+    color: var(--fg);
+  }
+
+  .menu-status.active { display: flex; }
+  .menu .menu-item.hidden { display: none; }
+
+  .spinner {
+    width: 14px;
+    height: 14px;
+    border: 1.5px solid rgba(255, 255, 255, 0.18);
+    border-top-color: rgba(255, 255, 255, 0.85);
+    border-radius: 50%;
+    animation: spin 0.85s linear infinite;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ---------------- Status pill (model loading + toasts) ---------------- */
+  .status {
+    position: fixed;
+    top: 14px;
+    right: 14px;
+    z-index: 10000;
+    max-width: 360px;
+    padding: 8px 12px;
+    font-size: 12px;
+    color: var(--fg-strong);
+    background: rgba(20, 20, 24, 0.7);
+    border: 0.5px solid rgba(255, 255, 255, 0.12);
+    border-radius: 10px;
+    backdrop-filter: blur(14px) saturate(160%);
+    -webkit-backdrop-filter: blur(14px) saturate(160%);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+    opacity: 0;
+    transform: translateY(-6px);
+    transition: opacity 200ms ease, transform 200ms ease;
+    pointer-events: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .status.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .status.error {
+    background: rgba(60, 18, 22, 0.78);
+    border-color: rgba(255, 120, 140, 0.35);
+  }
+
+  .status .bar {
+    flex: 1;
+    height: 4px;
+    min-width: 80px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.10);
+    overflow: hidden;
+  }
+  .status .bar > i {
+    display: block;
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, #ff7a9a, #79d8ff);
+    transition: width 200ms ease;
+  }
+
+  /* Hint pill, bottom centred, fades after a moment */
+  .hint {
+    position: fixed;
+    bottom: 18px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 11px;
+    color: var(--fg-mute);
+    pointer-events: none;
+    user-select: none;
+    letter-spacing: 0.04em;
+    transition: opacity 600ms ease;
+  }
+  .hint.fade { opacity: 0; }
+</style>
+</head>
+<body>
+  <div
+    id="editor"
+    contenteditable="true"
+    spellcheck="false"
+    autocorrect="off"
+    autocapitalize="off"
+    data-placeholder="Start typing. Select text and tap Ctrl for AI tools."
+  ></div>
+
+  <div id="menu" class="menu" role="menu" aria-hidden="true">
+    <span class="edge" aria-hidden="true"></span>
+    <div class="menu-item" data-action="grammar" role="menuitem">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M4 19h16"/><path d="M6 15l3-9 3 9"/><path d="M7.2 12h3.6"/><path d="M14 12l3 7"/><path d="M14 19l3-7"/>
+      </svg>
+      <span>Correct Grammar</span>
+    </div>
+    <div class="menu-item" data-action="translate" role="menuitem">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M3 5h10"/><path d="M8 3v2"/><path d="M5 9c2 4 6 6 8 6"/><path d="M11 9c-2 4-6 6-8 6"/><path d="M13 21l5-12 5 12"/><path d="M14.5 17h7"/>
+      </svg>
+      <span>Translate to English</span>
+    </div>
+    <div class="menu-status" id="menuStatus">
+      <span class="spinner" aria-hidden="true"></span>
+      <span id="menuStatusText">Processing...</span>
+    </div>
+  </div>
+
+  <div id="status" class="status" role="status" aria-live="polite">
+    <span id="statusText">Idle</span>
+    <span class="bar" id="statusBar"><i></i></span>
+  </div>
+
+  <div id="hint" class="hint">Tap Ctrl on a selection</div>
+
+<script type="module">
+  // ---------- Worker source (inline, module worker via Blob URL) ----------
+  const workerSource = `
+    import {
+      AutoTokenizer,
+      AutoModelForCausalLM,
+      TextStreamer
+    } from "https://cdn.jsdelivr.net/npm/@huggingface/transformers@latest/+esm";
+
+    const MODEL_ID = "onnx-community/Qwen3-0.6B-ONNX";
+
+    let tokenizer = null;
+    let model = null;
+    let loadingPromise = null;
+    let device = "wasm";
+
+    async function pickDevice() {
+      if (typeof navigator !== "undefined" && navigator.gpu) {
+        try {
+          const adapter = await navigator.gpu.requestAdapter();
+          if (adapter) return "webgpu";
+        } catch (_) {}
+      }
+      return "wasm";
+    }
+
+    async function ensureLoaded() {
+      if (tokenizer && model) return;
+      if (loadingPromise) return loadingPromise;
+      loadingPromise = (async () => {
+        device = await pickDevice();
+        self.postMessage({ type: "status", phase: "loading", device });
+
+        const progressCallback = (p) => {
+          self.postMessage({ type: "progress", payload: p });
+        };
+
+        tokenizer = await AutoTokenizer.from_pretrained(MODEL_ID, {
+          progress_callback: progressCallback
+        });
+
+        const modelOpts = {
+          dtype: "q4f16",
+          device,
+          progress_callback: progressCallback
+        };
+
+        try {
+          model = await AutoModelForCausalLM.from_pretrained(MODEL_ID, modelOpts);
+        } catch (err) {
+          if (device === "webgpu") {
+            self.postMessage({ type: "status", phase: "fallback", device: "wasm", message: String(err && err.message || err) });
+            device = "wasm";
+            model = await AutoModelForCausalLM.from_pretrained(MODEL_ID, {
+              dtype: "q4f16",
+              device: "wasm",
+              progress_callback: progressCallback
+            });
+          } else {
+            throw err;
+          }
+        }
+        self.postMessage({ type: "status", phase: "ready", device });
+      })();
+      try {
+        await loadingPromise;
+      } catch (e) {
+        loadingPromise = null;
+        throw e;
+      }
+    }
+
+    function buildPrompt(action, text) {
+      if (action === "translate") {
+        return "Translate the following text to English. Return only the translated text, no explanations or quotes.\\n\\n" + text;
+      }
+      return "Return only the grammatically corrected version of the following text. Do not add explanations or quotes.\\n\\n" + text;
+    }
+
+    async function runGenerate(id, action, text) {
+      await ensureLoaded();
+      const userContent = buildPrompt(action, text);
+
+      // Single user message, no thinking. enable_thinking:false suppresses Qwen3's <think> block.
+      const messages = [{ role: "user", content: userContent }];
+      const inputs = tokenizer.apply_chat_template(messages, {
+        add_generation_prompt: true,
+        return_dict: true,
+        enable_thinking: false
+      });
+
+      let buffered = "";
+      const streamer = new TextStreamer(tokenizer, {
+        skip_prompt: true,
+        skip_special_tokens: true,
+        callback_function: (chunk) => {
+          buffered += chunk;
+          self.postMessage({ type: "token", id, chunk });
+        }
+      });
+
+      const output = await model.generate({
+        ...inputs,
+        max_new_tokens: 512,
+        do_sample: false,
+        streamer
+      });
+
+      // Decode full output as a fallback in case the streamer missed pieces.
+      let finalText = buffered;
+      try {
+        const seqLen = inputs.input_ids.dims[1];
+        const generated = output.slice(null, [seqLen, null]);
+        const decoded = tokenizer.batch_decode(generated, { skip_special_tokens: true });
+        if (decoded && decoded[0] && decoded[0].length > finalText.length) {
+          finalText = decoded[0];
+        }
+      } catch (_) { /* keep buffered */ }
+
+      // Strip optional <think>...</think> just in case.
+      finalText = finalText.replace(/<think>[\\s\\S]*?<\\/think>/gi, "").trim();
+      // Strip surrounding quotes/whitespace.
+      finalText = finalText.replace(/^[\\s"'\\u201C\\u201D\\u2018\\u2019\`]+|[\\s"'\\u201C\\u201D\\u2018\\u2019\`]+$/g, "");
+
+      self.postMessage({ type: "done", id, text: finalText });
+    }
+
+    self.onmessage = async (ev) => {
+      const msg = ev.data || {};
+      if (msg.type === "warmup") {
+        try { await ensureLoaded(); }
+        catch (e) { self.postMessage({ type: "error", id: null, message: String(e && e.message || e) }); }
+        return;
+      }
+      if (msg.type === "run") {
+        try { await runGenerate(msg.id, msg.action, msg.text); }
+        catch (e) { self.postMessage({ type: "error", id: msg.id, message: String(e && e.message || e) }); }
+      }
+    };
+  `;
+
+  const workerUrl = URL.createObjectURL(new Blob([workerSource], { type: "text/javascript" }));
+  const worker = new Worker(workerUrl, { type: "module" });
+
+  // ---------- DOM ----------
+  const editor       = document.getElementById("editor");
+  const menu         = document.getElementById("menu");
+  const menuStatus   = document.getElementById("menuStatus");
+  const menuStatusText = document.getElementById("menuStatusText");
+  const status       = document.getElementById("status");
+  const statusText   = document.getElementById("statusText");
+  const statusBar    = document.getElementById("statusBar").firstElementChild;
+  const hint         = document.getElementById("hint");
+
+  const items = Array.from(menu.querySelectorAll(".menu-item"));
+
+  // ---------- Status helpers ----------
+  let statusHideTimer = null;
+  function showStatus(text, { progress = null, error = false, sticky = false } = {}) {
+    clearTimeout(statusHideTimer);
+    statusText.textContent = text;
+    status.classList.toggle("error", !!error);
+    status.classList.add("visible");
+    if (typeof progress === "number") {
+      statusBar.style.width = Math.max(0, Math.min(100, progress)) + "%";
+      statusBar.parentElement.style.display = "block";
+    } else {
+      statusBar.parentElement.style.display = "none";
+    }
+    if (!sticky) {
+      statusHideTimer = setTimeout(() => status.classList.remove("visible"), error ? 4500 : 2200);
+    }
+  }
+  function hideStatus() {
+    clearTimeout(statusHideTimer);
+    status.classList.remove("visible");
+  }
+
+  // Hide hint after a few seconds
+  setTimeout(() => hint.classList.add("fade"), 6000);
+
+  // ---------- Selection tracking ----------
+  let savedRange = null;
+  let savedSelectionText = "";
+
+  function captureSelection() {
+    const sel = document.getSelection();
+    if (!sel || sel.rangeCount === 0) return;
+    const range = sel.getRangeAt(0);
+    if (range.collapsed) {
+      savedRange = null;
+      savedSelectionText = "";
+      return;
+    }
+    if (!editor.contains(range.commonAncestorContainer)) {
+      savedRange = null;
+      savedSelectionText = "";
+      return;
+    }
+    savedRange = range.cloneRange();
+    savedSelectionText = sel.toString();
+  }
+
+  document.addEventListener("selectionchange", captureSelection);
+
+  // ---------- Menu show / hide ----------
+  let menuOpen = false;
+
+  function showMenu() {
+    if (!savedRange || !savedSelectionText.trim()) return;
+    const rect = savedRange.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+
+    // Reset processing UI
+    menuStatus.classList.remove("active");
+    items.forEach(i => { i.classList.remove("disabled", "hidden"); });
+
+    // Place menu first as visible to measure
+    menu.style.left = "0px";
+    menu.style.top  = "0px";
+    menu.classList.add("visible");
+    menu.setAttribute("aria-hidden", "false");
+
+    const mw = menu.offsetWidth;
+    const mh = menu.offsetHeight;
+
+    let x = rect.left;
+    let y = rect.bottom + 8;
+    if (rect.width === 0 && rect.height === 0) {
+      x = vw / 2 - mw / 2;
+      y = vh / 2 - mh / 2;
+    }
+    if (y + mh > vh - 8) y = Math.max(8, rect.top - mh - 8);
+    if (x + mw > vw - 8) x = vw - mw - 8;
+    if (x < 8) x = 8;
+    if (y < 8) y = 8;
+
+    menu.style.left = x + "px";
+    menu.style.top  = y + "px";
+
+    menuOpen = true;
+  }
+
+  function hideMenu() {
+    menu.classList.remove("visible");
+    menu.setAttribute("aria-hidden", "true");
+    menuOpen = false;
+  }
+
+  // Mouse-tracked specular highlight
+  menu.addEventListener("mousemove", (e) => {
+    const r = menu.getBoundingClientRect();
+    menu.style.setProperty("--mx", (e.clientX - r.left) + "px");
+    menu.style.setProperty("--my", (e.clientY - r.top)  + "px");
+  });
+
+  // ---------- Ctrl-only trigger ----------
+  let ctrlPressedLogical = false;
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && menuOpen) {
+      e.preventDefault();
+      hideMenu();
+      return;
+    }
+    if (e.key !== "Control") return;
+    if (e.repeat) return;
+    if (e.altKey || e.shiftKey || e.metaKey) return;
+    if (ctrlPressedLogical) return;
+    ctrlPressedLogical = true;
+
+    // Only open the menu if there's a saved non-collapsed selection inside the editor.
+    if (savedRange && savedSelectionText.trim().length > 0) {
+      e.preventDefault();
+      showMenu();
+    }
+  });
+  document.addEventListener("keyup", (e) => {
+    if (e.key === "Control") ctrlPressedLogical = false;
+  });
+
+  // Click outside to close
+  document.addEventListener("mousedown", (e) => {
+    if (!menuOpen) return;
+    if (menu.contains(e.target)) return;
+    hideMenu();
+  });
+
+  // ---------- Worker messaging ----------
+  let activeJob = null; // { id, action }
+
+  worker.addEventListener("message", (ev) => {
+    const msg = ev.data || {};
+    if (msg.type === "status") {
+      if (msg.phase === "loading") {
+        showStatus("Loading model (" + msg.device + ")...", { progress: 0, sticky: true });
+      } else if (msg.phase === "fallback") {
+        showStatus("WebGPU unavailable, using WASM", { sticky: true });
+      } else if (msg.phase === "ready") {
+        showStatus("Model ready (" + msg.device + ")");
+      }
+    } else if (msg.type === "progress") {
+      const p = msg.payload || {};
+      if (p.status === "progress" && typeof p.progress === "number") {
+        const file = p.file ? (" " + p.file.split("/").pop()) : "";
+        showStatus("Downloading" + file, { progress: p.progress, sticky: true });
+      } else if (p.status === "ready") {
+        showStatus("Model ready");
+      }
+    } else if (msg.type === "token") {
+      if (activeJob && msg.id === activeJob.id) {
+        menuStatusText.textContent = "Processing... (" + (activeJob.streamLen += (msg.chunk || "").length) + " chars)";
+      }
+    } else if (msg.type === "done") {
+      if (!activeJob || msg.id !== activeJob.id) return;
+      const text = (msg.text || "").trim();
+      finishJob(text, null);
+    } else if (msg.type === "error") {
+      if (activeJob && msg.id !== null && msg.id !== activeJob.id) return;
+      finishJob(null, msg.message || "Unknown error");
+    }
+  });
+
+  function finishJob(text, error) {
+    if (error) {
+      showStatus("Error: " + error, { error: true });
+      menuStatus.classList.remove("active");
+      items.forEach(i => i.classList.remove("disabled", "hidden"));
+      activeJob = null;
+      return;
+    }
+    if (text != null) {
+      replaceSelectionWith(text);
+      hideMenu();
+      showStatus("Replaced");
+    }
+    activeJob = null;
+  }
+
+  // ---------- Replace selection (and restore caret) ----------
+  function replaceSelectionWith(newText) {
+    if (!savedRange) return;
+    editor.focus();
+    const sel = document.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(savedRange);
+
+    // Delete and insert as text node so newlines survive (white-space: pre-wrap).
+    savedRange.deleteContents();
+    const textNode = document.createTextNode(newText);
+    savedRange.insertNode(textNode);
+
+    // Place caret at end of inserted node.
+    const after = document.createRange();
+    after.setStartAfter(textNode);
+    after.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(after);
+
+    savedRange = after.cloneRange();
+    savedSelectionText = "";
+  }
+
+  // ---------- Action click ----------
+  function startJob(action) {
+    const text = (savedSelectionText || "").trim();
+    if (!text) return;
+    items.forEach(i => i.classList.add("disabled"));
+    menuStatus.classList.add("active");
+    menuStatusText.textContent = "Processing...";
+    const id = Math.random().toString(36).slice(2);
+    activeJob = { id, action, streamLen: 0 };
+    worker.postMessage({ type: "run", id, action, text });
+  }
+
+  items.forEach(item => {
+    item.addEventListener("click", (e) => {
+      if (item.classList.contains("disabled")) return;
+      const action = item.dataset.action;
+      if (!action) return;
+      startJob(action);
+    });
+    // Prevent the contenteditable from losing the selection visually on mousedown
+    item.addEventListener("mousedown", (e) => e.preventDefault());
+  });
+
+  // ---------- Warmup ----------
+  showStatus("Initialising...", { sticky: true });
+  worker.postMessage({ type: "warmup" });
+
+  // Editor focus
+  editor.addEventListener("blur", () => { /* keep savedRange so menu still works */ });
+  editor.focus();
+</script>
+</body>
+</html>
