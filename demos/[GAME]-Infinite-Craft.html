@@ -1,0 +1,1769 @@
+<!--
+  ============================================================================
+  Infinite Craft - combine two elements to discover a new one. AI-generated.
+
+  Bootstrap:
+  - 4 starter elements: Water 💧, Fire 🔥, Earth 🌍, Wind 🌬️. They live in a
+    side grid (right).
+  - Workspace (centre/left) is an empty drop zone where the user drags
+    elements to combine.
+
+  Mechanics:
+  - Drag an element from the grid into the workspace. Drag a second one
+    onto the first. The two elements combine.
+  - Look up combo[a+b] in the merged cache (sorted-pair key, lowercased).
+    If present, instant result, no LLM call.
+  - If absent: call the text LLM with both names + the list of already-used
+    name->emoji pairs -> returns
+      { "name": "<short noun>", "emoji": "<one emoji or 2-emoji pair>",
+        "description": "<one short sentence>" }
+    Then validate emoji uniqueness vs the elements map; retry up to 3 times
+    with feedback if the emoji is already used for a DIFFERENT name.
+  - New result is added to the grid. "First Discovery!" toast when the
+    local user genuinely creates a result that wasn't in the merged remote
+    set; otherwise a smaller "Already discovered by ___" line.
+  - Clicking a placed element in the workspace removes it. Workspace holds
+    at most 2 items pending combination.
+
+  Visuals (emoji-only, NO image gen):
+  - Apple-inspired: squircle elements (border-radius: 18px + subtle inner
+    gloss + outer shadow), Inter-or-system sans, generous spacing.
+  - Dark by default (#0d0d10 bg, #f4f4f6 text, accent #7aa2ff). Theme
+    toggle uses prefers-color-scheme initially, persists explicit toggle.
+  - Element card visual = big emoji glyph (or 2-emoji pair) + name beneath.
+    Tooltip with description on hover/long-press.
+  - Smooth fusion animation: scale-in toward each other, brief flash, new
+    card pops in via cubic-bezier(.34, 1.56, .64, 1).
+  - Loading shimmer (morphing-blob) on the two merging cards while the LLM
+    call is in flight; the rest of the UI stays responsive.
+
+  Emoji uniqueness invariant (mandatory):
+  - Same result name => same emoji always (Water+Fire->Steam reuses ♨️).
+  - Different names => MUST have different emoji. The validator rejects
+    any LLM response whose emoji is already taken by a different name and
+    re-prompts the model with explicit feedback. Cap at 3 retries; final
+    fallback appends ✨ to disambiguate and warns in debug.
+
+  UI panels:
+  - Top bar: title left; sync-status dot, theme toggle, "Copy debug log"
+    right.
+  - Right side: scrollable element grid (sorted by discoveredAt desc with
+    starters anchored), search filter at top.
+  - Centre/left: workspace drop zone with two slots; below it, a history
+    strip of the last 8 local discoveries.
+
+  Auto-start:
+  - No Start button. The 4 starter elements appear immediately, workspace
+    is interactive on first paint. Remote cache is fetched in the
+    background and merged when ready.
+
+  Failure handling:
+  - Pollinations text 5xx/timeout: inline retry button on the workspace,
+    never blocks UI.
+  - LLM returns non-JSON: parseLooseJSON (strip ```json fences, trim,
+    JSON.parse); if still bad, "couldn't combine these - try again"; the
+    slots stay populated so the user can retry without re-dragging.
+  - Sync GET fail: run solo with red dot, retry on next discovery.
+  - Sync PUT fail: queue, amber dot, retry on next discovery or on
+    visibility change. Exponential backoff capped at 30s.
+
+  Single-file constraints:
+  - Inline EVERYTHING. No .css/.js/.png/.mp3 companions.
+  - Vanilla DOM, no frameworks.
+  - Mobile-first responsive: < 720px stacks workspace above grid.
+  - body scrolls (min-height: 100dvh, no overflow:hidden on body); no
+    rigid aspect-ratio without a max-height: 80dvh cap.
+  - <meta name="description"> in <head>: "Infinite Craft clone - drag two
+    elements to discover a new one, generated live by AI."
+
+  LocalStorage keys:
+  - infiniteCraft.elements.v1: { "<lowercased name>": {
+        name, emoji, description, parents:[a,b]|null, createdAt,
+        discoveredBy } }
+  - infiniteCraft.combos.v1:   { "<sortedPairKey>": "<lowercased name>" }
+  - infiniteCraft.theme:       "dark" | "light"  (only when user toggles)
+  - infiniteCraft.debug.v1:    ring buffer of last 100 log entries
+  - infiniteCraft.userId.v1:   "anon-<random-suffix>" - stable per-browser
+  - infiniteCraft.blobId.v1:   override of SHARED_BLOB_ID after bootstrap
+
+  Shared discovery cache (multiplayer):
+  - Backend: JSONBlob (https://jsonblob.com/api/jsonBlob). Free, no
+    signup, no auth, CORS open. Verified: POST 201, GET 200, PUT 200.
+  - SHARED_BLOB_ID constant defaults to a pre-bootstrapped blob. Setting
+    it to the literal "TODO_GENERATE_ON_FIRST_LOAD" makes the demo POST a
+    fresh blob on first load, save the id to localStorage, and surface a
+    banner with a copy button so Katehuuh can paste it back into source.
+  - Blob schema:
+      { schema: 1,
+        elements: { "<lowercased name>": { name, emoji, description,
+                                           parents, discoveredAt,
+                                           discoveredBy } },
+        combos:   { "<sortedPairKey>": "<lowercased name>" } }
+  - Read-modify-write pattern:
+      boot:      GET blob -> merge into local cache. Remote wins for
+                 already-known names; local wins for names not yet
+                 uploaded.
+      discover:  cache hit (remote OR local) = no LLM call. Miss = LLM,
+                 write local immediately, schedule debounced (~3s)
+                 read-modify-write PUT.
+      PUT path:  fresh GET -> merge in everything that arrived since last
+                 read -> PUT the merged set; collisions resolved
+                 last-write-wins per-key, other keys preserved.
+  - Status dot: green (synced), amber (pending push or merging), red
+    (offline). Tooltip shows last sync time.
+  - No WebSocket, no presence: this is a shared *cache*, not live chat.
+
+  Debug log:
+  - Copy debug log button serialises ring buffer to JSON, copies via
+    navigator.clipboard.writeText with textarea + execCommand fallback.
+  - Each entry: { t, kind:"text"|"sync"|"error", elapsedMs,
+    requestSummary, responseSummary }.
+  ============================================================================
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Infinite Craft</title>
+<meta name="description" content="Infinite Craft clone — drag two elements to discover a new one, generated live by AI." />
+<style>
+:root {
+    --bg: #0d0d10;
+    --surface: #16161b;
+    --surface-2: #1d1d24;
+    --surface-3: #25252e;
+    --border: #2a2a33;
+    --border-strong: #3a3a44;
+    --text: #f4f4f6;
+    --muted: #9a9aa6;
+    --accent: #7aa2ff;
+    --accent-soft: rgba(122, 162, 255, 0.16);
+    --good: #4ade80;
+    --bad: #f87171;
+    --warn: #f5b252;
+    --gloss: rgba(255, 255, 255, 0.06);
+    --shadow: 0 1px 2px rgba(0,0,0,0.4), 0 8px 24px rgba(0,0,0,0.35);
+    --radius-sm: 10px;
+    --radius-md: 14px;
+    --radius-lg: 18px;
+    --radius-xl: 24px;
+    --bezier-pop: cubic-bezier(.34, 1.56, .64, 1);
+    --transition: 220ms ease;
+}
+html[data-theme="light"] {
+    --bg: #f6f6f8;
+    --surface: #ffffff;
+    --surface-2: #f0f0f4;
+    --surface-3: #e6e6ec;
+    --border: #d8d8e0;
+    --border-strong: #c4c4cc;
+    --text: #18181c;
+    --muted: #6a6a76;
+    --accent: #3b6cff;
+    --accent-soft: rgba(59, 108, 255, 0.14);
+    --gloss: rgba(255, 255, 255, 0.55);
+    --shadow: 0 1px 2px rgba(0,0,0,0.06), 0 8px 24px rgba(0,0,0,0.08);
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Inter", "SF Pro Text", "Segoe UI", Roboto, system-ui, sans-serif;
+    font-size: 15px;
+    line-height: 1.45;
+    min-height: 100dvh;
+    overflow-y: auto;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+}
+
+button {
+    font: inherit;
+    color: inherit;
+    background: none;
+    border: 0;
+    cursor: pointer;
+    padding: 0;
+}
+input, button { -webkit-tap-highlight-color: transparent; }
+
+/* Top bar */
+.topbar {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 22px;
+    background: color-mix(in oklab, var(--bg) 80%, transparent);
+    -webkit-backdrop-filter: saturate(140%) blur(14px);
+    backdrop-filter: saturate(140%) blur(14px);
+    border-bottom: 1px solid var(--border);
+}
+.brand {
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    font-size: 17px;
+}
+.brand .glyph { display: inline-block; transform: translateY(1px); margin-right: 4px; }
+.top-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+.btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    border-radius: var(--radius-md);
+    background: var(--surface-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    font-size: 13px;
+    transition: background var(--transition), border-color var(--transition), transform 120ms ease;
+}
+.btn:hover { background: var(--surface-3); border-color: var(--border-strong); }
+.btn:active { transform: scale(0.97); }
+.btn[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); }
+
+/* Sync dot */
+.sync-btn { padding-left: 10px; }
+.sync-btn .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--muted);
+    transition: background 220ms ease;
+}
+.sync-btn[data-state="ok"]      .dot { background: var(--good); }
+.sync-btn[data-state="pending"] .dot { background: var(--warn); animation: pulseDot 1.4s ease-in-out infinite; }
+.sync-btn[data-state="off"]     .dot { background: var(--bad); }
+@keyframes pulseDot {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50%      { opacity: 0.55; transform: scale(0.8); }
+}
+
+/* Bootstrap banner (shown only after a fresh blob is POSTed) */
+.bootstrap-banner {
+    background: linear-gradient(180deg, var(--accent-soft), var(--surface));
+    border: 1px solid var(--accent);
+    border-radius: var(--radius-md);
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    font-size: 13px;
+    margin: 12px auto 0;
+    max-width: 1236px;
+    width: calc(100% - 44px);
+}
+.bootstrap-banner code {
+    background: var(--surface-3);
+    padding: 1px 6px;
+    border-radius: 6px;
+    font-size: 12px;
+    word-break: break-all;
+}
+.bootstrap-banner .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.bootstrap-banner .close { margin-left: auto; }
+
+/* Layout */
+.app {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 360px;
+    gap: 22px;
+    padding: 22px;
+    max-width: 1280px;
+    margin: 0 auto;
+}
+@media (max-width: 900px) {
+    .app { grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; padding: 16px; }
+}
+@media (max-width: 720px) {
+    .app { grid-template-columns: 1fr; gap: 14px; padding: 14px; }
+}
+
+/* Workspace */
+.workspace-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    min-width: 0;
+}
+.workspace {
+    position: relative;
+    background: var(--surface);
+    border: 1px dashed var(--border-strong);
+    border-radius: var(--radius-xl);
+    padding: 28px 24px;
+    min-height: 280px;
+    max-height: 80dvh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 22px;
+    transition: border-color var(--transition), background var(--transition);
+}
+.workspace.is-drop-target {
+    border-color: var(--accent);
+    background: color-mix(in oklab, var(--accent) 10%, var(--surface));
+}
+.workspace-hint {
+    color: var(--muted);
+    font-size: 14px;
+    text-align: center;
+    max-width: 360px;
+}
+.slots {
+    display: flex;
+    align-items: center;
+    gap: 22px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+.plus { font-size: 24px; color: var(--muted); user-select: none; }
+.workspace-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+.error-banner {
+    background: color-mix(in oklab, var(--bad) 16%, var(--surface));
+    border: 1px solid color-mix(in oklab, var(--bad) 50%, var(--border));
+    color: var(--text);
+    border-radius: var(--radius-md);
+    padding: 10px 14px;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 13px;
+    width: 100%;
+    max-width: 480px;
+}
+.error-banner .btn { background: var(--surface); }
+
+/* Element card */
+.card {
+    position: relative;
+    width: 110px;
+    height: 110px;
+    border-radius: var(--radius-lg);
+    background:
+      linear-gradient(180deg, var(--gloss) 0%, transparent 50%),
+      var(--surface-2);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 8px;
+    cursor: grab;
+    user-select: none;
+    transition: transform var(--transition), background var(--transition), border-color var(--transition);
+}
+.card:hover { transform: translateY(-2px); border-color: var(--border-strong); }
+.card:active { cursor: grabbing; transform: translateY(0) scale(0.97); }
+.card.dragging { opacity: 0.4; }
+.card .emoji {
+    font-size: 38px;
+    line-height: 1;
+    pointer-events: none;
+    -webkit-user-select: none;
+    user-select: none;
+}
+.card .name {
+    font-size: 13px;
+    font-weight: 500;
+    text-align: center;
+    color: var(--text);
+    pointer-events: none;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    width: 100%;
+}
+.card.size-sm { width: 80px; height: 80px; border-radius: var(--radius-md); padding: 6px; }
+.card.size-sm .emoji { font-size: 28px; }
+.card.size-sm .name  { font-size: 11px; }
+.card.size-lg { width: 140px; height: 140px; border-radius: 22px; }
+.card.size-lg .emoji { font-size: 52px; }
+.card.size-lg .name  { font-size: 14px; }
+
+/* Discoverer initials chip */
+.card .discoverer {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 4px;
+    border-radius: 9px;
+    background: var(--surface-3);
+    border: 1px solid var(--border-strong);
+    color: var(--muted);
+    font-size: 9px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    pointer-events: none;
+}
+.card.size-sm .discoverer { min-width: 14px; height: 14px; font-size: 8px; padding: 0 3px; border-radius: 7px; }
+.card .discoverer.is-me { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+
+/* Shimmer (in-flight LLM combine) */
+.card.shimmer::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background:
+      radial-gradient(120% 80% at 30% 20%, color-mix(in oklab, var(--accent) 22%, transparent), transparent 60%),
+      radial-gradient(140% 80% at 70% 80%, color-mix(in oklab, var(--accent) 16%, transparent), transparent 65%);
+    animation: blob 2.4s ease-in-out infinite alternate;
+    pointer-events: none;
+}
+.card.shimmer::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: linear-gradient(110deg, transparent 30%, color-mix(in oklab, var(--text) 14%, transparent) 50%, transparent 70%);
+    background-size: 220% 100%;
+    animation: shimmer 1.6s linear infinite;
+    pointer-events: none;
+    mix-blend-mode: screen;
+}
+@keyframes blob {
+    0%   { transform: scale(1) translate(0, 0); }
+    100% { transform: scale(1.08) translate(2%, -2%); }
+}
+@keyframes shimmer {
+    0%   { background-position: 200% 0; }
+    100% { background-position: -100% 0; }
+}
+
+.card.is-fusing { animation: fuse 380ms ease-in forwards; }
+@keyframes fuse {
+    0%   { transform: scale(1); }
+    60%  { transform: scale(1.18); filter: brightness(1.4); }
+    100% { transform: scale(0.6); opacity: 0; }
+}
+.card.is-popped { animation: popIn 540ms var(--bezier-pop) both; }
+@keyframes popIn {
+    0%   { transform: scale(0.4); opacity: 0; }
+    60%  { transform: scale(1.08); opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+/* Side panel */
+.side-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xl);
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    max-height: calc(100dvh - 120px);
+    position: sticky;
+    top: 78px;
+}
+@media (max-width: 720px) {
+    .side-panel { position: static; max-height: none; }
+}
+.side-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.side-title { font-weight: 600; font-size: 14px; }
+.side-count { color: var(--muted); font-size: 12px; }
+
+.search {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 8px 12px;
+}
+.search input {
+    flex: 1;
+    background: transparent;
+    border: 0;
+    outline: 0;
+    color: var(--text);
+    font-size: 14px;
+    min-width: 0;
+}
+.search input::placeholder { color: var(--muted); }
+
+.grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+    gap: 10px;
+    overflow-y: auto;
+    padding-right: 4px;
+    padding-bottom: 4px;
+}
+.grid.is-empty { color: var(--muted); font-size: 13px; padding: 12px; }
+
+/* History strip */
+.history { display: flex; flex-direction: column; gap: 8px; }
+.history-title { font-size: 13px; color: var(--muted); margin-left: 4px; }
+.history-strip {
+    display: flex;
+    gap: 10px;
+    overflow-x: auto;
+    padding: 4px;
+    min-height: 90px;
+}
+.history-strip:empty::after {
+    content: "Discoveries you make will appear here.";
+    color: var(--muted);
+    font-size: 13px;
+    align-self: center;
+    margin: 0 auto;
+}
+
+/* Toast */
+.toast-host {
+    position: fixed;
+    bottom: 22px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    z-index: 100;
+    pointer-events: none;
+}
+.toast {
+    background: var(--surface-3);
+    border: 1px solid var(--border-strong);
+    color: var(--text);
+    padding: 10px 16px;
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow);
+    font-size: 14px;
+    animation: toastIn 320ms var(--bezier-pop), toastOut 320ms ease 2.6s forwards;
+    pointer-events: auto;
+    max-width: 360px;
+    text-align: center;
+}
+.toast.is-discovery {
+    background: linear-gradient(180deg, var(--accent-soft), var(--surface-3));
+    border-color: var(--accent);
+}
+.toast.is-info { font-size: 13px; color: var(--muted); }
+@keyframes toastIn {
+    from { transform: translateY(20px); opacity: 0; }
+    to   { transform: translateY(0);    opacity: 1; }
+}
+@keyframes toastOut { to { transform: translateY(20px); opacity: 0; } }
+
+/* Tooltip */
+.tooltip {
+    position: fixed;
+    z-index: 60;
+    background: var(--surface-3);
+    color: var(--text);
+    border: 1px solid var(--border-strong);
+    padding: 8px 10px;
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+    max-width: 220px;
+    pointer-events: none;
+    box-shadow: var(--shadow);
+    opacity: 0;
+    transform: translateY(4px);
+    transition: opacity 120ms ease, transform 120ms ease;
+}
+.tooltip.is-visible { opacity: 1; transform: translateY(0); }
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+    * { animation-duration: 0.001s !important; transition-duration: 0.001s !important; }
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+    <div class="brand"><span class="glyph">🧪</span> Infinite Craft</div>
+    <div class="top-actions">
+        <button class="btn sync-btn" id="syncStatus" type="button"
+                title="Shared discovery cache status" aria-label="Sync status">
+            <span class="dot" id="syncDot" aria-hidden="true"></span>
+            <span id="syncLabel">Connecting…</span>
+        </button>
+        <button class="btn" id="themeToggle" type="button" title="Toggle theme">
+            <span id="themeIcon">🌙</span>
+            <span id="themeLabel">Dark</span>
+        </button>
+        <button class="btn" id="copyDebug" type="button" title="Copy debug log to clipboard">
+            <span>📋</span>
+            <span>Copy debug log</span>
+        </button>
+    </div>
+</header>
+
+<div id="bootstrapHost"></div>
+
+<main class="app">
+    <section class="workspace-panel" aria-label="Combination workspace">
+        <div class="workspace" id="workspace" aria-dropeffect="move">
+            <div class="workspace-hint" id="workspaceHint">
+                Drag two elements here to combine them.
+            </div>
+            <div class="slots" id="slots" aria-live="polite"></div>
+            <div class="workspace-actions" id="workspaceActions"></div>
+        </div>
+
+        <div class="history" aria-label="Recent discoveries">
+            <div class="history-title">Recent discoveries</div>
+            <div class="history-strip" id="historyStrip"></div>
+        </div>
+    </section>
+
+    <aside class="side-panel" aria-label="Element library">
+        <div class="side-header">
+            <div class="side-title">Elements</div>
+            <div class="side-count" id="elementCount">0</div>
+        </div>
+        <div class="search">
+            <span aria-hidden="true">🔍</span>
+            <input id="searchInput" type="search" placeholder="Search elements" aria-label="Search elements">
+        </div>
+        <div class="grid" id="elementsGrid" aria-live="polite"></div>
+    </aside>
+</main>
+
+<div id="toastHost" class="toast-host" aria-live="polite" aria-atomic="true"></div>
+<div id="tooltip" class="tooltip" role="tooltip" aria-hidden="true"></div>
+
+<script>
+(function () {
+    'use strict';
+
+    // ------------------------------------------------------------------
+    // Endpoints / constants
+    // ------------------------------------------------------------------
+    const TEXT_URL  = 'https://text.pollinations.ai/openai/v1/chat/completions';
+    const TEXT_TIMEOUT_MS = 18000;
+    const TEXT_MODEL = 'openai';
+
+    // Shared discovery cache (JSONBlob). Verified live: POST 201 Created
+    // with Location: /api/jsonBlob/{id}; GET 200; PUT 200. CORS open.
+    // SHARED_BLOB_ID below is a pre-bootstrapped blob - replace with the
+    // literal "TODO_GENERATE_ON_FIRST_LOAD" to make the demo POST a fresh
+    // one and surface the new id with a copy button on screen.
+    const JSONBLOB_BASE = 'https://jsonblob.com/api/jsonBlob';
+    const SHARED_BLOB_ID = '019dda74-f338-7239-a462-60ed381990df';
+    const SYNC_DEBOUNCE_MS    = 3000;
+    const SYNC_TIMEOUT_MS     = 12000;
+    const SYNC_BACKOFF_BASE   = 1500;
+    const SYNC_BACKOFF_MAX_MS = 30000;
+
+    const MAX_LLM_RETRIES_FOR_EMOJI = 3;
+    const MAX_USED_LIST = 200;
+
+    const LS_ELEMENTS = 'infiniteCraft.elements.v1';
+    const LS_COMBOS   = 'infiniteCraft.combos.v1';
+    const LS_THEME    = 'infiniteCraft.theme';
+    const LS_DEBUG    = 'infiniteCraft.debug.v1';
+    const LS_USER_ID  = 'infiniteCraft.userId.v1';
+    const LS_BLOB_ID  = 'infiniteCraft.blobId.v1';
+    const DEBUG_MAX   = 100;
+
+    // Starter elements (always present, name-keyed)
+    const STARTERS = [
+        { name: 'Water', emoji: '💧', description: 'A clear, refreshing liquid.' },
+        { name: 'Fire',  emoji: '🔥', description: 'A bright, hungry flame.' },
+        { name: 'Earth', emoji: '🌍', description: 'Solid ground beneath us.' },
+        { name: 'Wind',  emoji: '🌬️', description: 'Moving air across the world.' }
+    ];
+
+    // ------------------------------------------------------------------
+    // State
+    // ------------------------------------------------------------------
+    const state = {
+        elements: {},   // key: lowercased name -> { name,emoji,description,parents,createdAt,discoveredBy }
+        combos:   {},   // key: sortedPairKey -> lowercased name
+        debug:    [],
+        theme:    null,
+        userId:   null,
+        slots:    [],   // up to 2 lowercased names
+        history:  [],   // last 8 lowercased names (newest first)
+        comboInFlight: null,
+        lastError: null,
+
+        // Sync
+        blobId: null,                  // resolved blob id (constant or LS override)
+        sync: {
+            state: 'idle',             // 'idle'|'ok'|'pending'|'off'
+            lastSyncAt: null,
+            backoffMs: SYNC_BACKOFF_BASE,
+            putTimer: null,
+            putInFlight: false,
+            dirty: false,              // local writes await PUT
+            knownRemoteNames: new Set() // names that came from remote at boot
+        }
+    };
+
+    // ------------------------------------------------------------------
+    // Boot
+    // ------------------------------------------------------------------
+    document.addEventListener('DOMContentLoaded', init);
+
+    function init() {
+        loadPersisted();
+        applyTheme();
+        wireTopbar();
+        wireSearch();
+        wireWorkspaceDnd();
+        renderAll();
+        // Defer sync to keep first paint snappy
+        setTimeout(initSync, 30);
+    }
+
+    function loadPersisted() {
+        // Elements (object map)
+        const rawEls = readJSON(LS_ELEMENTS, null);
+        if (rawEls && typeof rawEls === 'object' && !Array.isArray(rawEls)) {
+            state.elements = rawEls;
+        } else {
+            state.elements = {};
+        }
+        // Ensure starters are present
+        for (const s of STARTERS) {
+            const k = nameKey(s.name);
+            if (!state.elements[k]) {
+                state.elements[k] = {
+                    name: s.name, emoji: s.emoji, description: s.description,
+                    parents: null, createdAt: 0, discoveredBy: 'starter'
+                };
+            }
+        }
+        writeJSON(LS_ELEMENTS, state.elements);
+
+        // Combos
+        const rawCombos = readJSON(LS_COMBOS, {});
+        state.combos = (rawCombos && typeof rawCombos === 'object') ? rawCombos : {};
+
+        // Debug
+        state.debug = readJSON(LS_DEBUG, []) || [];
+        if (!Array.isArray(state.debug)) state.debug = [];
+
+        // Theme
+        const t = localStorage.getItem(LS_THEME);
+        state.theme = (t === 'light' || t === 'dark') ? t : null;
+
+        // User id
+        let uid = localStorage.getItem(LS_USER_ID);
+        if (!uid || !/^anon-/.test(uid)) {
+            uid = 'anon-' + Math.random().toString(36).slice(2, 8);
+            localStorage.setItem(LS_USER_ID, uid);
+        }
+        state.userId = uid;
+
+        // Blob id - localStorage override beats the constant (used after a
+        // fresh bootstrap when Katehuuh hasn't yet pasted the id back into
+        // source).
+        const lsBlob = localStorage.getItem(LS_BLOB_ID);
+        state.blobId = lsBlob || (SHARED_BLOB_ID === 'TODO_GENERATE_ON_FIRST_LOAD' ? null : SHARED_BLOB_ID);
+    }
+
+    function readJSON(key, fallback) {
+        try { const s = localStorage.getItem(key); return s ? JSON.parse(s) : fallback; }
+        catch (e) { return fallback; }
+    }
+    function writeJSON(key, value) {
+        try { localStorage.setItem(key, JSON.stringify(value)); }
+        catch (e) { /* quota: silently drop */ }
+    }
+    function nameKey(name) { return String(name || '').trim().toLowerCase(); }
+
+    // ------------------------------------------------------------------
+    // Theme
+    // ------------------------------------------------------------------
+    function applyTheme() {
+        const explicit = state.theme;
+        const prefersLight = window.matchMedia
+            && window.matchMedia('(prefers-color-scheme: light)').matches;
+        const theme = explicit || (prefersLight ? 'light' : 'dark');
+        document.documentElement.setAttribute('data-theme', theme);
+
+        const btn = document.getElementById('themeToggle');
+        const icon = document.getElementById('themeIcon');
+        const label = document.getElementById('themeLabel');
+        if (theme === 'light') {
+            icon.textContent = '☀️'; label.textContent = 'Light';
+            btn.setAttribute('aria-pressed', 'true');
+        } else {
+            icon.textContent = '🌙'; label.textContent = 'Dark';
+            btn.setAttribute('aria-pressed', 'false');
+        }
+    }
+
+    function wireTopbar() {
+        document.getElementById('themeToggle').addEventListener('click', () => {
+            const current = document.documentElement.getAttribute('data-theme');
+            const next = current === 'light' ? 'dark' : 'light';
+            state.theme = next;
+            localStorage.setItem(LS_THEME, next);
+            applyTheme();
+        });
+        document.getElementById('copyDebug').addEventListener('click', copyDebugLog);
+        document.getElementById('syncStatus').addEventListener('click', () => {
+            // Manual nudge: try a fresh sync round
+            if (state.sync.state === 'off') initSync();
+            else if (state.sync.dirty) flushSyncNow();
+            else doRemoteRefresh();
+        });
+
+        if (window.matchMedia) {
+            const mq = window.matchMedia('(prefers-color-scheme: light)');
+            const handler = () => { if (!state.theme) applyTheme(); };
+            if (mq.addEventListener) mq.addEventListener('change', handler);
+            else if (mq.addListener) mq.addListener(handler);
+        }
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden && state.sync.dirty) flushSyncNow();
+        });
+    }
+
+    function setSyncState(s, label) {
+        state.sync.state = s;
+        const btn = document.getElementById('syncStatus');
+        btn.setAttribute('data-state', s);
+        const last = state.sync.lastSyncAt
+            ? ' · last sync ' + relTime(state.sync.lastSyncAt)
+            : '';
+        const tip = ({
+            ok:     'Synced with shared cache' + last,
+            pending:'Pending push to shared cache' + last,
+            off:    'Offline - running solo' + last,
+            idle:   'Connecting…'
+        })[s] || s;
+        btn.title = tip;
+        const lbl = document.getElementById('syncLabel');
+        lbl.textContent = label || ({
+            ok: 'Synced', pending: 'Syncing…', off: 'Offline', idle: 'Connecting…'
+        })[s] || s;
+    }
+
+    function relTime(ts) {
+        const sec = Math.max(1, Math.round((Date.now() - ts) / 1000));
+        if (sec < 60) return sec + 's ago';
+        const min = Math.round(sec / 60);
+        if (min < 60) return min + 'm ago';
+        const h = Math.round(min / 60);
+        return h + 'h ago';
+    }
+
+    // ------------------------------------------------------------------
+    // Debug log
+    // ------------------------------------------------------------------
+    function logEntry(kind, requestSummary, responseSummary, elapsedMs) {
+        const entry = {
+            t: new Date().toISOString(),
+            kind: kind,
+            elapsedMs: elapsedMs == null ? null : Math.round(elapsedMs),
+            requestSummary: requestSummary,
+            responseSummary: responseSummary
+        };
+        state.debug.push(entry);
+        while (state.debug.length > DEBUG_MAX) state.debug.shift();
+        writeJSON(LS_DEBUG, state.debug);
+    }
+
+    async function copyDebugLog() {
+        const text = JSON.stringify(state.debug, null, 2);
+        let ok = false;
+        try {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                await navigator.clipboard.writeText(text);
+                ok = true;
+            }
+        } catch (e) { /* fallthrough */ }
+        if (!ok) {
+            try {
+                const ta = document.createElement('textarea');
+                ta.value = text;
+                ta.setAttribute('readonly', '');
+                ta.style.position = 'fixed';
+                ta.style.top = '-9999px';
+                document.body.appendChild(ta);
+                ta.select();
+                ok = document.execCommand('copy');
+                document.body.removeChild(ta);
+            } catch (e) { ok = false; }
+        }
+        showToast(ok ? 'Debug log copied' : 'Copy failed', { isInfo: true });
+    }
+
+    // ------------------------------------------------------------------
+    // Sorted-pair combo key (lowercased so case mismatches collapse)
+    // ------------------------------------------------------------------
+    function comboKey(nameA, nameB) {
+        const [a, b] = [nameKey(nameA), nameKey(nameB)].sort();
+        return a + '+' + b;
+    }
+
+    function findCombo(nameA, nameB) {
+        const k = comboKey(nameA, nameB);
+        const targetKey = state.combos[k];
+        if (targetKey && state.elements[targetKey]) {
+            return { key: targetKey, element: state.elements[targetKey] };
+        }
+        return null;
+    }
+
+    // ------------------------------------------------------------------
+    // Emoji uniqueness validator
+    // ------------------------------------------------------------------
+    function buildEmojiToName() {
+        const map = new Map();
+        for (const k of Object.keys(state.elements)) {
+            const el = state.elements[k];
+            if (!el || !el.emoji) continue;
+            if (!map.has(el.emoji)) map.set(el.emoji, el.name);
+        }
+        return map;
+    }
+
+    // The "name" returned by the LLM may already exist (legitimate reuse)
+    // or be new. The emoji rule:
+    //   - if the result name matches an existing element, force-reuse
+    //     that element's emoji (override what the LLM said).
+    //   - if the name is new, the emoji must NOT collide with any other
+    //     element's emoji.
+    function validateLLMResult(parsed) {
+        if (!parsed || typeof parsed !== 'object') return { ok: false, reason: 'Non-object JSON' };
+        const name = String(parsed.name || '').trim();
+        if (!name) return { ok: false, reason: 'Missing name' };
+        let emoji = String(parsed.emoji || '').trim();
+        if (!emoji) return { ok: false, reason: 'Missing emoji' };
+        // Strip ZWJ-trailing whitespace and any plain-text framing
+        emoji = emoji.replace(/^["']|["']$/g, '').slice(0, 12);
+
+        const k = nameKey(name);
+        if (state.elements[k]) {
+            // Reuse existing element's emoji, regardless of what model returned
+            const existing = state.elements[k];
+            return {
+                ok: true,
+                forced: true,
+                element: { name: existing.name, emoji: existing.emoji,
+                           description: existing.description }
+            };
+        }
+
+        // New name -> emoji must be unused by any DIFFERENT name
+        const map = buildEmojiToName();
+        if (map.has(emoji) && nameKey(map.get(emoji)) !== k) {
+            return {
+                ok: false,
+                reason: 'Emoji ' + emoji + ' is already used for "' + map.get(emoji) + '". Pick a different emoji.',
+                conflictEmoji: emoji,
+                conflictName: map.get(emoji)
+            };
+        }
+        return {
+            ok: true,
+            forced: false,
+            element: {
+                name: prettifyName(name),
+                emoji: emoji,
+                description: String(parsed.description || '').slice(0, 240)
+            }
+        };
+    }
+
+    function prettifyName(s) {
+        const t = String(s || '').trim();
+        if (!t) return 'Mystery';
+        return t.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+    }
+
+    // ------------------------------------------------------------------
+    // LLM combine call
+    // ------------------------------------------------------------------
+    const SYS_PROMPT =
+        'You generate the result of combining two elements in a discovery game.\n' +
+        'Reply with valid JSON only - no markdown, no commentary.\n' +
+        'Schema: { "name": "<short noun, 1-3 words>", "emoji": "<single emoji or two-emoji pair, no spaces>", "description": "<one short sentence>" }\n' +
+        '\n' +
+        'Hard rules:\n' +
+        '1. The "name" must be a real concept, not a coined word. Common nouns preferred.\n' +
+        '2. The "emoji" MUST NOT collide with any emoji already used for a DIFFERENT name. The full list of taken emojis with their names follows in the user prompt.\n' +
+        '3. If the result is conceptually identical to an existing element (same name), reuse that element\'s emoji exactly. Otherwise pick an unused single emoji, or if none fits, a 2-emoji pair that is also currently unused.\n' +
+        '4. Keep description under 80 characters.';
+
+    function buildUsedList() {
+        const items = [];
+        for (const k of Object.keys(state.elements)) {
+            const el = state.elements[k];
+            if (!el || !el.emoji) continue;
+            items.push(el.name + ':' + el.emoji);
+        }
+        // Sample if exceeding cap so the model still sees a representative
+        // slice over many calls
+        if (items.length > MAX_USED_LIST) {
+            for (let i = items.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                const t = items[i]; items[i] = items[j]; items[j] = t;
+            }
+            return items.slice(0, MAX_USED_LIST);
+        }
+        return items;
+    }
+
+    function buildUserPrompt(a, b, feedback) {
+        const used = buildUsedList().join(', ');
+        const lines = [
+            'Combine: "' + a.name + '" (' + a.emoji + ') + "' + b.name + '" (' + b.emoji + ').',
+            'Already-used emojis (do not reuse for a new name): ' + (used || '<none>') + '.'
+        ];
+        if (feedback) lines.push('Previous attempt rejected: ' + feedback + ' Try again with a different emoji.');
+        lines.push('Return JSON for the result.');
+        return lines.join('\n');
+    }
+
+    async function callCombineLLM(a, b) {
+        let lastFeedback = null;
+        for (let attempt = 0; attempt < MAX_LLM_RETRIES_FOR_EMOJI; attempt++) {
+            const body = {
+                model: TEXT_MODEL,
+                messages: [
+                    { role: 'system', content: SYS_PROMPT },
+                    { role: 'user',   content: buildUserPrompt(a, b, lastFeedback) }
+                ],
+                response_format: { type: 'json_object' },
+                temperature: 0.9,
+                seed: Math.floor(Math.random() * 1_000_000)
+            };
+            const t0 = performance.now();
+            const reqSummary = {
+                kind: 'combine', a: a.name, b: b.name,
+                attempt: attempt + 1, retryFeedback: lastFeedback
+            };
+            try {
+                const data = await fetchJSON(TEXT_URL, body, null, TEXT_TIMEOUT_MS);
+                const content = data && data.choices && data.choices[0]
+                    && data.choices[0].message && data.choices[0].message.content;
+                if (!content) throw new Error('Empty content from text API');
+                const parsed = parseLooseJSON(content);
+                const v = validateLLMResult(parsed);
+                const elapsed = performance.now() - t0;
+                if (v.ok) {
+                    logEntry('text', reqSummary, {
+                        raw: typeof content === 'string' ? content.slice(0, 400) : null,
+                        accepted: { name: v.element.name, emoji: v.element.emoji, forced: !!v.forced }
+                    }, elapsed);
+                    return v.element;
+                } else {
+                    logEntry('text', reqSummary, {
+                        raw: typeof content === 'string' ? content.slice(0, 400) : null,
+                        rejected: v.reason
+                    }, elapsed);
+                    lastFeedback = v.reason;
+                    continue;
+                }
+            } catch (err) {
+                const elapsed = performance.now() - t0;
+                logEntry('error', reqSummary, { message: String(err && err.message || err) }, elapsed);
+                throw err;
+            }
+        }
+        // Last-resort: append a sparkle to disambiguate. Build a result
+        // from the most recent rejected attempt's name where possible.
+        // We don't have that name stored cleanly here - use a generic.
+        logEntry('error', { kind: 'combine', a: a.name, b: b.name },
+                 { message: 'Emoji uniqueness failed after retries; using ✨ disambiguation' });
+        return {
+            name: prettifyName(a.name + ' ' + b.name + ' Mix'),
+            emoji: '✨',
+            description: 'A mix of ' + a.name + ' and ' + b.name + '.'
+        };
+    }
+
+    async function fetchJSON(url, body, signal, timeoutMs) {
+        const ctrl = new AbortController();
+        const onParentAbort = () => ctrl.abort();
+        if (signal) {
+            if (signal.aborted) ctrl.abort();
+            else signal.addEventListener('abort', onParentAbort, { once: true });
+        }
+        const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+        try {
+            const resp = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+                signal: ctrl.signal
+            });
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+            return await resp.json();
+        } catch (err) {
+            if (err && err.name === 'AbortError') throw new Error('Request timed out');
+            throw err;
+        } finally {
+            clearTimeout(timer);
+            if (signal) signal.removeEventListener('abort', onParentAbort);
+        }
+    }
+
+    function parseLooseJSON(text) {
+        const cleaned = String(text)
+            .replace(/^\s*```(?:json)?\s*/i, '')
+            .replace(/\s*```\s*$/i, '')
+            .trim();
+        try { return JSON.parse(cleaned); } catch (e) { /* fallthrough */ }
+        const start = cleaned.indexOf('{');
+        const end   = cleaned.lastIndexOf('}');
+        if (start >= 0 && end > start) {
+            const slice = cleaned.slice(start, end + 1);
+            try { return JSON.parse(slice); } catch (e) {
+                throw new Error('Could not parse JSON: ' + e.message);
+            }
+        }
+        throw new Error('No JSON object in response');
+    }
+
+    // ------------------------------------------------------------------
+    // Combine flow
+    // ------------------------------------------------------------------
+    async function combineSlots() {
+        if (state.slots.length !== 2) return;
+        const aKey = state.slots[0];
+        const bKey = state.slots[1];
+        const a = state.elements[aKey];
+        const b = state.elements[bKey];
+        if (!a || !b) { resetSlots(); return; }
+
+        // Cache hit?
+        const cached = findCombo(a.name, b.name);
+        if (cached) {
+            await playFusion(cached.key, /*isNew*/ false, /*remoteHit*/ state.sync.knownRemoteNames.has(cached.key));
+            return;
+        }
+
+        // LLM call
+        const cKey = comboKey(a.name, b.name);
+        state.comboInFlight = cKey;
+        state.lastError = null;
+        renderWorkspace();
+        try {
+            const result = await callCombineLLM(a, b);
+            const k = nameKey(result.name);
+            const wasNewLocally = !state.elements[k];
+            const wasInRemote = state.sync.knownRemoteNames.has(k);
+
+            if (wasNewLocally) {
+                state.elements[k] = {
+                    name: result.name,
+                    emoji: result.emoji,
+                    description: result.description,
+                    parents: [a.name, b.name],
+                    createdAt: Date.now(),
+                    discoveredBy: state.userId
+                };
+            }
+            state.combos[cKey] = k;
+            writeJSON(LS_ELEMENTS, state.elements);
+            writeJSON(LS_COMBOS, state.combos);
+
+            state.comboInFlight = null;
+            // First-discovery = locally new AND not already known via remote merge
+            const isFirstDiscovery = wasNewLocally && !wasInRemote;
+            await playFusion(k, isFirstDiscovery, /*remoteHit*/ wasInRemote);
+
+            // Schedule shared-cache push
+            scheduleSyncPush();
+        } catch (err) {
+            state.comboInFlight = null;
+            state.lastError = err && err.message || 'Combine failed';
+            renderWorkspace();
+        }
+    }
+
+    async function playFusion(resultKey, isFirstDiscovery, remoteHit) {
+        const slotsHost = document.getElementById('slots');
+        const slotCards = Array.from(slotsHost.querySelectorAll('.card'));
+        slotCards.forEach(c => c.classList.add('is-fusing'));
+        await sleep(380);
+
+        state.slots = [];
+        state.history.unshift(resultKey);
+        if (state.history.length > 8) state.history.length = 8;
+        renderAll();
+
+        requestAnimationFrame(() => {
+            const target = document.querySelector('[data-grid-card="' + cssEscape(resultKey) + '"]');
+            if (target) {
+                target.classList.add('is-popped');
+                setTimeout(() => target.classList.remove('is-popped'), 600);
+            }
+        });
+
+        const el = state.elements[resultKey];
+        if (!el) return;
+        if (isFirstDiscovery) {
+            showToast('First Discovery! ' + el.emoji + ' ' + el.name, { isDiscovery: true });
+        } else if (remoteHit) {
+            const who = el.discoveredBy && el.discoveredBy !== state.userId
+                ? el.discoveredBy
+                : 'someone';
+            showToast(el.emoji + ' ' + el.name + ' · already discovered by ' + who, { isInfo: true });
+        }
+    }
+
+    function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+    function cssEscape(s) {
+        if (window.CSS && CSS.escape) return CSS.escape(s);
+        return String(s).replace(/[^a-zA-Z0-9_-]/g, '\\$&');
+    }
+
+    // ------------------------------------------------------------------
+    // Drag and drop
+    // ------------------------------------------------------------------
+    let dragSourceKey = null;
+
+    function wireWorkspaceDnd() {
+        const ws = document.getElementById('workspace');
+        ws.addEventListener('dragover', (ev) => {
+            if (dragSourceKey) {
+                ev.preventDefault();
+                ev.dataTransfer.dropEffect = 'copy';
+                ws.classList.add('is-drop-target');
+            }
+        });
+        ws.addEventListener('dragleave', (ev) => {
+            if (ev.target === ws) ws.classList.remove('is-drop-target');
+        });
+        ws.addEventListener('drop', (ev) => {
+            ev.preventDefault();
+            ws.classList.remove('is-drop-target');
+            const idFromData = ev.dataTransfer && ev.dataTransfer.getData('text/x-element-key');
+            const k = idFromData || dragSourceKey;
+            if (!k) return;
+            placeIntoSlots(k);
+        });
+    }
+
+    function placeIntoSlots(k) {
+        if (state.comboInFlight) return;
+        if (!state.elements[k]) return;
+        if (state.slots.length >= 2) return;
+        state.slots.push(k);
+        renderWorkspace();
+        if (state.slots.length === 2) combineSlots();
+    }
+
+    function removeFromSlots(index) {
+        if (state.comboInFlight) return;
+        state.slots.splice(index, 1);
+        renderWorkspace();
+    }
+
+    function resetSlots() { state.slots = []; renderWorkspace(); }
+
+    // ------------------------------------------------------------------
+    // Search
+    // ------------------------------------------------------------------
+    let searchQuery = '';
+    function wireSearch() {
+        document.getElementById('searchInput').addEventListener('input', (ev) => {
+            searchQuery = ev.target.value.trim().toLowerCase();
+            renderGrid();
+        });
+    }
+
+    // ------------------------------------------------------------------
+    // Rendering
+    // ------------------------------------------------------------------
+    function renderAll() {
+        renderGrid();
+        renderWorkspace();
+        renderHistory();
+    }
+
+    function isStarter(k) { return STARTERS.some(s => nameKey(s.name) === k); }
+
+    function renderGrid() {
+        const host = document.getElementById('elementsGrid');
+        const counter = document.getElementById('elementCount');
+        host.innerHTML = '';
+        const allKeys = Object.keys(state.elements);
+        // Sort: starters first, then newest createdAt first
+        allKeys.sort((ka, kb) => {
+            const sa = isStarter(ka) ? 0 : 1;
+            const sb = isStarter(kb) ? 0 : 1;
+            if (sa !== sb) return sa - sb;
+            return (state.elements[kb].createdAt || 0) - (state.elements[ka].createdAt || 0);
+        });
+        const filtered = searchQuery
+            ? allKeys.filter(k => state.elements[k].name.toLowerCase().includes(searchQuery))
+            : allKeys;
+
+        counter.textContent = allKeys.length + ' total';
+
+        if (!filtered.length) {
+            host.classList.add('is-empty');
+            host.textContent = 'No matches.';
+            return;
+        }
+        host.classList.remove('is-empty');
+        const frag = document.createDocumentFragment();
+        for (const k of filtered) {
+            frag.appendChild(buildCard(k, { size: 'sm', context: 'grid' }));
+        }
+        host.appendChild(frag);
+    }
+
+    function renderWorkspace() {
+        const host = document.getElementById('slots');
+        const hint = document.getElementById('workspaceHint');
+        const actions = document.getElementById('workspaceActions');
+        host.innerHTML = '';
+        actions.innerHTML = '';
+
+        hint.style.display = state.slots.length === 0 ? 'block' : 'none';
+
+        const inFlight = !!state.comboInFlight;
+
+        for (let i = 0; i < state.slots.length; i++) {
+            const k = state.slots[i];
+            const el = state.elements[k];
+            if (!el) continue;
+            const card = buildCard(k, { size: 'lg', context: 'slot', slotIndex: i });
+            if (inFlight) card.classList.add('shimmer');
+            host.appendChild(card);
+            if (i === 0) {
+                const plus = document.createElement('span');
+                plus.className = 'plus';
+                plus.textContent = '+';
+                plus.setAttribute('aria-hidden', 'true');
+                host.appendChild(plus);
+                if (state.slots.length < 2) {
+                    const empty = document.createElement('div');
+                    empty.className = 'card size-lg';
+                    empty.style.opacity = '0.35';
+                    empty.style.cursor = 'default';
+                    empty.style.borderStyle = 'dashed';
+                    const eEmoji = document.createElement('div');
+                    eEmoji.className = 'emoji'; eEmoji.textContent = '➕';
+                    const eName  = document.createElement('div');
+                    eName.className = 'name'; eName.textContent = 'Drop another';
+                    empty.appendChild(eEmoji); empty.appendChild(eName);
+                    host.appendChild(empty);
+                }
+            }
+        }
+
+        if (state.lastError) {
+            const banner = document.createElement('div');
+            banner.className = 'error-banner';
+            const msg = document.createElement('span');
+            msg.textContent = 'Couldn\'t combine these — ' + state.lastError;
+            const grp = document.createElement('div');
+            grp.style.display = 'flex'; grp.style.gap = '8px';
+            const retry = document.createElement('button');
+            retry.className = 'btn'; retry.type = 'button';
+            retry.textContent = 'Retry';
+            retry.addEventListener('click', () => {
+                state.lastError = null;
+                if (state.slots.length === 2) { renderWorkspace(); combineSlots(); }
+                else renderWorkspace();
+            });
+            const clear = document.createElement('button');
+            clear.className = 'btn'; clear.type = 'button';
+            clear.textContent = 'Clear';
+            clear.addEventListener('click', () => {
+                state.lastError = null; state.slots = []; renderWorkspace();
+            });
+            grp.appendChild(retry); grp.appendChild(clear);
+            banner.appendChild(msg); banner.appendChild(grp);
+            actions.appendChild(banner);
+        }
+    }
+
+    function renderHistory() {
+        const host = document.getElementById('historyStrip');
+        host.innerHTML = '';
+        for (const k of state.history) {
+            if (!state.elements[k]) continue;
+            host.appendChild(buildCard(k, { size: 'sm', context: 'history' }));
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Card builder
+    // ------------------------------------------------------------------
+    function buildCard(k, opts) {
+        opts = opts || {};
+        const el = state.elements[k];
+        const size = opts.size || 'sm';
+        const context = opts.context || 'grid';
+        const card = document.createElement('div');
+        card.className = 'card size-' + size;
+        card.setAttribute('draggable', 'true');
+        card.setAttribute('role', 'button');
+        card.setAttribute('tabindex', '0');
+        card.dataset.elementKey = k;
+        if (context === 'grid') card.dataset.gridCard = k;
+
+        const emoji = document.createElement('div');
+        emoji.className = 'emoji';
+        emoji.textContent = el.emoji || '✨';
+        const name = document.createElement('div');
+        name.className = 'name';
+        name.textContent = el.name;
+        card.appendChild(emoji);
+        card.appendChild(name);
+
+        // Discoverer chip (skip starters)
+        if (el.discoveredBy && el.discoveredBy !== 'starter') {
+            const chip = document.createElement('div');
+            chip.className = 'discoverer';
+            const isMe = el.discoveredBy === state.userId;
+            if (isMe) chip.classList.add('is-me');
+            chip.textContent = initialsFor(el.discoveredBy);
+            chip.title = isMe ? 'Discovered by you' : 'Discovered by ' + el.discoveredBy;
+            card.appendChild(chip);
+        }
+
+        card.addEventListener('dragstart', (ev) => {
+            dragSourceKey = k;
+            try {
+                ev.dataTransfer.setData('text/x-element-key', k);
+                ev.dataTransfer.setData('text/plain', el.name);
+            } catch (e) { /* swallow */ }
+            ev.dataTransfer.effectAllowed = 'copy';
+            card.classList.add('dragging');
+        });
+        card.addEventListener('dragend', () => {
+            dragSourceKey = null;
+            card.classList.remove('dragging');
+        });
+
+        card.addEventListener('click', (ev) => {
+            ev.stopPropagation();
+            if (context === 'slot') removeFromSlots(opts.slotIndex || 0);
+            else placeIntoSlots(k);
+        });
+        card.addEventListener('keydown', (ev) => {
+            if (ev.key === 'Enter' || ev.key === ' ') {
+                ev.preventDefault();
+                if (context === 'slot') removeFromSlots(opts.slotIndex || 0);
+                else placeIntoSlots(k);
+            }
+        });
+
+        if (el.description) wireTooltip(card, el.description + (el.discoveredBy && el.discoveredBy !== 'starter' && el.discoveredBy !== state.userId ? '\n— ' + el.discoveredBy : ''));
+        return card;
+    }
+
+    function initialsFor(uid) {
+        // "anon-abc12d" -> "ab"
+        const tail = String(uid).replace(/^anon-/, '');
+        return (tail.slice(0, 2) || '??').toUpperCase();
+    }
+
+    // ------------------------------------------------------------------
+    // Tooltip
+    // ------------------------------------------------------------------
+    function wireTooltip(target, text) {
+        target.addEventListener('mouseenter', () => showTooltip(target, text));
+        target.addEventListener('mouseleave', hideTooltip);
+        target.addEventListener('focus', () => showTooltip(target, text));
+        target.addEventListener('blur', hideTooltip);
+        let pressTimer = null;
+        target.addEventListener('touchstart', () => {
+            pressTimer = setTimeout(() => showTooltip(target, text), 450);
+        }, { passive: true });
+        target.addEventListener('touchend', () => { clearTimeout(pressTimer); hideTooltip(); });
+        target.addEventListener('touchmove', () => { clearTimeout(pressTimer); hideTooltip(); }, { passive: true });
+    }
+    function showTooltip(target, text) {
+        const tip = document.getElementById('tooltip');
+        tip.textContent = text;
+        const rect = target.getBoundingClientRect();
+        const tipW = 220;
+        let left = rect.left + rect.width / 2 - tipW / 2;
+        left = Math.max(8, Math.min(window.innerWidth - tipW - 8, left));
+        const top = rect.bottom + 8;
+        tip.style.left = left + 'px';
+        tip.style.top = top + 'px';
+        tip.style.maxWidth = tipW + 'px';
+        tip.classList.add('is-visible');
+        tip.setAttribute('aria-hidden', 'false');
+    }
+    function hideTooltip() {
+        const tip = document.getElementById('tooltip');
+        tip.classList.remove('is-visible');
+        tip.setAttribute('aria-hidden', 'true');
+    }
+
+    // ------------------------------------------------------------------
+    // Toasts
+    // ------------------------------------------------------------------
+    function showToast(text, opts) {
+        opts = opts || {};
+        const host = document.getElementById('toastHost');
+        const t = document.createElement('div');
+        t.className = 'toast' + (opts.isDiscovery ? ' is-discovery' : '') + (opts.isInfo ? ' is-info' : '');
+        t.textContent = text;
+        host.appendChild(t);
+        setTimeout(() => { if (t.parentNode) t.parentNode.removeChild(t); }, 3100);
+    }
+
+    // ------------------------------------------------------------------
+    // Shared discovery cache (JSONBlob) - read on boot, debounced PUT
+    // ------------------------------------------------------------------
+    async function initSync() {
+        setSyncState('idle', 'Connecting…');
+        if (!state.blobId) {
+            // SHARED_BLOB_ID was the literal placeholder; bootstrap a fresh
+            // blob so end users still get sync, and surface the new id.
+            await bootstrapFreshBlob();
+        }
+        if (!state.blobId) {
+            setSyncState('off', 'Offline');
+            return;
+        }
+        try {
+            await doRemoteRefresh();
+            setSyncState('ok', 'Synced');
+        } catch (err) {
+            setSyncState('off', 'Offline');
+            logEntry('error', { kind: 'sync.boot.get', blobId: state.blobId },
+                     { message: String(err && err.message || err) });
+        }
+    }
+
+    async function bootstrapFreshBlob() {
+        const t0 = performance.now();
+        try {
+            const ctrl = new AbortController();
+            const timer = setTimeout(() => ctrl.abort(), SYNC_TIMEOUT_MS);
+            const initial = JSON.stringify({ schema: 1, elements: {}, combos: {} });
+            const resp = await fetch(JSONBLOB_BASE, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                body: initial,
+                signal: ctrl.signal
+            });
+            clearTimeout(timer);
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+            // The server sets Location: /api/jsonBlob/{id} but a few CORS
+            // setups strip it; also expose x-jsonblob-id. Try both.
+            const loc = resp.headers.get('location') || resp.headers.get('Location');
+            const direct = resp.headers.get('x-jsonblob-id');
+            let id = direct;
+            if (!id && loc) {
+                const m = loc.match(/jsonBlob\/([^/?#]+)/i);
+                if (m) id = m[1];
+            }
+            if (!id) throw new Error('Bootstrap: blob id missing in response headers');
+            state.blobId = id;
+            localStorage.setItem(LS_BLOB_ID, id);
+            logEntry('sync', { kind: 'bootstrap.post' }, { blobId: id }, performance.now() - t0);
+            renderBootstrapBanner(id);
+        } catch (err) {
+            logEntry('error', { kind: 'bootstrap.post' }, { message: String(err && err.message || err) },
+                     performance.now() - t0);
+        }
+    }
+
+    function renderBootstrapBanner(id) {
+        const host = document.getElementById('bootstrapHost');
+        host.innerHTML = '';
+        const div = document.createElement('div');
+        div.className = 'bootstrap-banner';
+        const row1 = document.createElement('div');
+        row1.className = 'row';
+        const msg = document.createElement('span');
+        msg.innerHTML = 'Created a fresh shared cache. Replace <code>SHARED_BLOB_ID</code> in the source with this id and commit:';
+        row1.appendChild(msg);
+        const close = document.createElement('button');
+        close.className = 'btn close';
+        close.type = 'button';
+        close.textContent = 'Dismiss';
+        close.addEventListener('click', () => { host.innerHTML = ''; });
+        row1.appendChild(close);
+
+        const row2 = document.createElement('div');
+        row2.className = 'row';
+        const idEl = document.createElement('code');
+        idEl.textContent = id;
+        const copyBtn = document.createElement('button');
+        copyBtn.className = 'btn';
+        copyBtn.type = 'button';
+        copyBtn.textContent = 'Copy id';
+        copyBtn.addEventListener('click', async () => {
+            let ok = false;
+            try {
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    await navigator.clipboard.writeText(id);
+                    ok = true;
+                }
+            } catch (e) { /* fallthrough */ }
+            if (!ok) {
+                const ta = document.createElement('textarea');
+                ta.value = id;
+                document.body.appendChild(ta); ta.select();
+                try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+                document.body.removeChild(ta);
+            }
+            showToast(ok ? 'Blob id copied' : 'Copy failed', { isInfo: true });
+        });
+        row2.appendChild(idEl); row2.appendChild(copyBtn);
+        div.appendChild(row1); div.appendChild(row2);
+        host.appendChild(div);
+    }
+
+    async function doRemoteRefresh() {
+        if (!state.blobId) throw new Error('No blob id');
+        const t0 = performance.now();
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), SYNC_TIMEOUT_MS);
+        try {
+            const resp = await fetch(JSONBLOB_BASE + '/' + encodeURIComponent(state.blobId),
+                { method: 'GET', headers: { 'Accept': 'application/json' }, signal: ctrl.signal });
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+            const remote = await resp.json();
+            mergeRemoteIntoLocal(remote, /*recordKnown*/ true);
+            state.sync.lastSyncAt = Date.now();
+            state.sync.backoffMs = SYNC_BACKOFF_BASE;
+            renderAll();
+            logEntry('sync', { kind: 'get', blobId: state.blobId },
+                     { elements: Object.keys((remote && remote.elements) || {}).length,
+                       combos: Object.keys((remote && remote.combos) || {}).length },
+                     performance.now() - t0);
+            return remote;
+        } finally {
+            clearTimeout(timer);
+        }
+    }
+
+    function mergeRemoteIntoLocal(remote, recordKnown) {
+        if (!remote || typeof remote !== 'object') return;
+        const remoteEls = (remote.elements && typeof remote.elements === 'object') ? remote.elements : {};
+        const remoteCombos = (remote.combos && typeof remote.combos === 'object') ? remote.combos : {};
+
+        // Elements: remote wins when conflict (its emoji is the canonical
+        // one for that name). Local-only elements are kept.
+        for (const k of Object.keys(remoteEls)) {
+            const r = remoteEls[k];
+            if (!r || !r.name || !r.emoji) continue;
+            state.elements[k] = {
+                name: r.name,
+                emoji: r.emoji,
+                description: r.description || '',
+                parents: r.parents || null,
+                createdAt: r.discoveredAt || r.createdAt || 0,
+                discoveredBy: r.discoveredBy || 'unknown'
+            };
+            if (recordKnown) state.sync.knownRemoteNames.add(k);
+        }
+        // Combos: remote wins for known keys
+        for (const cKey of Object.keys(remoteCombos)) {
+            const target = remoteCombos[cKey];
+            if (target && state.elements[target]) state.combos[cKey] = target;
+        }
+        writeJSON(LS_ELEMENTS, state.elements);
+        writeJSON(LS_COMBOS, state.combos);
+    }
+
+    function buildLocalUploadPayload() {
+        const elements = {};
+        for (const k of Object.keys(state.elements)) {
+            const el = state.elements[k];
+            if (isStarter(k)) continue; // skip starters in remote payload
+            elements[k] = {
+                name: el.name,
+                emoji: el.emoji,
+                description: el.description || '',
+                parents: el.parents || null,
+                discoveredAt: el.createdAt || Date.now(),
+                discoveredBy: el.discoveredBy || state.userId
+            };
+        }
+        return { schema: 1, elements: elements, combos: { ...state.combos } };
+    }
+
+    function scheduleSyncPush() {
+        state.sync.dirty = true;
+        if (state.sync.state !== 'off') setSyncState('pending', 'Syncing…');
+        if (state.sync.putTimer) return;
+        state.sync.putTimer = setTimeout(() => {
+            state.sync.putTimer = null;
+            flushSyncNow();
+        }, SYNC_DEBOUNCE_MS);
+    }
+
+    async function flushSyncNow() {
+        if (!state.blobId) return;
+        if (state.sync.putInFlight) return;
+        if (!state.sync.dirty) return;
+        state.sync.putInFlight = true;
+        setSyncState('pending', 'Syncing…');
+        const t0 = performance.now();
+        try {
+            // Read-modify-write: GET, merge remote into local, then PUT
+            const remote = await doRemoteRefresh().catch((e) => {
+                // Don't fail the whole flush if GET fails - we'll PUT what we have
+                logEntry('error', { kind: 'sync.preput.get' }, { message: String(e && e.message || e) });
+                return null;
+            });
+            const payload = buildLocalUploadPayload();
+            const ctrl = new AbortController();
+            const timer = setTimeout(() => ctrl.abort(), SYNC_TIMEOUT_MS);
+            try {
+                const resp = await fetch(JSONBLOB_BASE + '/' + encodeURIComponent(state.blobId), {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                    body: JSON.stringify(payload),
+                    signal: ctrl.signal
+                });
+                if (!resp.ok) throw new Error('HTTP ' + resp.status);
+                state.sync.dirty = false;
+                state.sync.lastSyncAt = Date.now();
+                state.sync.backoffMs = SYNC_BACKOFF_BASE;
+                setSyncState('ok', 'Synced');
+                logEntry('sync', { kind: 'put', blobId: state.blobId,
+                                   elements: Object.keys(payload.elements).length,
+                                   combos: Object.keys(payload.combos).length },
+                         { ok: true }, performance.now() - t0);
+                // Mark all uploaded names as remote-known so future cache
+                // hits don't fire "First Discovery!"
+                for (const k of Object.keys(payload.elements)) state.sync.knownRemoteNames.add(k);
+            } finally {
+                clearTimeout(timer);
+            }
+        } catch (err) {
+            logEntry('error', { kind: 'sync.put' },
+                     { message: String(err && err.message || err) }, performance.now() - t0);
+            setSyncState('off', 'Offline');
+            // Backoff retry
+            const retry = Math.min(state.sync.backoffMs, SYNC_BACKOFF_MAX_MS);
+            state.sync.backoffMs = Math.min(state.sync.backoffMs * 2, SYNC_BACKOFF_MAX_MS);
+            setTimeout(() => {
+                if (state.sync.dirty) {
+                    setSyncState('pending', 'Retrying…');
+                    flushSyncNow();
+                }
+            }, retry);
+        } finally {
+            state.sync.putInFlight = false;
+        }
+    }
+
+})();
+</script>
+</body>
+</html>
