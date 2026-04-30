@@ -1270,58 +1270,29 @@ input, button { -webkit-tap-highlight-color: transparent; }
         ].join('\n');
     }
 
-    // Last-resort lookup: takes the model's chosen NAME, scores every emoji
-    // by how well its slug (`:fire:`, `:sun_with_face:`) matches the name's
-    // tokens (after expanding through a small cross-concept synonym map),
-    // and returns the highest-scoring emoji that isn't already used.
+    // Last-resort lookup: scores every emoji's emojibase-data label+tags
+    // against the model's chosen NAME and returns the best unused match.
+    // emojibase ships ~3700 emojis each with ~5-15 tags ("fire","flame",
+    // "hot","tool",...) - that IS the 11k+ word correspondence dataset,
+    // baked into the emoji metadata. No hand-coded synonym map.
     // Triggered ONLY when local retries + puter rescue both fail.
-    const EMOJI_DATA_URL = 'https://cdn.jsdelivr.net/npm/unicode-emoji-json@0.6.0/data-by-emoji.json';
+    const EMOJI_DATA_URL = 'https://cdn.jsdelivr.net/npm/emojibase-data@latest/en/data.json';
     let emojiDataPromise = null;
     function loadEmojiData() {
         if (!emojiDataPromise) {
-            emojiDataPromise = fetch(EMOJI_DATA_URL).then(r => r.json()).catch(e => {
-                logEntry('error', { kind: 'emoji.data.load' }, { message: String(e && e.message || e) });
-                return null;
-            });
+            emojiDataPromise = fetch(EMOJI_DATA_URL)
+                .then(r => r.json())
+                .then(arr => arr.filter(e => e.tags && e.tags.length))
+                .catch(e => {
+                    logEntry('error', { kind: 'emoji.data.load' }, { message: String(e && e.message || e) });
+                    return null;
+                });
         }
         return emojiDataPromise;
     }
 
-    // Cross-concept fallback (sun -> fire if sun is taken). Tiny on purpose:
-    // covers the most common element-game adjacencies. Anything not here
-    // still resolves via direct slug match.
-    const EMOJI_SYNONYMS = {
-        sun:['fire','light','bright','star'], fire:['flame','sun','hot','burn','spark','volcano'],
-        water:['rain','liquid','wet','wave','sea'], rain:['water','storm','cloud','drop'],
-        earth:['ground','soil','land','globe','dirt'], wind:['air','breeze','storm','blow'],
-        air:['wind','sky','breeze'], snow:['ice','cold','frost','winter'],
-        ice:['snow','cold','frost','crystal'], rock:['stone','mountain','boulder'],
-        stone:['rock','mountain'], mountain:['rock','peak','hill'],
-        cloud:['sky','fog','weather','smoke'], storm:['rain','lightning','thunder','wind'],
-        thunder:['lightning','storm'], plant:['tree','leaf','grass','flower','sprout','seed'],
-        tree:['plant','wood','forest','log'], wood:['tree','log','plank'],
-        flower:['plant','rose','bloom','blossom'], grass:['plant','leaf','green'],
-        person:['human','man','woman','people','figure'], human:['person','people','man','woman'],
-        man:['person','human','male'], woman:['person','human','female'],
-        baby:['infant','child','newborn'], child:['kid','boy','girl','baby'],
-        death:['skull','grave','dead','dying'], life:['heart','plant','sprout'],
-        light:['sun','lamp','bulb','star','bright'], dark:['night','shadow','black'],
-        metal:['iron','steel','gear','tool'], smoke:['cloud','fog','fire','steam'],
-        steam:['cloud','fog','water','vapor'], lava:['fire','volcano','magma'],
-        magma:['fire','volcano','lava'], heart:['love'], love:['heart'],
-        food:['meal','bread','fruit','dinner'], drink:['water','tea','coffee','beverage']
-    };
-
     function tokenizeName(s) {
         return String(s || '').toLowerCase().split(/[^a-z]+/).filter(t => t.length >= 3);
-    }
-    function expandWithSynonyms(tokens) {
-        const out = new Set(tokens);
-        for (const t of tokens) {
-            const syns = EMOJI_SYNONYMS[t];
-            if (syns) for (const s of syns) out.add(s);
-        }
-        return out;
     }
 
     async function pickFallbackEmoji(name, banSet) {
@@ -1329,22 +1300,26 @@ input, button { -webkit-tap-highlight-color: transparent; }
         if (!tokens.length) return null;
         const data = await loadEmojiData();
         if (!data) return null;
-        const expanded = expandWithSynonyms(tokens);
         const bans = banSet instanceof Set ? banSet : new Set(banSet || []);
         let best = null;
         let bestScore = 0;
-        let bestSlugLen = Infinity;
-        for (const emoji in data) {
-            if (bans.has(emoji)) continue;
-            const slug = String((data[emoji] && data[emoji].slug) || '').toLowerCase();
-            if (!slug) continue;
-            const slugTokens = slug.split(/[^a-z]+/).filter(Boolean);
+        let bestRank = Infinity;
+        for (const entry of data) {
+            const emoji = entry.emoji;
+            if (!emoji || bans.has(emoji)) continue;
+            const label = String(entry.label || '').toLowerCase();
+            const tags = entry.tags || [];
             let score = 0;
-            for (const st of slugTokens) if (expanded.has(st)) score++;
-            // Direct-token matches outweigh synonym matches (rough boost).
-            for (const t of tokens) if (slug.includes(t)) score++;
-            if (score > bestScore || (score === bestScore && slug.length < bestSlugLen)) {
-                best = emoji; bestScore = score; bestSlugLen = slug.length;
+            for (const t of tokens) {
+                if (label === t) score += 3;
+                else if (label.includes(t)) score += 1;
+                if (tags.indexOf(t) !== -1) score += 2;
+            }
+            // Tie-break: prefer earlier-ordered (more canonical) emojis
+            // and shorter labels (more focused matches).
+            const rank = (entry.order || 9999) + label.length;
+            if (score > bestScore || (score === bestScore && rank < bestRank)) {
+                best = emoji; bestScore = score; bestRank = rank;
             }
         }
         return bestScore > 0 ? best : null;
