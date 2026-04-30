@@ -990,6 +990,16 @@ input, button { -webkit-tap-highlight-color: transparent; }
     // (e.g. "Dust + Water", "Steam Plant", "Smoke + Earth"). Used at boot to
     // prune historical bad entries from local cache and from the seed-merge
     // pass, so the validator-fix retroactively cleans them up.
+    // True when the emoji string is plain text (LLM returned the word "dry"
+    // instead of a glyph), or empty.
+    function isBadEmoji(emoji) {
+        const e = String(emoji || '').trim();
+        if (!e) return true;
+        try {
+            return !/\p{Extended_Pictographic}/u.test(e);
+        } catch (_) { return false; }
+    }
+
     function isLazyConcatName(name, parents) {
         const n = String(name || '').trim();
         if (!n) return true;
@@ -1016,7 +1026,7 @@ input, button { -webkit-tap-highlight-color: transparent; }
         for (const [k, el] of Object.entries(state.elements)) {
             if (isStarter(k)) continue;
             if (!el) { drop.push(k); continue; }
-            if (isLazyConcatName(el.name, el.parents)) drop.push(k);
+            if (isLazyConcatName(el.name, el.parents) || isBadEmoji(el.emoji)) drop.push(k);
         }
         if (!drop.length) return 0;
         const dropSet = new Set(drop);
@@ -2498,7 +2508,7 @@ input, button { -webkit-tap-highlight-color: transparent; }
         for (const k of Object.keys(remoteEls)) {
             const r = remoteEls[k];
             if (!r || !r.name || !r.emoji) continue;
-            if (isLazyConcatName(r.name, r.parents)) continue;
+            if (isLazyConcatName(r.name, r.parents) || isBadEmoji(r.emoji)) continue;
             state.elements[k] = {
                 name: r.name,
                 emoji: r.emoji,
