@@ -1499,34 +1499,36 @@ input, button { -webkit-tap-highlight-color: transparent; }
                 throw err;
             }
         }
-        // Semantic-group fallback: keep the LLM's last-rejected name (often a
-        // good real-world concept) and substitute a related-but-unused emoji
-        // from the same hand-curated group. Skip if the LLM's name was itself
-        // lazy ("Steam + Wind") - we don't want to preserve that.
-        if (lastRejected && !isLazyConcatName(lastRejected.name, [a.name, b.name])) {
-            const used = new Set();
-            for (const k of Object.keys(state.elements)) {
-                const el = state.elements[k];
-                if (el && el.emoji) used.add(el.emoji);
+        // Puter rescue: local retries are exhausted (and were all
+        // validation-rejected, so puter never got a turn via fetchTextGET).
+        // Give puter one direct shot with the same prompt - it picks emoji
+        // that match the name far better than local 2B.
+        try {
+            const rescueSys = buildSysPrompt(buildBanList(triedRejections));
+            const rescueUser = buildUserPrompt(a, b);
+            const t0 = performance.now();
+            const content = await tryPuterChat(rescueSys, rescueUser, 'gpt-4o-mini', TEXT_TIMEOUT_MS);
+            const elapsed = performance.now() - t0;
+            const parsed = parseLooseJSON(content);
+            const v = validateLLMResult(parsed);
+            const resKey = v.ok ? nameKey(v.element.name) : null;
+            const aKey = nameKey(a.name), bKey = nameKey(b.name);
+            const lazyConcat = v.ok && isLazyConcatName(v.element.name, [a.name, b.name]) && resKey !== aKey && resKey !== bKey;
+            const sameAsInput = v.ok && (resKey === aKey || resKey === bKey);
+            if (v.ok && !lazyConcat && !sameAsInput) {
+                logEntry('text', { kind: 'combine.puter-rescue', a: a.name, b: b.name },
+                         { path: 'puter', raw: content, accepted: v.element }, elapsed);
+                state.comboAttempts.push({ n: state.comboAttempts.length + 1, path: 'puter', elapsedMs: elapsed, ok: true });
+                renderWorkspace();
+                return v.element;
             }
-            const related = findRelatedUnusedEmoji(lastRejected.emoji, used);
-            if (related) {
-                logEntry('text', { kind: 'combine.semantic-fallback', a: a.name, b: b.name },
-                         { swapped: lastRejected.emoji + ' -> ' + related,
-                           name: lastRejected.name });
-                return {
-                    name: prettifyName(lastRejected.name),
-                    emoji: related,
-                    description: lastRejected.description
-                                 || ('A combination of ' + a.name + ' and ' + b.name + '.')
-                };
-            }
+            logEntry('text', { kind: 'combine.puter-rescue', a: a.name, b: b.name },
+                     { path: 'puter', raw: content, rejected: v.reason || (sameAsInput ? 'same as input' : (lazyConcat ? 'lazy concat' : 'invalid')) }, elapsed);
+        } catch (e) {
+            logEntry('error', { kind: 'combine.puter-rescue', a: a.name, b: b.name }, { message: String(e && e.message || e) });
         }
-        // Last-resort: throw so the caller surfaces a real error instead of
-        // creating a lazy-concat name like "Water Algae Mix" with the sparkle
-        // emoji. The user retrying after a model warmup typically succeeds.
         logEntry('error', { kind: 'combine', a: a.name, b: b.name },
-                 { message: 'All retries exhausted + semantic fallback empty; surfacing error' });
+                 { message: 'Local retries + puter rescue all failed; surfacing error' });
         throw new Error('Could not produce a valid result for ' + a.name + ' + ' + b.name + ' (try again).');
     }
 
@@ -2367,8 +2369,25 @@ input, button { -webkit-tap-highlight-color: transparent; }
             }
         });
 
-        if (el.description) wireTooltip(card, el.description + (el.discoveredBy && el.discoveredBy !== 'starter' && el.discoveredBy !== state.userId ? '\nby ' + el.discoveredBy : ''));
+        const tipText = buildTooltipText(el);
+        if (tipText) wireTooltip(card, tipText);
         return card;
+    }
+
+    function buildTooltipText(el) {
+        const parts = [];
+        if (el.parents && el.parents.length === 2) {
+            const pa = state.elements[nameKey(el.parents[0])];
+            const pb = state.elements[nameKey(el.parents[1])];
+            const aLabel = pa ? (pa.name + ' ' + pa.emoji) : el.parents[0];
+            const bLabel = pb ? (pb.name + ' ' + pb.emoji) : el.parents[1];
+            parts.push(aLabel + ' + ' + bLabel);
+        }
+        if (el.description) parts.push(el.description);
+        if (el.discoveredBy && el.discoveredBy !== 'starter' && el.discoveredBy !== state.userId) {
+            parts.push('by ' + el.discoveredBy);
+        }
+        return parts.join('\n');
     }
 
     function initialsFor(uid) {
