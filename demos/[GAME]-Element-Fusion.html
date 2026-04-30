@@ -1270,6 +1270,97 @@ input, button { -webkit-tap-highlight-color: transparent; }
         ].join('\n');
     }
 
+    // Hardcoded last-resort lookup: name -> emoji[] in priority order. Used
+    // ONLY when local retries + puter rescue both fail. Picks the first
+    // alternate that is not in the current ban list, so duplicates against
+    // already-used emojis are never produced.
+    const NAME_EMOJIS = {
+        water:['💧','🌊','💦','🚰'], fire:['🔥','🌋','🎆'],
+        earth:['🌍','🌎','🌏','🌐'], wind:['🌬️','💨','🌪️'], air:['🌬️','💨','🪁'],
+        rain:['🌧️','☔'], storm:['⛈️','🌩️','🌪️'], thunder:['⚡','🌩️'], lightning:['⚡','🌩️'],
+        cloud:['☁️','⛅'], fog:['🌫️'], mist:['🌫️'], haze:['🌫️'], smog:['🌫️','💨'],
+        snow:['❄️','🌨️','☃️','⛄'], ice:['🧊','❄️'], frost:['❄️','🧊'], hail:['🌨️','🧊'],
+        mountain:['⛰️','🏔️','🗻'], rock:['🪨','🗿','⛰️'], stone:['🪨','🗿'], boulder:['🪨','⛰️'],
+        volcano:['🌋'], lava:['🌋','🔥'], magma:['🌋','🔥'], cave:['🪨','⛰️'],
+        sand:['🏖️','🏝️'], dust:['💨','🌪️'], mud:['🟫'], dirt:['🟫'], clay:['🟫','🧱'],
+        ash:['🌫️','💨'], soot:['🌫️','💨'], ember:['🔥','✨'], spark:['✨','⚡'],
+        coal:['⬛','🪨'], steam:['💨','♨️'], smoke:['💨','🌫️'], vapor:['💨','♨️'],
+        flame:['🔥'], inferno:['🔥','🌋'], bonfire:['🔥','🪵'],
+        ocean:['🌊','🐚'], sea:['🌊'], river:['🏞️','🌊'], lake:['🏞️'], pond:['🏞️','🪷'],
+        wave:['🌊'], waterfall:['🌊','🏞️'], swamp:['🐊','🟩'], spring:['🌊','💧'],
+        sky:['🌌','🌠'], sun:['☀️','🌞','🔆'], moon:['🌙','🌝','🌛','🌜'],
+        star:['⭐','🌟','✨','💫'], galaxy:['🌌','🌠'], space:['🪐','🚀','🌌'],
+        planet:['🪐','🌍'], comet:['☄️'], meteor:['☄️'], eclipse:['🌑'],
+        plant:['🌱','🌿','🪴'], tree:['🌳','🌲','🎄','🌴'], forest:['🌲','🌳','🌴'],
+        grass:['🌱','🌿','🍃'], leaf:['🍃','🌿'], flower:['🌸','🌺','🌹','🌷','💐'],
+        seed:['🌱'], sprout:['🌱'], sapling:['🌱','🌳'], wood:['🪵','🌳'], log:['🪵'],
+        fruit:['🍎','🍇','🍊','🍌'], vegetable:['🥕','🥦','🥬'], mushroom:['🍄'],
+        moss:['🌿'], vine:['🌿','🍇'], cactus:['🌵'], herb:['🌿'], spice:['🌶️'],
+        person:['🧑','🧍'], human:['🧑','👤'], people:['👥','🧑','🚶'],
+        man:['👨','🧔'], woman:['👩'], baby:['👶'], infant:['👶'], child:['🧒','👦','👧'],
+        boy:['👦'], girl:['👧'], elder:['👴','👵'], family:['👨‍👩‍👧','👪'],
+        crowd:['👥','🚶'], couple:['💑','👫'],
+        ghost:['👻'], skeleton:['💀','🦴'], zombie:['🧟'], vampire:['🧛'],
+        demon:['👹','😈'], angel:['👼','😇'], god:['🙏','✨'], devil:['😈','👹'],
+        dragon:['🐉','🐲'], unicorn:['🦄'], phoenix:['🔥','🦅'], dinosaur:['🦖','🦕'],
+        animal:['🐾','🦌'], dog:['🐶','🐕'], cat:['🐱','🐈'], horse:['🐎','🐴'],
+        cow:['🐄','🐮'], pig:['🐖','🐷'], sheep:['🐑'], chicken:['🐔','🐣'],
+        bird:['🐦','🦅','🦆'], fish:['🐟','🐠'], shark:['🦈'], whale:['🐳','🐋'],
+        snake:['🐍'], lizard:['🦎'], turtle:['🐢'], frog:['🐸'],
+        bug:['🐛','🐞'], insect:['🐛','🐞'], spider:['🕷️'], bee:['🐝'], butterfly:['🦋'],
+        metal:['⚙️','🔩'], iron:['🔩','⚙️'], steel:['⚙️','🔧'], copper:['🟧','🔶'],
+        gold:['🥇','💰','🪙'], silver:['🥈','🪙'], glass:['🥃','🔍'],
+        oil:['🛢️','🫒'], gas:['💨','🛢️'], fuel:['⛽','🛢️'],
+        salt:['🧂'], sugar:['🍬'], gem:['💎'], diamond:['💎'], crystal:['💎','🔮'],
+        pearl:['🦪','🤍'], ruby:['❤️','💎'], emerald:['💚','💎'],
+        house:['🏠','🏡'], home:['🏠','🏡'], city:['🏙️','🌆'], town:['🏘️'],
+        village:['🏘️'], castle:['🏰'], temple:['⛩️'], church:['⛪'],
+        wall:['🧱'], brick:['🧱'], road:['🛣️'], bridge:['🌉'], tower:['🗼'],
+        ship:['🚢','⛵'], boat:['⛵','🛶'], car:['🚗','🚙'], train:['🚂','🚆'],
+        food:['🍎','🍞','🍱'], bread:['🍞','🥖'], cheese:['🧀'], meat:['🥩','🍖'],
+        egg:['🥚'], honey:['🍯'], soup:['🍲','🥣'], cake:['🍰','🎂'],
+        drink:['🥤','🍹'], wine:['🍷'], beer:['🍺'], coffee:['☕'], tea:['🍵'],
+        milk:['🥛'], juice:['🧃'],
+        sword:['⚔️','🗡️'], shield:['🛡️'], bow:['🏹'], arrow:['🏹'], gun:['🔫'],
+        tool:['🔧','🛠️'], hammer:['🔨','🛠️'], axe:['🪓'], saw:['🪚'], wrench:['🔧'],
+        life:['💖','🌱'], death:['💀','☠️','🪦'], birth:['👶','🌱'],
+        light:['💡','🕯️'], dark:['🌑','🕳️'], shadow:['🌑','🖤'],
+        energy:['⚡','🔋'], power:['⚡','💪'], magic:['✨','🪄','🔮'],
+        sound:['🔊','🎵'], music:['🎵','🎶','🎼'], song:['🎵'], voice:['🗣️'],
+        time:['⏰','⌛','🕰️'], clock:['⏰','🕰️'], calendar:['📅'],
+        love:['❤️','💖','💘'], heart:['❤️','💖'], joy:['😊','🥳'], sadness:['😢','💔'],
+        anger:['😠','💢'], fear:['😱','😨'], hope:['🌟','✨'],
+        blood:['🩸'], bone:['🦴'], skull:['💀','☠️'], feather:['🪶'],
+        eye:['👁️','👀'], hand:['✋','🤚'], foot:['🦶'],
+        book:['📚','📖'], paper:['📄','📃'], money:['💰','💵','💴'],
+        gift:['🎁'], crown:['👑'], ring:['💍'],
+        rainbow:['🌈'], aurora:['🌌','✨']
+    };
+
+    function pickFallbackEmoji(name, banSet) {
+        if (!name) return null;
+        const norm = String(name).trim().toLowerCase();
+        const bans = banSet instanceof Set ? banSet : new Set(banSet || []);
+        const tryList = (list) => {
+            if (!list) return null;
+            for (const e of list) if (!bans.has(e)) return e;
+            return null;
+        };
+        let found = tryList(NAME_EMOJIS[norm]);
+        if (found) return found;
+        for (const t of norm.split(/\s+/)) {
+            if (t === norm) continue;
+            found = tryList(NAME_EMOJIS[t]);
+            if (found) return found;
+        }
+        const singular = norm.replace(/ies$/, 'y').replace(/(ses|xes|zes|ches|shes)$/, m => m.slice(0, -2)).replace(/s$/, '');
+        if (singular !== norm) {
+            found = tryList(NAME_EMOJIS[singular]);
+            if (found) return found;
+        }
+        return null;
+    }
+
     function buildBanList() {
         const set = new Set();
         for (const k of Object.keys(state.elements)) {
@@ -1402,8 +1493,33 @@ input, button { -webkit-tap-highlight-color: transparent; }
         } catch (e) {
             logEntry('error', { kind: 'combine.puter-rescue', a: a.name, b: b.name }, { message: String(e && e.message || e) });
         }
+        // Dictionary fallback: keep the model's last attempted name and pick a
+        // semantically-plausible emoji from NAME_EMOJIS that isn't taken.
+        const lastAssistant = [...messages].reverse().find(m => m.role === 'assistant');
+        if (lastAssistant) {
+            try {
+                const parsed = parseLooseJSON(lastAssistant.content);
+                if (parsed && parsed.name) {
+                    const rawName = String(parsed.name).trim();
+                    const resKey = nameKey(rawName);
+                    const lazyConcat = isLazyConcatName(rawName, [a.name, b.name]) && resKey !== aKey && resKey !== bKey;
+                    const sameAsInput = resKey === aKey || resKey === bKey;
+                    if (rawName && !lazyConcat && !sameAsInput) {
+                        const banSet = new Set(buildBanList());
+                        const fallbackEmoji = pickFallbackEmoji(rawName, banSet);
+                        if (fallbackEmoji) {
+                            logEntry('text', { kind: 'combine.dict-fallback', a: a.name, b: b.name },
+                                     { name: rawName, emoji: fallbackEmoji });
+                            state.comboAttempts.push({ n: state.comboAttempts.length + 1, path: 'dict', elapsedMs: 0, ok: true });
+                            renderWorkspace();
+                            return { name: prettifyName(rawName), emoji: fallbackEmoji, description: '' };
+                        }
+                    }
+                }
+            } catch (_) { /* fall through to error */ }
+        }
         logEntry('error', { kind: 'combine', a: a.name, b: b.name },
-                 { message: 'Local retries + puter rescue all failed; surfacing error' });
+                 { message: 'Local retries + puter rescue + dict fallback all failed; surfacing error' });
         throw new Error('Could not produce a valid result for ' + a.name + ' + ' + b.name + ' (try again).');
     }
 
