@@ -1270,19 +1270,26 @@ input, button { -webkit-tap-highlight-color: transparent; }
         ].join('\n');
     }
 
-    // Last-resort lookup: scores every emoji's emojibase-data label+tags
-    // against the model's chosen NAME and returns the best unused match.
-    // emojibase ships ~3700 emojis each with ~5-15 tags ("fire","flame",
-    // "hot","tool",...) - that IS the 11k+ word correspondence dataset,
-    // baked into the emoji metadata. No hand-coded synonym map.
-    // Triggered ONLY when local retries + puter rescue both fail.
+    // Last-resort emoji lookup: real semantic search via sentence embeddings.
+    //   1. Load emoji metadata (label + tags) from emojibase-data CDN.
+    //   2. Load Xenova/all-MiniLM-L6-v2 (~25MB) via transformers.js.
+    //   3. Embed every emoji's label+tags ONCE; cache the vectors in memory.
+    //   4. For each fallback call, embed the model's chosen NAME and pick
+    //      the unused emoji with highest cosine similarity.
+    // No hardcoded synonym map - cross-concept jumps (sun -> fire when both
+    // are taken) emerge from the embedding space. First call has a one-time
+    // ~25MB download + ~10-30s embed pass; subsequent calls are instant.
     const EMOJI_DATA_URL = 'https://cdn.jsdelivr.net/npm/emojibase-data@latest/en/data.json';
+    const EMBEDDER_MODEL = 'Xenova/all-MiniLM-L6-v2';
     let emojiDataPromise = null;
+    let embedderPromise = null;
+    let emojiVectorsPromise = null;
+
     function loadEmojiData() {
         if (!emojiDataPromise) {
             emojiDataPromise = fetch(EMOJI_DATA_URL)
                 .then(r => r.json())
-                .then(arr => arr.filter(e => e.tags && e.tags.length))
+                .then(arr => arr.filter(e => e.emoji && e.label && e.tags && e.tags.length))
                 .catch(e => {
                     logEntry('error', { kind: 'emoji.data.load' }, { message: String(e && e.message || e) });
                     return null;
@@ -1291,36 +1298,66 @@ input, button { -webkit-tap-highlight-color: transparent; }
         return emojiDataPromise;
     }
 
-    function tokenizeName(s) {
-        return String(s || '').toLowerCase().split(/[^a-z]+/).filter(t => t.length >= 3);
+    function loadEmbedder() {
+        if (!embedderPromise) {
+            embedderPromise = (async () => {
+                logEntry('info', { kind: 'emoji.embed.boot' }, { model: EMBEDDER_MODEL });
+                const mod = await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@latest/+esm');
+                return mod.pipeline('feature-extraction', EMBEDDER_MODEL, { dtype: 'q8' });
+            })().catch(e => {
+                logEntry('error', { kind: 'emoji.embed.boot' }, { message: String(e && e.message || e) });
+                embedderPromise = null;
+                return null;
+            });
+        }
+        return embedderPromise;
+    }
+
+    async function loadEmojiVectors() {
+        if (emojiVectorsPromise) return emojiVectorsPromise;
+        emojiVectorsPromise = (async () => {
+            const data = await loadEmojiData();
+            const embed = await loadEmbedder();
+            if (!data || !embed) return null;
+            const texts = data.map(e => e.label + ' ' + (e.tags || []).slice(0, 6).join(' '));
+            const t0 = performance.now();
+            const BATCH = 64;
+            const vectors = new Array(data.length);
+            for (let i = 0; i < texts.length; i += BATCH) {
+                const batch = texts.slice(i, i + BATCH);
+                const out = await embed(batch, { pooling: 'mean', normalize: true });
+                const dim = out.data.length / batch.length;
+                for (let j = 0; j < batch.length; j++) {
+                    vectors[i + j] = out.data.slice(j * dim, (j + 1) * dim);
+                }
+            }
+            logEntry('info', { kind: 'emoji.embed.ready' }, { count: vectors.length, ms: Math.round(performance.now() - t0) });
+            return { data, vectors };
+        })().catch(e => {
+            logEntry('error', { kind: 'emoji.embed.build' }, { message: String(e && e.message || e) });
+            emojiVectorsPromise = null;
+            return null;
+        });
+        return emojiVectorsPromise;
     }
 
     async function pickFallbackEmoji(name, banSet) {
-        const tokens = tokenizeName(name);
-        if (!tokens.length) return null;
-        const data = await loadEmojiData();
-        if (!data) return null;
+        if (!name) return null;
+        const corpus = await loadEmojiVectors();
+        const embed = await loadEmbedder();
+        if (!corpus || !embed) return null;
         const bans = banSet instanceof Set ? banSet : new Set(banSet || []);
+        const nameOut = await embed(String(name), { pooling: 'mean', normalize: true });
+        const q = nameOut.data;
         let best = null;
-        let bestScore = 0;
-        let bestRank = Infinity;
-        for (const entry of data) {
-            const emoji = entry.emoji;
-            if (!emoji || bans.has(emoji)) continue;
-            const label = String(entry.label || '').toLowerCase();
-            const tags = entry.tags || [];
-            let score = 0;
-            for (const t of tokens) {
-                if (label === t) score += 3;
-                else if (label.includes(t)) score += 1;
-                if (tags.indexOf(t) !== -1) score += 2;
-            }
-            // Tie-break: prefer earlier-ordered (more canonical) emojis
-            // and shorter labels (more focused matches).
-            const rank = (entry.order || 9999) + label.length;
-            if (score > bestScore || (score === bestScore && rank < bestRank)) {
-                best = emoji; bestScore = score; bestRank = rank;
-            }
+        let bestScore = -Infinity;
+        for (let i = 0; i < corpus.data.length; i++) {
+            const emoji = corpus.data[i].emoji;
+            if (bans.has(emoji)) continue;
+            const v = corpus.vectors[i];
+            let dot = 0;
+            for (let k = 0; k < q.length; k++) dot += q[k] * v[k];
+            if (dot > bestScore) { bestScore = dot; best = emoji; }
         }
         return bestScore > 0 ? best : null;
     }
