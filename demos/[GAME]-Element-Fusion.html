@@ -1313,7 +1313,7 @@ input, button { -webkit-tap-highlight-color: transparent; }
             '- You generate the result of combining two elements/objects/people/concepts/characters with following rules:',
             ' - If two inputs would intuitively make a real thing in everyday English, that thing is the answer. Pick the obvious natural-language answer (Water💧+Fire🔥 = Steam💨, Man👨+Woman👩 = Baby👶, Plant🌱+Plant🌱 = Tree🌳). No underscores, no slug-style.',
             ' - do NOT cheat: mash the two input names together as the result ("Dust + Water", "Dust And Water", "DustWater", "Fire Plant" are all WRONG). EXISTING and PLAUSIBLE in real-world concept, NOT invented.',
-            ' - Do NOT use any of this emojy: [current used emojy list: ' + list + ']',
+            ' - Do NOT or be similar to any of these emojy: ' + list,
             '',
             '# Output strcure',
             '- Reply with valid JSON only - no markdown, no commentary using below Schema:',
@@ -1387,6 +1387,7 @@ input, button { -webkit-tap-highlight-color: transparent; }
                 const got = await fetchTextGET(sysPrompt, userPrompt, model, TEXT_TIMEOUT_MS);
                 content = got.content;
                 path = got.path;
+                reqSummary.model = path === 'local' ? 'qwen3.5-2b-local' : (model || 'default');
                 if (!content) throw new Error('Empty content from text API');
                 const parsed = parseLooseJSON(content);
                 const v = validateLLMResult(parsed);
