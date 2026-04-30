@@ -734,7 +734,9 @@ input, button { -webkit-tap-highlight-color: transparent; }
     // Endpoints / constants
     // ------------------------------------------------------------------
     // LLM via puter.ai.chat (JS API, no CORS, no Pollinations rate limit).
-    const TEXT_TIMEOUT_MS = 35000;
+    // Local Qwen3.5-2B with thinking can take 30-90s per call; 120s upper
+    // bound aborts thinking-loop runaways without hanging the UI forever.
+    const TEXT_TIMEOUT_MS = 120000;
     // Models supported by puter.ai.chat. First is default; rotation on retry
     // gives a different upstream if one model errors out. undefined = puter's
     // default (currently gpt-4o-mini equivalent).
@@ -1230,6 +1232,16 @@ input, button { -webkit-tap-highlight-color: transparent; }
                 return { ok: false, reason: 'Emoji field "' + emoji + '" is not an emoji glyph. Use an actual emoji character (e.g. 🟫 for Mud, ☁️ for Cloud).' };
             }
         } catch (_) { /* old engine without \p — fall through, accept anything */ }
+        // Reject multi-grapheme emoji (no more 2-emoji "pair" cheats like
+        // 🌋⛰ or 🌌✨). Single glyph only — forces the model to find a real
+        // unique emoji per concept.
+        try {
+            const seg = new Intl.Segmenter('en', { granularity: 'grapheme' });
+            const clusters = [...seg.segment(emoji)].length;
+            if (clusters > 1) {
+                return { ok: false, reason: 'Emoji "' + emoji + '" is a multi-emoji pair. Pick a SINGLE emoji that represents the concept on its own.' };
+            }
+        } catch (_) { /* no Intl.Segmenter — old browser, skip */ }
 
         const k = nameKey(name);
         if (state.elements[k]) {
@@ -1517,7 +1529,7 @@ input, button { -webkit-tap-highlight-color: transparent; }
         AutoModelForCausalLM,
         InterruptableStoppingCriteria
       } from "https://cdn.jsdelivr.net/npm/@huggingface/transformers@latest/+esm";
-      const MODEL_ID = "onnx-community/Qwen3-0.6B-ONNX";
+      const MODEL_ID = "onnx-community/Qwen3.5-2B-ONNX-OPT";
       let tokenizer = null, model = null, loadingPromise = null, device = "wasm";
       const stopping = new InterruptableStoppingCriteria();
 
@@ -1561,21 +1573,22 @@ input, button { -webkit-tap-highlight-color: transparent; }
           add_generation_prompt: true, return_dict: true, enable_thinking: true
         });
         stopping.reset();
-        // Qwen3 best-practices for thinking mode (HF model card):
-        //   temperature 0.6, top_p 0.95, top_k 20, min_p 0, no greedy decode.
-        //   Output length 32768 (model card explicitly says this).
-        //   Repetition: HF says presence_penalty 1.5 - transformers.js doesn't
-        //   ship presence_penalty, so we use repetition_penalty 1.3 (close
-        //   equivalent), which the user also requested.
+        // Qwen3.5-2B thinking-mode for text tasks (verbatim from HF card):
+        //   temperature 1.0, top_p 0.95, top_k 20, min_p 0, presence_penalty 1.5,
+        //   repetition_penalty 1.0, max_tokens 32768.
+        //   transformers.js has no presence_penalty, so that line is dropped;
+        //   the user explicitly asked for "settings recommend by Qwen" so we
+        //   keep repetition_penalty at the recommended 1.0 even though loops
+        //   are documented as a risk for this size class.
         const output = await model.generate({
           ...inputs,
           max_new_tokens: 32768,
           do_sample: true,
-          temperature: 0.6,
+          temperature: 1.0,
           top_p: 0.95,
           top_k: 20,
           min_p: 0,
-          repetition_penalty: 1.3,
+          repetition_penalty: 1.0,
           stopping_criteria: stopping
         });
         const seqLen = inputs.input_ids.dims[1];
