@@ -994,6 +994,8 @@ input, button { -webkit-tap-highlight-color: transparent; }
         const n = String(name || '').trim();
         if (!n) return true;
         if (/ [+&] | and | with /i.test(n)) return true;
+        // Catch lazy "A B Mix" / "A B Combo" / "A B Hybrid" / "A B Blend"
+        // patterns where A and B are both inputs with a generic suffix.
         if (parents && parents.length === 2) {
             const k = n.toLowerCase();
             const a = String(parents[0] || '').toLowerCase();
@@ -1001,6 +1003,11 @@ input, button { -webkit-tap-highlight-color: transparent; }
             if (k === a || k === b) return true;
             if (k === a + ' ' + b || k === b + ' ' + a) return true;
             if (k === a + b || k === b + a) return true;
+            const suffixes = [' mix', ' combo', ' combination', ' blend', ' hybrid', ' fusion', ' mixture'];
+            for (const s of suffixes) {
+                if (k === a + ' ' + b + s || k === b + ' ' + a + s) return true;
+                if (k === a + s || k === b + s) return true;
+            }
         }
         return false;
     }
@@ -1339,12 +1346,9 @@ input, button { -webkit-tap-highlight-color: transparent; }
                     // with explicit feedback so the LLM picks a real concept.
                     const resKey = nameKey(v.element.name);
                     const aKey = nameKey(a.name), bKey = nameKey(b.name);
-                    const lazyConcat =
-                        / [+&] | and | with /i.test(v.element.name) ||
-                        resKey === (aKey + ' ' + bKey) ||
-                        resKey === (bKey + ' ' + aKey) ||
-                        resKey === (aKey + bKey) ||
-                        resKey === (bKey + aKey);
+                    // Reuse the same heuristic as the boot-prune so accept and
+                    // prune logic stay in sync.
+                    const lazyConcat = isLazyConcatName(v.element.name, [a.name, b.name]) && resKey !== aKey && resKey !== bKey;
                     const sameAsInput = resKey === aKey || resKey === bKey;
                     if (sameAsInput || lazyConcat) {
                         const why = sameAsInput
@@ -1455,15 +1459,12 @@ input, button { -webkit-tap-highlight-color: transparent; }
                 };
             }
         }
-        // Last-resort: sparkle disambiguation.
+        // Last-resort: throw so the caller surfaces a real error instead of
+        // creating a lazy-concat name like "Water Algae Mix" with the sparkle
+        // emoji. The user retrying after a model warmup typically succeeds.
         logEntry('error', { kind: 'combine', a: a.name, b: b.name },
-                 { message: 'Emoji uniqueness failed after retries + semantic fallback; using ✨' });
-        return {
-            name: prettifyName((lastRejected && lastRejected.name) || (a.name + ' ' + b.name + ' Mix')),
-            emoji: '✨',
-            description: (lastRejected && lastRejected.description)
-                         || ('A mix of ' + a.name + ' and ' + b.name + '.')
-        };
+                 { message: 'All retries exhausted + semantic fallback empty; surfacing error' });
+        throw new Error('Could not produce a valid result for ' + a.name + ' + ' + b.name + ' (try again).');
     }
 
     // ----------------------------------------------------------------
