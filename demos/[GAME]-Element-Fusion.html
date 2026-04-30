@@ -1704,21 +1704,27 @@ input, button { -webkit-tap-highlight-color: transparent; }
     // Tries local Qwen3 first (free, on-device). If local isn't ready or
     // errors, falls back to puter.ai.chat. The caller logs `path`.
     async function fetchTextGET(systemPrompt, userPrompt, model, timeoutMs) {
+        let localFailReason = null;
+        if (!localReady) {
+            localFailReason = localBroken ? 'broken' : 'not-ready (model still loading?)';
+        }
         if (localReady && !localBroken) {
             try {
                 const content = await tryLocalChat(systemPrompt, userPrompt, timeoutMs);
                 return { content, path: 'local' };
             } catch (e) {
-                // Fall through to puter for THIS call only. Permanent disable
-                // is reserved for genuinely fatal errors (worker crash / WebGPU
-                // unsupported / OOM). A timeout is transient - the next call
-                // gets another shot at local.
                 const msg = String(e && e.message || e);
+                localFailReason = msg;
                 if (/out of memory|webgpu unsupported|worker dead|worker missing|local broken/i.test(msg)) {
                     localBroken = true;
                 }
                 // Note: 'timed out' no longer trips localBroken.
             }
+        }
+        // Log WHY local was skipped so the user can see in the debug log /
+        // devtools console instead of getting silent puter fallback.
+        if (localFailReason) {
+            logEntry('error', { kind: 'local.fallback' }, { message: 'local skipped, using puter: ' + localFailReason });
         }
         const content = await tryPuterChat(systemPrompt, userPrompt, model, timeoutMs);
         return { content, path: 'puter' };
