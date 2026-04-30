@@ -1573,22 +1573,26 @@ input, button { -webkit-tap-highlight-color: transparent; }
           add_generation_prompt: true, return_dict: true, enable_thinking: true
         });
         stopping.reset();
-        // Qwen3.5-2B thinking-mode for text tasks (verbatim from HF card):
+        // Qwen3.5-2B thinking-mode for text tasks (HF card baseline):
         //   temperature 1.0, top_p 0.95, top_k 20, min_p 0, presence_penalty 1.5,
         //   repetition_penalty 1.0, max_tokens 32768.
-        //   transformers.js has no presence_penalty, so that line is dropped;
-        //   the user explicitly asked for "settings recommend by Qwen" so we
-        //   keep repetition_penalty at the recommended 1.0 even though loops
-        //   are documented as a risk for this size class.
+        //   Two pragmatic deviations from the card:
+        //   (1) max_new_tokens 4096, not 32768 - the card explicitly warns
+        //       that 2B is "more prone to entering thinking loops" and at 32k
+        //       budget the worker truly hangs before the outer timeout fires.
+        //       4096 is plenty for a JSON answer + ~3k tokens of thinking.
+        //   (2) repetition_penalty 1.1 instead of 1.0 - transformers.js doesn't
+        //       support presence_penalty=1.5 (HF rec), so we shift a small
+        //       penalty into repetition_penalty to break n-gram loops.
         const output = await model.generate({
           ...inputs,
-          max_new_tokens: 32768,
+          max_new_tokens: 4096,
           do_sample: true,
           temperature: 1.0,
           top_p: 0.95,
           top_k: 20,
           min_p: 0,
-          repetition_penalty: 1.0,
+          repetition_penalty: 1.1,
           stopping_criteria: stopping
         });
         const seqLen = inputs.input_ids.dims[1];
@@ -1645,6 +1649,12 @@ input, button { -webkit-tap-highlight-color: transparent; }
             const timer = setTimeout(() => {
                 if (localPending.has(id)) {
                     localPending.delete(id);
+                    // Tell the worker to stop the in-flight generation via
+                    // InterruptableStoppingCriteria. Without this the worker
+                    // keeps thinking-looping on a 32k-token budget while the
+                    // outer caller has already given up - and queues new
+                    // requests behind the busy generation.
+                    try { localWorker.postMessage({ type: 'interrupt' }); } catch (_) {}
                     reject(new Error('local timed out'));
                 }
             }, timeoutMs);
