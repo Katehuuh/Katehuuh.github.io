@@ -1573,20 +1573,19 @@ input, button { -webkit-tap-highlight-color: transparent; }
           add_generation_prompt: true, return_dict: true, enable_thinking: true
         });
         stopping.reset();
-        // Qwen3.5-2B thinking-mode for text tasks (HF card baseline):
-        //   temperature 1.0, top_p 0.95, top_k 20, min_p 0, presence_penalty 1.5,
-        //   repetition_penalty 1.0, max_tokens 32768.
-        //   Two pragmatic deviations from the card:
-        //   (1) max_new_tokens 4096, not 32768 - the card explicitly warns
-        //       that 2B is "more prone to entering thinking loops" and at 32k
-        //       budget the worker truly hangs before the outer timeout fires.
-        //       4096 is plenty for a JSON answer + ~3k tokens of thinking.
-        //   (2) repetition_penalty 1.1 instead of 1.0 - transformers.js doesn't
-        //       support presence_penalty=1.5 (HF rec), so we shift a small
-        //       penalty into repetition_penalty to break n-gram loops.
+        // Qwen3.5-2B thinking-mode for text tasks (HF card):
+        //   temperature 1.0, top_p 0.95, top_k 20, min_p 0,
+        //   presence_penalty 1.5, repetition_penalty 1.0, max_tokens 32768.
+        //   Pragmatic deviation: repetition_penalty 1.1 instead of 1.0 -
+        //   transformers.js has no presence_penalty (HF's actual repetition
+        //   mitigation), so we soft-shift a small penalty here to break
+        //   n-gram loops without distorting output.
+        //   max_new_tokens stays at the recommended 32768 - any earlier cut
+        //   would truncate the thinking block. Outer timeout + worker
+        //   interrupt protects against runaway loops.
         const output = await model.generate({
           ...inputs,
-          max_new_tokens: 4096,
+          max_new_tokens: 32768,
           do_sample: true,
           temperature: 1.0,
           top_p: 0.95,
