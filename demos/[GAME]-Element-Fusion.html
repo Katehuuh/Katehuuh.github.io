@@ -1583,32 +1583,24 @@ input, button { -webkit-tap-highlight-color: transparent; }
           { role: "system", content: system },
           { role: "user", content: user }
         ];
-        // Enable thinking so Qwen3-0.6B reasons before answering. The
-        // <think>...</think> block is stripped below before we hand text to
-        // the parser. With thinking enabled the small model actually thinks
-        // about the combination instead of pattern-matching to "Mud".
+        // Thinking disabled: 0.8B's CoT was hallucinating the input emoji
+        // (saw 🔥 as 🔈/🌲/🌅) and tying itself in knots until it produced
+        // multi-emoji junk. Non-thinking mode forces a direct JSON answer.
         const inputs = tokenizer.apply_chat_template(messages, {
-          add_generation_prompt: true, return_dict: true, enable_thinking: true
+          add_generation_prompt: true, return_dict: true, enable_thinking: false
         });
         stopping.reset();
-        // Qwen3.5-0.8B thinking-mode for text tasks (HF card):
-        //   temperature 1.0, top_p 0.95, top_k 20, min_p 0,
-        //   presence_penalty 1.5, repetition_penalty 1.0, max_tokens 32768.
-        //   Same params as 2B; 0.8B is smaller (~500MB) and faster but
-        //   ALSO documented as prone to thinking loops in this size class.
-        //   Pragmatic deviation: repetition_penalty 1.1 instead of 1.0 -
-        //   transformers.js has no presence_penalty (HF's actual repetition
-        //   mitigation), so we soft-shift a small penalty here to break
-        //   n-gram loops without distorting output.
-        //   max_new_tokens stays at the recommended 32768 - any earlier cut
-        //   would truncate the thinking block. Outer timeout + worker
-        //   interrupt protects against runaway loops.
+        // Qwen3 non-thinking sampling (HF card): temperature 0.7, top_p 0.8,
+        // top_k 20, min_p 0, presence_penalty 1.5. transformers.js has no
+        // presence_penalty so we use repetition_penalty 1.1 in its place.
+        // max_new_tokens lowered to 1024 since the answer is a short JSON
+        // and there is no thinking block to budget for.
         const output = await model.generate({
           ...inputs,
-          max_new_tokens: 32768,
+          max_new_tokens: 1024,
           do_sample: true,
-          temperature: 1.0,
-          top_p: 0.95,
+          temperature: 0.7,
+          top_p: 0.8,
           top_k: 20,
           min_p: 0,
           repetition_penalty: 1.1,
