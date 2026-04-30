@@ -1650,6 +1650,13 @@ input, button { -webkit-tap-highlight-color: transparent; }
     // Tries local Qwen3 first (free, on-device). If local isn't ready or
     // errors, falls back to puter.ai.chat. The caller logs `path`.
     async function fetchTextGET(systemPrompt, userPrompt, model, timeoutMs) {
+        // Dev escape: window.FORCE_PUTER skips local entirely. Useful when the
+        // small Qwen3-0.6B is repeating itself and you want the bigger puter
+        // model to break the loop.
+        if (window.FORCE_PUTER === true) {
+            const content = await tryPuterChat(systemPrompt, userPrompt, model, timeoutMs);
+            return { content, path: 'puter' };
+        }
         if (localReady && !localBroken) {
             try {
                 const content = await tryLocalChat(systemPrompt, userPrompt, timeoutMs);
