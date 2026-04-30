@@ -366,8 +366,8 @@ input, button { -webkit-tap-highlight-color: transparent; }
     user-select: none;
     transition: transform var(--transition), background var(--transition), border-color var(--transition);
 }
-.card:hover { transform: translateY(-2px); border-color: var(--border-strong); }
-.card:active { cursor: grabbing; transform: translateY(0) scale(0.97); }
+.card:hover { transform: translateY(-3px) scale(1.05); border-color: var(--border-strong); z-index: 5; }
+.card:active { cursor: grabbing; transform: translateY(0) scale(0.97); z-index: 5; }
 .card.dragging { opacity: 0.4; }
 .card .emoji {
     font-size: 38px;
@@ -474,6 +474,7 @@ input, button { -webkit-tap-highlight-color: transparent; }
     max-height: calc(100dvh - 120px);
     position: sticky;
     top: 78px;
+    overflow-y: auto;
 }
 @media (max-width: 720px) {
     .side-panel { position: static; max-height: none; }
@@ -482,6 +483,8 @@ input, button { -webkit-tap-highlight-color: transparent; }
 .side-title { font-weight: 600; font-size: 14px; }
 .side-count { color: var(--muted); font-size: 12px; }
 
+/* Sticky search keeps the input in view while the grid scrolls. z-index sits
+   below `.card:hover` so a hovered card visually rises ABOVE the search bar. */
 .search {
     display: flex;
     align-items: center;
@@ -490,6 +493,9 @@ input, button { -webkit-tap-highlight-color: transparent; }
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
     padding: 8px 12px;
+    position: sticky;
+    top: 0;
+    z-index: 1;
 }
 .search input {
     flex: 1;
@@ -502,13 +508,13 @@ input, button { -webkit-tap-highlight-color: transparent; }
 }
 .search input::placeholder { color: var(--muted); }
 
+/* Scroll lives on .side-panel; grid is overflow:visible so a hovered card
+   can scale UP and translate UP without the grid clipping its border. */
 .grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
     gap: 10px;
-    overflow-y: auto;
-    padding-right: 4px;
-    padding-bottom: 4px;
+    padding: 4px;
 }
 .grid.is-empty { color: var(--muted); font-size: 13px; padding: 12px; }
 
