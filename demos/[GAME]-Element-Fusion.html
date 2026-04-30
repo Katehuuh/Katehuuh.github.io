@@ -1154,6 +1154,14 @@ input, button { -webkit-tap-highlight-color: transparent; }
         state.debug.push(entry);
         while (state.debug.length > DEBUG_MAX) state.debug.shift();
         writeJSON(LS_DEBUG, state.debug);
+        // Mirror to Chrome DevTools console with the FULL raw model output
+        // visible (no truncation). Use the right level so devtools filter
+        // dropdown can pick it out.
+        const head = '[ef] ' + kind +
+            (requestSummary && requestSummary.kind ? ' ' + requestSummary.kind : '') +
+            (elapsedMs != null ? ' (' + Math.round(elapsedMs) + 'ms)' : '');
+        const fn = kind === 'error' ? console.error : console.log;
+        fn.call(console, head, { req: requestSummary, resp: responseSummary });
     }
 
     async function copyDebugLog() {
@@ -1385,7 +1393,7 @@ input, button { -webkit-tap-highlight-color: transparent; }
                             : 'lazy concatenation "' + v.element.name + '"';
                         logEntry('text', reqSummary, {
                             path,
-                            raw: typeof content === 'string' ? content.slice(0, 400) : null,
+                            raw: typeof content === 'string' ? content : null,
                             rejected: why
                         }, elapsed);
                         state.comboAttempts.push({ n: attempt + 1, path, elapsedMs: elapsed, ok: false, error: 'rejected: ' + why });
@@ -1397,7 +1405,7 @@ input, button { -webkit-tap-highlight-color: transparent; }
                     }
                     logEntry('text', reqSummary, {
                         path,
-                        raw: typeof content === 'string' ? content.slice(0, 400) : null,
+                        raw: typeof content === 'string' ? content : null,
                         accepted: { name: v.element.name, emoji: v.element.emoji, forced: !!v.forced }
                     }, elapsed);
                     state.comboAttempts.push({ n: attempt + 1, path, elapsedMs: elapsed, ok: true });
@@ -1414,7 +1422,7 @@ input, button { -webkit-tap-highlight-color: transparent; }
                     }
                     logEntry('text', reqSummary, {
                         path,
-                        raw: typeof content === 'string' ? content.slice(0, 400) : null,
+                        raw: typeof content === 'string' ? content : null,
                         rejected: combinedReason
                     }, elapsed);
                     state.comboAttempts.push({ n: attempt + 1, path, elapsedMs: elapsed, ok: false, error: 'rejected: ' + combinedReason });
@@ -1447,7 +1455,7 @@ input, button { -webkit-tap-highlight-color: transparent; }
                 logEntry('error', reqSummary, {
                     path,
                     message: msg,
-                    raw: typeof content === 'string' ? content.slice(0, 800) : null,
+                    raw: typeof content === 'string' ? content : null,
                 }, elapsed);
                 state.comboAttempts.push({ n: attempt + 1, path, elapsedMs: elapsed, ok: false, error: msg });
                 renderWorkspace();
