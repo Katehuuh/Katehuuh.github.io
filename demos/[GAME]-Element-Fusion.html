@@ -775,23 +775,24 @@ input, button { -webkit-tap-highlight-color: transparent; }
     // 'WebSocket is already in CLOSING or CLOSED state'. We catch that and fall
     // through to direct fetch (which will fail on CORS for these origins, but
     // at least surfaces a clean error instead of leaving the UI hanging).
-    // jsonblob.com sets Access-Control-Allow-Origin: *, so direct fetch
-    // works without any relay. Other origins still need puter.net.fetch.
-    // Puter's anonymous auth has been 401-ing whole sessions lately, so
-    // try direct first and only fall back to puter if direct hits CORS.
+    // jsonblob.com does NOT serve Access-Control-Allow-Origin so direct fetch
+    // is blocked by the browser. Route through puter.net.fetch which proxies
+    // server-side. If puter is unavailable / 401-ing, fall through to direct
+    // so the failure surfaces cleanly instead of hanging.
     async function relayFetch(url, opts) {
-      try {
-        return await fetch(url, opts);
-      } catch (e) {
-        for (let i = 0; i < 30; i++) {
-          if (typeof puter !== 'undefined' && puter && puter.net && typeof puter.net.fetch === 'function') break;
-          await new Promise(r => setTimeout(r, 100));
-        }
-        if (typeof puter !== 'undefined' && puter && puter.net && typeof puter.net.fetch === 'function') {
-          return puter.net.fetch(url, opts);
-        }
-        throw e;
+      for (let i = 0; i < 30; i++) {
+        if (typeof puter !== 'undefined' && puter && puter.net && typeof puter.net.fetch === 'function') break;
+        await new Promise(r => setTimeout(r, 100));
       }
+      const puterReady = typeof puter !== 'undefined' && puter && puter.net && typeof puter.net.fetch === 'function';
+      if (puterReady) {
+        try {
+          return await puter.net.fetch(url, opts);
+        } catch (e) {
+          console.warn('[relayFetch] puter relay failed, trying direct fetch:', e && e.message || e);
+        }
+      }
+      return fetch(url, opts);
     }
 
     const MAX_LLM_RETRIES_FOR_EMOJI = 3;
@@ -800,58 +801,6 @@ input, button { -webkit-tap-highlight-color: transparent; }
     // cover most realistic discovery sets; sample randomly above that.
     const MAX_USED_LIST = 400;
 
-    // Semantic emoji groups: when the LLM keeps picking a taken emoji we
-    // search the same group for an unused one before falling back to the
-    // sparkle disambiguation. Hand-curated for control + tiny size; no CDN
-    // dependency. Order inside a group is fallback priority (commonest first).
-    const EMOJI_GROUPS = [
-      ['☀️','🌞','🔆','⭐','✨','💫','🌟','🌠'],     // sun / bright
-      ['🌙','🌛','🌜','🌚','🌝','🌑','🌒','🌓','🌔','🌕','🌖','🌗','🌘'], // moon
-      ['💧','💦','🌊','🚰','🫧','🥛'],               // water
-      ['🔥','🌋','💥','☄️','💢'],                    // fire / impact
-      ['🌍','🌎','🌏','🪨','⛰️','🗿','🏔️','🌐'],     // earth / globe
-      ['🌬️','💨','🌪️','🍃','♨️'],                   // wind / vapour
-      ['☁️','⛅','🌫️','🌤️','🌥️','🌦️'],             // cloud
-      ['🌧️','⛈️','🌩️','⚡'],                         // rain / storm
-      ['❄️','☃️','⛄','🌨️','🧊'],                    // snow / ice
-      ['🌱','🌿','🍀','🌾','🪴','🥬'],               // plant / leaf
-      ['🌳','🌲','🎄','🌴','🪵'],                    // tree / wood
-      ['🌸','🌺','🌹','🌷','💐','🌼','🪷'],          // flower
-      ['🍎','🍐','🍊','🍋','🍌','🍇','🍉','🍓','🍒','🍑','🍍','🥥','🥝'], // fruit
-      ['🥖','🍞','🥐','🥯','🧈'],                    // bread
-      ['🐶','🐱','🐭','🐹','🐰','🐺','🦊','🐻','🐼','🐨','🦝'], // mammal
-      ['🐦','🦅','🦆','🦉','🦜','🐔','🦢'],          // bird
-      ['🐠','🐟','🐡','🦈','🐳','🐋','🐬'],          // fish / sea
-      ['🐝','🦋','🐞','🐛','🦟','🐜'],               // insect
-      ['🐍','🦎','🐢','🐊','🦖','🦕'],               // reptile
-      ['👶','👦','👧','🧒'],                          // child
-      ['👨','👩','🧑','🧔','👴','👵'],                // adult
-      ['💀','☠️','👻','🪦'],                          // death / spirit
-      ['😀','😁','😃','😄','😊','🙂','😺'],          // happy
-      ['😢','😭','😞','😔','🥺'],                    // sad
-      ['❤️','🧡','💛','💚','💙','💜','🤍','🖤','🤎'],// heart
-      ['🏠','🏡','🏘️','🏚️'],                        // home
-      ['🏰','🏯','🗼','⛩️'],                         // landmark
-      ['🛸','👽','🚀','🪐','🌌'],                    // space
-      ['💎','💍','👑','💰'],                          // treasure
-      ['🎭','🎨','🖼️','🎬','🎮'],                    // art / play
-      ['⚔️','🗡️','🔫','🏹','🛡️'],                    // weapon
-      ['🍳','🍲','🍜','🍱','🥘','🍛'],               // dish
-      ['📚','📖','📕','📗','📘','📙'],               // book
-      ['⏰','⌛','⏳','🕰️'],                          // time
-      ['💡','🔦','🕯️','🔥'],                         // light source
-    ];
-
-    function findRelatedUnusedEmoji(taken, usedSet) {
-      for (const group of EMOJI_GROUPS) {
-        if (!group.includes(taken)) continue;
-        for (const e of group) {
-          if (e !== taken && !usedSet.has(e)) return e;
-        }
-        return null; // group exhausted
-      }
-      return null;   // taken emoji not in any known group
-    }
 
     const LS_ELEMENTS = 'infiniteCraft.elements.v1';
     const LS_COMBOS   = 'infiniteCraft.combos.v1';
@@ -1282,9 +1231,7 @@ input, button { -webkit-tap-highlight-color: transparent; }
         if (map.has(emoji) && nameKey(map.get(emoji)) !== k) {
             return {
                 ok: false,
-                reason: 'Emoji ' + emoji + ' is already used for "' + map.get(emoji) + '". Pick a different emoji.',
-                conflictEmoji: emoji,
-                conflictName: map.get(emoji)
+                reason: 'Emoji ' + emoji + ' is already used for "' + map.get(emoji) + '". Pick a different emoji.'
             };
         }
         return {
@@ -1323,13 +1270,12 @@ input, button { -webkit-tap-highlight-color: transparent; }
         ].join('\n');
     }
 
-    function buildBanList(triedRejections) {
+    function buildBanList() {
         const set = new Set();
         for (const k of Object.keys(state.elements)) {
             const e = state.elements[k];
             if (e && e.emoji) set.add(e.emoji);
         }
-        if (triedRejections) for (const r of triedRejections) if (r && r.emoji) set.add(r.emoji);
         const arr = Array.from(set);
         if (arr.length > MAX_USED_LIST) {
             for (let i = arr.length - 1; i > 0; i--) {
@@ -1462,9 +1408,9 @@ input, button { -webkit-tap-highlight-color: transparent; }
     }
 
     // ----------------------------------------------------------------
-    // Local LLM via transformers.js + Qwen3-0.6B (WebGPU, falls back to
-    // WASM). Same pattern as the Dark Editor demo. We try local first;
-    // puter.ai.chat is the secondary fallback only.
+    // Local LLM via transformers.js + Qwen3.5-2B-ONNX-OPT (WebGPU, falls
+    // back to WASM). Try local first; puter.ai.chat is the secondary
+    // fallback only.
     //
     // Why local first: it's free forever, no quota, no auth, runs on the
     // user's GPU. Puter.ai is the parachute - it works today but anonymous
@@ -1664,39 +1610,10 @@ input, button { -webkit-tap-highlight-color: transparent; }
         return { content, path: 'puter' };
     }
 
-    async function fetchJSON(url, body, signal, timeoutMs) {
-        const ctrl = new AbortController();
-        const onParentAbort = () => ctrl.abort();
-        if (signal) {
-            if (signal.aborted) ctrl.abort();
-            else signal.addEventListener('abort', onParentAbort, { once: true });
-        }
-        const timer = setTimeout(() => ctrl.abort(), timeoutMs);
-        try {
-            // Route through puter.net.fetch so Pollinations' missing CORS
-            // headers don't block the POST preflight from github.io. Same
-            // relay used for jsonblob.
-            const resp = await relayFetch(url, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(body),
-                signal: ctrl.signal
-            });
-            if (!resp.ok) throw new Error('HTTP ' + resp.status);
-            return await resp.json();
-        } catch (err) {
-            if (err && err.name === 'AbortError') throw new Error('Request timed out');
-            throw err;
-        } finally {
-            clearTimeout(timer);
-            if (signal) signal.removeEventListener('abort', onParentAbort);
-        }
-    }
-
-    // Pollinations.openai sometimes wraps real JSON in junk like
-    // `{"{"name":"X"...}` or buries it inside whitespace. Walk forward from
-    // a known schema key (`"name"`) and brace-balance to recover the inner
-    // valid object. Returns the slice or null.
+    // The model sometimes wraps real JSON in junk like `{"{"name":"X"...}`
+    // or buries it inside whitespace. Walk forward from a known schema key
+    // (`"name"`) and brace-balance to recover the inner valid object.
+    // Returns the slice or null.
     function findKeyedObject(text, key) {
         const tag = '"' + key + '"';
         let idx = text.indexOf(tag);
