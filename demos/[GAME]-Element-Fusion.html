@@ -775,21 +775,23 @@ input, button { -webkit-tap-highlight-color: transparent; }
     // 'WebSocket is already in CLOSING or CLOSED state'. We catch that and fall
     // through to direct fetch (which will fail on CORS for these origins, but
     // at least surfaces a clean error instead of leaving the UI hanging).
+    // jsonblob.com sets Access-Control-Allow-Origin: *, so direct fetch
+    // works without any relay. Other origins still need puter.net.fetch.
+    // Puter's anonymous auth has been 401-ing whole sessions lately, so
+    // try direct first and only fall back to puter if direct hits CORS.
     async function relayFetch(url, opts) {
-      for (let i = 0; i < 30; i++) {
-        if (typeof puter !== 'undefined' && puter && puter.net && typeof puter.net.fetch === 'function') break;
-        await new Promise(r => setTimeout(r, 100));
-      }
-      const puterReady = typeof puter !== 'undefined' && puter && puter.net && typeof puter.net.fetch === 'function';
-      if (puterReady) {
-        try {
-          return await puter.net.fetch(url, opts);
-        } catch (e) {
-          // Puter's socket is dead or refused. Try direct as last resort.
-          console.warn('[relayFetch] puter relay failed, falling back to direct fetch:', e && e.message || e);
+      try {
+        return await fetch(url, opts);
+      } catch (e) {
+        for (let i = 0; i < 30; i++) {
+          if (typeof puter !== 'undefined' && puter && puter.net && typeof puter.net.fetch === 'function') break;
+          await new Promise(r => setTimeout(r, 100));
         }
+        if (typeof puter !== 'undefined' && puter && puter.net && typeof puter.net.fetch === 'function') {
+          return puter.net.fetch(url, opts);
+        }
+        throw e;
       }
-      return fetch(url, opts);
     }
 
     const MAX_LLM_RETRIES_FOR_EMOJI = 3;
@@ -1363,28 +1365,23 @@ input, button { -webkit-tap-highlight-color: transparent; }
     }
 
     async function callCombineLLM(a, b) {
-        let lastFeedback = null;
-        let lastRejected = null;       // most recent rejected attempt (used for semantic fallback)
-        const triedRejections = [];    // accumulates EVERY rejected emoji this call so the LLM can't re-pick
+        // The conversation grows as retries accumulate. Each rejected attempt
+        // appends the assistant's bad answer plus a user message explaining
+        // why - so the model sees its own past mistakes and can self-correct
+        // instead of restarting cold every retry.
+        const messages = [
+            { role: 'system', content: buildSysPrompt(buildBanList()) },
+            { role: 'user',   content: buildUserPrompt(a, b) }
+        ];
+        const aKey = nameKey(a.name), bKey = nameKey(b.name);
         for (let attempt = 0; attempt < MAX_LLM_RETRIES_FOR_EMOJI; attempt++) {
             const model = TEXT_MODELS[Math.min(attempt, TEXT_MODELS.length - 1)];
-            const sysPrompt = buildSysPrompt(buildBanList(triedRejections));
-            const userPrompt = buildUserPrompt(a, b);
             const t0 = performance.now();
-            const reqSummary = {
-                kind: 'combine', a: a.name, b: b.name,
-                model: model || 'default',
-                attempt: attempt + 1, retryFeedback: lastFeedback,
-                triedSoFar: triedRejections.map(r => r.emoji)
-            };
-            // `content` and `path` live outside the try so the catch can
-            // include them in the error log entry (otherwise a parse failure
-            // leaves only the exception message and the raw model output is
-            // lost). `path` is 'local' (Qwen3 on-device) or 'puter' (fallback).
+            const reqSummary = { kind: 'combine', a: a.name, b: b.name, model: model || 'default', attempt: attempt + 1 };
             let content = null;
             let path = null;
             try {
-                const got = await fetchTextGET(sysPrompt, userPrompt, model, TEXT_TIMEOUT_MS);
+                const got = await fetchTextGET(messages, model, TEXT_TIMEOUT_MS);
                 content = got.content;
                 path = got.path;
                 reqSummary.model = path === 'local' ? 'qwen3.5-2b-local' : (model || 'default');
@@ -1392,141 +1389,70 @@ input, button { -webkit-tap-highlight-color: transparent; }
                 const parsed = parseLooseJSON(content);
                 const v = validateLLMResult(parsed);
                 const elapsed = performance.now() - t0;
-                if (v.ok) {
-                    // Reject lazy LLM answers: name identical to one of the
-                    // inputs (Smoke+Smoke -> Smoke) OR a literal concatenation
-                    // ("Dust + Water", "Dust And Water", "DustWater"). Retry
-                    // with explicit feedback so the LLM picks a real concept.
-                    const resKey = nameKey(v.element.name);
-                    const aKey = nameKey(a.name), bKey = nameKey(b.name);
-                    // Reuse the same heuristic as the boot-prune so accept and
-                    // prune logic stay in sync.
-                    const lazyConcat = isLazyConcatName(v.element.name, [a.name, b.name]) && resKey !== aKey && resKey !== bKey;
-                    const sameAsInput = resKey === aKey || resKey === bKey;
-                    if (sameAsInput || lazyConcat) {
-                        const why = sameAsInput
-                            ? 'same as input "' + v.element.name + '"'
-                            : 'lazy concatenation "' + v.element.name + '"';
-                        logEntry('text', reqSummary, {
-                            path,
-                            raw: typeof content === 'string' ? content : null,
-                            rejected: why
-                        }, elapsed);
-                        state.comboAttempts.push({ n: attempt + 1, path, elapsedMs: elapsed, ok: false, error: 'rejected: ' + why });
-                        renderWorkspace();
-                        lastFeedback = sameAsInput
-                            ? 'You returned "' + v.element.name + '", which is one of the inputs. The result of X + X must be a DIFFERENT, larger concept (e.g. Smoke+Smoke = Smog, Water+Water = Lake, Plant+Plant = Tree). Pick a different name.'
-                            : 'You returned "' + v.element.name + '", which is just the two input names mashed together. NEVER do that. Pick a single real-world concept that the combination would actually produce (e.g. Dust+Water = Mud, not "Dust + Water"; Fire+Plant = Ash, not "Fire Plant").';
-                        continue;
-                    }
-                    logEntry('text', reqSummary, {
-                        path,
-                        raw: typeof content === 'string' ? content : null,
-                        accepted: { name: v.element.name, emoji: v.element.emoji, forced: !!v.forced }
-                    }, elapsed);
+                const resKey = v.ok ? nameKey(v.element.name) : null;
+                const lazyConcat = v.ok && isLazyConcatName(v.element.name, [a.name, b.name]) && resKey !== aKey && resKey !== bKey;
+                const sameAsInput = v.ok && (resKey === aKey || resKey === bKey);
+                if (v.ok && !lazyConcat && !sameAsInput) {
+                    logEntry('text', reqSummary, { path, raw: content, accepted: { name: v.element.name, emoji: v.element.emoji, forced: !!v.forced } }, elapsed);
                     state.comboAttempts.push({ n: attempt + 1, path, elapsedMs: elapsed, ok: true });
                     renderWorkspace();
                     return v.element;
-                } else {
-                    // Layer in lazy-name feedback even on emoji conflict so the
-                    // LLM fixes BOTH issues on the next attempt instead of just
-                    // swapping emojis while keeping the lazy "A + B" name.
-                    const nameIsLazy = parsed && parsed.name && isLazyConcatName(parsed.name, [a.name, b.name]);
-                    let combinedReason = v.reason;
-                    if (nameIsLazy) {
-                        combinedReason = v.reason + ' Also: "' + parsed.name + '" is just the input names mashed together. Pick a single real-world concept (e.g. Steam+Wind = Cloud, Fire+Wind = Smoke).';
-                    }
-                    logEntry('text', reqSummary, {
-                        path,
-                        raw: typeof content === 'string' ? content : null,
-                        rejected: combinedReason
-                    }, elapsed);
-                    state.comboAttempts.push({ n: attempt + 1, path, elapsedMs: elapsed, ok: false, error: 'rejected: ' + combinedReason });
-                    renderWorkspace();
-                    lastFeedback = combinedReason;
-                    // Only save lastRejected if name is non-lazy. Otherwise the
-                    // semantic fallback would inherit the bad name.
-                    if (v.conflictEmoji && parsed && parsed.name && !nameIsLazy) {
-                        lastRejected = {
-                            name: String(parsed.name).trim(),
-                            emoji: v.conflictEmoji,
-                            description: String(parsed.description || '').slice(0, 240)
-                        };
-                    }
-                    if (v.conflictEmoji) {
-                        // Accumulate so the next retry's prompt explicitly bans
-                        // every emoji this call has already tried.
-                        if (!triedRejections.some(r => r.emoji === v.conflictEmoji)) {
-                            triedRejections.push({
-                                emoji: v.conflictEmoji,
-                                conflictName: v.conflictName || '?'
-                            });
-                        }
-                    }
-                    continue;
                 }
+                const reason = v.ok
+                    ? (sameAsInput
+                        ? 'You returned "' + v.element.name + '", same as one of the inputs. X+X must be a DIFFERENT, larger concept (e.g. Smoke+Smoke = Smog).'
+                        : 'You returned "' + v.element.name + '", which is just the input names mashed together. Pick a single real-world concept (e.g. Dust+Water = Mud, not "Dust + Water").')
+                    : v.reason;
+                logEntry('text', reqSummary, { path, raw: content, rejected: reason }, elapsed);
+                state.comboAttempts.push({ n: attempt + 1, path, elapsedMs: elapsed, ok: false, error: 'rejected: ' + reason });
+                renderWorkspace();
+                messages.push({ role: 'assistant', content });
+                messages.push({ role: 'user', content: 'Rejected: ' + reason + ' Try again with a DIFFERENT name and emoji.' });
+                continue;
             } catch (err) {
                 const elapsed = performance.now() - t0;
                 const msg = String(err && err.message || err);
-                logEntry('error', reqSummary, {
-                    path,
-                    message: msg,
-                    raw: typeof content === 'string' ? content : null,
-                }, elapsed);
+                logEntry('error', reqSummary, { path, message: msg, raw: content }, elapsed);
                 state.comboAttempts.push({ n: attempt + 1, path, elapsedMs: elapsed, ok: false, error: msg });
                 renderWorkspace();
-                // Retry on parse failure (model gave prose) or transient
-                // timeout (Pollinations busy); both often clear on a second
-                // attempt. Network 5xx and DNS errors propagate so the user
-                // sees a real outage instead of three slow waits.
                 const isParseError   = /JSON|parse/i.test(msg);
                 const isTimeoutError = /timed out/i.test(msg);
                 const isEmptyContent = /empty content/i.test(msg);
                 const isRateLimit    = /HTTP 429/i.test(msg);
-                if ((isParseError || isTimeoutError || isEmptyContent || isRateLimit)
-                    && attempt < MAX_LLM_RETRIES_FOR_EMOJI - 1) {
+                if ((isParseError || isTimeoutError || isEmptyContent || isRateLimit) && attempt < MAX_LLM_RETRIES_FOR_EMOJI - 1) {
                     if (isRateLimit) {
-                        // Pollinations throttle — exponential backoff (1.5s, 3s, 6s).
                         const wait = 1500 * Math.pow(2, attempt);
                         await new Promise(r => setTimeout(r, wait));
                     }
-                    lastFeedback = isTimeoutError
-                        ? 'Previous attempt timed out. Reply with the smallest possible JSON.'
+                    if (content) messages.push({ role: 'assistant', content });
+                    messages.push({ role: 'user', content: isTimeoutError
+                        ? 'Previous attempt timed out. Reply with a short JSON only.'
                         : isEmptyContent
                             ? 'Previous response was empty. Reply with a complete JSON object matching the schema.'
-                            : isRateLimit
-                                ? null // no LLM-side feedback for rate limit, just retry after sleep
-                                : 'Previous response was not valid JSON. Reply with ONLY the JSON object matching the schema, no prose, no markdown.';
+                            : 'Previous response was not valid JSON. Reply with ONLY the JSON object, no prose, no markdown.' });
                     continue;
                 }
                 throw err;
             }
         }
-        // Puter rescue: local retries are exhausted (and were all
-        // validation-rejected, so puter never got a turn via fetchTextGET).
-        // Give puter one direct shot with the same prompt - it picks emoji
-        // that match the name far better than local 2B.
+        // Puter rescue: send the full accumulated conversation so puter sees
+        // every local attempt and the rejection reasons - one shot to fix it.
         try {
-            const rescueSys = buildSysPrompt(buildBanList(triedRejections));
-            const rescueUser = buildUserPrompt(a, b);
             const t0 = performance.now();
-            const content = await tryPuterChat(rescueSys, rescueUser, 'gpt-4o-mini', TEXT_TIMEOUT_MS);
+            const content = await tryPuterChat(messages, 'gpt-4o-mini', TEXT_TIMEOUT_MS);
             const elapsed = performance.now() - t0;
             const parsed = parseLooseJSON(content);
             const v = validateLLMResult(parsed);
             const resKey = v.ok ? nameKey(v.element.name) : null;
-            const aKey = nameKey(a.name), bKey = nameKey(b.name);
             const lazyConcat = v.ok && isLazyConcatName(v.element.name, [a.name, b.name]) && resKey !== aKey && resKey !== bKey;
             const sameAsInput = v.ok && (resKey === aKey || resKey === bKey);
             if (v.ok && !lazyConcat && !sameAsInput) {
-                logEntry('text', { kind: 'combine.puter-rescue', a: a.name, b: b.name },
-                         { path: 'puter', raw: content, accepted: v.element }, elapsed);
+                logEntry('text', { kind: 'combine.puter-rescue', a: a.name, b: b.name }, { path: 'puter', raw: content, accepted: v.element }, elapsed);
                 state.comboAttempts.push({ n: state.comboAttempts.length + 1, path: 'puter', elapsedMs: elapsed, ok: true });
                 renderWorkspace();
                 return v.element;
             }
-            logEntry('text', { kind: 'combine.puter-rescue', a: a.name, b: b.name },
-                     { path: 'puter', raw: content, rejected: v.reason || (sameAsInput ? 'same as input' : (lazyConcat ? 'lazy concat' : 'invalid')) }, elapsed);
+            logEntry('text', { kind: 'combine.puter-rescue', a: a.name, b: b.name }, { path: 'puter', raw: content, rejected: v.reason || (sameAsInput ? 'same as input' : (lazyConcat ? 'lazy concat' : 'invalid')) }, elapsed);
         } catch (e) {
             logEntry('error', { kind: 'combine.puter-rescue', a: a.name, b: b.name }, { message: String(e && e.message || e) });
         }
@@ -1585,12 +1511,8 @@ input, button { -webkit-tap-highlight-color: transparent; }
         })();
         try { await loadingPromise; } catch (e) { loadingPromise = null; throw e; }
       }
-      async function runChat(id, system, user) {
+      async function runChat(id, messages) {
         await ensureLoaded();
-        const messages = [
-          { role: "system", content: system },
-          { role: "user", content: user }
-        ];
         // Non-thinking: 0.8B with CoT hallucinated the input emoji and ran
         // away. 2B without CoT is the sweet spot - reads the prompt, answers
         // directly, no thinking-loop risk.
@@ -1624,7 +1546,7 @@ input, button { -webkit-tap-highlight-color: transparent; }
       self.onmessage = async (ev) => {
         const m = ev.data || {};
         if (m.type === "warmup") { try { await ensureLoaded(); } catch (e) { self.postMessage({ type: "error", id: null, message: String(e && e.message || e) }); } return; }
-        if (m.type === "run") { try { await runChat(m.id, m.system, m.user); } catch (e) { self.postMessage({ type: "error", id: m.id, message: String(e && e.message || e) }); } return; }
+        if (m.type === "run") { try { await runChat(m.id, m.messages); } catch (e) { self.postMessage({ type: "error", id: m.id, message: String(e && e.message || e) }); } return; }
         if (m.type === "interrupt") { stopping.interrupt(); }
       };
     `;
@@ -1647,7 +1569,10 @@ input, button { -webkit-tap-highlight-color: transparent; }
                     if (!bootLocalWorker._filePct) bootLocalWorker._filePct = new Map();
                     if (p.status === 'progress' && typeof p.progress === 'number' && p.file) {
                         const last = bootLocalWorker._filePct.get(p.file);
-                        if (last === undefined || p.progress - last >= 25 || p.progress >= 99) {
+                        const crossed99 = (last === undefined || last < 99) && p.progress >= 99;
+                        const big25Step = last !== undefined && p.progress - last >= 25;
+                        const firstSeen = last === undefined;
+                        if (firstSeen || big25Step || crossed99) {
                             bootLocalWorker._filePct.set(p.file, p.progress);
                             logEntry('info', { kind: 'local.download' }, { file: p.file, pct: p.progress.toFixed(0) + '%' });
                         }
@@ -1675,7 +1600,7 @@ input, button { -webkit-tap-highlight-color: transparent; }
     }
     bootLocalWorker();
 
-    function tryLocalChat(systemPrompt, userPrompt, timeoutMs) {
+    function tryLocalChat(messages, timeoutMs) {
         return new Promise((resolve, reject) => {
             if (localBroken) return reject(new Error('local broken'));
             if (!localReady)  return reject(new Error('local not ready'));
@@ -1684,31 +1609,22 @@ input, button { -webkit-tap-highlight-color: transparent; }
             const timer = setTimeout(() => {
                 if (localPending.has(id)) {
                     localPending.delete(id);
-                    // Tell the worker to stop the in-flight generation via
-                    // InterruptableStoppingCriteria. Without this the worker
-                    // keeps thinking-looping on a 32k-token budget while the
-                    // outer caller has already given up - and queues new
-                    // requests behind the busy generation.
                     try { localWorker.postMessage({ type: 'interrupt' }); } catch (_) {}
                     reject(new Error('local timed out'));
                 }
             }, timeoutMs);
             localPending.set(id, { resolve, reject, timer });
-            localWorker.postMessage({ type: 'run', id, system: systemPrompt, user: userPrompt });
+            localWorker.postMessage({ type: 'run', id, messages });
         });
     }
 
-    async function tryPuterChat(systemPrompt, userPrompt, model, timeoutMs) {
+    async function tryPuterChat(messages, model, timeoutMs) {
         if (typeof puter === 'undefined' || !puter.ai || typeof puter.ai.chat !== 'function') {
             throw new Error('puter.ai unavailable');
         }
         const ctrl = new AbortController();
         const timer = setTimeout(() => ctrl.abort(), timeoutMs);
         try {
-            const messages = [
-                { role: 'system', content: systemPrompt },
-                { role: 'user',   content: userPrompt }
-            ];
             const chatPromise = puter.ai.chat(messages, model ? { model } : undefined);
             const aborted = new Promise((_, rej) => {
                 ctrl.signal.addEventListener('abort', () => rej(new Error('Request timed out')), { once: true });
@@ -1722,17 +1638,16 @@ input, button { -webkit-tap-highlight-color: transparent; }
         }
     }
 
-    // Returns { content, path } where path = 'local' | 'puter'.
-    // Tries local Qwen3 first (free, on-device). If local isn't ready or
-    // errors, falls back to puter.ai.chat. The caller logs `path`.
-    async function fetchTextGET(systemPrompt, userPrompt, model, timeoutMs) {
+    // Returns { content, path } where path = 'local' | 'puter'. Local first;
+    // puter is the fallback when local is unavailable or errors out.
+    async function fetchTextGET(messages, model, timeoutMs) {
         let localFailReason = null;
         if (!localReady) {
             localFailReason = localBroken ? 'broken' : 'not-ready (model still loading?)';
         }
         if (localReady && !localBroken) {
             try {
-                const content = await tryLocalChat(systemPrompt, userPrompt, timeoutMs);
+                const content = await tryLocalChat(messages, timeoutMs);
                 return { content, path: 'local' };
             } catch (e) {
                 const msg = String(e && e.message || e);
@@ -1740,15 +1655,12 @@ input, button { -webkit-tap-highlight-color: transparent; }
                 if (/out of memory|webgpu unsupported|worker dead|worker missing|local broken/i.test(msg)) {
                     localBroken = true;
                 }
-                // Note: 'timed out' no longer trips localBroken.
             }
         }
-        // Log WHY local was skipped so the user can see in the debug log /
-        // devtools console instead of getting silent puter fallback.
         if (localFailReason) {
             logEntry('error', { kind: 'local.fallback' }, { message: 'local skipped, using puter: ' + localFailReason });
         }
-        const content = await tryPuterChat(systemPrompt, userPrompt, model, timeoutMs);
+        const content = await tryPuterChat(messages, model, timeoutMs);
         return { content, path: 'puter' };
     }
 
@@ -2267,7 +2179,11 @@ input, button { -webkit-tap-highlight-color: transparent; }
         renderWorkspace();
         const t0 = performance.now();
         try {
-            const got = await fetchTextGET(buildSysPrompt(buildBanList()), userPrompt, undefined, TEXT_TIMEOUT_MS);
+            const customMessages = [
+                { role: 'system', content: buildSysPrompt(buildBanList()) },
+                { role: 'user',   content: userPrompt }
+            ];
+            const got = await fetchTextGET(customMessages, undefined, TEXT_TIMEOUT_MS);
             const elapsed = performance.now() - t0;
             state.comboAttempts.push({ n: 1, path: got.path, elapsedMs: elapsed, ok: true });
             const parsed = parseLooseJSON(got.content);
