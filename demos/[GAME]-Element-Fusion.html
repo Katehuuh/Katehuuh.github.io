@@ -1375,20 +1375,32 @@ input, button { -webkit-tap-highlight-color: transparent; }
                     renderWorkspace();
                     return v.element;
                 } else {
+                    // Layer in lazy-name feedback even on emoji conflict so the
+                    // LLM fixes BOTH issues on the next attempt instead of just
+                    // swapping emojis while keeping the lazy "A + B" name.
+                    const nameIsLazy = parsed && parsed.name && isLazyConcatName(parsed.name, [a.name, b.name]);
+                    let combinedReason = v.reason;
+                    if (nameIsLazy) {
+                        combinedReason = v.reason + ' Also: "' + parsed.name + '" is just the input names mashed together. Pick a single real-world concept (e.g. Steam+Wind = Cloud, Fire+Wind = Smoke).';
+                    }
                     logEntry('text', reqSummary, {
                         path,
                         raw: typeof content === 'string' ? content.slice(0, 400) : null,
-                        rejected: v.reason
+                        rejected: combinedReason
                     }, elapsed);
-                    state.comboAttempts.push({ n: attempt + 1, path, elapsedMs: elapsed, ok: false, error: 'rejected: ' + v.reason });
+                    state.comboAttempts.push({ n: attempt + 1, path, elapsedMs: elapsed, ok: false, error: 'rejected: ' + combinedReason });
                     renderWorkspace();
-                    lastFeedback = v.reason;
-                    if (v.conflictEmoji && parsed && parsed.name) {
+                    lastFeedback = combinedReason;
+                    // Only save lastRejected if name is non-lazy. Otherwise the
+                    // semantic fallback would inherit the bad name.
+                    if (v.conflictEmoji && parsed && parsed.name && !nameIsLazy) {
                         lastRejected = {
                             name: String(parsed.name).trim(),
                             emoji: v.conflictEmoji,
                             description: String(parsed.description || '').slice(0, 240)
                         };
+                    }
+                    if (v.conflictEmoji) {
                         // Accumulate so the next retry's prompt explicitly bans
                         // every emoji this call has already tried.
                         if (!triedRejections.some(r => r.emoji === v.conflictEmoji)) {
@@ -1439,8 +1451,9 @@ input, button { -webkit-tap-highlight-color: transparent; }
         }
         // Semantic-group fallback: keep the LLM's last-rejected name (often a
         // good real-world concept) and substitute a related-but-unused emoji
-        // from the same hand-curated group. Beats a generic sparkle.
-        if (lastRejected) {
+        // from the same hand-curated group. Skip if the LLM's name was itself
+        // lazy ("Steam + Wind") - we don't want to preserve that.
+        if (lastRejected && !isLazyConcatName(lastRejected.name, [a.name, b.name])) {
             const used = new Set();
             for (const k of Object.keys(state.elements)) {
                 const el = state.elements[k];
