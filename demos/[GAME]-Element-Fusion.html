@@ -1758,6 +1758,11 @@ input, button { -webkit-tap-highlight-color: transparent; }
     // ------------------------------------------------------------------
     async function combineSlots() {
         if (state.slots.length !== 2) return;
+        // Defensive: drop any lazy-concat entries that snuck into in-memory
+        // state earlier this session (before the validator landed). Without
+        // this the LLM is told 🪑 is taken for "Ash + Power Plant" and can't
+        // reuse the emoji for a real concept like "Chair" or "Furniture".
+        if (pruneLazyLocalEntries() > 0) renderGrid();
         const aKey = state.slots[0];
         const bKey = state.slots[1];
         const a = state.elements[aKey];
@@ -2129,6 +2134,11 @@ input, button { -webkit-tap-highlight-color: transparent; }
     }
 
     async function createCustomElement(name) {
+        // Same defensive prune as combineSlots: stale lazy-concat entries in
+        // memory would otherwise lock taken emojis the LLM should be free to
+        // reuse (e.g. 🪑 -> "Ash + Power Plant" blocking "man -> 🪑" or
+        // "chair -> 🪑").
+        if (pruneLazyLocalEntries() > 0) renderGrid();
         const userPrompt =
             'Create a NEW element named "' + name + '". Pick a single emoji that fits the name and is NOT already used for any element below. Reply ONLY with JSON {"name":"' + name + '","emoji":"<single emoji>","description":"<one short sentence>"}.\n' +
             'Already-used emojis (do NOT pick any of these): ' + buildUsedList().join(', ');
