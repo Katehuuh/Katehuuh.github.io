@@ -1541,7 +1541,7 @@ input, button { -webkit-tap-highlight-color: transparent; }
         AutoModelForCausalLM,
         InterruptableStoppingCriteria
       } from "https://cdn.jsdelivr.net/npm/@huggingface/transformers@latest/+esm";
-      const MODEL_ID = "onnx-community/Qwen3.5-2B-ONNX-OPT";
+      const MODEL_ID = "onnx-community/Qwen3.5-0.8B-ONNX-OPT";
       let tokenizer = null, model = null, loadingPromise = null, device = "wasm";
       const stopping = new InterruptableStoppingCriteria();
 
@@ -1585,9 +1585,11 @@ input, button { -webkit-tap-highlight-color: transparent; }
           add_generation_prompt: true, return_dict: true, enable_thinking: true
         });
         stopping.reset();
-        // Qwen3.5-2B thinking-mode for text tasks (HF card):
+        // Qwen3.5-0.8B thinking-mode for text tasks (HF card):
         //   temperature 1.0, top_p 0.95, top_k 20, min_p 0,
         //   presence_penalty 1.5, repetition_penalty 1.0, max_tokens 32768.
+        //   Same params as 2B; 0.8B is smaller (~500MB) and faster but
+        //   ALSO documented as prone to thinking loops in this size class.
         //   Pragmatic deviation: repetition_penalty 1.1 instead of 1.0 -
         //   transformers.js has no presence_penalty (HF's actual repetition
         //   mitigation), so we soft-shift a small penalty here to break
