@@ -1303,18 +1303,39 @@ input, button { -webkit-tap-highlight-color: transparent; }
     // ------------------------------------------------------------------
     // LLM combine call
     // ------------------------------------------------------------------
-    const SYS_PROMPT =
-        'You generate the result of combining two things (elements, objects, people, concepts, characters) in a discovery game.\n' +
-        'Reply with valid JSON only - no markdown, no commentary.\n' +
-        'Schema: { "name": "<short noun, 1-3 words>", "emoji": "<single emoji or two-emoji pair, no spaces>", "description": "<one short sentence>" }\n' +
-        '\n' +
-        'Hard rules:\n' +
-        '1. The "name" MUST be an EXISTING and PLAUSIBLE real-world concept - NOT INVENTED. Use common nouns, real species, real places, real people, or canonical fictional characters. NEVER coin compound words like "Scoria Storm", "Ashnado", "Volcanic Tempest", "Emberstorm". NEVER mash the two input names together as the result ("Dust + Water", "Dust And Water", "DustWater", "Fire Plant" are all WRONG). Pick the obvious natural-language answer (Water+Fire = Steam, Man+Woman = Baby, Plant+Plant = Tree, Stone+Wind = Sand, Dust+Water = Mud, Fire+Plant = Ash). If two inputs would intuitively make a real thing in everyday English, that thing is the answer.\n' +
-        '2. SELF-COMBINE rule: when the two inputs are the same thing (X+X), the result MUST be a DIFFERENT, larger / more advanced concept. Examples: Water+Water = Lake (or Sea, Ocean). Plant+Plant = Tree (or Forest). Fire+Fire = Inferno (or Bonfire, Sun). Smoke+Smoke = Smog (or Fog, Haze). Wind+Wind = Tornado. Stone+Stone = Mountain. NEVER return the same name as one of the inputs.\n' +
-        '3. The "emoji" MUST NOT collide with any emoji already used for a DIFFERENT name. The full list of taken emojis with their names follows in the user prompt.\n' +
-        '4. If the result is conceptually identical to an existing element (same name), reuse that element\'s emoji exactly. Otherwise pick an unused single emoji, or if none fits, a 2-emoji pair that is also currently unused.\n' +
-        '5. Keep description under 80 characters.\n' +
-        '6. Names are sentence-case English. No underscores, no slug-style. Use real spaces between words.';
+    function buildSysPrompt(banList) {
+        const list = banList && banList.length ? banList.join(',') : '';
+        return [
+            '# You are infinite-craft expert that combining emojy into one.',
+            '- Reply with ONLY ONE valid JSON, no markdown, no commentary.',
+            '- You generate the result of combining two elements/objects/people/concepts/characters with following rules:',
+            ' - If two inputs would intuitively make a real thing in everyday English, that thing is the answer. Pick the obvious natural-language answer (Water+Fire = Steam, Man+Woman = Baby, Plant+Plant = Tree). No underscores, no slug-style.',
+            ' - do NOT cheat: mash the two input names together as the result ("Dust + Water", "Dust And Water", "DustWater", "Fire Plant" are all WRONG). EXISTING and PLAUSIBLE in real-world concept, NOT invented.',
+            ' - Do NOT use any of this emojy: [current used emojy list: ' + list + ']',
+            '',
+            '# Output strcure',
+            '- Reply with valid JSON only - no markdown, no commentary using below Schema:',
+            '{ "name": "<short noun, 1-3 words>", "emoji": "<single emoji>" }'
+        ].join('\n');
+    }
+
+    function buildBanList(triedRejections) {
+        const set = new Set();
+        for (const k of Object.keys(state.elements)) {
+            const e = state.elements[k];
+            if (e && e.emoji) set.add(e.emoji);
+        }
+        if (triedRejections) for (const r of triedRejections) if (r && r.emoji) set.add(r.emoji);
+        const arr = Array.from(set);
+        if (arr.length > MAX_USED_LIST) {
+            for (let i = arr.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                const t = arr[i]; arr[i] = arr[j]; arr[j] = t;
+            }
+            return arr.slice(0, MAX_USED_LIST);
+        }
+        return arr;
+    }
 
     function buildUsedList() {
         const items = [];
@@ -1335,27 +1356,8 @@ input, button { -webkit-tap-highlight-color: transparent; }
         return items;
     }
 
-    function buildUserPrompt(a, b, feedback, triedRejections) {
-        const lines = [
-            'Combine: "' + a.name + '" (' + a.emoji + ') + "' + b.name + '" (' + b.emoji + ').'
-        ];
-        // ALWAYS send the full list of "already used" emojis on every attempt,
-        // not just the first - so retries explicitly accumulate the ban list
-        // and the model stops looping back to picks it just tried. With local
-        // Qwen3 + puter.ai.chat we have the context window to spare.
-        const used = buildUsedList().join(', ');
-        if (used) {
-            lines.push('Here are ALL emojis YOU MUST NOT take (each is already bound to a different element): ' + used + '.');
-        }
-        // Per-call rejections, called out explicitly so the model gets a
-        // sharper signal than the long "already used" list.
-        if (triedRejections && triedRejections.length > 0) {
-            const banned = triedRejections.map(r => r.emoji + ' (taken for "' + r.conflictName + '")').join(', ');
-            lines.push('Plus, you already tried these emojis earlier in this same turn - DO NOT pick them again: ' + banned + '.');
-        }
-        if (feedback) lines.push('Last attempt: ' + feedback);
-        lines.push('Return JSON for the result.');
-        return lines.join('\n');
+    function buildUserPrompt(a, b) {
+        return 'Combine: "' + a.name + '" (' + a.emoji + ') + "' + b.name + '" (' + b.emoji + ').';
     }
 
     async function callCombineLLM(a, b) {
@@ -1364,7 +1366,8 @@ input, button { -webkit-tap-highlight-color: transparent; }
         const triedRejections = [];    // accumulates EVERY rejected emoji this call so the LLM can't re-pick
         for (let attempt = 0; attempt < MAX_LLM_RETRIES_FOR_EMOJI; attempt++) {
             const model = TEXT_MODELS[Math.min(attempt, TEXT_MODELS.length - 1)];
-            const userPrompt = buildUserPrompt(a, b, lastFeedback, triedRejections);
+            const sysPrompt = buildSysPrompt(buildBanList(triedRejections));
+            const userPrompt = buildUserPrompt(a, b);
             const t0 = performance.now();
             const reqSummary = {
                 kind: 'combine', a: a.name, b: b.name,
@@ -1379,7 +1382,7 @@ input, button { -webkit-tap-highlight-color: transparent; }
             let content = null;
             let path = null;
             try {
-                const got = await fetchTextGET(SYS_PROMPT, userPrompt, model, TEXT_TIMEOUT_MS);
+                const got = await fetchTextGET(sysPrompt, userPrompt, model, TEXT_TIMEOUT_MS);
                 content = got.content;
                 path = got.path;
                 if (!content) throw new Error('Empty content from text API');
@@ -1597,7 +1600,7 @@ input, button { -webkit-tap-highlight-color: transparent; }
         // suppression has to come from temperature spread alone here.
         const output = await model.generate({
           ...inputs,
-          max_new_tokens: 1024,
+          max_new_tokens: 32768,
           do_sample: true,
           temperature: 1.0,
           top_p: 1.0,
@@ -2258,7 +2261,7 @@ input, button { -webkit-tap-highlight-color: transparent; }
         renderWorkspace();
         const t0 = performance.now();
         try {
-            const got = await fetchTextGET(SYS_PROMPT, userPrompt, undefined, TEXT_TIMEOUT_MS);
+            const got = await fetchTextGET(buildSysPrompt(buildBanList()), userPrompt, undefined, TEXT_TIMEOUT_MS);
             const elapsed = performance.now() - t0;
             state.comboAttempts.push({ n: 1, path: got.path, elapsedMs: elapsed, ok: true });
             const parsed = parseLooseJSON(got.content);
