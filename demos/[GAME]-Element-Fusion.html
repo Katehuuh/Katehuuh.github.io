@@ -1562,17 +1562,20 @@ input, button { -webkit-tap-highlight-color: transparent; }
         });
         stopping.reset();
         // Qwen3 best-practices for thinking mode (HF model card):
-        // temperature 0.6, top_p 0.95, top_k 20, min_p 0, no greedy decoding.
-        // Bumped max_new_tokens to 1024 so the thinking block + JSON answer
-        // both fit before the cap.
+        //   temperature 0.6, top_p 0.95, top_k 20, min_p 0, no greedy decode.
+        //   Output length 32768 (model card explicitly says this).
+        //   Repetition: HF says presence_penalty 1.5 - transformers.js doesn't
+        //   ship presence_penalty, so we use repetition_penalty 1.3 (close
+        //   equivalent), which the user also requested.
         const output = await model.generate({
           ...inputs,
-          max_new_tokens: 1024,
+          max_new_tokens: 32768,
           do_sample: true,
           temperature: 0.6,
           top_p: 0.95,
           top_k: 20,
           min_p: 0,
+          repetition_penalty: 1.3,
           stopping_criteria: stopping
         });
         const seqLen = inputs.input_ids.dims[1];
