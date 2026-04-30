@@ -1213,6 +1213,13 @@ input, button { -webkit-tap-highlight-color: transparent; }
         if (!emoji) return { ok: false, reason: 'Missing emoji' };
         // Strip ZWJ-trailing whitespace and any plain-text framing
         emoji = emoji.replace(/^["']|["']$/g, '').slice(0, 12);
+        // Reject if the emoji field is plain text (LLM returns word "dry"
+        // instead of an actual glyph). Require at least one pictograph.
+        try {
+            if (!/\p{Extended_Pictographic}/u.test(emoji)) {
+                return { ok: false, reason: 'Emoji field "' + emoji + '" is not an emoji glyph. Use an actual emoji character (e.g. 🟫 for Mud, ☁️ for Cloud).' };
+            }
+        } catch (_) { /* old engine without \p — fall through, accept anything */ }
 
         const k = nameKey(name);
         if (state.elements[k]) {
