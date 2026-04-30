@@ -1547,7 +1547,7 @@ input, button { -webkit-tap-highlight-color: transparent; }
         AutoModelForCausalLM,
         InterruptableStoppingCriteria
       } from "https://cdn.jsdelivr.net/npm/@huggingface/transformers@latest/+esm";
-      const MODEL_ID = "onnx-community/Qwen3.5-0.8B-ONNX-OPT";
+      const MODEL_ID = "onnx-community/Qwen3.5-2B-ONNX-OPT";
       let tokenizer = null, model = null, loadingPromise = null, device = "wasm";
       const stopping = new InterruptableStoppingCriteria();
 
@@ -1583,27 +1583,27 @@ input, button { -webkit-tap-highlight-color: transparent; }
           { role: "system", content: system },
           { role: "user", content: user }
         ];
-        // Thinking disabled: 0.8B's CoT was hallucinating the input emoji
-        // (saw 🔥 as 🔈/🌲/🌅) and tying itself in knots until it produced
-        // multi-emoji junk. Non-thinking mode forces a direct JSON answer.
+        // Non-thinking: 0.8B with CoT hallucinated the input emoji and ran
+        // away. 2B without CoT is the sweet spot - reads the prompt, answers
+        // directly, no thinking-loop risk.
         const inputs = tokenizer.apply_chat_template(messages, {
           add_generation_prompt: true, return_dict: true, enable_thinking: false
         });
         stopping.reset();
-        // Qwen3 non-thinking sampling (HF card): temperature 0.7, top_p 0.8,
-        // top_k 20, min_p 0, presence_penalty 1.5. transformers.js has no
-        // presence_penalty so we use repetition_penalty 1.1 in its place.
-        // max_new_tokens lowered to 1024 since the answer is a short JSON
-        // and there is no thinking block to budget for.
+        // Qwen3.5 non-thinking text-task params (HF card):
+        //   temperature 1.0, top_p 1.0, top_k 20, min_p 0,
+        //   presence_penalty 2.0, repetition_penalty 1.0.
+        // transformers.js does not expose presence_penalty - the repetition
+        // suppression has to come from temperature spread alone here.
         const output = await model.generate({
           ...inputs,
           max_new_tokens: 1024,
           do_sample: true,
-          temperature: 0.7,
-          top_p: 0.8,
+          temperature: 1.0,
+          top_p: 1.0,
           top_k: 20,
           min_p: 0,
-          repetition_penalty: 1.1,
+          repetition_penalty: 1.0,
           stopping_criteria: stopping
         });
         const seqLen = inputs.input_ids.dims[1];
