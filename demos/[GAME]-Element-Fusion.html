@@ -899,6 +899,15 @@ input, button { -webkit-tap-highlight-color: transparent; }
 
     function init() {
         loadPersisted();
+        // Retroactively scrub historical lazy-concat entries (Dust + Water,
+        // Steam Plant, etc.) that pre-date the validator. Runs every boot so
+        // entries that come back via remote sync also get filtered.
+        const dropped = pruneLazyLocalEntries();
+        if (dropped > 0) {
+            writeJSON(LS_ELEMENTS, state.elements);
+            writeJSON(LS_COMBOS, state.combos);
+            console.info('[element-fusion] pruned ' + dropped + ' lazy-concat element(s) from local cache.');
+        }
         applyTheme();
         wireTopbar();
         wireSearch();
@@ -976,6 +985,46 @@ input, button { -webkit-tap-highlight-color: transparent; }
         catch (e) { /* quota: silently drop */ }
     }
     function nameKey(name) { return String(name || '').trim().toLowerCase(); }
+
+    // Detect a lazy LLM "result" that's just the inputs mashed together
+    // (e.g. "Dust + Water", "Steam Plant", "Smoke + Earth"). Used at boot to
+    // prune historical bad entries from local cache and from the seed-merge
+    // pass, so the validator-fix retroactively cleans them up.
+    function isLazyConcatName(name, parents) {
+        const n = String(name || '').trim();
+        if (!n) return true;
+        if (/ [+&] | and | with /i.test(n)) return true;
+        if (parents && parents.length === 2) {
+            const k = n.toLowerCase();
+            const a = String(parents[0] || '').toLowerCase();
+            const b = String(parents[1] || '').toLowerCase();
+            if (k === a || k === b) return true;
+            if (k === a + ' ' + b || k === b + ' ' + a) return true;
+            if (k === a + b || k === b + a) return true;
+        }
+        return false;
+    }
+    function pruneLazyLocalEntries() {
+        const drop = [];
+        for (const [k, el] of Object.entries(state.elements)) {
+            if (isStarter(k)) continue;
+            if (!el) { drop.push(k); continue; }
+            if (isLazyConcatName(el.name, el.parents)) drop.push(k);
+        }
+        if (!drop.length) return 0;
+        const dropSet = new Set(drop);
+        for (const k of drop) delete state.elements[k];
+        for (const cKey of Object.keys(state.combos)) {
+            const target = state.combos[cKey];
+            const [a, b] = cKey.split('+');
+            if (dropSet.has(target) || dropSet.has(a) || dropSet.has(b)) {
+                delete state.combos[cKey];
+            }
+        }
+        // Also drop them from history so the strip doesn't show stale ghosts.
+        state.history = (state.history || []).filter(k => !dropSet.has(k));
+        return drop.length;
+    }
 
     // ------------------------------------------------------------------
     // Theme
@@ -2412,10 +2461,13 @@ input, button { -webkit-tap-highlight-color: transparent; }
         }
 
         // Elements: remote wins when conflict (its emoji is the canonical
-        // one for that name). Local-only elements are kept.
+        // one for that name). Local-only elements are kept. Lazy-concat
+        // entries from remote get filtered out (some old clients without the
+        // validator may still PUT them).
         for (const k of Object.keys(remoteEls)) {
             const r = remoteEls[k];
             if (!r || !r.name || !r.emoji) continue;
+            if (isLazyConcatName(r.name, r.parents)) continue;
             state.elements[k] = {
                 name: r.name,
                 emoji: r.emoji,
