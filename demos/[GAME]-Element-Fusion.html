@@ -753,6 +753,10 @@ input, button { -webkit-tap-highlight-color: transparent; }
     const SYNC_TIMEOUT_MS     = 12000;
     const SYNC_BACKOFF_BASE   = 1500;
     const SYNC_BACKOFF_MAX_MS = 30000;
+    // Max consecutive PUT retries before sync goes silent until the next
+    // user action. Prevents unbounded pile-up when the blob is gone or the
+    // server is wedged.
+    const SYNC_RETRY_MAX      = 3;
 
     // jsonblob.com and text.pollinations.ai don't serve Access-Control-Allow-Origin
     // to github.io, so direct fetch fails CORS preflight. puter.net.fetch makes
@@ -2616,10 +2620,31 @@ input, button { -webkit-tap-highlight-color: transparent; }
         setSyncState('pending', 'Syncing…');
         const t0 = performance.now();
         try {
-            // Read-modify-write: GET, merge remote into local, then PUT
-            const remote = await doRemoteRefresh().catch((e) => {
-                // Don't fail the whole flush if GET fails - we'll PUT what we have
-                logEntry('error', { kind: 'sync.preput.get' }, { message: String(e && e.message || e) });
+            // Read-modify-write: GET, merge remote into local, then PUT.
+            // If GET returns 404, the blob has been wiped server-side - try
+            // to POST a fresh one and update SHARED_BLOB_ID so subsequent
+            // calls hit the new id. Stops the retry-loop pile-up.
+            const remote = await doRemoteRefresh().catch(async (e) => {
+                const msg = String(e && e.message || e);
+                logEntry('error', { kind: 'sync.preput.get' }, { message: msg });
+                if (/HTTP 404/.test(msg)) {
+                    try {
+                        const payload = buildLocalUploadPayload();
+                        const resp = await relayFetch(JSONBLOB_BASE, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(payload),
+                        });
+                        if (resp.ok) {
+                            const loc = resp.headers && (resp.headers.get('x-jsonblob-id') || (resp.headers.get('location') || '').replace(/^\/?api\/jsonBlob\//, ''));
+                            if (loc) {
+                                state.blobId = loc.trim();
+                                try { localStorage.setItem(LS_BLOB_ID, state.blobId); } catch (_) {}
+                                logEntry('sync', { kind: 'recover.post' }, { newBlobId: state.blobId });
+                            }
+                        }
+                    } catch (recoverErr) { /* best-effort; fall through */ }
+                }
                 return null;
             });
             const payload = buildLocalUploadPayload();
@@ -2651,7 +2676,16 @@ input, button { -webkit-tap-highlight-color: transparent; }
             logEntry('error', { kind: 'sync.put' },
                      { message: String(err && err.message || err) }, performance.now() - t0);
             setSyncState('off', 'Offline');
-            // Backoff retry
+            // Cap retries so a server-side outage can't pile up an unbounded
+            // chain of pending setTimeouts. After SYNC_RETRY_MAX consecutive
+            // PUT failures we go silent until the next user-action triggers
+            // scheduleSyncPush again.
+            state.sync.retryCount = (state.sync.retryCount || 0) + 1;
+            if (state.sync.retryCount >= SYNC_RETRY_MAX) {
+                state.sync.retryCount = 0;
+                logEntry('error', { kind: 'sync.put.giveup' }, { message: 'gave up after ' + SYNC_RETRY_MAX + ' tries' });
+                return;
+            }
             const retry = Math.min(state.sync.backoffMs, SYNC_BACKOFF_MAX_MS);
             state.sync.backoffMs = Math.min(state.sync.backoffMs * 2, SYNC_BACKOFF_MAX_MS);
             setTimeout(() => {
@@ -2662,6 +2696,10 @@ input, button { -webkit-tap-highlight-color: transparent; }
             }, retry);
         } finally {
             state.sync.putInFlight = false;
+            // Reset retry count on success path - putInFlight is set false
+            // here only after successful return OR catch; if dirty cleared
+            // (PUT succeeded), zero the counter.
+            if (!state.sync.dirty) state.sync.retryCount = 0;
         }
     }
 
