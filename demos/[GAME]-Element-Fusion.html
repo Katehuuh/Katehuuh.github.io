@@ -1421,7 +1421,8 @@ input, button { -webkit-tap-highlight-color: transparent; }
                 const got = await fetchTextGET(messages, model, TEXT_TIMEOUT_MS);
                 content = got.content;
                 path = got.path;
-                reqSummary.model = path === 'local' ? 'qwen3.5-2b-local' : (model || 'default');
+                const shortModel = path === 'local' ? 'qwen3.5-2b' : (model || 'puter');
+                reqSummary.model = shortModel;
                 if (!content) throw new Error('Empty content from text API');
                 const parsed = parseLooseJSON(content);
                 const v = validateLLMResult(parsed);
@@ -1431,7 +1432,7 @@ input, button { -webkit-tap-highlight-color: transparent; }
                 const sameAsInput = v.ok && (resKey === aKey || resKey === bKey);
                 if (v.ok && !lazyConcat && !sameAsInput) {
                     logEntry('text', reqSummary, { path, raw: content, accepted: { name: v.element.name, emoji: v.element.emoji, forced: !!v.forced } }, elapsed);
-                    state.comboAttempts.push({ n: attempt + 1, path, elapsedMs: elapsed, ok: true });
+                    state.comboAttempts.push({ n: attempt + 1, path, model: shortModel, elapsedMs: elapsed, ok: true });
                     renderWorkspace();
                     return v.element;
                 }
@@ -1441,7 +1442,7 @@ input, button { -webkit-tap-highlight-color: transparent; }
                         : 'You returned "' + v.element.name + '", which is just the input names mashed together. Pick a single real-world concept (e.g. Dust+Water = Mud, not "Dust + Water").')
                     : v.reason;
                 logEntry('text', reqSummary, { path, raw: content, rejected: reason }, elapsed);
-                state.comboAttempts.push({ n: attempt + 1, path, elapsedMs: elapsed, ok: false, error: 'rejected: ' + reason });
+                state.comboAttempts.push({ n: attempt + 1, path, model: shortModel, elapsedMs: elapsed, ok: false, error: 'rejected: ' + reason });
                 renderWorkspace();
                 messages.push({ role: 'assistant', content });
                 messages.push({ role: 'user', content: 'Rejected: ' + reason + ' Try again with a DIFFERENT name and emoji.' });
@@ -1449,8 +1450,9 @@ input, button { -webkit-tap-highlight-color: transparent; }
             } catch (err) {
                 const elapsed = performance.now() - t0;
                 const msg = String(err && err.message || err);
+                const shortModel = path === 'local' ? 'qwen3.5-2b' : (model || 'puter');
                 logEntry('error', reqSummary, { path, message: msg, raw: content }, elapsed);
-                state.comboAttempts.push({ n: attempt + 1, path, elapsedMs: elapsed, ok: false, error: msg });
+                state.comboAttempts.push({ n: attempt + 1, path, model: shortModel, elapsedMs: elapsed, ok: false, error: msg });
                 renderWorkspace();
                 const isParseError   = /JSON|parse/i.test(msg);
                 const isTimeoutError = /timed out/i.test(msg);
@@ -1485,7 +1487,7 @@ input, button { -webkit-tap-highlight-color: transparent; }
             const sameAsInput = v.ok && (resKey === aKey || resKey === bKey);
             if (v.ok && !lazyConcat && !sameAsInput) {
                 logEntry('text', { kind: 'combine.puter-rescue', a: a.name, b: b.name }, { path: 'puter', raw: content, accepted: v.element }, elapsed);
-                state.comboAttempts.push({ n: state.comboAttempts.length + 1, path: 'puter', elapsedMs: elapsed, ok: true });
+                state.comboAttempts.push({ n: state.comboAttempts.length + 1, path: 'puter', model: 'gpt-4o-mini', elapsedMs: elapsed, ok: true });
                 renderWorkspace();
                 return v.element;
             }
@@ -1510,7 +1512,7 @@ input, button { -webkit-tap-highlight-color: transparent; }
                         if (fallbackEmoji) {
                             logEntry('text', { kind: 'combine.dict-fallback', a: a.name, b: b.name },
                                      { name: rawName, emoji: fallbackEmoji });
-                            state.comboAttempts.push({ n: state.comboAttempts.length + 1, path: 'dict', elapsedMs: 0, ok: true });
+                            state.comboAttempts.push({ n: state.comboAttempts.length + 1, path: 'dict', model: 'dict', elapsedMs: 0, ok: true });
                             renderWorkspace();
                             return { name: prettifyName(rawName), emoji: fallbackEmoji, description: '' };
                         }
@@ -2080,7 +2082,7 @@ input, button { -webkit-tap-highlight-color: transparent; }
             log.textContent = list.map(a => {
                 const sec = (a.elapsedMs / 1000).toFixed(1);
                 const status = a.ok ? 'ok' : (/rejected/.test(a.error || '') ? 'rejected' : 'err');
-                return a.n + ': ' + (a.path || '?') + ' ' + sec + 's ' + status;
+                return a.n + ': ' + (a.model || a.path || '?') + ' ' + sec + 's ' + status;
             }).join('  ·  ');
             actions.appendChild(log);
         }
@@ -2218,7 +2220,7 @@ input, button { -webkit-tap-highlight-color: transparent; }
             ];
             const got = await fetchTextGET(customMessages, undefined, TEXT_TIMEOUT_MS);
             const elapsed = performance.now() - t0;
-            state.comboAttempts.push({ n: 1, path: got.path, elapsedMs: elapsed, ok: true });
+            state.comboAttempts.push({ n: 1, path: got.path, model: got.path === 'local' ? 'qwen3.5-2b' : 'puter', elapsedMs: elapsed, ok: true });
             const parsed = parseLooseJSON(got.content);
             const v = validateLLMResult(parsed);
             if (!v || !v.element) throw new Error((v && v.reason) || 'invalid result');
