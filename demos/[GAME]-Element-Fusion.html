@@ -1644,11 +1644,12 @@ input, button { -webkit-tap-highlight-color: transparent; }
                 }
                 if (m.type === 'progress') {
                     const p = m.payload || {};
-                    if (p.status === 'progress' && typeof p.progress === 'number') {
-                        const pct = p.progress.toFixed(1);
-                        if (!bootLocalWorker._lastPct || Math.abs(pct - bootLocalWorker._lastPct) >= 5) {
-                            bootLocalWorker._lastPct = pct;
-                            logEntry('info', { kind: 'local.download' }, { file: p.file, pct: pct + '%' });
+                    if (!bootLocalWorker._filePct) bootLocalWorker._filePct = new Map();
+                    if (p.status === 'progress' && typeof p.progress === 'number' && p.file) {
+                        const last = bootLocalWorker._filePct.get(p.file);
+                        if (last === undefined || p.progress - last >= 25 || p.progress >= 99) {
+                            bootLocalWorker._filePct.set(p.file, p.progress);
+                            logEntry('info', { kind: 'local.download' }, { file: p.file, pct: p.progress.toFixed(0) + '%' });
                         }
                     } else if (p.status === 'done' || p.status === 'ready') {
                         logEntry('info', { kind: 'local.download' }, { file: p.file, status: p.status });
