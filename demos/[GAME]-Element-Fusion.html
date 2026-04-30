@@ -1696,10 +1696,15 @@ input, button { -webkit-tap-highlight-color: transparent; }
                 const content = await tryLocalChat(systemPrompt, userPrompt, timeoutMs);
                 return { content, path: 'local' };
             } catch (e) {
-                // Fall through to puter.
-                if (/timed out|out of memory|webgpu|unsupported/i.test(String(e && e.message || e))) {
-                    localBroken = true; // don't keep trying after fatal
+                // Fall through to puter for THIS call only. Permanent disable
+                // is reserved for genuinely fatal errors (worker crash / WebGPU
+                // unsupported / OOM). A timeout is transient - the next call
+                // gets another shot at local.
+                const msg = String(e && e.message || e);
+                if (/out of memory|webgpu unsupported|worker dead|worker missing|local broken/i.test(msg)) {
+                    localBroken = true;
                 }
+                // Note: 'timed out' no longer trips localBroken.
             }
         }
         const content = await tryPuterChat(systemPrompt, userPrompt, model, timeoutMs);
