@@ -1630,7 +1630,22 @@ input, button { -webkit-tap-highlight-color: transparent; }
             localWorker = new Worker(url, { type: 'module' });
             localWorker.addEventListener('message', (ev) => {
                 const m = ev.data || {};
-                if (m.type === 'status' && m.phase === 'ready') localReady = true;
+                if (m.type === 'status') {
+                    logEntry('info', { kind: 'local.status' }, { phase: m.phase, device: m.device });
+                    if (m.phase === 'ready') localReady = true;
+                }
+                if (m.type === 'progress') {
+                    const p = m.payload || {};
+                    if (p.status === 'progress' && typeof p.progress === 'number') {
+                        const pct = p.progress.toFixed(1);
+                        if (!bootLocalWorker._lastPct || Math.abs(pct - bootLocalWorker._lastPct) >= 5) {
+                            bootLocalWorker._lastPct = pct;
+                            logEntry('info', { kind: 'local.download' }, { file: p.file, pct: pct + '%' });
+                        }
+                    } else if (p.status === 'done' || p.status === 'ready') {
+                        logEntry('info', { kind: 'local.download' }, { file: p.file, status: p.status });
+                    }
+                }
                 if ((m.type === 'done' || m.type === 'error') && m.id != null && localPending.has(m.id)) {
                     const p = localPending.get(m.id);
                     localPending.delete(m.id);
