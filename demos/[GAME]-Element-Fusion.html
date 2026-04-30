@@ -1944,7 +1944,7 @@ input, button { -webkit-tap-highlight-color: transparent; }
         await sleep(380);
 
         state.slots = [];
-        state.history.unshift(resultKey);
+        state.history = [resultKey, ...state.history.filter(k => k !== resultKey)];
         if (state.history.length > 8) state.history.length = 8;
         renderAll();
 
