@@ -1207,10 +1207,11 @@ input, button { -webkit-tap-highlight-color: transparent; }
         '\n' +
         'Hard rules:\n' +
         '1. The "name" MUST be an EXISTING and PLAUSIBLE real-world concept - NOT INVENTED. Use common nouns, real species, real places, real people, or canonical fictional characters. NEVER coin compound words like "Scoria Storm", "Ashnado", "Volcanic Tempest", "Emberstorm". Pick the obvious natural-language answer (Water+Fire = Steam, Man+Woman = Baby, Plant+Plant = Tree, Stone+Wind = Sand). If two inputs would intuitively make a real thing in everyday English, that thing is the answer.\n' +
-        '2. The "emoji" MUST NOT collide with any emoji already used for a DIFFERENT name. The full list of taken emojis with their names follows in the user prompt.\n' +
-        '3. If the result is conceptually identical to an existing element (same name), reuse that element\'s emoji exactly. Otherwise pick an unused single emoji, or if none fits, a 2-emoji pair that is also currently unused.\n' +
-        '4. Keep description under 80 characters.\n' +
-        '5. Names are sentence-case English. No underscores, no slug-style. Use real spaces between words.';
+        '2. SELF-COMBINE rule: when the two inputs are the same thing (X+X), the result MUST be a DIFFERENT, larger / more advanced concept. Examples: Water+Water = Lake (or Sea, Ocean). Plant+Plant = Tree (or Forest). Fire+Fire = Inferno (or Bonfire, Sun). Smoke+Smoke = Smog (or Fog, Haze). Wind+Wind = Tornado. Stone+Stone = Mountain. NEVER return the same name as one of the inputs.\n' +
+        '3. The "emoji" MUST NOT collide with any emoji already used for a DIFFERENT name. The full list of taken emojis with their names follows in the user prompt.\n' +
+        '4. If the result is conceptually identical to an existing element (same name), reuse that element\'s emoji exactly. Otherwise pick an unused single emoji, or if none fits, a 2-emoji pair that is also currently unused.\n' +
+        '5. Keep description under 80 characters.\n' +
+        '6. Names are sentence-case English. No underscores, no slug-style. Use real spaces between words.';
 
     function buildUsedList() {
         const items = [];
@@ -1283,6 +1284,21 @@ input, button { -webkit-tap-highlight-color: transparent; }
                 const v = validateLLMResult(parsed);
                 const elapsed = performance.now() - t0;
                 if (v.ok) {
+                    // Reject results that are identical to one of the inputs
+                    // (Smoke+Smoke -> Smoke is a non-answer). Retry with
+                    // explicit feedback so the LLM picks a different concept.
+                    const resKey = nameKey(v.element.name);
+                    if (resKey === nameKey(a.name) || resKey === nameKey(b.name)) {
+                        logEntry('text', reqSummary, {
+                            path,
+                            raw: typeof content === 'string' ? content.slice(0, 400) : null,
+                            rejected: 'same as input "' + v.element.name + '"'
+                        }, elapsed);
+                        state.comboAttempts.push({ n: attempt + 1, path, elapsedMs: elapsed, ok: false, error: 'rejected: same as input "' + v.element.name + '"' });
+                        renderWorkspace();
+                        lastFeedback = 'You returned "' + v.element.name + '", which is one of the inputs. The result of X + X must be a DIFFERENT, larger concept (e.g. Smoke+Smoke = Smog, Water+Water = Lake, Plant+Plant = Tree). Pick a different name.';
+                        continue;
+                    }
                     logEntry('text', reqSummary, {
                         path,
                         raw: typeof content === 'string' ? content.slice(0, 400) : null,
