@@ -52,7 +52,7 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.0;
+renderer.toneMappingExposure = 0.85;
 document.body.appendChild(renderer.domElement);
 
 // Scene & camera
@@ -60,7 +60,7 @@ const scene = new THREE.Scene();
 scene.fog = new THREE.FogExp2(0x000010, 0.0015);
 
 const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 4000);
-camera.position.set(-10, 6, 10);
+camera.position.set(-16, 8, 16);
 
 // Controls
 const controls = new OrbitControls(camera, renderer.domElement);
@@ -512,12 +512,12 @@ const lensingShader = {
     blackHolePos: { value: new THREE.Vector2(0.5, 0.5) },
     aspect: { value: window.innerWidth / window.innerHeight },
     screenRadiusX: { value: 0.1 },
-    lensingStrength: { value: 0.12 },
-    baseRadius: { value: 0.3 },
-    chromaticAberration: { value: 0.004 },
+    lensingStrength: { value: 0.04 },
+    baseRadius: { value: 0.18 },
+    chromaticAberration: { value: 0.003 },
     ringRadius: { value: 0.12 },
     ringWidth: { value: 0.012 },
-    ringIntensity: { value: 0.3 }
+    ringIntensity: { value: 0.2 }
   },
   vertexShader: `
     varying vec2 vUv;
@@ -574,7 +574,7 @@ const lensingPass = new ShaderPass(lensingShader);
 composer.addPass(lensingPass);
 
 // Bloom
-const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.7, 0.5, 0.78);
+const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.35, 0.4, 0.88);
 composer.addPass(bloomPass);
 
 // ===== Animation =====
@@ -619,7 +619,7 @@ function animate() {
   lensingPass.uniforms.blackHolePos.value.copy(bhUv);
   lensingPass.uniforms.aspect.value = aspect;
   lensingPass.uniforms.screenRadiusX.value = screenRadiusX;
-  lensingPass.uniforms.baseRadius.value = Math.min(0.3, screenRadiusX * 1.0);
+  lensingPass.uniforms.baseRadius.value = Math.min(0.18, screenRadiusX * 0.55);
   lensingPass.uniforms.ringRadius.value = screenRadiusX * 1.2;
   lensingPass.uniforms.ringWidth.value = Math.max(0.003, screenRadiusX * 0.1);
 
