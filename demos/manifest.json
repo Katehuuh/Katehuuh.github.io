@@ -1,6 +1,11 @@
 {
   "demos": [
     {
+      "name": "[SHOW]-Black-Hole-v1",
+      "type": "file",
+      "filename": "[SHOW]-Black-Hole-v1.html"
+    },
+    {
       "name": "[GAME]-Element-Fusion",
       "type": "file",
       "filename": "[GAME]-Element-Fusion.html",
