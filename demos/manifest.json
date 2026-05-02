@@ -1,9 +1,14 @@
 {
   "demos": [
     {
-      "name": "[SHOW]-Black-Hole-Opus4.7",
+      "name": "[SHOW]-Black-Hole-Gemini-3-Pro",
       "type": "file",
-      "filename": "[SHOW]-Black-Hole-Opus4.7.html"
+      "filename": "[SHOW]-Black-Hole-Gemini-3-Pro.html"
+    },
+    {
+      "name": "[SHOW]-Black-Hole-v1",
+      "type": "file",
+      "filename": "[SHOW]-Black-Hole-v1.html"
     },
     {
       "name": "[GAME]-Element-Fusion",
