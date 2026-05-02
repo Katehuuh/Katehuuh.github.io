@@ -1,6 +1,11 @@
 {
   "demos": [
     {
+      "name": "[SHOW]-RT-Audio-Gaming-v1",
+      "type": "file",
+      "filename": "[SHOW]-RT-Audio-Gaming-v1.html"
+    },
+    {
       "name": "[SHOW]-Black-Hole-Gemini-3-Pro",
       "type": "file",
       "filename": "[SHOW]-Black-Hole-Gemini-3-Pro.html"
