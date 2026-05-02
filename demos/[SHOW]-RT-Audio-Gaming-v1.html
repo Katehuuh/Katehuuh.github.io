@@ -1,0 +1,1400 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>RT Audio Gaming - 2D Ray Traced Sound</title>
+<style>
+  :root {
+    --bg: #1a1a1a;
+    --panel: #1f1f1f;
+    --panel2: #262626;
+    --border: #333;
+    --text: #e8e8e8;
+    --muted: #9a9a9a;
+    --accent: #00ffff;
+    --orange: #ff9a3c;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    width: 100vw; height: 100vh;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif;
+    font-size: 13px;
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+    user-select: none;
+  }
+  #app {
+    display: flex; flex-direction: column;
+    width: 100%; height: 100%;
+  }
+  #topbar {
+    display: flex; flex-wrap: wrap; align-items: center;
+    gap: 6px;
+    padding: 8px 10px;
+    background: linear-gradient(180deg, #232323 0%, #1c1c1c 100%);
+    border-bottom: 1px solid var(--border);
+    box-shadow: 0 1px 0 rgba(255,255,255,0.03), 0 2px 8px rgba(0,0,0,0.4);
+    z-index: 5;
+  }
+  .group {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 3px 6px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+    height: 32px;
+  }
+  .group label {
+    color: var(--muted);
+    font-size: 11px;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+  }
+  select, input[type="number"], input[type="file"], input[type="text"] {
+    background: var(--panel2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 3px 6px;
+    font-size: 12px;
+    outline: none;
+    font-family: inherit;
+  }
+  select:focus, input:focus { border-color: var(--accent); }
+  button {
+    background: var(--panel2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 4px 10px;
+    cursor: pointer;
+    font-size: 13px;
+    font-family: inherit;
+    height: 28px;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 1px 1px rgba(0,0,0,0.2);
+    transition: background 0.12s, border 0.12s, transform 0.05s;
+    line-height: 1;
+  }
+  button:hover { background: #2f2f2f; border-color: #444; }
+  button:active { transform: translateY(1px); }
+  button.icon { padding: 4px 8px; min-width: 32px; }
+  button.toggle.on { background: #003a3a; border-color: var(--accent); color: var(--accent); }
+  input[type="range"] {
+    -webkit-appearance: none; appearance: none;
+    width: 70px; height: 4px;
+    background: #444; border-radius: 4px; outline: none;
+    cursor: pointer;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 14px; height: 14px; border-radius: 50%;
+    background: var(--accent);
+    border: 2px solid #1a1a1a;
+    box-shadow: 0 0 6px rgba(0,255,255,0.5);
+    cursor: grab;
+  }
+  input[type="range"]::-moz-range-thumb {
+    width: 14px; height: 14px; border-radius: 50%;
+    background: var(--accent);
+    border: 2px solid #1a1a1a;
+    box-shadow: 0 0 6px rgba(0,255,255,0.5);
+    cursor: grab;
+  }
+  input[type="checkbox"] {
+    accent-color: var(--accent);
+    cursor: pointer;
+  }
+  .chip {
+    display: inline-block;
+    padding: 4px 6px;
+    background: #161616;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace;
+    font-size: 10.5px;
+    color: var(--muted);
+    text-align: center;
+    height: 28px;
+    line-height: 20px;
+    white-space: nowrap;
+  }
+  .chip b { color: var(--text); font-weight: 500; }
+  #losGraph {
+    background: #0d0d0d;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    height: 36px;
+  }
+  #fileGroup .filewrap {
+    position: relative; display: inline-flex; align-items: center;
+  }
+  #fileGroup input[type="file"] {
+    width: 90px;
+    font-size: 11px;
+    color: var(--muted);
+  }
+  #fileGroup input[type="file"]::-webkit-file-upload-button { font-size: 10px; padding: 2px 4px; }
+  #fileGroup input[type="file"]::file-selector-button {
+    background: #303030;
+    color: var(--text);
+    border: 1px solid #404040;
+    border-radius: 4px;
+    padding: 2px 6px;
+    margin-right: 6px;
+    cursor: pointer;
+    font-size: 11px;
+  }
+  #removeMusicBtn {
+    display: none;
+    margin-left: 4px;
+    background: #3a1a1a;
+    border-color: #5a2a2a;
+    color: #ff8b8b;
+    width: 24px; height: 24px;
+    padding: 0;
+    border-radius: 6px;
+    font-size: 11px;
+    line-height: 22px;
+  }
+  #removeMusicBtn.on { display: inline-block; }
+  #explodeBtn { background: #3a1a1a; border-color: #5a2a2a; }
+  #explodeBtn:hover { background: #4a2222; }
+  #playPauseBtn {
+    margin-left: auto;
+    width: 38px; height: 32px;
+    background: #003030;
+    border-color: #006060;
+    color: var(--accent);
+    padding: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  #playPauseBtn:hover { background: #004848; }
+
+  #stage {
+    flex: 1 1 auto;
+    min-height: 0;
+    position: relative;
+    display: flex; align-items: center; justify-content: center;
+    padding: 12px;
+    background: radial-gradient(ellipse at center, #1c1c1c 0%, #131313 100%);
+  }
+  #scene {
+    background: #0a0a0a;
+    border: 1px solid #2a2a2a;
+    border-radius: 10px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.6), inset 0 0 0 1px rgba(255,255,255,0.02);
+    cursor: crosshair;
+    display: block;
+  }
+  #hint {
+    position: absolute; left: 24px; bottom: 24px;
+    color: var(--muted); font-size: 11px;
+    background: rgba(20,20,20,0.7);
+    border: 1px solid var(--border);
+    padding: 4px 8px; border-radius: 6px;
+    pointer-events: none;
+    backdrop-filter: blur(6px);
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="topbar">
+    <div class="group" title="Material for new walls">
+      <label>Mat</label>
+      <select id="materialSel">
+        <option value="drywall">drywall</option>
+        <option value="wood">wood</option>
+        <option value="stone" selected>stone</option>
+        <option value="glass">glass</option>
+        <option value="metal">metal</option>
+      </select>
+    </div>
+    <div class="group" title="Wall thickness">
+      <label>Thick</label>
+      <input id="thickSlider" type="range" min="0.5" max="3.0" step="0.1" value="1.0" />
+    </div>
+    <div class="group" title="Destructible">
+      <label>Destr</label>
+      <input id="destrChk" type="checkbox" />
+    </div>
+    <div class="group" title="Muffling amount">
+      <input id="muffleSlider" type="range" min="0" max="1" step="0.01" value="0.5" />
+    </div>
+    <div class="group" title="Echo mix">
+      <input id="echoSlider" type="range" min="0" max="1" step="0.01" value="0.3" />
+    </div>
+    <div class="group" id="fileGroup" title="Upload music">
+      <div class="filewrap">
+        <input id="musicFile" type="file" accept="audio/*" />
+        <button id="removeMusicBtn" title="Remove music">X</button>
+      </div>
+    </div>
+    <button id="explodeBtn" class="icon" title="Explode destructible walls near player">&#128165;</button>
+    <button id="clearBtn" class="icon" title="Clear walls and reset">&#129529;</button>
+    <button id="resetBtn" class="icon" title="Reset positions">&#128260;</button>
+    <button id="accessBtn" class="icon toggle" title="Accessibility mode">&#128066;</button>
+    <span class="chip" title="Line of sight">LOS:&nbsp;<b id="losChip">0%</b></span>
+    <span class="chip" title="Muffle factor">Muffle:&nbsp;<b id="muffleChip">0.00</b></span>
+    <span class="chip" title="Echo factor">Echo:&nbsp;<b id="echoChip">0.00</b></span>
+    <canvas id="losGraph" width="180" height="36"></canvas>
+    <button id="playPauseBtn" title="Start/Stop">
+      <svg id="ppIcon" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path id="ppPath" d="M8 5v14l11-7z"></path>
+      </svg>
+    </button>
+  </div>
+  <div id="stage">
+    <canvas id="scene"></canvas>
+    <div id="hint">Drag the cyan player or orange source. Click-drag empty space to draw walls.</div>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+// ----- Materials -----
+const MATERIALS = {
+  drywall: { color: "#cfcfcf", absorption: [0.08, 0.18, 0.28], reflectivity: 0.55, transmission: 0.32 },
+  wood:    { color: "#a97b50", absorption: [0.15, 0.25, 0.35], reflectivity: 0.50, transmission: 0.22 },
+  stone:   { color: "#7a7a7a", absorption: [0.05, 0.10, 0.20], reflectivity: 0.78, transmission: 0.06 },
+  glass:   { color: "#8fd3ff", absorption: [0.10, 0.06, 0.04], reflectivity: 0.30, transmission: 0.55 },
+  metal:   { color: "#9aa3ad", absorption: [0.04, 0.06, 0.10], reflectivity: 0.85, transmission: 0.02 },
+};
+
+// ----- World units (logical) -----
+const WORLD = 100; // arena 100x100 logical units; canvas scales
+
+// ----- DOM -----
+const sceneCanvas = document.getElementById("scene");
+const sceneCtx = sceneCanvas.getContext("2d");
+const losGraph = document.getElementById("losGraph");
+const losCtx = losGraph.getContext("2d");
+
+const materialSel = document.getElementById("materialSel");
+const thickSlider = document.getElementById("thickSlider");
+const destrChk = document.getElementById("destrChk");
+const muffleSlider = document.getElementById("muffleSlider");
+const echoSlider = document.getElementById("echoSlider");
+const musicFile = document.getElementById("musicFile");
+const removeMusicBtn = document.getElementById("removeMusicBtn");
+const explodeBtn = document.getElementById("explodeBtn");
+const clearBtn = document.getElementById("clearBtn");
+const resetBtn = document.getElementById("resetBtn");
+const accessBtn = document.getElementById("accessBtn");
+const losChip = document.getElementById("losChip");
+const muffleChip = document.getElementById("muffleChip");
+const echoChip = document.getElementById("echoChip");
+const playPauseBtn = document.getElementById("playPauseBtn");
+const ppPath = document.getElementById("ppPath");
+
+// ----- State -----
+const state = {
+  walls: [],
+  player: { x: 25, y: 50 },
+  source: { x: 75, y: 50 },
+  drag: null,         // { type: "player" | "source" | "wall", ... }
+  hoverEntity: null,  // "player" | "source" | null
+  running: false,
+  accessibility: false,
+  los: 0,
+  muffle: 0,
+  echo: 0,
+  bandEnergy: [0,0,0],
+  echoEnergy: [0,0,0],
+  diffractionVis: null,
+  reflectionVis: [],
+  detectorVis: [],
+  losHistory: new Float32Array(180),
+  losHistoryIdx: 0,
+  particles: [],
+  particleIdx: 0,
+  frame: 0,
+};
+
+// ----- Audio engine -----
+const AudioEngine = {
+  ctx: null,
+  master: null,
+  compressor: null,
+  makeup: null,
+  panner: null,
+  dryGain: null,
+  wetGain: null,
+  eqLow: null, eqMid: null, eqHigh: null,
+  source: null,
+  sourceType: "default", // or "music"
+  musicBuffer: null,
+  echoNodes: [], // {ts}
+  MAX_ECHO_NODES: 24,
+  noiseBuffer: null,
+
+  init() {
+    if (this.ctx) return;
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    this.ctx = new Ctx();
+    console.log("AudioContext state:", this.ctx.state);
+
+    // Master chain (in reverse: build destination side first)
+    this.compressor = this.ctx.createDynamicsCompressor();
+    this.compressor.threshold.value = -24;
+    this.compressor.knee.value = 30;
+    this.compressor.ratio.value = 1;
+    this.compressor.attack.value = 0.003;
+    this.compressor.release.value = 0.25;
+
+    this.makeup = this.ctx.createGain();
+    this.makeup.gain.value = 1.25;
+
+    this.panner = this.ctx.createPanner();
+    this.panner.panningModel = "HRTF";
+    this.panner.distanceModel = "inverse";
+    this.panner.refDistance = 1;
+    this.panner.maxDistance = 200;
+    this.panner.rolloffFactor = 1;
+    this.panner.coneInnerAngle = 360;
+    this.panner.coneOuterAngle = 0;
+    this.panner.coneOuterGain = 0;
+
+    // Listener at origin facing +y (in world coords, listener=player; we'll
+    // express source pos relative to player.)
+    if (this.ctx.listener.forwardX) {
+      this.ctx.listener.forwardX.value = 0;
+      this.ctx.listener.forwardY.value = 0;
+      this.ctx.listener.forwardZ.value = -1;
+      this.ctx.listener.upX.value = 0;
+      this.ctx.listener.upY.value = 1;
+      this.ctx.listener.upZ.value = 0;
+      this.ctx.listener.positionX.value = 0;
+      this.ctx.listener.positionY.value = 0;
+      this.ctx.listener.positionZ.value = 0;
+    }
+
+    this.panner.connect(this.compressor);
+    this.compressor.connect(this.makeup);
+    this.makeup.connect(this.ctx.destination);
+
+    // Dry & wet gains feed panner
+    this.dryGain = this.ctx.createGain();
+    this.dryGain.gain.value = 0.6;
+    this.dryGain.connect(this.panner);
+
+    this.wetGain = this.ctx.createGain();
+    this.wetGain.gain.value = 0.3;
+    this.wetGain.connect(this.panner);
+
+    // 3-band EQ between source and dryGain
+    this.eqLow = this.ctx.createBiquadFilter();
+    this.eqLow.type = "lowshelf";
+    this.eqLow.frequency.value = 200;
+    this.eqLow.gain.value = 0;
+
+    this.eqMid = this.ctx.createBiquadFilter();
+    this.eqMid.type = "peaking";
+    this.eqMid.frequency.value = 1000;
+    this.eqMid.Q.value = 0.9;
+    this.eqMid.gain.value = 0;
+
+    this.eqHigh = this.ctx.createBiquadFilter();
+    this.eqHigh.type = "highshelf";
+    this.eqHigh.frequency.value = 4000;
+    this.eqHigh.gain.value = 0;
+
+    this.eqLow.connect(this.eqMid);
+    this.eqMid.connect(this.eqHigh);
+    this.eqHigh.connect(this.dryGain);
+
+    // Pre-build a noise buffer for echoes & default source
+    const sr = this.ctx.sampleRate;
+    const len = Math.floor(sr * 1.5);
+    const nb = this.ctx.createBuffer(1, len, sr);
+    const nd = nb.getChannelData(0);
+    for (let i = 0; i < len; i++) nd[i] = (Math.random() * 2 - 1) * 0.5;
+    this.noiseBuffer = nb;
+
+    this._startDefaultSource();
+  },
+
+  _startDefaultSource() {
+    if (!this.ctx) return;
+    if (this.source) try { this.source.stop(); this.source.disconnect(); } catch (e) {}
+    const src = this.ctx.createBufferSource();
+    src.buffer = this.noiseBuffer;
+    src.loop = true;
+
+    const lp = this.ctx.createBiquadFilter();
+    lp.type = "lowpass";
+    lp.frequency.value = 600;
+    lp.Q.value = 0.7;
+
+    src.connect(lp);
+    lp.connect(this.eqLow);
+    src.start(0);
+    this.source = src;
+    this.sourceType = "default";
+  },
+
+  loadMusic(arrayBuffer) {
+    if (!this.ctx) this.init();
+    this.ctx.decodeAudioData(arrayBuffer.slice(0)).then(buf => {
+      this.musicBuffer = buf;
+      this._switchToMusic();
+      removeMusicBtn.classList.add("on");
+    }).catch(err => {
+      console.error("decodeAudioData failed:", err);
+    });
+  },
+
+  _switchToMusic() {
+    if (!this.ctx || !this.musicBuffer) return;
+    if (this.source) try { this.source.stop(); this.source.disconnect(); } catch (e) {}
+    const src = this.ctx.createBufferSource();
+    src.buffer = this.musicBuffer;
+    src.loop = true;
+    src.connect(this.eqLow);
+    src.start(0);
+    this.source = src;
+    this.sourceType = "music";
+  },
+
+  removeMusic() {
+    this.musicBuffer = null;
+    if (this.ctx) this._startDefaultSource();
+    removeMusicBtn.classList.remove("on");
+    musicFile.value = "";
+  },
+
+  applyBandGains(bandLin) {
+    // bandLin in [0..~1], convert to dB-ish gain in shelf/peaking.
+    // We'll treat 1.0 = 0 dB, lower = attenuation down to -24 dB.
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    const dbFor = v => {
+      const c = Math.max(0.0001, Math.min(1, v));
+      return 20 * Math.log10(c); // 0 dB at v=1, -inf at 0
+    };
+    const dbL = Math.max(-24, dbFor(bandLin[0]));
+    const dbM = Math.max(-24, dbFor(bandLin[1]));
+    const dbH = Math.max(-24, dbFor(bandLin[2]));
+    this.eqLow.gain.setTargetAtTime(dbL, t, 0.04);
+    this.eqMid.gain.setTargetAtTime(dbM, t, 0.04);
+    this.eqHigh.gain.setTargetAtTime(dbH, t, 0.04);
+  },
+
+  setDryGain(v) {
+    if (!this.ctx) return;
+    this.dryGain.gain.setTargetAtTime(v, this.ctx.currentTime, 0.04);
+  },
+
+  setWetGain(v) {
+    if (!this.ctx) return;
+    this.wetGain.gain.setTargetAtTime(v, this.ctx.currentTime, 0.04);
+  },
+
+  setPanner(relX, relY) {
+    // relX, relY in world units; map to a small 3D-ish space
+    if (!this.ctx) return;
+    const sx = relX * 0.5;
+    const sy = 0;
+    const sz = -relY * 0.5;
+    if (this.panner.positionX) {
+      this.panner.positionX.setTargetAtTime(sx, this.ctx.currentTime, 0.05);
+      this.panner.positionY.setTargetAtTime(sy, this.ctx.currentTime, 0.05);
+      this.panner.positionZ.setTargetAtTime(sz, this.ctx.currentTime, 0.05);
+    } else {
+      this.panner.setPosition(sx, sy, sz);
+    }
+  },
+
+  spawnEcho(distance, bandEnergy) {
+    if (!this.ctx) return;
+    if (this.echoNodes.length >= this.MAX_ECHO_NODES) return;
+
+    const speed = 343; // m/s, distance in arbitrary units => seconds = dist/speed
+    const delaySec = Math.min(0.6, Math.max(0.005, distance / speed * 1.2));
+
+    const src = this.ctx.createBufferSource();
+    src.buffer = this.noiseBuffer;
+    src.loop = false;
+    // start at random offset, short slice
+    const sr = this.ctx.sampleRate;
+    const startOffset = Math.random() * (this.noiseBuffer.duration - 0.1);
+    const dur = 0.08 + Math.random() * 0.05;
+
+    const delay = this.ctx.createDelay(2.0);
+    delay.delayTime.value = delaySec;
+
+    const eqL = this.ctx.createBiquadFilter();
+    eqL.type = "lowshelf";
+    eqL.frequency.value = 200;
+    const eqM = this.ctx.createBiquadFilter();
+    eqM.type = "peaking";
+    eqM.frequency.value = 1000;
+    eqM.Q.value = 0.9;
+    const eqH = this.ctx.createBiquadFilter();
+    eqH.type = "highshelf";
+    eqH.frequency.value = 4000;
+
+    const dbFor = v => 20 * Math.log10(Math.max(0.0001, Math.min(1, v)));
+    eqL.gain.value = Math.max(-24, dbFor(bandEnergy[0]));
+    eqM.gain.value = Math.max(-24, dbFor(bandEnergy[1]));
+    eqH.gain.value = Math.max(-24, dbFor(bandEnergy[2]));
+
+    const gain = this.ctx.createGain();
+    const peak = Math.min(1.0, (bandEnergy[0] + bandEnergy[1] + bandEnergy[2]) / 3);
+    gain.gain.value = peak;
+
+    src.connect(delay);
+    delay.connect(eqL);
+    eqL.connect(eqM);
+    eqM.connect(eqH);
+    eqH.connect(gain);
+    gain.connect(this.wetGain);
+
+    const entry = { src, delay, eqL, eqM, eqH, gain };
+    this.echoNodes.push(entry);
+
+    src.onended = () => {
+      try { src.disconnect(); delay.disconnect(); eqL.disconnect(); eqM.disconnect(); eqH.disconnect(); gain.disconnect(); } catch (e) {}
+      const i = this.echoNodes.indexOf(entry);
+      if (i >= 0) this.echoNodes.splice(i, 1);
+    };
+
+    src.start(this.ctx.currentTime, startOffset, dur);
+    src.stop(this.ctx.currentTime + delaySec + dur + 0.05);
+  },
+
+  suspend() {
+    if (this.ctx && this.ctx.state === "running") this.ctx.suspend();
+  },
+  resume() {
+    if (this.ctx && this.ctx.state === "suspended") this.ctx.resume();
+  }
+};
+
+// ----- Geometry helpers -----
+function segIntersect(a, b, c, d) {
+  // Return intersection point or null
+  const r1x = b.x - a.x, r1y = b.y - a.y;
+  const r2x = d.x - c.x, r2y = d.y - c.y;
+  const denom = r1x * r2y - r1y * r2x;
+  if (Math.abs(denom) < 1e-9) return null;
+  const t = ((c.x - a.x) * r2y - (c.y - a.y) * r2x) / denom;
+  const u = ((c.x - a.x) * r1y - (c.y - a.y) * r1x) / denom;
+  if (t < 0 || t > 1 || u < 0 || u > 1) return null;
+  return { x: a.x + r1x * t, y: a.y + r1y * t, t, u };
+}
+
+function segIntersectsAnyWall(a, b, exclude = null) {
+  for (const w of state.walls) {
+    if (w.destroyed) continue;
+    if (w === exclude) continue;
+    const hit = segIntersect(a, b, w.a, w.b);
+    if (hit) return true;
+  }
+  return false;
+}
+
+function wallNormal(w) {
+  const dx = w.b.x - w.a.x, dy = w.b.y - w.a.y;
+  const l = Math.hypot(dx, dy) || 1;
+  return { x: -dy / l, y: dx / l };
+}
+
+function dist(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
+
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+function lerp(a, b, t) { return a + (b - a) * t; }
+
+// ----- World construction -----
+function buildComplexOffice() {
+  state.walls.length = 0;
+  const W = WORLD;
+  const pad = 2;
+
+  // Outer arena (drywall, thick)
+  addWall(pad, pad, W - pad, pad, "drywall", 1.5, false);
+  addWall(W - pad, pad, W - pad, W - pad, "drywall", 1.5, false);
+  addWall(W - pad, W - pad, pad, W - pad, "drywall", 1.5, false);
+  addWall(pad, W - pad, pad, pad, "drywall", 1.5, false);
+
+  // Vertical divider with door
+  addWall(40, 2, 40, 30, "stone", 1.5, false);   // top section
+  addWall(40, 38, 40, 65, "stone", 1.5, true);  // mid section, destructible
+  addWall(40, 73, 40, 98, "stone", 1.5, false); // bottom
+
+  // Horizontal divider with door
+  addWall(2, 50, 22, 50, "wood", 1.0, false);
+  addWall(30, 50, 40, 50, "wood", 1.0, true);   // destructible
+
+  // Right side rooms
+  addWall(70, 2, 70, 25, "metal", 1.0, false);
+  addWall(70, 25, 95, 25, "metal", 1.0, true);  // destructible
+  addWall(70, 60, 95, 60, "glass", 0.8, false);
+  addWall(60, 60, 60, 80, "glass", 0.8, true);  // destructible
+
+  // A small interior column
+  addWall(55, 35, 60, 35, "wood", 1.2, false);
+  addWall(60, 35, 60, 42, "wood", 1.2, false);
+  addWall(60, 42, 55, 42, "wood", 1.2, false);
+  addWall(55, 42, 55, 35, "wood", 1.2, false);
+}
+
+function addWall(x1, y1, x2, y2, mat, thickness, destructible) {
+  state.walls.push({
+    a: { x: x1, y: y1 },
+    b: { x: x2, y: y2 },
+    material: mat,
+    thickness,
+    destructible: !!destructible,
+    destroyed: false,
+  });
+}
+
+// ----- Physics: direct/LOS, permeation, diffraction, reflections -----
+const NUM_DETECTORS = 32;
+const NUM_ECHO_RAYS = 24;
+const MAX_BOUNCES = 3;
+
+function computeLOS() {
+  // Cast NUM_DETECTORS rays from player aimed in a fan toward the source.
+  // Each ray has a small angular spread; if the ray hits source within tolerance
+  // before any wall, count as direct.
+  const p = state.player, s = state.source;
+  const dx = s.x - p.x, dy = s.y - p.y;
+  const baseAng = Math.atan2(dy, dx);
+  const spread = 0.5; // ~28 deg total fan
+  const total = NUM_DETECTORS;
+  let hits = 0;
+  state.detectorVis.length = 0;
+
+  for (let i = 0; i < total; i++) {
+    const t = total > 1 ? i / (total - 1) : 0.5;
+    const ang = baseAng + (t - 0.5) * spread * 2;
+    const rayLen = WORLD * 1.5;
+    const tip = { x: p.x + Math.cos(ang) * rayLen, y: p.y + Math.sin(ang) * rayLen };
+
+    // Find nearest wall hit
+    let nearest = null;
+    let nearestDist = Infinity;
+    for (const w of state.walls) {
+      if (w.destroyed) continue;
+      const hit = segIntersect(p, tip, w.a, w.b);
+      if (hit) {
+        const d = hit.t * rayLen;
+        if (d < nearestDist) { nearestDist = d; nearest = hit; }
+      }
+    }
+    // distance to source center along this ray (project)
+    const sourceProj = (s.x - p.x) * Math.cos(ang) + (s.y - p.y) * Math.sin(ang);
+    const perp = Math.abs(-(s.x - p.x) * Math.sin(ang) + (s.y - p.y) * Math.cos(ang));
+    const sourceRadius = 2.5;
+    let reachedSource = false;
+    if (sourceProj > 0 && perp <= sourceRadius) {
+      // ray passes within source radius
+      if (!nearest || sourceProj < nearestDist) {
+        reachedSource = true;
+      }
+    }
+    state.detectorVis.push({
+      from: { x: p.x, y: p.y },
+      to: nearest ? nearest : (reachedSource ? { x: p.x + Math.cos(ang) * sourceProj, y: p.y + Math.sin(ang) * sourceProj } : tip),
+      hit: reachedSource ? "source" : (nearest ? "wall" : "miss"),
+    });
+    if (reachedSource) hits++;
+  }
+  return hits / total;
+}
+
+function permeationEnergy() {
+  // Single ray source -> player, accumulate per-band attenuation through every wall.
+  const a = state.source, b = state.player;
+  let energy = [1, 1, 1];
+
+  for (const w of state.walls) {
+    if (w.destroyed) continue;
+    const hit = segIntersect(a, b, w.a, w.b);
+    if (!hit) continue;
+    const m = MATERIALS[w.material];
+    const T = w.thickness;
+    for (let i = 0; i < 3; i++) {
+      const Aeff = 1 - Math.pow(1 - m.absorption[i], T);
+      energy[i] *= (1 - Aeff) * m.transmission;
+    }
+  }
+  return energy;
+}
+
+function diffractionPath() {
+  // Try every wall vertex (endpoints) as a 1-bend corner.
+  const s = state.source, p = state.player;
+  let best = null;
+  for (const w of state.walls) {
+    if (w.destroyed) continue;
+    for (const v of [w.a, w.b]) {
+      // segments source->v and v->player must be unobstructed
+      const seg1Ok = !segIntersectsAnyWall(s, v, w);
+      const seg2Ok = !segIntersectsAnyWall(v, p, w);
+      if (!seg1Ok || !seg2Ok) continue;
+      const totalLen = dist(s, v) + dist(v, p);
+
+      // Bend angle theta at corner
+      const v1x = s.x - v.x, v1y = s.y - v.y;
+      const v2x = p.x - v.x, v2y = p.y - v.y;
+      const l1 = Math.hypot(v1x, v1y) || 1;
+      const l2 = Math.hypot(v2x, v2y) || 1;
+      const cosA = (v1x * v2x + v1y * v2y) / (l1 * l2);
+      const theta = Math.acos(clamp(cosA, -1, 1));
+
+      if (!best || totalLen < best.totalLen) {
+        best = { corner: { x: v.x, y: v.y }, theta, totalLen };
+      }
+    }
+  }
+  if (!best) return null;
+  // UTD-inspired
+  const k = [0.8, 1.5, 3.0];
+  const factor = 0.5 * (1 + Math.cos(Math.PI - best.theta));
+  const bandAtt = [
+    Math.pow(Math.max(0.0001, factor), k[0]),
+    Math.pow(Math.max(0.0001, factor), k[1]),
+    Math.pow(Math.max(0.0001, factor), k[2]),
+  ];
+  // Distance attenuation (simple inverse falloff)
+  const distAtt = 1 / (1 + best.totalLen / 30);
+  const bandEnergy = [bandAtt[0] * distAtt, bandAtt[1] * distAtt, bandAtt[2] * distAtt];
+  return { corner: best.corner, theta: best.theta, bandEnergy, totalLen: best.totalLen };
+}
+
+function simulateEchoRays() {
+  // Cast NUM_ECHO_RAYS from source in random directions, bounce up to MAX_BOUNCES.
+  // After each bounce, check if line from bounce point to player is clear; if so,
+  // it's a valid echo path. Push (distance, bandEnergy) to AudioEngine.
+  state.reflectionVis.length = 0;
+
+  if (!state.running || !AudioEngine.ctx) return;
+
+  const s = state.source, p = state.player;
+
+  for (let r = 0; r < NUM_ECHO_RAYS; r++) {
+    let pos = { x: s.x, y: s.y };
+    const ang = (r / NUM_ECHO_RAYS) * Math.PI * 2 + Math.random() * 0.1;
+    let dir = { x: Math.cos(ang), y: Math.sin(ang) };
+    let energy = [0.7, 0.7, 0.7];
+    let totalDist = 0;
+    const segs = [];
+
+    for (let bounce = 0; bounce < MAX_BOUNCES; bounce++) {
+      const rayLen = WORLD * 2;
+      const tip = { x: pos.x + dir.x * rayLen, y: pos.y + dir.y * rayLen };
+
+      // find nearest wall hit
+      let nearest = null;
+      let nearestT = Infinity;
+      let nearestWall = null;
+      for (const w of state.walls) {
+        if (w.destroyed) continue;
+        const hit = segIntersect(pos, tip, w.a, w.b);
+        if (hit && hit.t > 0.001 && hit.t < nearestT) {
+          nearestT = hit.t;
+          nearest = hit;
+          nearestWall = w;
+        }
+      }
+      if (!nearest) {
+        segs.push({ a: pos, b: tip, alpha: 0.05 });
+        break;
+      }
+      segs.push({ a: pos, b: nearest, alpha: 0.18 - bounce * 0.05 });
+      totalDist += dist(pos, nearest);
+
+      // attenuate energy by reflectivity * (1 - Aeff)
+      const m = MATERIALS[nearestWall.material];
+      const T = nearestWall.thickness;
+      for (let i = 0; i < 3; i++) {
+        const Aeff = 1 - Math.pow(1 - m.absorption[i], T);
+        energy[i] *= m.reflectivity * (1 - Aeff);
+      }
+
+      // bounce direction (mirror)
+      const n = wallNormal(nearestWall);
+      const dotDN = dir.x * n.x + dir.y * n.y;
+      dir = { x: dir.x - 2 * dotDN * n.x, y: dir.y - 2 * dotDN * n.y };
+      pos = { x: nearest.x + dir.x * 0.05, y: nearest.y + dir.y * 0.05 };
+
+      // After bounce: check if pos -> player clear
+      const pathClear = !segIntersectsAnyWall(pos, p);
+      if (pathClear) {
+        const dPP = dist(pos, p);
+        const totalEchoDist = totalDist + dPP;
+        const distAtt = 1 / (1 + totalEchoDist / 25);
+        const eOut = [energy[0] * distAtt, energy[1] * distAtt, energy[2] * distAtt];
+        if (eOut[0] + eOut[1] + eOut[2] > 0.01) {
+          AudioEngine.spawnEcho(totalEchoDist, eOut);
+          segs.push({ a: pos, b: p, alpha: 0.10 - bounce * 0.03 });
+        }
+      }
+    }
+    state.reflectionVis.push(segs);
+  }
+}
+
+// ----- Main update -----
+function audioUpdate() {
+  // Compute LOS, permeation, diffraction; combine into bandEnergy.
+  const losPct = computeLOS();
+  state.los = losPct;
+
+  let direct = [losPct, losPct, losPct];
+
+  // Always compute permeation (it scales by transmission only when through walls)
+  let perm = permeationEnergy();
+  // If LOS is full, perm.energy=1,1,1 because no wall hits; but we already
+  // counted that as direct. To avoid double-counting, only use permeation when
+  // LOS is partial.
+  let permContribution = [0, 0, 0];
+  if (losPct < 1) {
+    const blocked = 1 - losPct;
+    permContribution = [perm[0] * blocked, perm[1] * blocked, perm[2] * blocked];
+  }
+
+  // Diffraction
+  let diff = null;
+  if (losPct < 0.95) {
+    diff = diffractionPath();
+  }
+  state.diffractionVis = (losPct < 0.10 && diff) ? diff : null;
+
+  let diffContribution = [0, 0, 0];
+  if (diff && losPct < 0.95) {
+    const w = (1 - losPct) * 0.5;
+    diffContribution = [diff.bandEnergy[0] * w, diff.bandEnergy[1] * w, diff.bandEnergy[2] * w];
+  }
+
+  // Distance attenuation on direct
+  const d = dist(state.source, state.player);
+  const distAtt = 1 / (1 + d / 35);
+
+  const total = [
+    Math.min(1, direct[0] * distAtt + permContribution[0] + diffContribution[0]),
+    Math.min(1, direct[1] * distAtt + permContribution[1] + diffContribution[1]),
+    Math.min(1, direct[2] * distAtt + permContribution[2] + diffContribution[2]),
+  ];
+  state.bandEnergy = total;
+
+  // Muffling slider -> shape: bigger muffle = damp highs more
+  const muffleAmt = parseFloat(muffleSlider.value);
+  const muffleApplied = [
+    total[0],
+    total[1] * (1 - muffleAmt * 0.4),
+    total[2] * (1 - muffleAmt * 0.8),
+  ];
+
+  AudioEngine.applyBandGains(muffleApplied);
+
+  // Loudness mapping
+  const mag = Math.sqrt(total[0]*total[0] + total[1]*total[1] + total[2]*total[2]) / Math.sqrt(3);
+  const dryGain = clamp(0.1 + Math.sqrt(mag) * 1.5, 0, 1.5);
+  AudioEngine.setDryGain(dryGain);
+
+  // Wet gain from echo slider * recent echo magnitude estimate
+  const echoMix = parseFloat(echoSlider.value);
+  AudioEngine.setWetGain(echoMix);
+
+  // Panner: source position relative to player
+  AudioEngine.setPanner(state.source.x - state.player.x, state.source.y - state.player.y);
+
+  // Echoes (throttled)
+  if (state.frame % 3 === 0) {
+    simulateEchoRays();
+  }
+  state.echoEnergy = [echoMix, echoMix, echoMix];
+
+  // Update chips
+  state.muffle = 1 - mag;
+  state.echo = echoMix * Math.min(1, AudioEngine.echoNodes ? AudioEngine.echoNodes.length / AudioEngine.MAX_ECHO_NODES : 0);
+  losChip.textContent = Math.round(losPct * 100) + "%";
+  muffleChip.textContent = state.muffle.toFixed(2);
+  echoChip.textContent = state.echo.toFixed(2);
+
+  // LOS history ring buffer
+  state.losHistory[state.losHistoryIdx] = losPct;
+  state.losHistoryIdx = (state.losHistoryIdx + 1) % state.losHistory.length;
+}
+
+// ----- Visualization -----
+let canvasSize = 600;
+
+function fitCanvas() {
+  const stage = document.getElementById("stage");
+  const rect = stage.getBoundingClientRect();
+  const margin = 16;
+  const sz = Math.max(200, Math.min(rect.width, rect.height) - margin);
+  canvasSize = Math.floor(sz);
+  sceneCanvas.width = canvasSize;
+  sceneCanvas.height = canvasSize;
+  sceneCanvas.style.width = canvasSize + "px";
+  sceneCanvas.style.height = canvasSize + "px";
+}
+
+function w2c(p) {
+  const s = canvasSize / WORLD;
+  return { x: p.x * s, y: p.y * s };
+}
+function c2w(p) {
+  const s = WORLD / canvasSize;
+  return { x: p.x * s, y: p.y * s };
+}
+
+function drawScene() {
+  const ctx = sceneCtx;
+  const W = canvasSize;
+  ctx.clearRect(0, 0, W, W);
+
+  // Floor grid
+  ctx.save();
+  ctx.strokeStyle = "rgba(255,255,255,0.04)";
+  ctx.lineWidth = 1;
+  const step = canvasSize / 20;
+  for (let i = 0; i <= 20; i++) {
+    ctx.beginPath();
+    ctx.moveTo(i * step, 0); ctx.lineTo(i * step, W);
+    ctx.moveTo(0, i * step); ctx.lineTo(W, i * step);
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  // Detector / LOS rays from player
+  if (!state.accessibility) {
+    ctx.save();
+    for (const r of state.detectorVis) {
+      const a = w2c(r.from), b = w2c(r.to);
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      if (r.hit === "source") {
+        ctx.strokeStyle = "rgba(80, 255, 140, 0.55)";
+        ctx.lineWidth = 1.2;
+      } else {
+        ctx.strokeStyle = "rgba(0, 255, 255, 0.10)";
+        ctx.lineWidth = 0.8;
+      }
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // Reflection rays
+  if (!state.accessibility) {
+    ctx.save();
+    for (const segs of state.reflectionVis) {
+      for (const sg of segs) {
+        const a = w2c(sg.a), b = w2c(sg.b);
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);
+        ctx.strokeStyle = `rgba(140, 220, 255, ${sg.alpha})`;
+        ctx.lineWidth = 0.7;
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
+  }
+
+  // Particles (accessibility mode)
+  if (state.accessibility) {
+    ctx.save();
+    const N = state.particles.length;
+    for (let i = 0; i < N; i++) {
+      const p = state.particles[i];
+      if (!p) continue;
+      const c = w2c(p);
+      const a = clamp(p.life / p.maxLife, 0, 1);
+      ctx.fillStyle = `rgba(255, 154, 60, ${a * 0.7})`;
+      ctx.beginPath();
+      ctx.arc(c.x, c.y, 1.5 + (1 - a) * 0.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  // Walls
+  ctx.save();
+  for (const w of state.walls) {
+    const m = MATERIALS[w.material];
+    const a = w2c(w.a), b = w2c(w.b);
+    if (w.destroyed) {
+      ctx.strokeStyle = "rgba(80,80,80,0.25)";
+      ctx.setLineDash([2, 4]);
+      ctx.lineWidth = 1;
+    } else {
+      ctx.strokeStyle = m.color;
+      ctx.lineWidth = 1.5 + (w.thickness - 1) * 1.2;
+      if (w.destructible) {
+        ctx.setLineDash([6, 4]);
+      } else {
+        ctx.setLineDash([]);
+      }
+    }
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+  ctx.restore();
+
+  // Diffraction path
+  if (state.diffractionVis) {
+    const d = state.diffractionVis;
+    const s = w2c(state.source);
+    const c = w2c(d.corner);
+    const p = w2c(state.player);
+    ctx.save();
+    ctx.strokeStyle = "rgba(255, 154, 60, 0.85)";
+    ctx.lineWidth = 1.6;
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    ctx.moveTo(s.x, s.y);
+    ctx.lineTo(c.x, c.y);
+    ctx.lineTo(p.x, p.y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = "#ff9a3c";
+    ctx.beginPath();
+    ctx.arc(c.x, c.y, 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // Drag-in-progress wall preview
+  if (state.drag && state.drag.type === "wall") {
+    const a = w2c(state.drag.a), b = w2c(state.drag.b);
+    const m = MATERIALS[materialSel.value];
+    ctx.save();
+    ctx.strokeStyle = m.color;
+    ctx.globalAlpha = 0.6;
+    ctx.lineWidth = 1.5 + (parseFloat(thickSlider.value) - 1) * 1.2;
+    if (destrChk.checked) ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+  }
+
+  // Source (orange icon)
+  {
+    const c = w2c(state.source);
+    ctx.save();
+    const grd = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, 14);
+    grd.addColorStop(0, "rgba(255,154,60,0.55)");
+    grd.addColorStop(1, "rgba(255,154,60,0)");
+    ctx.fillStyle = grd;
+    ctx.beginPath();
+    ctx.arc(c.x, c.y, 14, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = "#ff9a3c";
+    ctx.strokeStyle = "#fff";
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(c.x, c.y, 6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    // Speaker glyph
+    ctx.fillStyle = "#1a1a1a";
+    ctx.fillRect(c.x - 2, c.y - 1.5, 4, 3);
+    ctx.restore();
+  }
+
+  // Player (cyan circle)
+  {
+    const c = w2c(state.player);
+    ctx.save();
+    const grd = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, 12);
+    grd.addColorStop(0, "rgba(0,255,255,0.5)");
+    grd.addColorStop(1, "rgba(0,255,255,0)");
+    ctx.fillStyle = grd;
+    ctx.beginPath();
+    ctx.arc(c.x, c.y, 12, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = "#00ffff";
+    ctx.strokeStyle = "#fff";
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(c.x, c.y, 6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    // Listening indicator
+    ctx.strokeStyle = "rgba(0,255,255,0.4)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(c.x, c.y, 10, -Math.PI / 4, Math.PI / 4);
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
+function drawLOSGraph() {
+  const ctx = losCtx;
+  const W = losGraph.width, H = losGraph.height;
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = "#0d0d0d";
+  ctx.fillRect(0, 0, W, H);
+
+  // grid line
+  ctx.strokeStyle = "rgba(255,255,255,0.08)";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(0, H / 2); ctx.lineTo(W, H / 2);
+  ctx.stroke();
+
+  // waveform
+  const N = state.losHistory.length;
+  ctx.strokeStyle = "#00ffff";
+  ctx.shadowColor = "rgba(0,255,255,0.6)";
+  ctx.shadowBlur = 4;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  for (let i = 0; i < N; i++) {
+    // index relative to head
+    const k = (state.losHistoryIdx + i) % N;
+    const v = state.losHistory[k];
+    const x = (i / (N - 1)) * W;
+    const y = H - 2 - v * (H - 4);
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+}
+
+// ----- Particles (accessibility) -----
+const MAX_PARTICLES = 200;
+function spawnParticles() {
+  if (!state.accessibility) return;
+  // Spawn 4 per frame radiating from source, color shifts toward dim if blocked.
+  for (let i = 0; i < 4; i++) {
+    const ang = Math.random() * Math.PI * 2;
+    const speed = 0.4 + Math.random() * 0.6;
+    const p = {
+      x: state.source.x,
+      y: state.source.y,
+      vx: Math.cos(ang) * speed,
+      vy: Math.sin(ang) * speed,
+      life: 60,
+      maxLife: 60,
+    };
+    state.particles[state.particleIdx] = p;
+    state.particleIdx = (state.particleIdx + 1) % MAX_PARTICLES;
+  }
+}
+
+function updateParticles() {
+  for (let i = 0; i < state.particles.length; i++) {
+    const p = state.particles[i];
+    if (!p) continue;
+    p.life--;
+    if (p.life <= 0) { state.particles[i] = null; continue; }
+    const nx = p.x + p.vx, ny = p.y + p.vy;
+    // collide with walls (simple: kill on hit)
+    let hit = false;
+    for (const w of state.walls) {
+      if (w.destroyed) continue;
+      if (segIntersect({ x: p.x, y: p.y }, { x: nx, y: ny }, w.a, w.b)) {
+        hit = true; break;
+      }
+    }
+    if (hit) { state.particles[i] = null; continue; }
+    p.x = nx; p.y = ny;
+    if (p.x < 0 || p.x > WORLD || p.y < 0 || p.y > WORLD) state.particles[i] = null;
+  }
+}
+
+// ----- Loop -----
+let rafId = null;
+function loop() {
+  state.frame++;
+  if (state.running) {
+    audioUpdate();
+  } else {
+    state.los = 0;
+    state.detectorVis.length = 0;
+    state.reflectionVis.length = 0;
+    state.diffractionVis = null;
+    losChip.textContent = "0%";
+    muffleChip.textContent = "0.00";
+    echoChip.textContent = "0.00";
+  }
+  if (state.accessibility) {
+    spawnParticles();
+    updateParticles();
+  }
+  drawScene();
+  drawLOSGraph();
+  rafId = requestAnimationFrame(loop);
+}
+
+// ----- Input -----
+function getMousePosWorld(ev) {
+  const r = sceneCanvas.getBoundingClientRect();
+  const cx = ev.clientX - r.left, cy = ev.clientY - r.top;
+  return c2w({ x: cx, y: cy });
+}
+
+function pickEntity(p) {
+  if (dist(p, state.player) < 4) return "player";
+  if (dist(p, state.source) < 4) return "source";
+  return null;
+}
+
+sceneCanvas.addEventListener("mousedown", (ev) => {
+  if (ev.button !== 0) return;
+  const p = getMousePosWorld(ev);
+  const ent = pickEntity(p);
+  if (ent) {
+    state.drag = { type: ent };
+  } else {
+    state.drag = { type: "wall", a: { x: p.x, y: p.y }, b: { x: p.x, y: p.y } };
+  }
+});
+
+sceneCanvas.addEventListener("mousemove", (ev) => {
+  const p = getMousePosWorld(ev);
+  state.hoverEntity = pickEntity(p);
+  if (!state.drag) {
+    sceneCanvas.style.cursor = state.hoverEntity ? "grab" : "crosshair";
+    return;
+  }
+  if (state.drag.type === "player") {
+    state.player.x = clamp(p.x, 0, WORLD);
+    state.player.y = clamp(p.y, 0, WORLD);
+    sceneCanvas.style.cursor = "grabbing";
+  } else if (state.drag.type === "source") {
+    state.source.x = clamp(p.x, 0, WORLD);
+    state.source.y = clamp(p.y, 0, WORLD);
+    sceneCanvas.style.cursor = "grabbing";
+  } else if (state.drag.type === "wall") {
+    state.drag.b = { x: clamp(p.x, 0, WORLD), y: clamp(p.y, 0, WORLD) };
+    sceneCanvas.style.cursor = "crosshair";
+  }
+});
+
+sceneCanvas.addEventListener("mouseup", (ev) => {
+  if (!state.drag) return;
+  if (state.drag.type === "wall") {
+    const a = state.drag.a, b = state.drag.b;
+    if (Math.hypot(a.x - b.x, a.y - b.y) > 1.5) {
+      addWall(a.x, a.y, b.x, b.y, materialSel.value, parseFloat(thickSlider.value), destrChk.checked);
+    }
+  }
+  state.drag = null;
+});
+
+sceneCanvas.addEventListener("mouseleave", () => {
+  if (state.drag && state.drag.type === "wall") {
+    state.drag = null;
+  }
+});
+
+// Touch support (basic)
+sceneCanvas.addEventListener("touchstart", (ev) => {
+  if (ev.touches.length !== 1) return;
+  ev.preventDefault();
+  const t = ev.touches[0];
+  const fakeEv = { button: 0, clientX: t.clientX, clientY: t.clientY };
+  sceneCanvas.dispatchEvent(new MouseEvent("mousedown", fakeEv));
+}, { passive: false });
+sceneCanvas.addEventListener("touchmove", (ev) => {
+  if (ev.touches.length !== 1) return;
+  ev.preventDefault();
+  const t = ev.touches[0];
+  sceneCanvas.dispatchEvent(new MouseEvent("mousemove", { clientX: t.clientX, clientY: t.clientY }));
+}, { passive: false });
+sceneCanvas.addEventListener("touchend", (ev) => {
+  ev.preventDefault();
+  sceneCanvas.dispatchEvent(new MouseEvent("mouseup", { clientX: 0, clientY: 0 }));
+}, { passive: false });
+
+// ----- Buttons -----
+playPauseBtn.addEventListener("click", () => {
+  if (!state.running) {
+    AudioEngine.init();
+    AudioEngine.resume();
+    state.running = true;
+    ppPath.setAttribute("d", "M6 4h4v16H6zM14 4h4v16h-4z"); // pause
+  } else {
+    AudioEngine.suspend();
+    state.running = false;
+    ppPath.setAttribute("d", "M8 5v14l11-7z"); // play
+  }
+});
+
+explodeBtn.addEventListener("click", () => {
+  const radius = 25;
+  let count = 0;
+  for (const w of state.walls) {
+    if (!w.destructible || w.destroyed) continue;
+    // check distance from player to segment
+    const A = w.a, B = w.b;
+    const ABx = B.x - A.x, ABy = B.y - A.y;
+    const APx = state.player.x - A.x, APy = state.player.y - A.y;
+    const t = clamp((APx * ABx + APy * ABy) / (ABx * ABx + ABy * ABy + 1e-9), 0, 1);
+    const px = A.x + t * ABx, py = A.y + t * ABy;
+    const d = Math.hypot(state.player.x - px, state.player.y - py);
+    if (d < radius) { w.destroyed = true; count++; }
+  }
+});
+
+clearBtn.addEventListener("click", () => {
+  state.walls.length = 0;
+  buildComplexOffice();
+  // remove music
+  AudioEngine.removeMusic();
+  // reset positions
+  state.player = { x: 25, y: 50 };
+  state.source = { x: 75, y: 50 };
+});
+
+resetBtn.addEventListener("click", () => {
+  state.player = { x: 25, y: 50 };
+  state.source = { x: 75, y: 50 };
+});
+
+accessBtn.addEventListener("click", () => {
+  state.accessibility = !state.accessibility;
+  accessBtn.classList.toggle("on", state.accessibility);
+});
+
+musicFile.addEventListener("change", async () => {
+  const f = musicFile.files && musicFile.files[0];
+  if (!f) return;
+  AudioEngine.init();
+  const ab = await f.arrayBuffer();
+  AudioEngine.loadMusic(ab);
+});
+
+removeMusicBtn.addEventListener("click", () => {
+  AudioEngine.removeMusic();
+});
+
+// ----- Init -----
+window.addEventListener("resize", fitCanvas);
+window.addEventListener("error", e => {
+  // Suppress noisy logs; the user can still see the canvas state.
+});
+
+buildComplexOffice();
+fitCanvas();
+loop();
+</script>
+</body>
+</html>
