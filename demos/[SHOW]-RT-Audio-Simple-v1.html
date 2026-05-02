@@ -1,0 +1,458 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RT Audio Simple</title>
+  <style>
+    :root {
+      color-scheme: dark;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      margin: 0;
+      min-height: 100%;
+    }
+
+    body {
+      min-height: 100vh;
+      padding: 48px 24px 36px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #111;
+      color: #e8e8e8;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    .stage {
+      width: min(700px, calc(100vw - 48px));
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+
+    #arena {
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      display: block;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      background: #151515;
+      touch-action: none;
+    }
+
+    #playBtn {
+      position: fixed;
+      top: 18px;
+      right: 18px;
+      width: 46px;
+      height: 46px;
+      display: grid;
+      place-items: center;
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      border-radius: 999px;
+      background: #1b1b1b;
+      color: #f4f4f4;
+      font-size: 20px;
+      line-height: 1;
+      cursor: pointer;
+    }
+
+    #playBtn:hover {
+      background: #262626;
+    }
+
+    #hint {
+      margin: 4px 0 0;
+      color: #bdbdbd;
+      font-size: 14px;
+      text-align: center;
+    }
+
+    #readout {
+      min-height: 18px;
+      color: #f2f2f2;
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+  <button id="playBtn" type="button" aria-label="Play">▶</button>
+  <main class="stage">
+    <canvas id="arena" width="700" height="700" aria-label="Audio occlusion arena"></canvas>
+    <p id="hint">Drag the cyan player or orange source. Move behind the wall to hear the volume drop.</p>
+    <div id="readout">LOS: 0%</div>
+  </main>
+
+  <script>
+    (() => {
+      "use strict";
+
+      const SIZE = 700;
+      const RAY_COUNT = 16;
+      const FAN_RAD = 8 * Math.PI / 180;
+
+      const canvas = document.getElementById("arena");
+      const canvasCtx = canvas.getContext("2d");
+      const readout = document.getElementById("readout");
+      const playBtn = document.getElementById("playBtn");
+
+      const player = { x: 150, y: 230, r: 16, color: "#20d7e8" };
+      const source = { x: 290, y: 230, r: 16, color: "#ff9a2f" };
+      const walls = [
+        { x1: 60, y1: 400, x2: 300, y2: 400 },
+        { x1: 400, y1: 400, x2: 640, y2: 400 },
+        { x1: 160, y1: 475, x2: 160, y2: 620 },
+        { x1: 515, y1: 470, x2: 610, y2: 585 }
+      ];
+
+      let audioCtx = null;
+      let noiseBuffer = null;
+      let bufferSource = null;
+      let lowpass = null;
+      let gainNode = null;
+      let playing = false;
+      let dragTarget = null;
+      let dragOffsetX = 0;
+      let dragOffsetY = 0;
+      let losPct = 1;
+      let selfTestDone = false;
+      let selfTestFailed = false;
+      let selfTestMessage = "";
+      let lastDebugInfo = null;
+
+      function clamp(value, min, max) {
+        return Math.max(min, Math.min(max, value));
+      }
+
+      function cross(ax, ay, bx, by) {
+        return ax * by - ay * bx;
+      }
+
+      function distanceBetween(a, b) {
+        return Math.hypot(a.x - b.x, a.y - b.y);
+      }
+
+      function raySegmentDistance(px, py, rx, ry, wall) {
+        const sx = wall.x2 - wall.x1;
+        const sy = wall.y2 - wall.y1;
+        const denom = cross(rx, ry, sx, sy);
+
+        if (Math.abs(denom) < 1e-8) {
+          return null;
+        }
+
+        const qpx = wall.x1 - px;
+        const qpy = wall.y1 - py;
+        const rayT = cross(qpx, qpy, sx, sy) / denom;
+        const segT = cross(qpx, qpy, rx, ry) / denom;
+
+        if (rayT >= 0 && segT >= 0 && segT <= 1) {
+          return rayT;
+        }
+
+        return null;
+      }
+
+      function computeLOS() {
+        const dx = source.x - player.x;
+        const dy = source.y - player.y;
+        const distToSource = Math.hypot(dx, dy);
+
+        if (distToSource < 1e-6) {
+          lastDebugInfo = {
+            player: { x: player.x, y: player.y },
+            source: { x: source.x, y: source.y },
+            distToSource,
+            unobstructedCount: RAY_COUNT,
+            rays: [],
+            walls: walls.map((wall) => ({ ...wall }))
+          };
+          return 1;
+        }
+
+        const baseAngle = Math.atan2(dy, dx);
+        const rays = [];
+        let unobstructedCount = 0;
+
+        for (let i = 0; i < RAY_COUNT; i += 1) {
+          const fanT = RAY_COUNT === 1 ? 0.5 : i / (RAY_COUNT - 1);
+          const angle = baseAngle - FAN_RAD + (2 * FAN_RAD * fanT);
+          const rx = Math.cos(angle);
+          const ry = Math.sin(angle);
+          let closestHit = Infinity;
+          let hitWall = -1;
+
+          for (let j = 0; j < walls.length; j += 1) {
+            const hit = raySegmentDistance(player.x, player.y, rx, ry, walls[j]);
+
+            if (hit !== null && hit < closestHit) {
+              closestHit = hit;
+              hitWall = j;
+            }
+          }
+
+          const unobstructed = closestHit > distToSource;
+
+          if (unobstructed) {
+            unobstructedCount += 1;
+          }
+
+          rays.push({
+            index: i,
+            angleDeg: Number((angle * 180 / Math.PI).toFixed(2)),
+            closestHit: Number.isFinite(closestHit) ? Number(closestHit.toFixed(2)) : null,
+            hitWall,
+            distToSource: Number(distToSource.toFixed(2)),
+            unobstructed
+          });
+        }
+
+        lastDebugInfo = {
+          player: { x: Number(player.x.toFixed(2)), y: Number(player.y.toFixed(2)) },
+          source: { x: Number(source.x.toFixed(2)), y: Number(source.y.toFixed(2)) },
+          distToSource: Number(distToSource.toFixed(2)),
+          unobstructedCount,
+          rays,
+          walls: walls.map((wall) => ({ ...wall }))
+        };
+
+        return unobstructedCount / RAY_COUNT;
+      }
+
+      function drawCircle(entity) {
+        canvasCtx.beginPath();
+        canvasCtx.arc(entity.x, entity.y, entity.r, 0, Math.PI * 2);
+        canvasCtx.fillStyle = entity.color;
+        canvasCtx.fill();
+        canvasCtx.lineWidth = 3;
+        canvasCtx.strokeStyle = "rgba(255, 255, 255, 0.8)";
+        canvasCtx.stroke();
+      }
+
+      function drawSelfTestBug() {
+        canvasCtx.fillStyle = "#c91515";
+        canvasCtx.fillRect(0, 0, SIZE, 38);
+        canvasCtx.fillStyle = "#fff";
+        canvasCtx.font = "14px system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif";
+        canvasCtx.textAlign = "center";
+        canvasCtx.textBaseline = "middle";
+        canvasCtx.fillText(selfTestMessage, SIZE / 2, 19);
+      }
+
+      function drawArena() {
+        canvasCtx.clearRect(0, 0, SIZE, SIZE);
+        canvasCtx.fillStyle = "#151515";
+        canvasCtx.fillRect(0, 0, SIZE, SIZE);
+
+        canvasCtx.save();
+        canvasCtx.lineWidth = 10;
+        canvasCtx.lineCap = "butt";
+        canvasCtx.strokeStyle = "#c7c7c7";
+        walls.forEach((wall) => {
+          canvasCtx.beginPath();
+          canvasCtx.moveTo(wall.x1, wall.y1);
+          canvasCtx.lineTo(wall.x2, wall.y2);
+          canvasCtx.stroke();
+        });
+        canvasCtx.restore();
+
+        drawCircle(player);
+        drawCircle(source);
+
+        if (selfTestFailed) {
+          drawSelfTestBug();
+        }
+      }
+
+      function makeNoiseBuffer() {
+        const sampleRate = audioCtx.sampleRate;
+        const buffer = audioCtx.createBuffer(1, sampleRate * 2, sampleRate);
+        const data = buffer.getChannelData(0);
+
+        for (let i = 0; i < data.length; i += 1) {
+          data[i] = Math.random() * 2 - 1;
+        }
+
+        return buffer;
+      }
+
+      async function startAudio() {
+        if (playing) {
+          return;
+        }
+
+        if (!audioCtx) {
+          const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+          audioCtx = new AudioContextClass();
+        }
+
+        if (audioCtx.state === "suspended") {
+          await audioCtx.resume();
+        }
+
+        if (!noiseBuffer) {
+          noiseBuffer = makeNoiseBuffer();
+        }
+
+        bufferSource = audioCtx.createBufferSource();
+        lowpass = audioCtx.createBiquadFilter();
+        gainNode = audioCtx.createGain();
+
+        bufferSource.buffer = noiseBuffer;
+        bufferSource.loop = true;
+        lowpass.type = "lowpass";
+        lowpass.Q.value = 0.7;
+        lowpass.frequency.value = 800 + 6200 * losPct;
+        gainNode.gain.value = 0.05 + 0.95 * losPct;
+
+        bufferSource.connect(lowpass);
+        lowpass.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+        bufferSource.start();
+
+        playing = true;
+        playBtn.textContent = "⏸";
+        playBtn.setAttribute("aria-label", "Stop");
+      }
+
+      function stopAudio() {
+        if (!playing) {
+          return;
+        }
+
+        playing = false;
+        playBtn.textContent = "▶";
+        playBtn.setAttribute("aria-label", "Play");
+
+        if (bufferSource) {
+          try {
+            bufferSource.stop();
+          } catch {}
+          bufferSource.disconnect();
+          bufferSource = null;
+        }
+
+        if (lowpass) {
+          lowpass.disconnect();
+          lowpass = null;
+        }
+
+        if (gainNode) {
+          gainNode.disconnect();
+          gainNode = null;
+        }
+      }
+
+      function updateAudio() {
+        if (!playing || !audioCtx || !gainNode || !lowpass) {
+          return;
+        }
+
+        const now = audioCtx.currentTime;
+        gainNode.gain.setTargetAtTime(0.05 + 0.95 * losPct, now, 0.04);
+        lowpass.frequency.setTargetAtTime(800 + 6200 * losPct, now, 0.04);
+      }
+
+      function canvasPoint(event) {
+        const rect = canvas.getBoundingClientRect();
+        return {
+          x: (event.clientX - rect.left) * (SIZE / rect.width),
+          y: (event.clientY - rect.top) * (SIZE / rect.height)
+        };
+      }
+
+      function pickEntity(point) {
+        const hits = [player, source]
+          .map((entity) => ({ entity, dist: distanceBetween(point, entity) }))
+          .filter((hit) => hit.dist <= hit.entity.r + 8)
+          .sort((a, b) => a.dist - b.dist);
+
+        return hits.length ? hits[0].entity : null;
+      }
+
+      canvas.addEventListener("pointerdown", (event) => {
+        const point = canvasPoint(event);
+        const entity = pickEntity(point);
+
+        if (!entity) {
+          return;
+        }
+
+        dragTarget = entity;
+        dragOffsetX = point.x - entity.x;
+        dragOffsetY = point.y - entity.y;
+        canvas.setPointerCapture(event.pointerId);
+        event.preventDefault();
+      });
+
+      canvas.addEventListener("pointermove", (event) => {
+        if (!dragTarget) {
+          return;
+        }
+
+        const point = canvasPoint(event);
+        dragTarget.x = clamp(point.x - dragOffsetX, dragTarget.r, SIZE - dragTarget.r);
+        dragTarget.y = clamp(point.y - dragOffsetY, dragTarget.r, SIZE - dragTarget.r);
+        event.preventDefault();
+      });
+
+      function endDrag(event) {
+        if (!dragTarget) {
+          return;
+        }
+
+        if (canvas.hasPointerCapture(event.pointerId)) {
+          canvas.releasePointerCapture(event.pointerId);
+        }
+
+        dragTarget = null;
+      }
+
+      canvas.addEventListener("pointerup", endDrag);
+      canvas.addEventListener("pointercancel", endDrag);
+
+      playBtn.addEventListener("click", () => {
+        if (playing) {
+          stopAudio();
+          return;
+        }
+
+        startAudio().catch((error) => {
+          console.error("Audio start failed", error);
+          stopAudio();
+        });
+      });
+
+      function frame() {
+        losPct = computeLOS();
+        readout.textContent = `LOS: ${Math.round(losPct * 100)}%`;
+        drawArena();
+
+        if (!selfTestDone) {
+          selfTestDone = true;
+
+          if (losPct < 0.5) {
+            selfTestFailed = true;
+            selfTestMessage = `LOS BUG: cyan and orange are in plain sight, detector reads ${Math.round(losPct * 100)}% (expected >= 50%)`;
+            document.title = `LOS DETECTOR BUG: losPct = ${losPct}`;
+            console.error("LOS DETECTOR BUG", losPct, lastDebugInfo);
+            drawArena();
+          }
+        }
+
+        updateAudio();
+        requestAnimationFrame(frame);
+      }
+
+      requestAnimationFrame(frame);
+    })();
+  </script>
+</body>
+</html>
