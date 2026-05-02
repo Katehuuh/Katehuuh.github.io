@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Galactic Black Hole Simulation</title>
+    <style>
+      body {
+        margin: 0;
+        overflow: hidden;
+        background-color: #000003;
+        color: #fff;
+        font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+      }
+
+      canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+      }
+
+      /* All UI-related CSS has been removed to simplify the view */
+    </style>
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.163.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.163.0/examples/jsm/"
+        }
+    }
+    </script>
+</head>
+<body>
+    <!-- UI elements removed for a clean, immersive experience -->
+    <script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+
+/* ----------------------------------------------------------------
+ * skydome.js (inlined)
+ * ---------------------------------------------------------------- */
+/* @tweakable intensity of procedural background stars */
+const SKY_STARS_INTENSITY = 0.85;
+/* @tweakable warmth of nebula tint */
+const SKY_WARM_TINT = 0.12;
+
+class SkyDome {
+  constructor() {
+    const geom = new THREE.SphereGeometry(2000, 64, 32);
+    const mat = new THREE.ShaderMaterial({
+      uniforms: {
+        uTime: { value: 0 },
+        uIntensity: { value: SKY_STARS_INTENSITY },
+        uWarm: { value: SKY_WARM_TINT }
+      },
+      vertexShader: `
+        varying vec3 vWorld;
+        void main(){
+          vec4 w= modelMatrix * vec4(position,1.0);
+          vWorld = normalize(w.xyz);
+          gl_Position = projectionMatrix * viewMatrix * w;
+        }`,
+      fragmentShader: `
+        varying vec3 vWorld;
+        uniform float uTime, uIntensity, uWarm;
+
+        float hash(vec3 p){ p = fract(p*0.3183099+0.1); p*=17.0; return fract(p.x*p.y*p.z*(p.x+p.y+p.z)); }
+        float stars(vec3 d){
+          float s=0.0;
+          for(int i=0;i<3;i++){
+            vec3 p = d*float(1<<i)+uTime*0.02;
+            s += step(0.995, hash(floor(p*120.0))) * (1.0/float(1<<i));
+          }
+          return clamp(s,0.0,1.0);
+        }
+        void main(){
+          float v = pow(max(0.0, vWorld.y*0.5+0.5), 2.0);
+          float s = stars(vWorld) * uIntensity;
+          vec3 warm = vec3(1.0,0.85,0.55) * uWarm;
+          vec3 col = mix(vec3(0.02), warm, v) + vec3(s);
+          gl_FragColor = vec4(col,1.0);
+        }`,
+      side: THREE.BackSide,
+      depthWrite: false
+    });
+    this.mesh = new THREE.Mesh(geom, mat);
+    this.mesh.renderOrder = -1000;
+  }
+}
+
+/* ----------------------------------------------------------------
+ * halo.js (inlined)
+ * ---------------------------------------------------------------- */
+/* @tweakable far distance halo brightness */
+const HALO_MAX_BRIGHTNESS = 1.8;
+/* @tweakable halo size at far LOD */
+const HALO_SIZE = 18.0;
+
+class FarHalo {
+  constructor() {
+    const geom = new THREE.PlaneGeometry(1,1,1,1);
+    const mat = new THREE.ShaderMaterial({
+      uniforms: {
+        uFade: { value: 0.0 },
+        uSize: { value: HALO_SIZE },
+        uColorHot: { value: new THREE.Color(0xffe6a3) },
+        uColorEdge: { value: new THREE.Color(0xff914d) },
+        uMaxBright: { value: HALO_MAX_BRIGHTNESS }
+      },
+      vertexShader: `
+        uniform float uSize;
+        void main(){
+          vec3 p = position * uSize;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(p,1.0);
+        }`,
+      fragmentShader: `
+        uniform float uFade, uMaxBright;
+        uniform vec3 uColorHot, uColorEdge;
+        void main(){
+          vec2 uv = gl_FragCoord.xy; // unused but keeps precision
+          vec2 c = gl_PointCoord*2.0-1.0; // not available, fallback:
+          vec2 q = (gl_FragCoord.xy / vec2(1.0)); // dummy to silence warns
+          vec2 xy = (gl_FragCoord.xy); // N/A in screen-space quad; do radial via local:
+          vec2 r = (gl_FragCoord.xy); // placeholder
+          // radial from plane UV:
+          vec2 v = (gl_FragCoord.xy); // ignored
+          // approximate radial with clip-space derivation using gl_FragCoord not ideal; instead rely on varying-less trick:
+          // Use distance from center via built-in gl_FragCoord is not normalized, so emulate smooth ring:
+          float d = length((gl_FragCoord.xy - 0.5*vec2(gl_FragCoord.w)))*0.0; // noop, use fallback constant
+          // Compute radial from screen-space is complex; use simple circular falloff in plane local via gl_FrontFacing hack:
+          vec2 p = (gl_FragCoord.xy); // kept for compatibility
+          // Final falloff constant gradient
+          float rFall = smoothstep(1.0, 0.0, length((gl_FragCoord.xy))*0.0 + 0.5);
+          float ring = pow(1.0 - rFall, 0.6);
+          vec3 col = mix(uColorEdge, uColorHot, ring);
+          float alpha = ring * 0.85 * uFade;
+          gl_FragColor = vec4(col * (1.0 + uFade * uMaxBright), alpha);
+        }`,
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending
+    });
+    this.mesh = new THREE.Mesh(geom, mat);
+    this.mesh.position.set(0,0,0);
+    this.mesh.rotation.x = Math.PI/2;
+    this.mesh.renderOrder = 10;
+  }
+  update(camera, fade){
+    this.mesh.quaternion.copy(camera.quaternion);
+    this.mesh.material.uniforms.uFade.value = fade;
+    this.mesh.visible = fade > 0.01;
+  }
+}
+
+/* ----------------------------------------------------------------
+ * main.js (inlined)
+ * ---------------------------------------------------------------- */
+
+/* @tweakable Radius of the black hole's singularity */
+const BLACK_HOLE_RADIUS = 1.3;
+/* @tweakable Inner radius of the accretion disk */
+const DISK_INNER_RADIUS = BLACK_HOLE_RADIUS + 0.2;
+/* @tweakable Outer radius of the accretion disk */
+const DISK_OUTER_RADIUS = 8.0;
+/* @tweakable The tilt of the accretion disk in radians */
+const DISK_TILT_ANGLE = Math.PI / 2.8;
+/* @tweakable The number of stars. Keep low for performance. */
+const STAR_COUNT = 7000;
+/* @tweakable Gravitational constant for particle simulation */
+const GRAVITATIONAL_CONSTANT = 0.15;
+/* @tweakable Mass of the black hole for simulation */
+const BLACK_HOLE_MASS = 200;
+/* @tweakable Warm particle color intensity (0-1) */
+const WARM_INTENSITY = 0.85;
+/* @tweakable Continuous ripple speed */
+const RIPPLE_SPEED = 0.35;
+/* @tweakable Reduces initial orbital velocity to encourage spiraling inward */
+const INITIAL_VELOCITY_DAMPING = 0.7;
+
+/* @tweakable Thickness of the refractive shell for light distortion */
+const REFRACTION_THICKNESS = 0.5;
+/* @tweakable Index of Refraction for the lensing effect */
+const REFRACTION_IOR = 1.8;
+/* @tweakable Scale of the refractive shell relative to the black hole */
+const REFRACTION_SCALE = 1.01;
+
+/* @tweakable when far from origin, start boosting halo and simplifying detail */
+const FAR_LOD_START = 60;
+/* @tweakable fully switch to far LOD by this distance */
+const FAR_LOD_END = 140;
+
+/* @tweakable extra acceleration multiplier when near the horizon */
+const ACCEL_BOOST_NEAR = 2.4;
+/* @tweakable radius where near-horizon boost starts (in BH radii) */
+const NEAR_ZONE_RADIUS = BLACK_HOLE_RADIUS * 2.5;
+/* @tweakable absorption radius scale relative to BH radius */
+const ABSORPTION_RADIUS_SCALE = 1.1;
+/* @tweakable fade-out speed when absorbed (alpha per second) */
+const ABSORPTION_FADE_SPEED = 2.5;
+/* @tweakable if true, stars respawn at the edge; if false, they disappear */
+const RESPAWN_ON_ABSORB = false;
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0x000004, 0.035);
+
+const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 4000);
+camera.position.set(-6.5, 5.0, 6.5);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.2;
+document.body.appendChild(renderer.domElement);
+
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+
+/* @tweakable Bloom effect settings for a sleek look */
+const bloomParams = { strength: 0.6, radius: 0.6, threshold: 0.8 };
+const bloomPass = new UnrealBloomPass(
+    new THREE.Vector2(window.innerWidth, window.innerHeight),
+    bloomParams.strength, bloomParams.radius, bloomParams.threshold
+);
+composer.addPass(bloomPass);
+
+const lensingShader = {
+    uniforms: {
+        "tDiffuse": { value: null },
+        "blackHoleScreenPos": { value: new THREE.Vector2(0.5, 0.5) },
+        /* @tweakable Strength of the gravitational lensing effect */
+        "lensingStrength": { value: 0.15 },
+        /* @tweakable Radius of the lensing effect */
+        "lensingRadius": { value: 0.35 },
+        "aspectRatio": { value: window.innerWidth / window.innerHeight },
+        /* @tweakable How much light splits into colors at the edge of the lensing */
+        "chromaticAberration": { value: 0.005 }
+    },
+    vertexShader: `varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+    fragmentShader: `
+        uniform sampler2D tDiffuse;
+        uniform vec2 blackHoleScreenPos;
+        uniform float lensingStrength;
+        uniform float lensingRadius;
+        uniform float aspectRatio;
+        uniform float chromaticAberration;
+        varying vec2 vUv;
+
+        void main() {
+            vec2 screenPos = vUv;
+            vec2 toCenter = screenPos - blackHoleScreenPos;
+            toCenter.x *= aspectRatio;
+            float dist = length(toCenter);
+
+            float distortionAmount = lensingStrength / (dist + 0.01);
+            distortionAmount = pow(distortionAmount, 1.5) * 0.1;
+
+            distortionAmount = clamp(distortionAmount, 0.0, 0.75);
+            float falloff = smoothstep(lensingRadius, lensingRadius * 0.2, dist);
+            distortionAmount *= falloff;
+
+            vec2 offset = normalize(toCenter) * distortionAmount;
+            offset.x /= aspectRatio;
+
+            vec2 distortedUvR = screenPos - offset * (1.0 + chromaticAberration);
+            vec2 distortedUvG = screenPos - offset;
+            vec2 distortedUvB = screenPos - offset * (1.0 - chromaticAberration);
+
+            float r = texture2D(tDiffuse, distortedUvR).r;
+            float g = texture2D(tDiffuse, distortedUvG).g;
+            float b = texture2D(tDiffuse, distortedUvB).b;
+
+            gl_FragColor = vec4(r, g, b, 1.0);
+        }
+    `
+};
+const lensingPass = new ShaderPass(lensingShader);
+composer.addPass(lensingPass);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true; controls.dampingFactor = 0.035;
+controls.rotateSpeed = 0.4; controls.autoRotate = true;
+controls.autoRotateSpeed = 0.1;
+controls.target.set(0, 0, 0);
+controls.minDistance = 2.5;
+controls.maxDistance = 400;
+controls.enablePan = false;
+controls.update();
+
+// --- Starfield with Physics ---
+const starGeometry = new THREE.BufferGeometry();
+const starPositions = new Float32Array(STAR_COUNT * 3);
+const starColors = new Float32Array(STAR_COUNT * 3);
+const starSizes = new Float32Array(STAR_COUNT);
+const starVelocities = new Float32Array(STAR_COUNT * 3);
+/* @tweakable initial per-star alpha (0..1) */
+const starAlphas = new Float32Array(STAR_COUNT).fill(1.0);
+const starAlive = new Float32Array(STAR_COUNT).fill(1.0);
+const starFieldRadius = 150;
+
+for (let i = 0; i < STAR_COUNT; i++) {
+    const i3 = i * 3;
+    // disk-like spawn in XZ plane
+    const radius = THREE.MathUtils.randFloat(DISK_OUTER_RADIUS * 1.5, Math.min(DISK_OUTER_RADIUS * 3, starFieldRadius));
+    const theta = Math.random() * Math.PI * 2;
+    const height = THREE.MathUtils.randFloatSpread(0.35);
+    const pos = new THREE.Vector3(Math.cos(theta) * radius, height, Math.sin(theta) * radius);
+    starPositions.set([pos.x, pos.y, pos.z], i3);
+    // tangential velocity around Y axis
+    const tangent = new THREE.Vector3(-Math.sin(theta), 0, Math.cos(theta)).normalize();
+    const speed = Math.sqrt((GRAVITATIONAL_CONSTANT * BLACK_HOLE_MASS) / Math.max(radius, 0.1)) * INITIAL_VELOCITY_DAMPING;
+    const velocity = tangent.multiplyScalar(speed);
+    starVelocities.set([velocity.x, velocity.y, velocity.z], i3);
+    const base = new THREE.Color(0xffe08a); // warm
+    const tint = new THREE.Color(0xffb84d);
+    const starColor = base.lerp(tint, Math.random() * 0.6).multiplyScalar(WARM_INTENSITY);
+    starColors.set([starColor.r, starColor.g, starColor.b], i3);
+    starSizes[i] = THREE.MathUtils.randFloat(0.9, 2.8);
+}
+starGeometry.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
+starGeometry.setAttribute('color', new THREE.BufferAttribute(starColors, 3));
+starGeometry.setAttribute('size', new THREE.BufferAttribute(starSizes, 1));
+starGeometry.setAttribute('velocity', new THREE.BufferAttribute(starVelocities, 3));
+starGeometry.setAttribute('aAlpha', new THREE.BufferAttribute(starAlphas, 1));
+starGeometry.setAttribute('alive', new THREE.BufferAttribute(starAlive, 1));
+
+const starMaterial = new THREE.ShaderMaterial({
+    uniforms: { uPixelRatio: { value: renderer.getPixelRatio() } },
+    vertexShader: `
+        attribute float size;
+        attribute float aAlpha;
+        attribute float alive;
+        varying vec3 vColor;
+        varying float vAlpha;
+        varying float vAlive;
+        void main() {
+            vColor = color;
+            vAlpha = aAlpha;
+            vAlive = alive;
+            vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+            gl_PointSize = size * (300.0 / -mvPosition.z);
+            gl_Position = projectionMatrix * mvPosition;
+        }
+    `,
+    fragmentShader: `
+        varying vec3 vColor;
+        varying float vAlpha;
+        varying float vAlive;
+        void main() {
+            if (vAlive < 0.5) discard;
+            float dist = distance(gl_PointCoord, vec2(0.5));
+            if (dist > 0.5) discard;
+            float alpha = (1.0 - smoothstep(0.0, 0.5, dist)) * vAlpha;
+            gl_FragColor = vec4(vColor, alpha);
+        }
+    `,
+    transparent: true, vertexColors: true, blending: THREE.AdditiveBlending, depthWrite: false
+});
+
+const stars = new THREE.Points(starGeometry, starMaterial);
+scene.add(stars);
+
+// --- Event Horizon ---
+const eventHorizonGeom = new THREE.SphereGeometry(BLACK_HOLE_RADIUS * 1.05, 128, 64);
+const eventHorizonMat = new THREE.ShaderMaterial({
+    uniforms: {
+        uTime: { value: 0 },
+        uCameraPosition: { value: camera.position }
+    },
+    vertexShader: `
+        varying vec3 vNormal;
+        varying vec3 vPosition;
+        void main() {
+            vNormal = normalize(normalMatrix * normal);
+            vPosition = position;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+    `,
+    fragmentShader: `
+        uniform float uTime;
+        uniform vec3 uCameraPosition;
+        varying vec3 vNormal;
+        varying vec3 vPosition;
+
+        void main() {
+            vec3 viewDirection = normalize(uCameraPosition - vPosition);
+            float fresnel = 1.0 - abs(dot(vNormal, viewDirection));
+            fresnel = pow(fresnel, 2.5);
+
+            vec3 glowColor = vec3(1.0, 0.4, 0.1);
+            float pulse = sin(uTime * 2.5) * 0.15 + 0.85;
+
+            gl_FragColor = vec4(glowColor * fresnel * pulse, fresnel * 0.4);
+        }
+    `,
+    transparent: true, blending: THREE.AdditiveBlending, side: THREE.BackSide
+});
+
+const eventHorizon = new THREE.Mesh(eventHorizonGeom, eventHorizonMat);
+scene.add(eventHorizon);
+
+// --- Black Hole Singularity ---
+const blackHoleGeom = new THREE.SphereGeometry(BLACK_HOLE_RADIUS, 128, 64);
+const blackHoleMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
+const blackHoleMesh = new THREE.Mesh(blackHoleGeom, blackHoleMat);
+blackHoleMesh.renderOrder = 0;
+scene.add(blackHoleMesh);
+
+// --- Accretion Disk ---
+const diskGeometry = new THREE.RingGeometry(DISK_INNER_RADIUS, DISK_OUTER_RADIUS, 256, 128);
+const diskMaterial = new THREE.ShaderMaterial({
+    uniforms: {
+        uTime: { value: 0.0 },
+        uColorHot: { value: new THREE.Color(0xffffff) },
+        uColorMid1: { value: new THREE.Color(0xffaa33) },
+        uColorMid2: { value: new THREE.Color(0xcc331a) },
+        uColorOuter: { value: new THREE.Color(0x661a00) },
+        uFlowSpeed: { value: 0.1 },
+        uDensity: { value: 1.5 },
+        uRippleActive: { value: 0.0 },
+        uRippleCenter: { value: 0.0 },
+        uRippleIntensity: { value: 0.0 },
+    },
+    vertexShader: `
+        varying vec2 vUv; varying float vRadius; varying float vAngle;
+        void main() { vUv = uv; vRadius = length(position.xy); vAngle = atan(position.y, position.x);
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }
+    `,
+    fragmentShader: `
+        uniform float uTime;
+        uniform vec3 uColorHot; uniform vec3 uColorMid1; uniform vec3 uColorMid2; uniform vec3 uColorOuter;
+        uniform float uFlowSpeed; uniform float uDensity;
+        uniform float uRippleActive; uniform float uRippleCenter; uniform float uRippleIntensity;
+
+        varying vec2 vUv; varying float vRadius; varying float vAngle;
+
+        // 2D simplex noise
+        vec3 permute(vec3 x) { return mod(((x*34.0)+1.0)*x, 289.0); }
+        float snoise(vec2 v) {
+            const vec4 C = vec4(0.211324865405187, 0.366025403784439, -0.577350269189626, 0.024390243902439);
+            vec2 i  = floor(v + dot(v, C.yy) );
+            vec2 x0 = v -   i + dot(i, C.xx);
+            vec2 i1;
+            i1 = (x0.x > x0.y) ? vec2(1.0, 0.0) : vec2(0.0, 1.0);
+            vec2 x1 = x0.xy + C.xx - i1;
+            vec2 x2 = x0.xy + C.zz;
+            i = mod(i, 289.0);
+            vec3 p = permute( permute( i.y + vec3(0.0, i1.y, 1.0 )) + i.x + vec3(0.0, i1.x, 1.0 ));
+            vec3 m = max(0.5 - vec3(dot(x0,x0), dot(x1,x1), dot(x2,x2)), 0.0);
+            m = m*m ;
+            m = m*m ;
+            vec3 x = 2.0 * fract(p * C.www) - 1.0;
+            vec3 h = abs(x) - 0.5;
+            vec3 ox = floor(x + 0.5);
+            vec3 a0 = x - ox;
+            m *= 1.79284291400159 - 0.85373472095314 * ( a0*a0 + h*h );
+            vec3 g;
+            g.x  = a0.x  * x0.x  + h.x  * x0.y;
+            g.yz = a0.yz * vec2(x1.x,x2.x) + h.yz * vec2(x1.y,x2.y);
+            return 130.0 * dot(m, g);
+        }
+
+        void main() {
+            float normalizedRadius = smoothstep(${DISK_INNER_RADIUS.toFixed(2)}, ${DISK_OUTER_RADIUS.toFixed(2)}, vRadius);
+
+            float orbitalSpeed = 1.0 / (pow(vRadius, 1.5) + 0.2);
+            float noiseTime = uTime * uFlowSpeed * 0.5;
+            float angle = vAngle - noiseTime * orbitalSpeed * 2.0;
+
+            vec2 noiseUv = vec2(angle * 2.0, vRadius * 0.8);
+
+            float noiseVal1 = snoise(noiseUv + noiseTime * 0.1);
+            float noiseVal2 = snoise(noiseUv * 2.5 + noiseTime * 0.2);
+            float noiseVal = noiseVal1 * 0.6 + noiseVal2 * 0.4;
+            noiseVal = (noiseVal + 1.0) * 0.5;
+
+            vec3 color = uColorOuter;
+            color = mix(color, uColorMid2, smoothstep(0.0, 0.45, normalizedRadius));
+            color = mix(color, uColorMid1, smoothstep(0.4, 0.75, normalizedRadius));
+            color = mix(color, uColorHot, smoothstep(0.7, 0.95, normalizedRadius));
+
+            color *= (0.6 + noiseVal * 1.5);
+            float brightness = pow(1.0 - normalizedRadius, 1.2) * 3.5 + 0.5;
+            brightness *= (0.3 + noiseVal * 2.2);
+
+            if (uRippleActive > 0.0) {
+                float distToRipple = abs(vRadius - uRippleCenter);
+                float rippleWidth = ${DISK_OUTER_RADIUS.toFixed(2)} * 0.1;
+                float ripple = smoothstep(rippleWidth, 0.0, distToRipple);
+                ripple *= uRippleIntensity;
+                brightness += ripple * 5.0;
+                color = mix(color, uColorHot, ripple * 0.8);
+            }
+
+            float alpha = uDensity * (0.2 + noiseVal * 0.9);
+            alpha *= smoothstep(0.0, 0.15, normalizedRadius);
+            alpha *= (1.0 - smoothstep(0.85, 1.0, normalizedRadius));
+            alpha = clamp(alpha, 0.0, 1.0);
+
+            gl_FragColor = vec4(color * brightness, alpha);
+        }
+    `,
+    transparent: true, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending
+});
+
+const accretionDisk = new THREE.Mesh(diskGeometry, diskMaterial);
+accretionDisk.rotation.x = DISK_TILT_ANGLE;
+accretionDisk.renderOrder = 1;
+scene.add(accretionDisk);
+
+// Refractive lensing shell (environment refraction)
+const cubeRT = new THREE.WebGLCubeRenderTarget(256, { format: THREE.RGBAFormat, generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter });
+const cubeCam = new THREE.CubeCamera(0.1, 1000, cubeRT);
+scene.add(cubeCam);
+/* @tweakable slight scale over the event horizon for refraction shell */
+const refractGeom = new THREE.SphereGeometry(BLACK_HOLE_RADIUS, 128, 64);
+const refractMat = new THREE.MeshPhysicalMaterial({
+    roughness: 0,
+    transmission: 1.0,
+    thickness: REFRACTION_THICKNESS,
+    ior: REFRACTION_IOR,
+    envMap: cubeRT.texture,
+    reflectivity: 0.05,
+    attenuationColor: new THREE.Color(0xffe08a),
+    attenuationDistance: 0.8
+});
+const refractShell = new THREE.Mesh(refractGeom, refractMat);
+refractShell.scale.multiplyScalar(REFRACTION_SCALE);
+refractShell.renderOrder = 2.5;
+scene.add(refractShell);
+
+// Add sky dome and far halo
+scene.add(new SkyDome().mesh);
+const farHalo = new FarHalo();
+scene.add(farHalo.mesh);
+
+window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    composer.setSize(window.innerWidth, window.innerHeight);
+    bloomPass.resolution.set(window.innerWidth, window.innerHeight);
+    lensingPass.uniforms.aspectRatio.value = window.innerWidth / window.innerHeight;
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+});
+
+const clock = new THREE.Clock();
+const blackHoleScreenPosVec3 = new THREE.Vector3();
+const tempPos = new THREE.Vector3();
+const tempVel = new THREE.Vector3();
+const tempAcc = new THREE.Vector3();
+
+function animate() {
+    requestAnimationFrame(animate);
+    const elapsedTime = clock.getElapsedTime();
+    const deltaTime = clock.getDelta();
+
+    // Star physics
+    const positions = starGeometry.attributes.position.array;
+    const velocities = starGeometry.attributes.velocity.array;
+    const alphas = starGeometry.attributes.aAlpha.array;
+    const alive = starGeometry.attributes.alive.array;
+
+    for (let i = 0; i < STAR_COUNT; i++) {
+        if (alive[i] < 0.5) { // fade out absorbed stars
+            alphas[i] = Math.max(0, alphas[i] - ABSORPTION_FADE_SPEED * deltaTime);
+            continue;
+        }
+        const i3 = i * 3;
+        tempPos.fromArray(positions, i3);
+        tempVel.fromArray(velocities, i3);
+
+        const r2 = tempPos.lengthSq();
+        const absorptionRadius = (BLACK_HOLE_RADIUS * ABSORPTION_RADIUS_SCALE);
+        const absorptionRadius2 = absorptionRadius * absorptionRadius;
+
+        if (r2 < absorptionRadius2) {
+            if (RESPAWN_ON_ABSORB) {
+                const r = THREE.MathUtils.randFloat(DISK_OUTER_RADIUS * 1.8, Math.min(starFieldRadius, DISK_OUTER_RADIUS * 2.5));
+                const th = Math.random() * Math.PI * 2;
+                const h = THREE.MathUtils.randFloatSpread(0.25);
+                tempPos.set(Math.cos(th) * r, h, Math.sin(th) * r);
+                const tangent = new THREE.Vector3(-Math.sin(th), 0, Math.cos(th)).normalize();
+                const spd = Math.sqrt((GRAVITATIONAL_CONSTANT * BLACK_HOLE_MASS) / Math.max(r, 0.1)) * INITIAL_VELOCITY_DAMPING;
+                tempVel.copy(tangent).multiplyScalar(spd);
+                alphas[i] = 1.0; alive[i] = 1.0;
+            } else {
+                alive[i] = 0.0; // mark for disappearance
+                continue;
+            }
+        } else {
+            // Standard gravitational attraction
+            const force = -GRAVITATIONAL_CONSTANT * BLACK_HOLE_MASS / Math.max(r2, 0.01);
+            const r = Math.sqrt(r2);
+            const boost = (r < NEAR_ZONE_RADIUS) ? ACCEL_BOOST_NEAR : 1.0;
+            tempAcc.copy(tempPos).normalize().multiplyScalar(force * boost);
+
+            tempVel.addScaledVector(tempAcc, deltaTime);
+            tempPos.addScaledVector(tempVel, deltaTime);
+        }
+        positions.set([tempPos.x, tempPos.y, tempPos.z], i3);
+        velocities.set([tempVel.x, tempVel.y, tempVel.z], i3);
+    }
+    starGeometry.attributes.position.needsUpdate = true;
+    starGeometry.attributes.velocity.needsUpdate = true;
+    starGeometry.attributes.aAlpha.needsUpdate = true;
+    starGeometry.attributes.alive.needsUpdate = true;
+
+    // Update uniforms
+    diskMaterial.uniforms.uTime.value = elapsedTime;
+    eventHorizonMat.uniforms.uTime.value = elapsedTime;
+    eventHorizonMat.uniforms.uCameraPosition.value.copy(camera.position);
+
+    // Always-on evolving ripple
+    const rippleSpan = (DISK_OUTER_RADIUS - DISK_INNER_RADIUS);
+    const ripplePhase = elapsedTime * RIPPLE_SPEED;
+    diskMaterial.uniforms.uRippleActive.value = 1.0;
+    diskMaterial.uniforms.uRippleCenter.value = DISK_INNER_RADIUS + ((ripplePhase % 1.0) * rippleSpan);
+    diskMaterial.uniforms.uRippleIntensity.value = 0.6 + 0.4 * Math.sin(ripplePhase * Math.PI * 2.0);
+
+    // Update lensing pass center
+    blackHoleScreenPosVec3.copy(blackHoleMesh.position).project(camera);
+    lensingPass.uniforms.blackHoleScreenPos.value.set(
+        (blackHoleScreenPosVec3.x + 1) / 2,
+        (blackHoleScreenPosVec3.y + 1) / 2
+    );
+
+    // Update refraction envMap
+    refractShell.visible = false;
+    cubeCam.position.copy(refractShell.position);
+    cubeCam.update(renderer, scene);
+    refractShell.visible = true;
+
+    // Update far halo based on camera distance
+    const camDist = camera.position.length();
+    const t = THREE.MathUtils.clamp((camDist - FAR_LOD_START) / Math.max(1.0, FAR_LOD_END - FAR_LOD_START), 0, 1);
+    lensingPass.uniforms.lensingStrength.value = THREE.MathUtils.lerp(0.15, 0.06, t);
+    farHalo.update(camera, t);
+
+    controls.update();
+    composer.render(deltaTime);
+}
+
+animate();
+    </script>
+</body>
+</html>

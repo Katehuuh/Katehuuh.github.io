@@ -1,0 +1,407 @@
+<!-- Standalone HTML created by Gemini 3 Pro -->
+<!--
+Opus 4.7 build prompt for the same task (the sibling file [SHOW]-Black-Hole-v1.html
+is the user's bundled websim source; this comment captures the full spec that the
+Opus agent was given so both implementations can be compared against the same brief).
+
+OUTPUT FILE: demos/[SHOW]-Black-Hole-v1.html (single self-contained HTML, all CSS+JS inline,
+externals only via CDN importmap for three@0.163.0 + addons).
+
+WHAT TO BUILD: a cinematic, always-animating, rotatable 3D black hole. Visual priority
+over physical accuracy. No UI of any kind.
+
+STACK
+- importmap to three@0.163.0 build/three.module.js and addons/
+- imports: three, OrbitControls, EffectComposer, RenderPass, UnrealBloomPass, ShaderPass
+- Renderer: antialias true, Math.min(devicePixelRatio, 1.5), SRGBColorSpace,
+  ACESFilmicToneMapping, toneMappingExposure ~1.0
+- FogExp2(0x000010, 0.0015)
+
+SCENE
+1. Event horizon: SphereGeometry(BH_RADIUS, 64, 32), MeshBasicMaterial color 0x000000,
+   renderOrder=0 so it writes depth.
+2. Photon ring: thin glowing torus at ~1.5x BH_RADIUS, warm yellow ~0xffcc66, additive,
+   low alpha ~0.25, gentle sin(uTime) pulse.
+3. Accretion disk: TorusGeometry((inner+outer)/2, (outer-inner)/2, 64, 512), rotation.x
+   = Math.PI/3. Custom ShaderMaterial:
+   - streaky look (ridged noise: 1.0 - abs(noise*2.0 - 1.0), then pow(ridge, ~2.2))
+   - 2 to 3 noise octaves, time-warped orbital swirl angle - time*(1.0/(radius+1.0))
+   - color ramp inner to outer: white-hot 0xffffe8 to orange 0xffaa44 to red 0xcc3318 to
+     deep red 0x4a0c06
+   - subtle Doppler beaming using world tangent vs view direction, clamp 0.6 to 1.5
+   - transparent, depthWrite false, blending NormalBlending with premultipliedAlpha
+     (NOT additive, additive looks like a cloud)
+   - inner rim highlight via smoothstep
+   - renderOrder = 10
+4. Gravitational lensing post-pass: ShaderPass screen-space distortion. Aspect-corrected
+   (toC.x *= aspect before length). Confined to tight radius around BH screen position.
+   Per-frame uniforms: blackHolePos (project origin to screen), aspect, screenRadiusX (from
+   projecting (BH_RADIUS, 0, 0)), lensingStrength ~0.12, baseRadius = min(0.3,
+   screenRadiusX), chromaticAberration ~0.004, photon ring band ringRadius = screenRadiusX
+   * 1.2, ringWidth = max(0.003, screenRadiusX * 0.1), ringIntensity ~0.3, gaussian falloff.
+   Distortion: (1.0/(r*r+0.002)) * smoothstep(baseRadius, 0.0, r) * 0.12 with chromatic
+   split (3 texture samples).
+5. Particle accretion: ~4000 THREE.Points with BufferGeometry positions/colors/sizes plus a
+   parallel Float32Array for velocities.
+   - spawn: random angle, radius in [DISK_INNER, DISK_OUTER], small y-jitter
+   - initial tangential velocity = sqrt(G*BH_MASS/r) * ~0.7 (sub-Keplerian feels nicer)
+   - color: warm gradient by radius
+   - per-frame physics, dt clamped to 0.02:
+     - r = sqrt(x*x + z*z)
+     - accel = -G*BH_MASS/r^2 toward origin
+     - near-horizon boost when r < 3*BH_RADIUS: multiply by 1 + 4*smoothstep(3*BH_RADIUS,
+       1.05*BH_RADIUS, r) so particles visibly accelerate inward
+     - mild radial drag *0.997
+     - integrate position
+   - absorption: r < 1.05*BH_RADIUS, fade alpha to 0 over ~10 frames, respawn at outer edge
+     with fresh tangential velocity
+   - shader: vertex clamps gl_PointSize = min(size * pixelRatio * (300.0 / -mvPosition.z),
+     6.0). fragment circular discard with soft edge. additive, depthWrite false,
+     renderOrder = 20.
+6. Background starfield: ~6000 Points on a sphere shell radius ~800 to 1500, slight color
+   variance (white, pale blue, pale yellow), tiny size, slow stars.rotation.y in animate.
+7. Nebula skydome: SphereGeometry(2000, 64, 32) BackSide. ShaderMaterial fragment with
+   multi-octave hash-based noise, deep blue/purple base, rare sparkle stars
+   step(0.9985, hash(dir.xy)). DIM. Must not compete with disk. depthWrite false.
+
+ANIMATION LOOP
+requestAnimationFrame, clock-based elapsedTime + deltaTime (clamp dt to 0.02). Each frame:
+update all shader uTime uniforms, update lensing pass uniforms (project BH, compute
+screenRadiusX, set baseRadius/ringRadius/ringWidth dynamically), pass camera position to
+disk shader for Doppler view-vector math, run particle physics, controls.update(),
+composer.render().
+
+CONSTANTS (defaults, tunable)
+BLACK_HOLE_RADIUS = 1.5; PHOTON_SPHERE_RADIUS = BLACK_HOLE_RADIUS * 1.5;
+DISK_INNER_RADIUS = BLACK_HOLE_RADIUS * 2.6; DISK_OUTER_RADIUS = 14.0;
+DISK_THICKNESS = 3.0; DISK_TILT_ANGLE = Math.PI / 3;
+PARTICLE_COUNT = 4000; G = 0.15; BH_MASS = 250;
+
+BLOOM
+UnrealBloomPass(new THREE.Vector2(w, h), 0.7, 0.5, 0.78);
+
+CAMERA + CONTROLS
+PerspectiveCamera(60, w/h, 0.1, 4000), position ~(-10, 6, 10). OrbitControls: damping 0.04,
+autoRotate true, autoRotateSpeed 0.2, minDistance 5, maxDistance 150, enablePan false,
+target (0, 0, 0).
+
+HARD DON'TS
+- no ray-marching SDF inside one fragment shader (past attempts produced black screens)
+- no isnan() (bad WebGL support)
+- no UI elements (no buttons, no info text, no theme switcher)
+- no em-dashes anywhere in code or comments (ASCII hyphen only)
+- no additive blending on the disk (makes it look like a soft cloud)
+- no double-rendered BH / mirror artifact
+- no whole-screen swirly distortion (lensing must be confined and aspect-correct)
+- no external file references beyond the CDN imports
+
+REPLY: file path written, line count, file size in KB, one sentence on what the user will
+see when they open the file.
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stunning Black Hole</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #000; }
+        #canvas-container { width: 100vw; height: 100vh; }
+        .overlay {
+            position: absolute;
+            bottom: 2rem;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255, 255, 255, 0.6);
+            font-family: 'Courier New', Courier, monospace;
+            text-transform: uppercase;
+            letter-spacing: 0.2em;
+            pointer-events: none;
+            text-align: center;
+            font-size: 0.8rem;
+        }
+    </style>
+</head>
+<body>
+    <div id="canvas-container"></div>
+    <div class="overlay">
+        <div>Singularity Simulation</div>
+        <div style="font-size: 0.6em; opacity: 0.7;">Move Mouse to Orbit</div>
+    </div>
+
+    <!-- Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+    <script id="vertexShader" type="x-shader/x-vertex">
+        varying vec2 vUv;
+        void main() {
+            vUv = uv;
+            gl_Position = vec4(position, 1.0);
+        }
+    </script>
+
+    <script id="fragmentShader" type="x-shader/x-fragment">
+        uniform float iTime;
+        uniform vec2 iResolution;
+        uniform vec2 iMouse;
+        
+        varying vec2 vUv;
+
+        // ---------------------------------------------------------
+        // Noise Functions
+        // ---------------------------------------------------------
+        float hash(float n) { return fract(sin(n) * 43758.5453123); }
+        
+        float noise(vec3 x) {
+            vec3 p = floor(x);
+            vec3 f = fract(x);
+            f = f * f * (3.0 - 2.0 * f);
+            float n = p.x + p.y * 57.0 + 113.0 * p.z;
+            return mix(mix(mix(hash(n + 0.0), hash(n + 1.0), f.x),
+                           mix(hash(n + 57.0), hash(n + 58.0), f.x), f.y),
+                       mix(mix(hash(n + 113.0), hash(n + 114.0), f.x),
+                           mix(hash(n + 170.0), hash(n + 171.0), f.x), f.y), f.z);
+        }
+
+        float fbm(vec3 p) {
+            float f = 0.0;
+            f += 0.5000 * noise(p); p *= 2.02;
+            f += 0.2500 * noise(p); p *= 2.03;
+            f += 0.1250 * noise(p); p *= 2.01;
+            f += 0.0625 * noise(p);
+            return f;
+        }
+
+        // ---------------------------------------------------------
+        // Black Hole Logic
+        // ---------------------------------------------------------
+        
+        // Rotates a vector around the Y axis
+        vec3 rotateY(vec3 v, float angle) {
+            float c = cos(angle);
+            float s = sin(angle);
+            return vec3(c * v.x + s * v.z, v.y, -s * v.x + c * v.z);
+        }
+        
+        // Rotates a vector around the X axis
+        vec3 rotateX(vec3 v, float angle) {
+            float c = cos(angle);
+            float s = sin(angle);
+            return vec3(v.x, c * v.y - s * v.z, s * v.y + c * v.z);
+        }
+
+        void main() {
+            // Normalized coordinates -1 to 1
+            vec2 uv = (vUv - 0.5) * 2.0;
+            uv.x *= iResolution.x / iResolution.y;
+
+            // Camera Setup
+            // Mouse interaction
+            float mouseX = (iMouse.x / iResolution.x - 0.5) * 2.0; // -1 to 1
+            float mouseY = (iMouse.y / iResolution.y - 0.5) * 2.0; // -1 to 1
+            
+            vec3 ro = vec3(0.0, 1.0 + mouseY * 2.0, -8.0); // Ray origin
+            vec3 lookAt = vec3(0.0, 0.0, 0.0);
+            
+            // Camera Matrix
+            vec3 forward = normalize(lookAt - ro);
+            vec3 right = normalize(cross(vec3(0.0, 1.0, 0.0), forward));
+            vec3 up = cross(forward, right);
+            
+            vec3 rd = normalize(forward + uv.x * right + uv.y * up); // Ray direction
+            
+            // Rotate camera based on mouse X
+            float rotAngle = mouseX * 2.0 + iTime * 0.05;
+            ro = rotateY(ro, rotAngle);
+            rd = rotateY(rd, rotAngle);
+
+            // Rendering Loop
+            vec3 col = vec3(0.0);
+            
+            // Accretion Disk params
+            vec3 diskNormal = normalize(vec3(0.0, 1.0, 0.0));
+            
+            // Raymarching / Stepping
+            vec3 p = ro;
+            float dist = 0.0;
+            float totDist = 0.0;
+            
+            // Accumulators
+            vec3 glow = vec3(0.0);
+            float hitHorizon = 0.0;
+            
+            // Black hole properties
+            float bhRadius = 1.5;
+            float bhMass = 2.0; // Artificial mass for stronger bending
+            
+            const int MAX_STEPS = 80;
+            float stepSize = 0.1;
+            
+            for(int i = 0; i < MAX_STEPS; i++) {
+                float r = length(p);
+                
+                // Event Horizon Check
+                if(r < bhRadius) {
+                    hitHorizon = 1.0;
+                    break;
+                }
+                
+                // Gravitational Bending (Simplified newtonian-ish approximation for visual flair)
+                // Force vector towards center
+                vec3 force = -normalize(p) * (bhMass / (r * r));
+                rd += force * stepSize * 0.8; // Bend the ray
+                rd = normalize(rd);
+                
+                // Move ray
+                p += rd * stepSize;
+                totDist += stepSize;
+                
+                // Accretion Disk Rendering
+                // We check distance to the XZ plane (y=0)
+                // But since we want a volumetric glow, we check distance to plane
+                float distToPlane = abs(p.y);
+                float radialDist = length(p.xz);
+                
+                // Define disk bounds
+                float innerRadius = bhRadius * 1.5;
+                float outerRadius = bhRadius * 4.5;
+                
+                if (radialDist > innerRadius && radialDist < outerRadius) {
+                    // Intensity fades at edges
+                    float diskFade = smoothstep(innerRadius, innerRadius + 0.5, radialDist) * 
+                                     (1.0 - smoothstep(outerRadius - 1.0, outerRadius, radialDist));
+                    
+                    // Vertical thickness fade
+                    float thickness = 0.1 + (radialDist * 0.05); // Disk gets thicker further out
+                    float verticalFade = exp(-distToPlane * distToPlane / (thickness * thickness));
+                    
+                    // Noise texture for the disk
+                    vec3 rotP = rotateY(p, iTime * (2.0 / radialDist)); // Differential rotation
+                    float noiseVal = fbm(rotP * 2.0 + vec3(0.0, iTime, 0.0));
+                    
+                    // Temperature color gradient (Hot inner -> Cool outer)
+                    // Cinematic Gold/Orange Palette
+                    vec3 innerColor = vec3(1.2, 0.9, 0.6) * 2.5; // Blindingly bright inner core
+                    vec3 midColor = vec3(1.0, 0.5, 0.1); // Rich amber
+                    vec3 outerColor = vec3(0.6, 0.1, 0.05); // Deep crimson edge
+                    
+                    float t = (radialDist - innerRadius) / (outerRadius - innerRadius);
+                    vec3 diskColor = mix(innerColor, midColor, smoothstep(0.0, 0.4, t));
+                    diskColor = mix(diskColor, outerColor, smoothstep(0.4, 1.0, t));
+                    
+                    // Add specific glowing bands
+                    float band = pow(0.5 + 0.5 * sin(radialDist * 15.0 - iTime * 3.0), 4.0); // Sharper bands
+                    
+                    // Accumulate light
+                    float intensity = diskFade * verticalFade * (0.3 + 0.9 * noiseVal) * (0.6 + 0.6 * band);
+                    
+                    // Dust lanes (darken parts)
+                    float dust = fbm(rotP * 4.0 - vec3(0.0, iTime*0.5, 0.0));
+                    intensity *= (0.4 + 0.6 * smoothstep(0.2, 0.8, dust)); // Higher contrast dust
+
+                    // Add to glow accumulation (Additive blending)
+                    glow += diskColor * intensity * stepSize * 0.4;
+                }
+                
+                // Adaptive step size - slow down near interesting things
+                float dDisk = max(0.02, abs(p.y) * 0.3); // Finer steps near disk
+                float dHole = max(0.02, (r - bhRadius) * 0.2); // Finer steps near hole
+                stepSize = min(dDisk, dHole);
+                stepSize = clamp(stepSize, 0.02, 0.6);
+                
+                // If we go too far away, stop
+                if(r > 25.0) break;
+            }
+            
+            // Background Stars (Space environment)
+            // We project the final ray direction onto a sphere
+            if (hitHorizon < 0.5) {
+                vec3 bgDir = normalize(rd);
+                float starNoise = pow(noise(bgDir * 200.0), 30.0) * 5.0; // Sharper, brighter stars
+                float nebula = fbm(bgDir * 1.5);
+                vec3 nebulaCol = vec3(0.02, 0.01, 0.08) * nebula; // Darker, moodier background
+                
+                col += nebulaCol + vec3(starNoise);
+            }
+            
+            // Add accumulated glow from disk
+            col += glow;
+            
+            // Cinematic Tone mapping
+            col = vec3(1.0) - exp(-col * 1.2); // Exposure
+            col = pow(col, vec3(1.1)); // Contrast boost
+            col = pow(col, vec3(0.4545)); // Gamma correction
+            
+            // Vignette
+            float vig = 1.0 - length(uv * 0.5);
+            col *= smoothstep(0.0, 1.0, vig);
+
+            gl_FragColor = vec4(col, 1.0);
+        }
+    </script>
+
+    <script>
+        const container = document.getElementById('canvas-container');
+        
+        // Scene Setup
+        const scene = new THREE.Scene();
+        const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+        
+        const renderer = new THREE.WebGLRenderer({ antialias: false }); // Raymarching does its own AA usually, or expensive
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        container.appendChild(renderer.domElement);
+
+        // Geometry
+        const geometry = new THREE.PlaneGeometry(2, 2);
+        
+        // Uniforms
+        const uniforms = {
+            iTime: { value: 0 },
+            iResolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
+            iMouse: { value: new THREE.Vector2(window.innerWidth / 2, window.innerHeight / 2) }
+        };
+
+        // Material
+        const material = new THREE.ShaderMaterial({
+            vertexShader: document.getElementById('vertexShader').textContent,
+            fragmentShader: document.getElementById('fragmentShader').textContent,
+            uniforms: uniforms
+        });
+
+        const mesh = new THREE.Mesh(geometry, material);
+        scene.add(mesh);
+
+        // Event Listeners
+        window.addEventListener('resize', () => {
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            uniforms.iResolution.value.set(window.innerWidth, window.innerHeight);
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            uniforms.iMouse.value.set(e.clientX, window.innerHeight - e.clientY);
+        });
+        
+        // Touch support
+        document.addEventListener('touchmove', (e) => {
+             if(e.touches.length > 0) {
+                uniforms.iMouse.value.set(e.touches[0].clientX, window.innerHeight - e.touches[0].clientY);
+             }
+        }, {passive: false});
+
+        // Animation Loop
+        const startTime = Date.now();
+        
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            const currentTime = Date.now();
+            uniforms.iTime.value = (currentTime - startTime) * 0.001;
+            
+            renderer.render(scene, camera);
+        }
+        
+        animate();
+    </script>
+</body>
+</html>
