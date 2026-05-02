@@ -166,7 +166,16 @@ async function shoot(page, name, url) {
   }
   await page.waitForTimeout(SETTLE_MS);
   // JPG ~50% the size of PNG for these screenshots; quality 80 is plenty.
-  await page.screenshot({ path: out, fullPage: false, type: 'jpeg', quality: 80 });
+  // Heavy demos (transformers.js, LLM init) saturate the runner CPU; the default
+  // 30s screenshot timeout isn't enough on GH-hosted runners. Bump to 90s and
+  // retry once with the load-state path if the first capture still hangs.
+  try {
+    await page.screenshot({ path: out, fullPage: false, type: 'jpeg', quality: 80, timeout: 90_000 });
+  } catch (e) {
+    console.warn(`  ! ${name}: screenshot timeout, retrying once: ${e.message}`);
+    await page.waitForTimeout(2000);
+    await page.screenshot({ path: out, fullPage: false, type: 'jpeg', quality: 80, timeout: 90_000 });
+  }
   console.log(`  - ${name} -> ${out}`);
   return true;
 }
