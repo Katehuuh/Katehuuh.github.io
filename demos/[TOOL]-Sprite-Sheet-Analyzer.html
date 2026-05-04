@@ -1,0 +1,1252 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sprite Sheet Analyzer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="importmap">
+{
+  "imports": {
+    "react": "https://aistudiocdn.com/react@^19.1.1",
+    "react-dom": "https://aistudiocdn.com/react-dom@^19.1.1",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.1.1/"
+  }
+}
+</script>
+    <script src="https://unpkg.com/@babel/standalone@7/babel.min.js"></script>
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+          'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+          sans-serif;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
+
+      .range-thumb::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 16px;
+        height: 16px;
+        background: #22d3ee;
+        border-radius: 50%;
+        cursor: pointer;
+        transition: transform 0.1s ease-in-out;
+      }
+      .range-thumb::-webkit-slider-thumb:hover {
+        transform: scale(1.1);
+      }
+      .range-thumb::-moz-range-thumb {
+        width: 16px;
+        height: 16px;
+        background: #22d3ee;
+        border-radius: 50%;
+        cursor: pointer;
+      }
+
+      .bg-checkered {
+        background-image:
+          linear-gradient(45deg, var(--check-color-1) 25%, transparent 25%),
+          linear-gradient(-45deg, var(--check-color-1) 25%, transparent 25%),
+          linear-gradient(45deg, transparent 75%, var(--check-color-1) 75%),
+          linear-gradient(-45deg, transparent 75%, var(--check-color-1) 75%);
+        background-size: 16px 16px;
+        background-position: 0 0, 0 8px, 8px -8px, -8px 0px;
+        background-color: var(--check-color-2);
+      }
+
+      .drop-target-active {
+        outline: 2px dashed #22d3ee;
+        outline-offset: -8px;
+        background-color: rgba(34, 211, 238, 0.05);
+      }
+
+      .toast {
+        position: fixed;
+        left: 50%;
+        bottom: 32px;
+        transform: translateX(-50%);
+        background: #0e7490;
+        color: #fff;
+        padding: 10px 18px;
+        border-radius: 8px;
+        font-size: 14px;
+        box-shadow: 0 4px 14px rgba(0,0,0,0.4);
+        z-index: 50;
+        pointer-events: none;
+      }
+    </style>
+  </head>
+  <body class="bg-gray-900">
+    <div id="root"></div>
+
+    <script type="module">
+      import React from 'react';
+      import ReactDOM from 'react-dom/client';
+      window.React = React;
+      window.ReactDOM = ReactDOM;
+      window.__REACT_READY__ = true;
+      window.dispatchEvent(new Event('react-ready'));
+    </script>
+
+    <script type="text/babel" data-presets="env,react,typescript">
+      (function () {
+        function boot() {
+          const React = window.React;
+          const ReactDOM = window.ReactDOM;
+          const { useState, useRef, useEffect, useCallback, useMemo } = React;
+
+          // ---------- Icons ----------
+          const EyeIcon = () => (
+            React.createElement('svg', { xmlns: "http://www.w3.org/2000/svg", className: "h-5 w-5", fill: "none", viewBox: "0 0 24 24", stroke: "currentColor" },
+              React.createElement('path', { strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: 2, d: "M15 12a3 3 0 11-6 0 3 3 0 016 0z" }),
+              React.createElement('path', { strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: 2, d: "M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" })
+            )
+          );
+
+          const EyeSlashIcon = () => (
+            React.createElement('svg', { xmlns: "http://www.w3.org/2000/svg", className: "h-5 w-5", fill: "none", viewBox: "0 0 24 24", stroke: "currentColor" },
+              React.createElement('path', { strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: 2, d: "M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a10.05 10.05 0 013.558-5.175L1.5 3.5m1.394 1.394L4 6m18 12l-1.5-1.5m-2.106-2.106L18 16m-4-4l-3-3m-4.5 0L6 8m6 6l-3-3" }),
+              React.createElement('path', { strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: 2, d: "M15 12a3 3 0 11-6 0 3 3 0 016 0z" })
+            )
+          );
+
+          const ArrowPathIcon = () => (
+            React.createElement('svg', { xmlns: "http://www.w3.org/2000/svg", className: "h-5 w-5", fill: "none", viewBox: "0 0 24 24", strokeWidth: 1.5, stroke: "currentColor" },
+              React.createElement('path', { strokeLinecap: "round", strokeLinejoin: "round", d: "M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0011.664 0l3.181-3.183m-11.664 0l4.992-4.993m-4.993 0l3.181-3.183a8.25 8.25 0 0111.664 0l3.181 3.183" })
+            )
+          );
+
+          const ArrowUpTrayIcon = () => (
+            React.createElement('svg', { xmlns: "http://www.w3.org/2000/svg", fill: "none", viewBox: "0 0 24 24", strokeWidth: 1.5, stroke: "currentColor", className: "w-5 h-5" },
+              React.createElement('path', { strokeLinecap: "round", strokeLinejoin: "round", d: "M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" })
+            )
+          );
+
+          const ArrowDownTrayIcon = () => (
+            React.createElement('svg', { xmlns: "http://www.w3.org/2000/svg", fill: "none", viewBox: "0 0 24 24", strokeWidth: 1.5, stroke: "currentColor", className: "w-5 h-5" },
+              React.createElement('path', { strokeLinecap: "round", strokeLinejoin: "round", d: "M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" })
+            )
+          );
+
+          const SparklesIcon = () => (
+            React.createElement('svg', { xmlns: "http://www.w3.org/2000/svg", fill: "none", viewBox: "0 0 24 24", strokeWidth: 1.5, stroke: "currentColor", className: "w-5 h-5" },
+              React.createElement('path', { strokeLinecap: "round", strokeLinejoin: "round", d: "M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.898 20.562L16.25 22.5l-.648-1.938a3.375 3.375 0 00-2.456-2.456L11.25 18l1.938-.648a3.375 3.375 0 002.456-2.456L16.25 13.5l.648 1.938a3.375 3.375 0 002.456 2.456L21 18l-1.938.648a3.375 3.375 0 00-2.456 2.456z" })
+            )
+          );
+
+          const ClipboardIcon = () => (
+            React.createElement('svg', { xmlns: "http://www.w3.org/2000/svg", fill: "none", viewBox: "0 0 24 24", strokeWidth: 1.5, stroke: "currentColor", className: "w-5 h-5" },
+              React.createElement('path', { strokeLinecap: "round", strokeLinejoin: "round", d: "M15.666 3.888A2.25 2.25 0 0013.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v3.045M15.666 3.888a2.25 2.25 0 012.25 2.25v13.5A2.25 2.25 0 0115.75 21h-6a2.25 2.25 0 01-2.25-2.25V6.138a2.25 2.25 0 012.25-2.25h1.5M13.5 4.5v3.045m0 0A2.25 2.25 0 0015.75 9h1.5m-1.5-1.5h-3a2.25 2.25 0 00-2.25 2.25v3.75m13.5 0v3.75a2.25 2.25 0 01-2.25 2.25h-1.5a2.25 2.25 0 01-2.25-2.25V15m-3 0a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 15v3.75a2.25 2.25 0 002.25 2.25h1.5a2.25 2.25 0 002.25-2.25V15" })
+            )
+          );
+
+          const CodeBracketIcon = () => (
+            React.createElement('svg', { xmlns: "http://www.w3.org/2000/svg", fill: "none", viewBox: "0 0 24 24", strokeWidth: 1.5, stroke: "currentColor", className: "w-5 h-5" },
+              React.createElement('path', { strokeLinecap: "round", strokeLinejoin: "round", d: "M14.25 9.75L16.5 12l-2.25 2.25m-4.5 0L7.5 12l2.25-2.25M6 20.25h12A2.25 2.25 0 0020.25 18V6A2.25 2.25 0 0018 3.75H6A2.25 2.25 0 003.75 6v12A2.25 2.25 0 006 20.25z" })
+            )
+          );
+
+          const FilmIcon = () => (
+            React.createElement('svg', { xmlns: "http://www.w3.org/2000/svg", fill: "none", viewBox: "0 0 24 24", strokeWidth: 1.5, stroke: "currentColor", className: "w-5 h-5" },
+              React.createElement('path', { strokeLinecap: "round", strokeLinejoin: "round", d: "M6 20.25h12A2.25 2.25 0 0020.25 18V6A2.25 2.25 0 0018 3.75H6A2.25 2.25 0 003.75 6v12A2.25 2.25 0 006 20.25z" }),
+              React.createElement('path', { strokeLinecap: "round", strokeLinejoin: "round", d: "M3.75 6h.008v.008H3.75V6zM3.75 9h.008v.008H3.75V9zM3.75 12h.008v.008H3.75v-.008zM3.75 15h.008v.008H3.75V15zm0 3h.008v.008H3.75v-.008zM20.25 6h-.008v.008h.008V6zM20.25 9h-.008v.008h.008V9zm0 3h-.008v.008h.008v-.008zm0 3h-.008v.008h.008V15zm0 3h-.008v.008h.008v-.008z" })
+            )
+          );
+
+          const WandIcon = () => (
+            React.createElement('svg', { xmlns: "http://www.w3.org/2000/svg", fill: "none", viewBox: "0 0 24 24", strokeWidth: 1.5, stroke: "currentColor", className: "w-5 h-5" },
+              React.createElement('path', { strokeLinecap: "round", strokeLinejoin: "round", d: "M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z" }),
+              React.createElement('path', { strokeLinecap: "round", strokeLinejoin: "round", d: "M12 18l-3-3m0 0l-3 3m3-3V21" })
+            )
+          );
+
+          // ---------- ControlSlider ----------
+          const ControlSlider = ({ label, value, onChange, min = 0, max = 1024, step = 1 }) => {
+            const handleSliderChange = (e) => {
+              onChange(Number(e.target.value));
+            };
+
+            const handleNumberChange = (e) => {
+              const numValue = e.target.value === '' ? min : Number(e.target.value);
+              onChange(numValue);
+            };
+
+            const handleBlur = (e) => {
+              let numValue = Number(e.target.value);
+              if (isNaN(numValue)) numValue = min;
+              onChange(Math.max(min, Math.min(max, numValue)));
+            };
+
+            return React.createElement('div', { className: "space-y-2" },
+              React.createElement('div', { className: "flex justify-between items-center" },
+                React.createElement('label', { htmlFor: label, className: "text-sm font-medium text-gray-300" }, label),
+                React.createElement('input', {
+                  type: "number",
+                  id: `${label}-number`,
+                  value: value,
+                  onChange: handleNumberChange,
+                  onBlur: handleBlur,
+                  min: min,
+                  max: max,
+                  step: step,
+                  className: "w-20 bg-gray-700 border border-gray-600 text-white text-sm rounded-md p-1 text-center focus:ring-cyan-500 focus:border-cyan-500"
+                })
+              ),
+              React.createElement('input', {
+                id: label,
+                type: "range",
+                min: min,
+                max: max,
+                step: step,
+                value: value,
+                onChange: handleSliderChange,
+                className: "w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer range-thumb",
+                style: { '--thumb-color': '#22d3ee' }
+              })
+            );
+          };
+
+          // ---------- AnimationPreviewer ----------
+          const AnimationPreviewer = ({ image, rows, spriteWidth, rowHeight, fps }) => {
+            const canvasRefs = useRef(new Map());
+            const animationFrameId = useRef(null);
+            const lastFrameTime = useRef(0);
+            const currentFrames = useRef(new Array(rows.length).fill(0));
+
+            useEffect(() => {
+              if (!image) return;
+              const frameDuration = 1000 / fps;
+
+              const animate = (timestamp) => {
+                if (!lastFrameTime.current) {
+                  lastFrameTime.current = timestamp;
+                }
+
+                const elapsed = timestamp - lastFrameTime.current;
+
+                if (elapsed > frameDuration) {
+                  lastFrameTime.current = timestamp - (elapsed % frameDuration);
+
+                  rows.forEach((sprites, rowIndex) => {
+                    if (sprites.length > 0) {
+                      const nextFrame = (currentFrames.current[rowIndex] + 1) % sprites.length;
+                      currentFrames.current[rowIndex] = nextFrame;
+
+                      const canvas = canvasRefs.current.get(rowIndex);
+                      const sprite = sprites[nextFrame];
+                      if (canvas && sprite && image) {
+                        const ctx = canvas.getContext('2d');
+                        if (ctx) {
+                          ctx.clearRect(0, 0, canvas.width, canvas.height);
+                          ctx.drawImage(
+                            image,
+                            sprite.x,
+                            sprite.y,
+                            sprite.w,
+                            sprite.h,
+                            0,
+                            0,
+                            canvas.width,
+                            canvas.height
+                          );
+                        }
+                      }
+                    }
+                  });
+                }
+
+                animationFrameId.current = requestAnimationFrame(animate);
+              };
+
+              rows.forEach((sprites, index) => {
+                if (sprites.length > 0) {
+                  const canvas = canvasRefs.current.get(index);
+                  const sprite = sprites[0];
+                  if (canvas && sprite && image) {
+                    const ctx = canvas.getContext('2d');
+                    if (ctx) {
+                      ctx.imageSmoothingEnabled = false;
+                      ctx.clearRect(0, 0, canvas.width, canvas.height);
+                      ctx.drawImage(image, sprite.x, sprite.y, sprite.w, sprite.h, 0, 0, canvas.width, canvas.height);
+                    }
+                  }
+                }
+              });
+
+              animationFrameId.current = requestAnimationFrame(animate);
+
+              return () => {
+                if (animationFrameId.current) {
+                  cancelAnimationFrame(animationFrameId.current);
+                }
+              };
+            }, [image, rows, fps]);
+
+            if (!rows || rows.length === 0 || spriteWidth <= 0 || rowHeight <= 0) {
+              return null;
+            }
+
+            return React.createElement('div', { className: "mt-6 bg-gray-800 rounded-lg shadow-2xl p-6" },
+              React.createElement('h2', { className: "text-2xl font-bold text-cyan-400 mb-4 border-b border-gray-700 pb-2" },
+                "Animation Preview"
+              ),
+              React.createElement('div', { className: "grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4" },
+                rows.map((sprites, index) => {
+                  if (sprites.length === 0) return null;
+                  const originalRowIndex = sprites[0].row;
+                  return React.createElement('div', { key: index, className: "flex flex-col items-center bg-gray-900/50 p-3 rounded-md border border-gray-700" },
+                    React.createElement('h3', { className: "text-sm font-semibold text-gray-300 mb-2" }, `Row ${index + 1} (Original: ${originalRowIndex})`),
+                    React.createElement('canvas', {
+                      ref: (el) => {
+                        if (el) {
+                          canvasRefs.current.set(index, el);
+                        } else {
+                          canvasRefs.current.delete(index);
+                        }
+                      },
+                      width: spriteWidth,
+                      height: rowHeight,
+                      className: "bg-checkered rounded-sm",
+                      style: {
+                        imageRendering: 'pixelated',
+                        '--check-color-1': '#4a5568',
+                        '--check-color-2': '#2d3748'
+                      },
+                      'aria-label': `Animation preview for original row ${originalRowIndex}`
+                    })
+                  );
+                })
+              )
+            );
+          };
+
+          // ---------- SpriteAnalyzer ----------
+          const REMIX_PROMPT = 'Using the same placement and type of animation, adapt to replace the current 2D game sprite character animation with the "girl with long hair". Carefully analyze the image and its movement, and replace accordingly. Each character in the grid MUST be changed to the corresponding action pose. This means idle, walk, run, jump, and attack 1 will need to be adapted to an "girl with long hair" style sprite in 2D animation.';
+
+          // Build a synthetic sprite sheet so the demo works offline / without external images.
+          // Layout matches INITIAL_STATE: labelWidth=303, spriteWidth=192, rowHeight=215,
+          // offsetX=-71, offsetY=228 on a 1024x576 sheet.
+          const buildDefaultSpriteSheet = () => {
+            const W = 1024, H = 576;
+            const canvas = document.createElement('canvas');
+            canvas.width = W;
+            canvas.height = H;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) return canvas;
+
+            // grey background that matches the "make grey transparent" target color
+            ctx.fillStyle = '#a2a2a2';
+            ctx.fillRect(0, 0, W, H);
+
+            const labels = ['IDLE', 'WALK', 'RUN', 'JUMP', 'ATK 1'];
+            const skinColor = '#f4c290';       // warm skin (saturated -> survives grey-transparency)
+            const hairColor = '#5d3a1a';       // brown hair
+            const shirtPalette = ['#e74c3c', '#f39c12', '#27ae60', '#2980b9', '#8e44ad'];
+            const pantsColor = '#2c3e50';
+            const rowHeight = 215;
+            const labelWidth = 303;
+            const spriteWidth = 192;
+            const offsetX = -71;
+            const offsetY = 228;
+
+            for (let r = 0; r < 3; r++) {
+              const y = offsetY + r * rowHeight;
+              if (y >= H) continue;
+              const rowColor = shirtPalette[r % shirtPalette.length];
+
+              // label area (saturated dark blue so it survives transparency)
+              const labelStart = Math.max(0, offsetX);
+              ctx.fillStyle = '#0c2340';
+              ctx.fillRect(labelStart, y, labelWidth + Math.min(0, offsetX), Math.min(rowHeight, H - y));
+              ctx.fillStyle = '#ffffff';
+              ctx.font = 'bold 30px sans-serif';
+              ctx.textAlign = 'left';
+              ctx.textBaseline = 'middle';
+              ctx.fillText(labels[r % labels.length] || '',
+                           labelStart + 16,
+                           y + rowHeight / 2);
+
+              // 4 sprite cells per row
+              for (let c = 0; c < 4; c++) {
+                const x = offsetX + labelWidth + c * spriteWidth;
+                if (x + spriteWidth > W || x < 0) continue;
+
+                // cell bg in saturated teal tint so it stays visible
+                ctx.fillStyle = c % 2 === 0 ? '#11324a' : '#0e3d54';
+                ctx.fillRect(x + 4, y + 4, spriteWidth - 8, Math.min(rowHeight, H - y) - 8);
+
+                // character: head + torso + limbs, scaled to fill most of the cell
+                const cx = x + spriteWidth / 2;
+                const cyBase = y + rowHeight - 30;
+
+                // legs
+                ctx.fillStyle = pantsColor;
+                const legSpread = 6 + c * 4;
+                ctx.fillRect(cx - 22 - (c % 2 === 0 ? 0 : legSpread), cyBase - 60, 18, 60);
+                ctx.fillRect(cx + 4 + (c % 2 === 0 ? 0 : legSpread), cyBase - 60, 18, 60);
+
+                // torso
+                ctx.fillStyle = rowColor;
+                ctx.fillRect(cx - 32, cyBase - 120, 64, 65);
+
+                // arms
+                ctx.fillStyle = skinColor;
+                ctx.fillRect(cx - 50, cyBase - 110, 18, 55);
+                ctx.fillRect(cx + 32, cyBase - 110, 18, 55);
+
+                // head
+                ctx.fillStyle = skinColor;
+                ctx.beginPath();
+                ctx.arc(cx, cyBase - 145, 26, 0, Math.PI * 2);
+                ctx.fill();
+
+                // hair
+                ctx.fillStyle = hairColor;
+                ctx.beginPath();
+                ctx.arc(cx, cyBase - 152, 26, Math.PI, 0);
+                ctx.fill();
+                ctx.fillRect(cx - 26, cyBase - 158, 52, 12);
+
+                // frame number badge in saturated yellow
+                ctx.fillStyle = '#facc15';
+                ctx.fillRect(x + spriteWidth - 36, y + 8, 28, 22);
+                ctx.fillStyle = '#000';
+                ctx.font = 'bold 14px monospace';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(`f${c + 1}`, x + spriteWidth - 22, y + 19);
+              }
+            }
+
+            return canvas;
+          };
+
+          const INITIAL_STATE = {
+            labelWidth: 303,
+            spriteWidth: 192,
+            rowHeight: 215,
+            offsetX: -71,
+            offsetY: 228,
+            lineWidth: 1,
+            fps: 10,
+          };
+
+          const isDrawable = (src) => {
+            if (!src) return false;
+            if (typeof HTMLImageElement !== 'undefined' && src instanceof HTMLImageElement) return true;
+            if (typeof HTMLCanvasElement !== 'undefined' && src instanceof HTMLCanvasElement) return true;
+            if (typeof ImageBitmap !== 'undefined' && src instanceof ImageBitmap) return true;
+            return false;
+          };
+
+          const SpriteAnalyzer = () => {
+            const [image, setImage] = useState(null);
+            const [processedImage, setProcessedImage] = useState(null);
+            const [sourceCanvas, setSourceCanvas] = useState(null);
+            const [imageDimensions, setImageDimensions] = useState({ width: 1024, height: 576 });
+            const [isLoading, setIsLoading] = useState(true);
+            const [isAdjusting, setIsAdjusting] = useState(false);
+            const [isDragOver, setIsDragOver] = useState(false);
+            const [toast, setToast] = useState('');
+            const canvasRef = useRef(null);
+            const canvasContainerRef = useRef(null);
+            const fileInputRef = useRef(null);
+
+            const [gridVisible, setGridVisible] = useState(true);
+            const [useWhiteBackground, setUseWhiteBackground] = useState(false);
+            const [makeGreyTransparent, setMakeGreyTransparent] = useState(true);
+            const [labelWidth, setLabelWidth] = useState(INITIAL_STATE.labelWidth);
+            const [spriteWidth, setSpriteWidth] = useState(INITIAL_STATE.spriteWidth);
+            const [rowHeight, setRowHeight] = useState(INITIAL_STATE.rowHeight);
+            const [offsetX, setOffsetX] = useState(INITIAL_STATE.offsetX);
+            const [offsetY, setOffsetY] = useState(INITIAL_STATE.offsetY);
+            const [lineWidth, setLineWidth] = useState(INITIAL_STATE.lineWidth);
+            const [fps, setFps] = useState(INITIAL_STATE.fps);
+            const [copySuccess, setCopySuccess] = useState('');
+            const [activeTab, setActiveTab] = useState('json');
+
+            const imageToDraw = useMemo(() => {
+              if (isDrawable(processedImage)) return processedImage;
+              if (isDrawable(image)) return image;
+              return null;
+            }, [processedImage, image]);
+
+            useEffect(() => {
+              // Try the original Ryu reference; fall back to a synthetic sheet if the network blocks it.
+              const DEFAULT_SPRITE_SHEET_URL = 'https://i.imgur.com/gA32p4K.png';
+              const img = new Image();
+              img.crossOrigin = 'anonymous';
+              img.onload = () => {
+                setImage(img);
+                setImageDimensions({ width: img.width, height: img.height });
+                setIsLoading(false);
+              };
+              img.onerror = () => {
+                const synth = buildDefaultSpriteSheet();
+                setImage(synth);
+                setImageDimensions({ width: synth.width, height: synth.height });
+                setIsLoading(false);
+              };
+              img.src = DEFAULT_SPRITE_SHEET_URL;
+            }, []);
+
+            useEffect(() => {
+              if (!image) return;
+              const canvas = document.createElement('canvas');
+              canvas.width = image.width;
+              canvas.height = image.height;
+              const ctx = canvas.getContext('2d', { willReadFrequently: true });
+              if (ctx) {
+                try {
+                  ctx.drawImage(image, 0, 0);
+                  // probe to confirm we can read pixels (CORS check)
+                  ctx.getImageData(0, 0, 1, 1);
+                  setSourceCanvas(canvas);
+                } catch (e) {
+                  setSourceCanvas(null);
+                }
+              } else {
+                setSourceCanvas(null);
+              }
+            }, [image]);
+
+            useEffect(() => {
+              if (!image) {
+                setProcessedImage(null);
+                return;
+              }
+
+              if (!makeGreyTransparent) {
+                setProcessedImage(null);
+                return;
+              }
+
+              const canvas = document.createElement('canvas');
+              canvas.width = image.width;
+              canvas.height = image.height;
+              const ctx = canvas.getContext('2d');
+              if (!ctx) {
+                setProcessedImage(null);
+                return;
+              }
+
+              ctx.drawImage(image, 0, 0);
+
+              try {
+                const imageData = ctx.getImageData(0, 0, image.width, image.height);
+                const data = imageData.data;
+
+                const saturationThreshold = 0.25;
+                const targetLightness = 162;
+                const lightnessTolerance = 80;
+
+                for (let i = 0; i < data.length; i += 4) {
+                  const r = data[i];
+                  const g = data[i + 1];
+                  const b = data[i + 2];
+
+                  const max = Math.max(r, g, b);
+                  const min = Math.min(r, g, b);
+                  const lightness = (max + min) / 2;
+
+                  let saturation = 0;
+                  if (max !== min) {
+                    const d = max - min;
+                    saturation = lightness > 127.5 ? d / (510 - max - min) : d / (max + min);
+                  }
+
+                  if (saturation < saturationThreshold && Math.abs(lightness - targetLightness) < lightnessTolerance) {
+                    data[i + 3] = 0;
+                  }
+                }
+                ctx.putImageData(imageData, 0, 0);
+                setProcessedImage(canvas);
+              } catch (e) {
+                // CORS rejection: fall back to original image rather than null
+                setProcessedImage(null);
+              }
+            }, [image, makeGreyTransparent]);
+
+            const loadImageFromFile = useCallback((file) => {
+              if (!file) return;
+              setIsLoading(true);
+              const reader = new FileReader();
+              reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => {
+                  setImage(img);
+                  setImageDimensions({ width: img.width, height: img.height });
+                  handleReset();
+                  setIsLoading(false);
+                };
+                img.onerror = () => {
+                  setIsLoading(false);
+                };
+                img.src = e.target?.result;
+              };
+              reader.readAsDataURL(file);
+            }, []);
+
+            const handleImageUpload = (event) => {
+              const file = event.target.files?.[0];
+              if (file) loadImageFromFile(file);
+            };
+
+            const handleDragOver = (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              if (!isDragOver) setIsDragOver(true);
+            };
+
+            const handleDragLeave = (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setIsDragOver(false);
+            };
+
+            const handleDrop = (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setIsDragOver(false);
+              const file = e.dataTransfer?.files?.[0];
+              if (file && file.type.startsWith('image/')) {
+                loadImageFromFile(file);
+              }
+            };
+
+            const drawGridOnContext = (ctx, canvasWidth, canvasHeight, imageTopLeftX, imageTopLeftY, scale = 1) => {
+              ctx.strokeStyle = 'rgba(255, 0, 0, 0.7)';
+              ctx.lineWidth = lineWidth;
+
+              const sOffsetX = offsetX * scale;
+              const sOffsetY = offsetY * scale;
+              const sRowHeight = rowHeight * scale;
+              const sLabelWidth = labelWidth * scale;
+              const sSpriteWidth = spriteWidth * scale;
+
+              const gridOriginX = imageTopLeftX + sOffsetX;
+              const gridOriginY = imageTopLeftY + sOffsetY;
+
+              if (sRowHeight > 0) {
+                const yStartOffset = gridOriginY % sRowHeight;
+                const yStart = yStartOffset > 0 ? yStartOffset - sRowHeight : yStartOffset;
+                for (let y = yStart; y < canvasHeight; y += sRowHeight) {
+                  ctx.beginPath();
+                  ctx.moveTo(0, y + 0.5);
+                  ctx.lineTo(canvasWidth, y + 0.5);
+                  ctx.stroke();
+                }
+              }
+
+              const labelLineX = gridOriginX + sLabelWidth;
+              if (sLabelWidth > 0) {
+                ctx.beginPath();
+                ctx.moveTo(labelLineX + 0.5, 0);
+                ctx.lineTo(labelLineX + 0.5, canvasHeight);
+                ctx.stroke();
+              }
+
+              if (sSpriteWidth > 0) {
+                const xStartOffset = (gridOriginX + sLabelWidth) % sSpriteWidth;
+                let xStart = (gridOriginX + sLabelWidth) - xStartOffset;
+                if (xStartOffset === 0) xStart = gridOriginX + sLabelWidth;
+
+                while (xStart > 0) {
+                  xStart -= sSpriteWidth;
+                }
+
+                for (let x = xStart; x < canvasWidth; x += sSpriteWidth) {
+                  if (Math.abs(x - (gridOriginX)) > 0.1) {
+                    ctx.beginPath();
+                    ctx.moveTo(x + 0.5, 0);
+                    ctx.lineTo(x + 0.5, canvasHeight);
+                    ctx.stroke();
+                  }
+                }
+              }
+            };
+
+            const handleDownload = () => {
+              const drawSource = isDrawable(processedImage) ? processedImage : (isDrawable(image) ? image : null);
+              if (!drawSource) return;
+
+              const tempCanvas = document.createElement('canvas');
+              tempCanvas.width = imageDimensions.width;
+              tempCanvas.height = imageDimensions.height;
+              const ctx = tempCanvas.getContext('2d');
+              if (!ctx) return;
+
+              ctx.drawImage(drawSource, 0, 0);
+              if (gridVisible) {
+                drawGridOnContext(ctx, imageDimensions.width, imageDimensions.height, 0, 0, 1);
+              }
+
+              const link = document.createElement('a');
+              link.download = 'sprite-analysis.png';
+              link.href = tempCanvas.toDataURL('image/png');
+              link.click();
+            };
+
+            const draw = useCallback(() => {
+              const canvas = canvasRef.current;
+              if (!canvas) return;
+
+              const drawSource = isDrawable(processedImage) ? processedImage : (isDrawable(image) ? image : null);
+              if (!drawSource) return;
+
+              const ctx = canvas.getContext('2d');
+              if (!ctx) return;
+
+              const scale = Math.min(canvas.width / imageDimensions.width, canvas.height / imageDimensions.height);
+              const scaledWidth = imageDimensions.width * scale;
+              const scaledHeight = imageDimensions.height * scale;
+              const imageTopLeftX = (canvas.width - scaledWidth) / 2;
+              const imageTopLeftY = (canvas.height - scaledHeight) / 2;
+
+              ctx.clearRect(0, 0, canvas.width, canvas.height);
+              ctx.fillStyle = '#111827';
+              ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+              ctx.imageSmoothingEnabled = false;
+              ctx.drawImage(drawSource, imageTopLeftX, imageTopLeftY, scaledWidth, scaledHeight);
+
+              if (useWhiteBackground) {
+                try {
+                  const imageData = ctx.getImageData(imageTopLeftX, imageTopLeftY, scaledWidth, scaledHeight);
+                  const data = imageData.data;
+                  const R = 128, G = 128, B = 128, tolerance = 10;
+                  for (let i = 0; i < data.length; i += 4) {
+                    if (Math.abs(data[i] - R) < tolerance &&
+                        Math.abs(data[i + 1] - G) < tolerance &&
+                        Math.abs(data[i + 2] - B) < tolerance) {
+                      data[i] = 255;
+                      data[i + 1] = 255;
+                      data[i + 2] = 255;
+                    }
+                  }
+                  ctx.putImageData(imageData, imageTopLeftX, imageTopLeftY);
+                } catch (error) {
+                  // CORS - silently skip background swap
+                }
+              }
+
+              if (gridVisible) {
+                drawGridOnContext(ctx, canvas.width, canvas.height, imageTopLeftX, imageTopLeftY, scale);
+              }
+            }, [processedImage, image, gridVisible, labelWidth, spriteWidth, rowHeight, offsetX, offsetY, useWhiteBackground, lineWidth, imageDimensions]);
+
+            useEffect(() => {
+              const canvas = canvasRef.current;
+              const container = canvasContainerRef.current;
+              if (!container || !canvas) return;
+
+              const resizeObserver = new ResizeObserver(() => {
+                const { width, height } = container.getBoundingClientRect();
+                canvas.width = width;
+                canvas.height = height;
+                draw();
+              });
+
+              resizeObserver.observe(container);
+              return () => resizeObserver.disconnect();
+            }, [draw]);
+
+            useEffect(() => {
+              draw();
+            }, [draw]);
+
+            const handleReset = () => {
+              setLabelWidth(INITIAL_STATE.labelWidth);
+              setSpriteWidth(INITIAL_STATE.spriteWidth);
+              setRowHeight(INITIAL_STATE.rowHeight);
+              setOffsetX(INITIAL_STATE.offsetX);
+              setOffsetY(INITIAL_STATE.offsetY);
+              setLineWidth(INITIAL_STATE.lineWidth);
+              setFps(INITIAL_STATE.fps);
+            };
+
+            const getMode = (arr) => {
+              if (arr.length === 0) return null;
+              const counts = arr.reduce((acc, val) => {
+                acc[val] = (acc[val] || 0) + 1;
+                return acc;
+              }, {});
+              return Number(Object.keys(counts).reduce((a, b) => counts[Number(a)] > counts[Number(b)] ? a : b));
+            };
+
+            const handleCopyRemixPrompt = async () => {
+              try {
+                await navigator.clipboard.writeText(REMIX_PROMPT);
+                setToast('Prompt copied');
+              } catch (e) {
+                // fallback for browsers without clipboard permission
+                const ta = document.createElement('textarea');
+                ta.value = REMIX_PROMPT;
+                document.body.appendChild(ta);
+                ta.select();
+                try { document.execCommand('copy'); setToast('Prompt copied'); }
+                catch { setToast('Copy failed'); }
+                document.body.removeChild(ta);
+              }
+              setTimeout(() => setToast(''), 2000);
+            };
+
+            const handleAutoAdjust = (imgOrEvent) => {
+              const targetImage = isDrawable(imgOrEvent) ? imgOrEvent : image;
+              if (!isDrawable(targetImage) || !targetImage.width) return;
+
+              setIsAdjusting(true);
+
+              setTimeout(() => {
+                const imgWidth = targetImage.width;
+                const imgHeight = targetImage.height;
+                const tempCanvas = document.createElement('canvas');
+                tempCanvas.width = imgWidth;
+                tempCanvas.height = imgHeight;
+                const ctx = tempCanvas.getContext('2d', { willReadFrequently: true });
+                if (!ctx) {
+                  setIsAdjusting(false);
+                  return;
+                }
+
+                try {
+                  ctx.drawImage(targetImage, 0, 0);
+                  const imageData = ctx.getImageData(0, 0, imgWidth, imgHeight);
+                  const data = imageData.data;
+
+                  const isTransparent = (i) => {
+                    if (data[i + 3] < 100) return true;
+                    if (makeGreyTransparent) {
+                      const r = data[i], g = data[i + 1], b = data[i + 2];
+                      return Math.abs(r - 162) < 40 && Math.abs(g - 162) < 40 && Math.abs(b - 162) < 40;
+                    }
+                    return false;
+                  };
+
+                  const rowProj = new Array(imgHeight).fill(0);
+                  for (let y = 0; y < imgHeight; y++) {
+                    for (let x = 0; x < imgWidth; x++) {
+                      if (!isTransparent((y * imgWidth + x) * 4)) {
+                        rowProj[y]++;
+                      }
+                    }
+                  }
+
+                  const findBoundaries = (proj, threshold = 2) => {
+                    const bounds = [];
+                    let inBlock = false;
+                    let start = 0;
+                    for (let i = 0; i < proj.length; i++) {
+                      if (!inBlock && proj[i] > threshold) {
+                        inBlock = true;
+                        start = i;
+                      } else if (inBlock && proj[i] <= threshold) {
+                        inBlock = false;
+                        bounds.push({ start, end: i, size: i - start });
+                      }
+                    }
+                    if (inBlock) bounds.push({ start, end: proj.length, size: proj.length - start });
+                    return bounds;
+                  };
+
+                  const rowBounds = findBoundaries(rowProj);
+                  if (rowBounds.length === 0) {
+                    setIsAdjusting(false);
+                    return;
+                  }
+
+                  const newOffsetY = rowBounds[0].start;
+                  const rowDistances = [];
+                  for (let i = 1; i < rowBounds.length; i++) rowDistances.push(rowBounds[i].start - rowBounds[i - 1].start);
+                  const newRowHeight = getMode(rowDistances) || rowBounds[0].size + 10;
+
+                  const colProj = new Array(imgWidth).fill(0);
+                  const midRow = rowBounds[Math.floor(rowBounds.length / 2)] || rowBounds[0];
+                  for (let x = 0; x < imgWidth; x++) {
+                    for (let y = midRow.start; y < midRow.end; y++) {
+                      if (!isTransparent((y * imgWidth + x) * 4)) {
+                        colProj[x]++;
+                      }
+                    }
+                  }
+
+                  const colBounds = findBoundaries(colProj);
+                  if (colBounds.length < 2) {
+                    setIsAdjusting(false);
+                    return;
+                  }
+
+                  const newOffsetX = colBounds[0].start;
+                  const newLabelWidth = colBounds[1].start - colBounds[0].start;
+
+                  const colDistances = [];
+                  for (let i = 2; i < colBounds.length; i++) colDistances.push(colBounds[i].start - colBounds[i - 1].start);
+                  const newSpriteWidth = getMode(colDistances) || (colBounds[1].end - colBounds[1].start) + 5;
+
+                  setOffsetX(Math.round(newOffsetX));
+                  setOffsetY(Math.round(newOffsetY));
+                  setRowHeight(Math.round(newRowHeight));
+                  setLabelWidth(Math.round(newLabelWidth));
+                  setSpriteWidth(Math.round(newSpriteWidth));
+                } catch (e) {
+                  // CORS - cannot auto-adjust on cross-origin image
+                }
+
+                setIsAdjusting(false);
+              }, 50);
+            };
+
+            const gridData = useMemo(() => {
+              if (!image || rowHeight <= 0 || spriteWidth <= 0 || !sourceCanvas) return [];
+
+              const ctx = sourceCanvas.getContext('2d');
+              if (!ctx) return [];
+
+              const isFrameSolid = (x, y, w, h) => {
+                if (w < 1 || h < 1) return true;
+                try {
+                  const imageData = ctx.getImageData(x, y, w, h);
+                  const data = imageData.data;
+                  const r1 = data[0], g1 = data[1], b1 = data[2], a1 = data[3];
+
+                  for (let i = 4; i < data.length; i += 4) {
+                    if (Math.abs(data[i] - r1) > 2 ||
+                        Math.abs(data[i + 1] - g1) > 2 ||
+                        Math.abs(data[i + 2] - b1) > 2 ||
+                        Math.abs(data[i + 3] - a1) > 2) {
+                      return false;
+                    }
+                  }
+                  return true;
+                } catch (e) {
+                  return false;
+                }
+              };
+
+              const data = [];
+              const startRow = Math.ceil(-offsetY / rowHeight);
+              const endRow = Math.floor((image.height - offsetY) / rowHeight);
+
+              for (let r = startRow; r < endRow; r++) {
+                const y = offsetY + r * rowHeight;
+                if (y + rowHeight > image.height || y < 0) continue;
+
+                const startX = offsetX + labelWidth;
+                const numCols = Math.floor((image.width - startX) / spriteWidth);
+
+                for (let c = 0; c < numCols; c++) {
+                  const x = startX + c * spriteWidth;
+                  if (x + spriteWidth > image.width || x < 0) continue;
+
+                  const finalX = Math.round(x);
+                  const finalY = Math.round(y);
+                  const finalW = Math.round(spriteWidth);
+                  const finalH = Math.round(rowHeight);
+
+                  if (!isFrameSolid(finalX, finalY, finalW, finalH)) {
+                    data.push({
+                      row: r,
+                      col: c,
+                      x: finalX,
+                      y: finalY,
+                      w: finalW,
+                      h: finalH
+                    });
+                  }
+                }
+              }
+              return data;
+            }, [offsetX, offsetY, labelWidth, spriteWidth, rowHeight, image, sourceCanvas]);
+
+            const animationRows = useMemo(() => {
+              if (!gridData.length) return [];
+              const groupedByRow = gridData.reduce((acc, sprite) => {
+                if (!acc[sprite.row]) {
+                  acc[sprite.row] = [];
+                }
+                acc[sprite.row].push(sprite);
+                return acc;
+              }, {});
+              return Object.values(groupedByRow);
+            }, [gridData]);
+
+            const generatedHtml = useMemo(() => {
+              if (!animationRows.length || spriteWidth <= 0 || rowHeight <= 0) return '';
+
+              const PLACEHOLDER_FILENAME = 'spritesheet.png';
+              const comment = `<!--
+  IMPORTANT: This HTML file expects an image named "${PLACEHOLDER_FILENAME}"
+  to be in the same directory. Make sure you have your sprite sheet image
+  with this exact name in the same folder as this HTML file.
+-->`;
+
+              const styles = animationRows.map((sprites, index) => {
+                if (!sprites.length) return '';
+                const rowData = sprites[0];
+                const numFrames = sprites.length;
+                const animationDuration = (numFrames / fps).toFixed(2);
+                const startX = rowData.x;
+                const startY = rowData.y;
+                const endX = startX + (numFrames * spriteWidth);
+
+                return `
+  .sprite-row-${index} {
+    width: ${spriteWidth}px;
+    height: ${rowHeight}px;
+    background-image: url('${PLACEHOLDER_FILENAME}');
+    background-repeat: no-repeat;
+    animation: play-row-${index} ${animationDuration}s steps(${numFrames}) infinite;
+    image-rendering: pixelated;
+  }
+  @keyframes play-row-${index} {
+    from { background-position: -${startX}px -${startY}px; }
+    to   { background-position: -${endX}px -${startY}px; }
+  }`;
+              }).join('\n');
+
+              const elements = animationRows.map((sprites, index) => {
+                if (!sprites.length) return '';
+                return `
+    <div class="animation-container">
+      <h3 class="row-label">Row ${index + 1} (Original row ${sprites[0].row})</h3>
+      <div class="sprite-row-${index}"></div>
+    </div>`;
+              }).join('\n');
+
+              return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sprite Animation Preview</title>
+  ${comment}
+  <style>
+    body {
+      font-family: sans-serif;
+      background: #111827;
+      color: #d1d5db;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+      padding: 20px;
+      justify-content: center;
+    }
+    .animation-container {
+      text-align: center;
+      background: #1f2937;
+      padding: 1rem;
+      border-radius: 0.5rem;
+      border: 1px solid #374151;
+    }
+    .row-label {
+      margin: 0 0 10px 0;
+      font-weight: normal;
+      color: #9ca3af;
+    }
+    ${styles}
+  </style>
+</head>
+<body>
+  ${elements}
+</body>
+</html>`;
+            }, [animationRows, fps, spriteWidth, rowHeight]);
+
+            const handleCopy = () => {
+              const textToCopy = activeTab === 'json' ? JSON.stringify(gridData, null, 2) : generatedHtml;
+              navigator.clipboard.writeText(textToCopy).then(() => {
+                setCopySuccess('Copied!');
+                setTimeout(() => setCopySuccess(''), 2000);
+              }, () => {
+                setCopySuccess('Failed!');
+                setTimeout(() => setCopySuccess(''), 2000);
+              });
+            };
+
+            return React.createElement('div', null,
+              React.createElement('div', { className: "grid grid-cols-1 lg:grid-cols-3 gap-6" },
+                React.createElement('div', { className: "lg:col-span-2 bg-gray-800 rounded-lg shadow-2xl p-4 flex justify-center items-center" },
+                  React.createElement('div', {
+                      ref: canvasContainerRef,
+                      className: `w-full h-[60vh] lg:h-[75vh] bg-gray-900/50 rounded-md border ${isDragOver ? 'border-cyan-400 drop-target-active' : 'border-gray-700'} relative overflow-hidden`,
+                      onDragOver: handleDragOver,
+                      onDragEnter: handleDragOver,
+                      onDragLeave: handleDragLeave,
+                      onDrop: handleDrop
+                    },
+                    isLoading && React.createElement('div', { className: "absolute inset-0 text-gray-400 w-full h-full flex items-center justify-center z-10" }, "Loading Image..."),
+                    isDragOver && React.createElement('div', { className: "absolute inset-0 flex items-center justify-center z-20 pointer-events-none" },
+                      React.createElement('span', { className: "text-cyan-300 text-lg font-semibold bg-gray-900/80 px-4 py-2 rounded-md" }, "Drop image to load")
+                    ),
+                    React.createElement('canvas', {
+                      ref: canvasRef,
+                      className: `transition-opacity duration-300 ${isLoading ? 'opacity-50' : 'opacity-100'}`
+                    })
+                  )
+                ),
+                React.createElement('div', { className: "bg-gray-800 rounded-lg shadow-2xl p-6 flex flex-col space-y-4" },
+                  React.createElement('div', { className: "flex justify-between items-center pb-2 border-b border-gray-700" },
+                    React.createElement('h2', { className: "text-2xl font-bold text-cyan-400" }, "Controls"),
+                    React.createElement('div', { className: "flex items-center space-x-2" },
+                      React.createElement('button', {
+                        onClick: () => setGridVisible(!gridVisible),
+                        className: "p-2 rounded-md bg-gray-700 hover:bg-cyan-500 text-white transition-colors focus:outline-none focus:ring-2 focus:ring-cyan-400",
+                        title: gridVisible ? "Hide Grid" : "Show Grid"
+                      }, gridVisible ? React.createElement(EyeSlashIcon) : React.createElement(EyeIcon)),
+                      React.createElement('button', {
+                        onClick: handleReset,
+                        className: "p-2 rounded-md bg-gray-700 hover:bg-cyan-500 text-white transition-colors focus:outline-none focus:ring-2 focus:ring-cyan-400",
+                        title: "Reset Controls"
+                      }, React.createElement(ArrowPathIcon)),
+                      React.createElement('button', {
+                        onClick: handleAutoAdjust,
+                        disabled: isAdjusting || !sourceCanvas,
+                        className: "p-2 rounded-md bg-gray-700 hover:bg-cyan-500 text-white transition-colors focus:outline-none focus:ring-2 focus:ring-cyan-400 disabled:bg-gray-600 disabled:cursor-not-allowed",
+                        title: "Auto-Adjust Grid"
+                      }, isAdjusting ? React.createElement('div', { className: "animate-spin h-5 w-5 border-2 border-t-transparent border-white rounded-full" }) : React.createElement(SparklesIcon)),
+                      React.createElement('button', {
+                        onClick: handleDownload,
+                        className: "p-2 rounded-md bg-gray-700 hover:bg-cyan-500 text-white transition-colors focus:outline-none focus:ring-2 focus:ring-cyan-400",
+                        title: "Download Image"
+                      }, React.createElement(ArrowDownTrayIcon))
+                    )
+                  ),
+
+                  React.createElement('h3', { className: "text-xl font-semibold pt-2" }, "Image Options"),
+                  React.createElement('div', { className: "flex flex-col space-y-3" },
+                    React.createElement('input', { type: "file", ref: fileInputRef, onChange: handleImageUpload, accept: "image/*", className: "hidden" }),
+                    React.createElement('button', {
+                      onClick: () => fileInputRef.current?.click(),
+                      className: "flex items-center justify-center gap-2 w-full p-2 rounded-md bg-cyan-600 hover:bg-cyan-500 text-white font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-cyan-400"
+                    }, React.createElement(ArrowUpTrayIcon), "Upload Image"),
+                    React.createElement('button', {
+                      onClick: handleCopyRemixPrompt,
+                      disabled: !image,
+                      className: "flex items-center justify-center gap-2 w-full p-2 rounded-md bg-indigo-600 hover:bg-indigo-500 text-white font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-400 disabled:opacity-50 disabled:cursor-not-allowed",
+                      title: "Copy the remix prompt to clipboard for use in an external image-gen tool"
+                    }, React.createElement(WandIcon), "Copy Remix Prompt"),
+                    React.createElement('div', { className: "flex items-center justify-between p-2 bg-gray-700/50 rounded-md" },
+                      React.createElement('label', { htmlFor: "grey-bg-toggle", className: "text-sm font-medium text-gray-300 select-none" }, "Make Grey Transparent (#a2a2a2)"),
+                      React.createElement('label', { className: "relative inline-flex items-center cursor-pointer" },
+                        React.createElement('input', { type: "checkbox", id: "grey-bg-toggle", className: "sr-only peer", checked: makeGreyTransparent, onChange: () => setMakeGreyTransparent(!makeGreyTransparent) }),
+                        React.createElement('div', { className: "w-11 h-6 bg-gray-600 rounded-full peer peer-focus:ring-2 peer-focus:ring-cyan-400 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-500" })
+                      )
+                    ),
+                    React.createElement('div', { className: "flex items-center justify-between p-2 bg-gray-700/50 rounded-md" },
+                      React.createElement('label', { htmlFor: "bg-toggle", className: "text-sm font-medium text-gray-300 select-none" }, "Replace Gray BG with White"),
+                      React.createElement('label', { className: "relative inline-flex items-center cursor-pointer" },
+                        React.createElement('input', { type: "checkbox", id: "bg-toggle", className: "sr-only peer", checked: useWhiteBackground, onChange: () => setUseWhiteBackground(!useWhiteBackground) }),
+                        React.createElement('div', { className: "w-11 h-6 bg-gray-600 rounded-full peer peer-focus:ring-2 peer-focus:ring-cyan-400 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-500" })
+                      )
+                    )
+                  ),
+
+                  React.createElement('h3', { className: "text-xl font-semibold pt-2" }, "Dimensions"),
+                  React.createElement(ControlSlider, { label: "Label Width", value: labelWidth, onChange: setLabelWidth, min: -imageDimensions.width, max: imageDimensions.width }),
+                  React.createElement(ControlSlider, { label: "Sprite Width", value: spriteWidth, onChange: setSpriteWidth, min: 0, max: imageDimensions.width }),
+                  React.createElement(ControlSlider, { label: "Row Height", value: rowHeight, onChange: setRowHeight, min: 0, max: imageDimensions.height }),
+
+                  React.createElement('h3', { className: "text-xl font-semibold pt-2" }, "Grid & Animation"),
+                  React.createElement(ControlSlider, { label: "Line Width", value: lineWidth, onChange: setLineWidth, min: 1, max: 10 }),
+                  React.createElement(ControlSlider, { label: "Animation FPS", value: fps, onChange: setFps, min: 1, max: 60 }),
+
+                  React.createElement('h3', { className: "text-xl font-semibold pt-4" }, "Offsets"),
+                  React.createElement(ControlSlider, { label: "Offset X", value: offsetX, onChange: setOffsetX, min: -imageDimensions.width, max: imageDimensions.width }),
+                  React.createElement(ControlSlider, { label: "Offset Y", value: offsetY, onChange: setOffsetY, min: -imageDimensions.height, max: imageDimensions.height }),
+
+                  React.createElement('div', { className: "pt-4 space-y-4 mt-auto" },
+                    React.createElement('div', { className: "bg-gray-900 rounded-lg p-4 space-y-2 text-sm" },
+                      React.createElement('p', { className: "text-lg font-bold text-cyan-400" }, "Pixel Dimensions:"),
+                      React.createElement('div', { className: "grid grid-cols-2 gap-x-4 gap-y-1 text-gray-300" },
+                        React.createElement('span', { className: "font-semibold" }, "Text Label Area:"),
+                        React.createElement('span', null, `${labelWidth}px wide`),
+                        React.createElement('span', { className: "font-semibold" }, "Character Sprite:"),
+                        React.createElement('span', null, `${spriteWidth}px wide / ${rowHeight}px high`)
+                      )
+                    ),
+                    React.createElement('div', { className: "bg-gray-900 rounded-lg" },
+                      React.createElement('div', { className: "flex border-b border-gray-700" },
+                        React.createElement('button', {
+                          onClick: () => setActiveTab('json'),
+                          className: `flex-1 p-3 text-sm font-medium flex items-center justify-center gap-2 ${activeTab === 'json' ? 'bg-gray-800 text-cyan-400' : 'text-gray-400 hover:bg-gray-800/50'}`
+                        }, React.createElement(CodeBracketIcon), " Script Data"),
+                        React.createElement('button', {
+                          onClick: () => setActiveTab('html'),
+                          className: `flex-1 p-3 text-sm font-medium flex items-center justify-center gap-2 ${activeTab === 'html' ? 'bg-gray-800 text-cyan-400' : 'text-gray-400 hover:bg-gray-800/50'}`
+                        }, React.createElement(FilmIcon), " HTML Output")
+                      ),
+                      React.createElement('div', { className: "p-4" },
+                        React.createElement('div', { className: "flex justify-end mb-2" },
+                          React.createElement('button', {
+                            onClick: handleCopy,
+                            className: "p-2 rounded-md bg-gray-700 hover:bg-cyan-500 text-white transition-colors focus:outline-none focus:ring-2 focus:ring-cyan-400",
+                            title: `Copy ${activeTab === 'json' ? 'JSON' : 'HTML'}`
+                          }, copySuccess ? React.createElement('span', { className: "text-xs" }, copySuccess) : React.createElement(ClipboardIcon))
+                        ),
+                        React.createElement('textarea', {
+                          readOnly: true,
+                          value: activeTab === 'json' ? JSON.stringify(gridData, null, 2) : generatedHtml,
+                          className: "w-full h-32 bg-gray-800 border border-gray-700 rounded-md p-2 text-xs font-mono text-gray-300 focus:ring-cyan-500 focus:border-cyan-500",
+                          'aria-label': "Output Data"
+                        })
+                      )
+                    )
+                  )
+                )
+              ),
+              imageToDraw && animationRows.length > 0 && React.createElement(AnimationPreviewer, {
+                image: imageToDraw,
+                rows: animationRows,
+                spriteWidth: spriteWidth,
+                rowHeight: rowHeight,
+                fps: fps
+              }),
+              toast && React.createElement('div', { className: "toast" }, toast)
+            );
+          };
+
+          // ---------- App ----------
+          const App = () => {
+            return React.createElement('div', { className: "min-h-screen bg-gray-900 text-white flex flex-col items-center p-4 sm:p-6 lg:p-8" },
+              React.createElement('header', { className: "w-full max-w-7xl mb-6 text-center" },
+                React.createElement('h1', { className: "text-4xl sm:text-5xl font-bold text-cyan-400 tracking-tight" },
+                  "Sprite Sheet Analyzer"
+                ),
+                React.createElement('p', { className: "mt-2 text-lg text-gray-400" },
+                  "Adjust the grid to find the perfect dimensions for your sprites."
+                )
+              ),
+              React.createElement('main', { className: "w-full max-w-7xl" },
+                React.createElement(SpriteAnalyzer)
+              ),
+              React.createElement('footer', { className: "w-full max-w-7xl mt-8 text-center text-gray-500" },
+                React.createElement('p', null, "Self-contained build, runs in-browser via Babel.")
+              )
+            );
+          };
+
+          const rootElement = document.getElementById('root');
+          if (!rootElement) {
+            throw new Error("Could not find root element to mount to");
+          }
+          const root = ReactDOM.createRoot(rootElement);
+          root.render(
+            React.createElement(React.StrictMode, null,
+              React.createElement(App)
+            )
+          );
+        }
+
+        if (window.__REACT_READY__) {
+          boot();
+        } else {
+          window.addEventListener('react-ready', boot, { once: true });
+        }
+      })();
+    </script>
+  </body>
+</html>
