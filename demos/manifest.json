@@ -1,9 +1,29 @@
 {
   "demos": [
     {
-      "name": "[SHOW]-RT-Audio-Simple-v1",
+      "name": "[SHOW]-Interactive-Ray-Traced-Audio-v1",
       "type": "file",
-      "filename": "[SHOW]-RT-Audio-Simple-v1.html"
+      "filename": "[SHOW]-Interactive-Ray-Traced-Audio-v1.html"
+    },
+    {
+      "name": "[SHOW]-Interactive-Ray-Traced-Audio-v2",
+      "type": "file",
+      "filename": "[SHOW]-Interactive-Ray-Traced-Audio-v2.html"
+    },
+    {
+      "name": "[SHOW]-RL-Physics-Mimic-NN-vs-Real-v1",
+      "type": "file",
+      "filename": "[SHOW]-RL-Physics-Mimic-NN-vs-Real-v1.html"
+    },
+    {
+      "name": "[SHOW]-RT-Audio-Simple-v1-gpt-5.5",
+      "type": "file",
+      "filename": "[SHOW]-RT-Audio-Simple-v1-gpt-5.5.html"
+    },
+    {
+      "name": "[SHOW]-RT-Audio-Simple-v1-opus-4.7",
+      "type": "file",
+      "filename": "[SHOW]-RT-Audio-Simple-v1-opus-4.7.html"
     },
     {
       "name": "[SHOW]-Black-Hole-Gemini-3-Pro",
