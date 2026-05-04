@@ -22,11 +22,11 @@
   --line:      rgba(255, 255, 255, 0.07);    /* hairlines */
   --line-2:    rgba(255, 255, 255, 0.13);    /* dividers */
   --text:      #f4f4f6;                      /* primary text */
-  --text-2:    rgba(244, 244, 246, 0.72);    /* secondary — bumped from .62 */
-  --text-3:    rgba(244, 244, 246, 0.55);    /* muted / labels — bumped from .36 (WCAG AA) */
-  --accent:    #ff6b35;                      /* coral-orange — primary brand */
-  --accent-2:  #ffa8b8;                      /* soft rose — secondary highlight */
-  --accent-3:  #f5cf5e;                      /* warm gold — tertiary, sparingly */
+  --text-2:    rgba(244, 244, 246, 0.72);    /* secondary - bumped from .62 */
+  --text-3:    rgba(244, 244, 246, 0.55);    /* muted / labels - bumped from .36 (WCAG AA) */
+  --accent:    #ff6b35;                      /* coral-orange - primary brand */
+  --accent-2:  #ffa8b8;                      /* soft rose - secondary highlight */
+  --accent-3:  #f5cf5e;                      /* warm gold - tertiary, sparingly */
   --accent-soft: rgba(255, 107, 53, 0.12);
   --accent-line: rgba(255, 107, 53, 0.42);
   --danger:    #ff6f6f;
@@ -37,11 +37,11 @@
   --sans:      "Manrope", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   --mono:      "Geist Mono", ui-monospace, "JetBrains Mono", "SF Mono", Consolas, monospace;
 
-  /* === Type — single token for small UI text; headings use inline rem ==== */
+  /* === Type - single token for small UI text; headings use inline rem ==== */
   --fs-sm:     17px;
   --lh-tight:  1.2;
 
-  /* === Spacing & radii — only what's used ================================ */
+  /* === Spacing & radii - only what's used ================================ */
   --sp-2:   8px;
   --r-sm:   10px;
   --r-lg:   22px;
@@ -55,7 +55,7 @@
   --shadow-coral:0 18px 44px -14px rgba(255, 107, 53, 0.42), 0 6px 18px -8px rgba(255, 107, 53, 0.18);
 
   /* === Motion ============================================================ */
-  --ease-bounce: cubic-bezier(.34, 1.56, .64, 1);   /* overshoot — popovers, cards on hover */
+  --ease-bounce: cubic-bezier(.34, 1.56, .64, 1);   /* overshoot - popovers, cards on hover */
 
   /* === Layout ============================================================ */
   --max:    980px;
@@ -80,7 +80,7 @@ a:hover { color: #ffb98d; }
   box-shadow: 0 0 0 1px var(--line), 0 30px 60px -20px rgba(255, 107, 53, 0.18);
 }
 .icon-nav { display: inline-flex; gap: .25rem; justify-content: center; }
-/* Direct-child selectors only — descendant `.icon-nav a` would also match
+/* Direct-child selectors only - descendant `.icon-nav a` would also match
    popover pills and force them to 48x48 circles. */
 .icon-nav > a, .icon-nav > .icon-pop-wrap > a {
   display: inline-flex; align-items: center; justify-content: center;
@@ -217,9 +217,9 @@ section h2 {
   display: flex; align-items: center; gap: .9rem; flex-wrap: wrap;
 }
 /* Combined heading: "Katehuuh · vibe code".
-   .me  — display serif name (inherits h2 clamp size + Fraunces).
-   .topic — small mono lowercase, mirrors the tagline rhythm.
-   .h2-dot — coral separator, sized between the two for an optical balance.
+   .me  - display serif name (inherits h2 clamp size + Fraunces).
+   .topic - small mono lowercase, mirrors the tagline rhythm.
+   .h2-dot - coral separator, sized between the two for an optical balance.
    The asterisk hovers a tooltip revealing the alias (Nekochu) without spelling it out. */
 section h2 .vibe-heading { display: inline-flex; align-items: baseline; gap: .35em; flex-wrap: nowrap; }
 section h2 .me { color: var(--text); }
@@ -259,7 +259,7 @@ section h2 .alias-mark {
    without a real-time displacement shader:
 
    1. multi-step inset box-shadow for the convex rim (light catches the
-      top edge twice — outer specular ring + inner highlight — same as a
+      top edge twice - outer specular ring + inner highlight - same as a
       pinched glass cross-section)
    2. ::before conic-gradient specular highlight that tracks the cursor
       via the --gloss-angle CSS variable (set by JS)
@@ -286,7 +286,7 @@ section h2 .alias-mark {
     0 6px 24px -6px rgba(0, 0, 0, 0.55),
     /* inner top highlight (the key light catching the lip) */
     inset 0 1.5px 0 rgba(255, 255, 255, 0.45),
-    /* inner side bevels — extra hint of glass thickness */
+    /* inner side bevels - extra hint of glass thickness */
     inset 1.5px 0 1px rgba(255, 255, 255, 0.10),
     inset -1.5px 0 1px rgba(255, 255, 255, 0.10),
     /* inner bottom shadow (back of the lip) */
@@ -433,7 +433,7 @@ section h2 .alias-mark {
 }
 .title-row h3 { margin: 0; flex: 1; min-width: 0; }
 
-/* Like button — sits next to the title (no longer overlay on thumbnail).
+/* Like button - sits next to the title (no longer overlay on thumbnail).
    Click adds your like; orange-filled when you've liked. Public count
    shown next to the heart. */
 .like-btn {
@@ -499,40 +499,6 @@ section h2 .alias-mark {
   color: var(--text-3); font-size: var(--fs-sm);
 }
 
-section.compact { display: grid; gap: .6rem; }
-.compact-row {
-  display: grid; grid-template-columns: 90px 1fr; gap: 1rem; align-items: baseline;
-  padding-block: .55rem; border-top: 1px solid var(--line);
-}
-.compact-row:last-child { border-bottom: 1px solid var(--line); }
-.compact-row h3 {
-  font-family: var(--serif); font-weight: 500; font-size: 1.08rem;
-  color: var(--text-2); margin: 0; letter-spacing: -0.01em;
-}
-.chips {
-  list-style: none; padding: 0 0 .25rem; margin: 0;
-  display: flex; flex-wrap: nowrap; gap: .35rem;
-  overflow-x: auto; -webkit-overflow-scrolling: touch;
-  scrollbar-width: thin; scrollbar-color: var(--line-2) transparent;
-}
-.chips::-webkit-scrollbar { height: 4px; }
-.chips::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: 2px; }
-.chips::-webkit-scrollbar-track { background: transparent; }
-.chips li { flex-shrink: 0; }
-.chips li a {
-  display: inline-block; padding: .25rem .7rem;
-  border: 1px solid var(--line); border-radius: 999px;
-  font-family: var(--mono); font-size: var(--fs-sm); color: var(--text);
-  white-space: nowrap;
-  transition: border-color .18s ease, color .18s ease, background-color .18s ease;
-}
-.chips li a:hover {
-  border-color: var(--accent-line); background: var(--accent-soft); color: var(--accent);
-}
-@media (max-width: 540px) {
-  .compact-row { grid-template-columns: 1fr; gap: .35rem; padding-block: .8rem; }
-}
-
 @keyframes rise {
   from { opacity: 0; transform: translateY(12px); }
   to   { opacity: 1; transform: translateY(0); }
@@ -540,9 +506,6 @@ section.compact { display: grid; gap: .6rem; }
 .rise { animation: rise .65s cubic-bezier(.2, .65, .2, 1) both; }
 .rise[data-d="1"] { animation-delay: .04s; }
 .rise[data-d="2"] { animation-delay: .12s; }
-.rise[data-d="3"] { animation-delay: .20s; }
-.rise[data-d="4"] { animation-delay: .28s; }
-.rise[data-d="5"] { animation-delay: .36s; }
 @media (prefers-reduced-motion: reduce) { .rise { animation: none; } }
 
 @media (max-width: 600px) {
@@ -550,21 +513,10 @@ section.compact { display: grid; gap: .6rem; }
   .hero { margin-bottom: 2rem; }
   .avatar { width: 92px; height: 92px; margin-bottom: .8rem; }
   section { margin-block: 2.2rem; }
-  /* Bigger tap targets where text is dense. */
   .tag-filter button { padding: 5px 12px; }
-  .chips li a { padding: .35rem .8rem; }
-}
-/* Scroll-driven reveal — replaces the time-based cascade where supported.
-   In Chrome/Edge cards animate as they enter the viewport, off-the-shelf, no JS. */
-@supports (animation-timeline: view()) {
-  .vibe-card.rise {
-    animation-timeline: view();
-    animation-range: cover 0% cover 22%;
-    animation-delay: 0s; /* timeline drives progress, not time */
-  }
 }
 
-/* Command palette — Ctrl/Cmd+K opens a centered modal scoped to navigation
+/* Command palette - Ctrl/Cmd+K opens a centered modal scoped to navigation
    jumps and filter toggles (project search lives in the inline search field).
    Lazily-built on first open so the cost doesn't hit initial paint. */
 .cmd-overlay {
@@ -639,8 +591,8 @@ section.compact { display: grid; gap: .6rem; }
 
 <!-- Puter SDK is loaded eagerly (async, doesn't block render). The like
      buttons route their counter API calls through `puter.net.fetch()` so
-     the actual outbound HTTP request hits puter.com — not the underlying
-     counterapi.dev URL — which means uBlock + EasyPrivacy + similar filter
+     the actual outbound HTTP request hits puter.com - not the underlying
+     counterapi.dev URL - which means uBlock + EasyPrivacy + similar filter
      lists that flag counterapi.dev as a tracker never fire on these calls.
      Direct fetch is kept as a last-resort fallback if puter itself fails. -->
 <script src="https://js.puter.com/v2/" async></script>
@@ -656,7 +608,7 @@ section.compact { display: grid; gap: .6rem; }
         </svg>
       </a>
       <a href="https://huggingface.co/Nekochu" aria-label="Hugging Face" title="Hugging Face"><span class="emoji">🤗</span></a>
-      <a href="https://websim.com/" aria-label="Websim" title="Websim — more vibe-coded sites">
+      <a href="https://websim.com/" aria-label="Websim" title="Websim - more vibe-coded sites">
         <img src="https://websim.com/favicon.ico" alt="" width="22" height="22" loading="lazy" style="display:block;border-radius:4px;background:rgba(255,255,255,.04)">
       </a>
       <a href="demos/CatBench/" aria-label="CatBench" title="CatBench"><span class="emoji">🐱</span></a>
@@ -712,7 +664,7 @@ section.compact { display: grid; gap: .6rem; }
 })();
 
 // `document.startViewTransition(fn)` snapshots the DOM, runs fn, then crossfades
-// from old to new — turning a "snap" filter change into a smooth diff. Falls
+// from old to new - turning a "snap" filter change into a smooth diff. Falls
 // back to a plain call where the API isn't shipped (Firefox at time of writing).
 function withVT(fn) {
   if (document.startViewTransition) document.startViewTransition(fn);
@@ -727,7 +679,7 @@ function setupTagFilter() {
   const buttons = [...root.querySelectorAll('button[data-tag]')];
   // The three toggles cover these category tags. Cards whose tags don't
   // include any of these (descriptive-only tags like "webrtc", "p2p") are
-  // shown regardless — the toggles don't affect them.
+  // shown regardless - the toggles don't affect them.
   const CATEGORY = new Set(buttons.map(b => b.dataset.tag));
 
   function applyFilter() {
@@ -745,7 +697,7 @@ function setupTagFilter() {
     writeHash();
   }
 
-  // Hash-route filter state — `#tags=game,show` is shareable and survives reload.
+  // Hash-route filter state - `#tags=game,show` is shareable and survives reload.
   // Empty (all-on) hash drops the param so default URL stays clean.
   function writeHash() {
     const on = buttons.filter(b => b.classList.contains('active')).map(b => b.dataset.tag);
@@ -786,7 +738,7 @@ function setupTagFilter() {
   // Mouse-tracked specular: rotate the conic-gradient highlight on the
   // glass pill so it points roughly at the cursor. Listener is on `root`
   // (not document) so the gloss only animates when the cursor is actually
-  // over the pill — no global cursor-following everywhere on the page.
+  // over the pill - no global cursor-following everywhere on the page.
   // On leave, the angle eases back to the default 90deg.
   let rafId = 0;
   const onMove = (e) => {
@@ -806,7 +758,7 @@ function setupTagFilter() {
 
 // Sims-4-style flyout: hovers on GitHub / HF icons reveal a tree of
 // related links cascading from above the icon. Click any item to follow
-// the underlying url — popover is a sibling of the icon-link, not a
+// the underlying url - popover is a sibling of the icon-link, not a
 // child, so item clicks don't trigger the icon's own href.
 function populateHeroPopovers(data) {
   const ghLink = document.querySelector('.icon-nav a[aria-label="GitHub"]');
@@ -837,9 +789,9 @@ function populateHeroPopovers(data) {
   // Hover state is managed in JS (not :hover CSS) so we can keep the popover
   // open while the cursor traverses the gap between icon and popover. Pure
   // CSS :hover loses state the moment the cursor leaves the icon's box,
-  // before it can land on a hover-bridge — JS grace period fixes that.
+  // before it can land on a hover-bridge - JS grace period fixes that.
   const HIDE_DELAY_MS = 220;
-  // Only one popover open at a time — opening one closes the others.
+  // Only one popover open at a time - opening one closes the others.
   const allWraps = [];
   const closeOthers = (current) => {
     for (const w of allWraps) if (w !== current) w.__closeNow();
@@ -856,7 +808,7 @@ function populateHeroPopovers(data) {
       if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; }
       closeOthers(wrap);
       // Clamp popover height to available space above the icon so its top
-      // edge never crosses the viewport top — opens-up positioning means a
+      // edge never crosses the viewport top - opens-up positioning means a
       // tall popover would otherwise spill off-screen at top on small viewports.
       const space = wrap.getBoundingClientRect().top - 6 - 8; // anchor gap + viewport buffer
       ul.style.maxHeight = Math.max(120, Math.min(window.innerHeight * 0.5, space)) + 'px';
@@ -873,7 +825,7 @@ function populateHeroPopovers(data) {
       if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; }
       wrap.classList.remove('show-pop');
     };
-    // Listen on the wrapper — events bubble from icon, popover, and bridge.
+    // Listen on the wrapper - events bubble from icon, popover, and bridge.
     wrap.addEventListener('mouseenter', show);
     wrap.addEventListener('mouseleave', scheduleHide);
     // Touch / focus: tap on icon shows, blur hides
@@ -883,7 +835,7 @@ function populateHeroPopovers(data) {
   };
 
   // Tag last item of an odd-count section so CSS can span it across both
-  // grid columns — otherwise it sits alone in column 1 with empty col 2.
+  // grid columns - otherwise it sits alone in column 1 with empty col 2.
   const appendItems = (ul, items, startIdx = 0) => {
     items.forEach((item, i) => {
       const li = buildItem(item, startIdx + i);
@@ -919,7 +871,7 @@ function populateHeroPopovers(data) {
   }
 }
 
-// Ctrl/Cmd+K command palette — keyboard-only navigation list (no visible button).
+// Ctrl/Cmd+K command palette - keyboard-only navigation list (no visible button).
 // Scoped to filter toggles + outbound jumps; project search lives in the inline
 // search field. Built lazily on first open.
 function setupCommandPalette() {
@@ -942,9 +894,9 @@ function setupCommandPalette() {
         run: () => b.click(),
       });
     }
-    items.push({ label: 'CatBench — kitten benchmark', meta: 'jump', run: () => location.assign('demos/CatBench/') });
-    items.push({ label: 'GitHub — Katehuuh', meta: 'jump', run: () => window.open('https://github.com/Katehuuh', '_blank') });
-    items.push({ label: 'Hugging Face — Nekochu', meta: 'jump', run: () => window.open('https://huggingface.co/Nekochu', '_blank') });
+    items.push({ label: 'CatBench - kitten benchmark', meta: 'jump', run: () => location.assign('demos/CatBench/') });
+    items.push({ label: 'GitHub - Katehuuh', meta: 'jump', run: () => window.open('https://github.com/Katehuuh', '_blank') });
+    items.push({ label: 'Hugging Face - Nekochu', meta: 'jump', run: () => window.open('https://huggingface.co/Nekochu', '_blank') });
   };
 
   const render = () => {
@@ -994,7 +946,6 @@ function setupCommandPalette() {
     setTimeout(() => { overlay.hidden = true; }, 200);
   };
 
-  trigger?.addEventListener('click', open);
   input.addEventListener('input', apply);
   input.addEventListener('keydown', e => {
     if (e.key === 'ArrowDown') { e.preventDefault(); cursor = Math.min(filtered.length - 1, cursor + 1); updateSelection(); }
@@ -1015,20 +966,10 @@ function setupCommandPalette() {
 function setupSearch() {
   const input = document.getElementById('site-search');
   if (!input) return;
-  const targets = [
-    ...document.querySelectorAll('.vibe-card'),
-    ...document.querySelectorAll('.chips li'),
-  ];
   const apply = () => {
     const q = input.value.toLowerCase().trim();
-    for (const el of targets) {
-      const text = el.textContent.toLowerCase();
-      el.classList.toggle('is-hidden-by-search', !!q && !text.includes(q));
-    }
-    for (const row of document.querySelectorAll('.compact-row')) {
-      const chips = [...row.querySelectorAll('.chips li')];
-      const visible = chips.some(li => !li.classList.contains('is-hidden-by-search'));
-      row.classList.toggle('is-hidden-by-search', !!q && !visible);
+    for (const el of document.querySelectorAll('.vibe-card')) {
+      el.classList.toggle('is-hidden-by-search', !!q && !el.textContent.toLowerCase().includes(q));
     }
   };
   input.addEventListener('input', () => withVT(apply));
@@ -1073,7 +1014,7 @@ async function liveAugmentDemos(projects) {
       thumb: `assets/thumbs/${rawName}.jpg`,
       tags: tag ? [tag] : ['demo'],
       // Description is extracted from each demo's <meta name="description">
-      // by build_demos_manifest.py — present per-entry only when set.
+      // by build_demos_manifest.py - present per-entry only when set.
       description: it.description || undefined,
     });
   }
@@ -1092,7 +1033,7 @@ async function loadDemosManifest() {
   }
 }
 
-// Fallback: scan via the Contents API. Best-effort — if rate-limited, we
+// Fallback: scan via the Contents API. Best-effort - if rate-limited, we
 // silently give up and the page just shows whatever data.json had.
 async function loadDemosFromApi() {
   const host = location.hostname;
@@ -1141,14 +1082,14 @@ async function fetchCached(key, ttl, fetcher) {
 
 /* First-commit date is embedded into each thumbnail JPEG's COM marker by
    the build pipeline (scripts/embed_thumb_dates.py). We read the binary
-   the browser is already fetching for <img>, so this costs ~0 network —
+   the browser is already fetching for <img>, so this costs ~0 network -
    shared HTTP cache between fetch() and <img>. No GitHub API hit. */
 async function readJpegEmbeddedDate(thumbUrl) {
   const cacheKey = `jpgdate:${thumbUrl}`;
   const stored = localStorage.getItem(cacheKey);
   if (stored) return stored;
   try {
-    // force-cache shares the response with the <img> request — no double fetch.
+    // force-cache shares the response with the <img> request - no double fetch.
     const r = await fetch(thumbUrl, { cache: 'force-cache' });
     if (!r.ok) return null;
     const buf = new Uint8Array(await r.arrayBuffer());
@@ -1158,7 +1099,7 @@ async function readJpegEmbeddedDate(thumbUrl) {
   } catch { return null; }
 }
 
-/* Walk JPEG segments looking for COM (FF FE). Stop at SOS — past metadata. */
+/* Walk JPEG segments looking for COM (FF FE). Stop at SOS - past metadata. */
 function scanJpegComMarker(buf) {
   if (buf[0] !== 0xff || buf[1] !== 0xd8) return null;
   const STANDALONE = new Set([0xd0, 0xd1, 0xd2, 0xd3, 0xd4, 0xd5, 0xd6, 0xd7, 0xd8, 0xd9, 0x01]);
@@ -1166,7 +1107,7 @@ function scanJpegComMarker(buf) {
   while (i + 3 < buf.length) {
     if (buf[i] !== 0xff) return null;
     const m = buf[i + 1];
-    if (m === 0xda) return null;             // SOS — entropy data follows
+    if (m === 0xda) return null;             // SOS - entropy data follows
     if (STANDALONE.has(m)) { i += 2; continue; }
     const segLen = (buf[i + 2] << 8) | buf[i + 3];
     if (m === 0xfe) {                         // COM marker
@@ -1306,7 +1247,7 @@ function restoreNaturalOrder() {
 
 // ─── Likes (anonymous, no signup) ────────────────────────────────────
 // Counter-only via counterapi.dev (free, no key, /up + /down both work).
-// Per-browser identity via localStorage — same person on different
+// Per-browser identity via localStorage - same person on different
 // browsers can like multiple times, which is acceptable for a portfolio.
 // (IP-hashing was considered but adds complexity and false-positives on
 //  shared NATs without much real benefit. Easy to add later.)
@@ -1338,7 +1279,7 @@ function makeLikeButton(slug) {
     handleLikeClick(btn);
   });
   // Background fetch of the global count. If the API is fully unreachable
-  // (adblocker + puter both blocked), hide the button — better than showing
+  // (adblocker + puter both blocked), hide the button - better than showing
   // a non-functional heart.
   fetchLikeCount(slug).then(n => {
     if (n === null) { btn.style.display = 'none'; return; }
@@ -1349,7 +1290,7 @@ function makeLikeButton(slug) {
 }
 
 // Wait for the puter SDK to finish loading (added to <head> as async).
-// Bumped to 5s — earlier 1.5s timed out on slower connections before the
+// Bumped to 5s - earlier 1.5s timed out on slower connections before the
 // SDK was ready, causing every call to fall through to direct fetch.
 function puterReady(timeoutMs = 5000) {
   if (window.puter && window.puter.net && window.puter.net.fetch) return Promise.resolve(true);
@@ -1368,7 +1309,7 @@ function puterReady(timeoutMs = 5000) {
 // await. First call triggers SDK wait + opening the WebSocket via a
 // throwaway fetch (with retries because the very first puter.net.fetch
 // can fail with "Still in CONNECTING state"). Subsequent callers reuse
-// the resolved promise — no parallel WS-open races. nvd-chat doesn't
+// the resolved promise - no parallel WS-open races. nvd-chat doesn't
 // hit this because it makes one call after a user gesture, by which
 // time the WS is already up; the home page fires many in parallel on
 // page load, so we need to gate them.
@@ -1381,7 +1322,7 @@ window.addEventListener('unhandledrejection', (e) => {
   if (/Still in CONNECTING state/i.test(msg)) e.preventDefault();
 });
 
-// Race a promise against a timeout — every network call is timeboxed
+// Race a promise against a timeout - every network call is timeboxed
 // because puter's WS can hang indefinitely on transient relay issues,
 // which would otherwise leave every like button stuck on "·" forever.
 function withTimeout(p, ms, label) {
@@ -1392,7 +1333,7 @@ function withTimeout(p, ms, label) {
 }
 
 // Skip the long warm-up retry storm if a previous session failed, but always
-// do ONE quick probe per page load to detect recovery — otherwise users stay
+// do ONE quick probe per page load to detect recovery - otherwise users stay
 // stuck in fallback mode forever after a transient puter.cafe outage.
 const PUTER_BROKEN_KEY = 'puter-broken-until';
 function puterRecentlyBroken() {
@@ -1409,7 +1350,7 @@ async function ensurePuterReady() {
   if (puterReadyPromise) return puterReadyPromise;
   puterReadyPromise = (async () => {
     if (!(await puterReady())) { markPuterBroken(); return false; }
-    // Single fast probe — quick recovery check after a previous failure.
+    // Single fast probe - quick recovery check after a previous failure.
     try {
       const r = await withTimeout(puter.net.fetch('https://api.github.com/'), 3500, 'puter probe');
       if (r && r.ok) { clearPuterBroken(); return true; }
@@ -1430,10 +1371,10 @@ async function ensurePuterReady() {
 }
 
 // Returns the JSON, or null if all transports failed. Puter-first to
-// bypass adblock filters on counterapi.dev — the actual outbound request
+// bypass adblock filters on counterapi.dev - the actual outbound request
 // goes to puter.com / puter.cafe (the relay) which isn't on standard
 // filter lists. 400 "record not found" means the counter has zero hits
-// yet — treat as { count: 0 } so fresh slugs show 0 instead of hiding.
+// yet - treat as { count: 0 } so fresh slugs show 0 instead of hiding.
 // Each transport gets its own timeout so neither can hang forever.
 async function likesApi(path) {
   const url = `${LIKES_API}/${LIKES_NS}/${path}`;
@@ -1485,7 +1426,7 @@ async function handleLikeClick(btn) {
     countEl.textContent = d.count;
     notifyLikeCountLoaded(slug, d.count);
   } else if (d === null) {
-    // Both transports blocked — revert optimistic UI
+    // Both transports blocked - revert optimistic UI
     btn.classList.toggle('liked', wasLiked);
     countEl.textContent = curSafe;
     if (wasLiked) localStorage.setItem(`liked-${slug}`, '1');
