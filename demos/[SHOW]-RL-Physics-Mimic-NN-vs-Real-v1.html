@@ -1017,13 +1017,14 @@ function buildNeuronGrid(elId, count) {
     // current real-normalized state toward the prediction. Without that, an untrained
     // model is just a random walk in normalized space and visually pins to walls.
     if (predDeltaArr) {
-      const cur = new Float32Array(FEATURES);
-      normState(predState, cur);
+      // Anchor each prediction to the current REAL state so the GRU shows
+      // "where it thinks blue will be next frame" instead of accumulating
+      // open-loop drift over thousands of auto-regressive steps. One-step
+      // training only guarantees one-step accuracy; closing the loop here
+      // converts that into visible trajectory tracking.
+      const cur = snapTmp;
       const next = new Float32Array(FEATURES);
-      const realNorm = snapTmp; // already filled this frame
-      // delta scale: keeps an untrained net from wandering far per frame
       const dScale = 1.0;
-      // pure NN integration: predicted next = current + delta. No real-state blending.
       for (let k = 0; k < FEATURES; k++) {
         next[k] = clamp01(cur[k] + predDeltaArr[k] * dScale);
       }
