@@ -795,107 +795,135 @@
               setTimeout(() => setToast(''), 2000);
             };
 
+            // Histogram-based global grid fit. Algorithm:
+            //  1. Build a binary subject mask (drop alpha=0 and the grey background).
+            //  2. Project to rowSum[y] and colSum[x] over the full image.
+            //  3. Smooth with a box filter (~7px) to kill single-pixel text noise.
+            //  4. Autocorrelate to find the dominant period (rowHeight, spriteWidth).
+            //     Period detection wins over edge detection because every cell-row
+            //     of every column contributes the same beat, while per-character
+            //     pose differences (arm forward, backflip, head tilt) blur edges.
+            //  5. Phase via boundary-darkness: choose the offset where the gaps
+            //     between cells line up with low-density columns.
+            //  6. labelWidth: density jump from the sparse-text label region to
+            //     the dense first sprite column (1.5x global column-mean).
             const handleAutoAdjust = (imgOrEvent) => {
               const targetImage = isDrawable(imgOrEvent) ? imgOrEvent : image;
               if (!isDrawable(targetImage) || !targetImage.width) return;
-
               setIsAdjusting(true);
-
               setTimeout(() => {
-                const imgWidth = targetImage.width;
-                const imgHeight = targetImage.height;
+                const W = targetImage.width;
+                const H = targetImage.height;
                 const tempCanvas = document.createElement('canvas');
-                tempCanvas.width = imgWidth;
-                tempCanvas.height = imgHeight;
+                tempCanvas.width = W;
+                tempCanvas.height = H;
                 const ctx = tempCanvas.getContext('2d', { willReadFrequently: true });
-                if (!ctx) {
-                  setIsAdjusting(false);
-                  return;
-                }
-
+                if (!ctx) { setIsAdjusting(false); return; }
                 try {
                   ctx.drawImage(targetImage, 0, 0);
-                  const imageData = ctx.getImageData(0, 0, imgWidth, imgHeight);
-                  const data = imageData.data;
+                  const data = ctx.getImageData(0, 0, W, H).data;
 
-                  const isTransparent = (i) => {
-                    if (data[i + 3] < 100) return true;
-                    if (makeGreyTransparent) {
+                  // 1. Subject mask
+                  const mask = new Uint8Array(W * H);
+                  for (let y = 0; y < H; y++) {
+                    for (let x = 0; x < W; x++) {
+                      const i = (y * W + x) * 4;
+                      if (data[i + 3] < 64) continue;
                       const r = data[i], g = data[i + 1], b = data[i + 2];
-                      return Math.abs(r - 162) < 40 && Math.abs(g - 162) < 40 && Math.abs(b - 162) < 40;
+                      const isGrey = makeGreyTransparent
+                        ? (Math.abs(r - 162) < 40 && Math.abs(g - 162) < 40 && Math.abs(b - 162) < 40)
+                        : (Math.abs(r - 128) < 16 && Math.abs(g - 128) < 16 && Math.abs(b - 128) < 16);
+                      if (!isGrey) mask[y * W + x] = 1;
                     }
-                    return false;
+                  }
+
+                  // 2. Projections
+                  const rowSum = new Float32Array(H);
+                  const colSum = new Float32Array(W);
+                  for (let y = 0; y < H; y++) {
+                    let s = 0;
+                    for (let x = 0; x < W; x++) s += mask[y * W + x];
+                    rowSum[y] = s;
+                  }
+                  for (let x = 0; x < W; x++) {
+                    let s = 0;
+                    for (let y = 0; y < H; y++) s += mask[y * W + x];
+                    colSum[x] = s;
+                  }
+
+                  // 3. Box-filter smoothing (window 7)
+                  const smooth = (arr, win) => {
+                    const out = new Float32Array(arr.length);
+                    const half = Math.floor(win / 2);
+                    for (let i = 0; i < arr.length; i++) {
+                      const lo = Math.max(0, i - half);
+                      const hi = Math.min(arr.length - 1, i + half);
+                      let s = 0;
+                      for (let j = lo; j <= hi; j++) s += arr[j];
+                      out[i] = s / (hi - lo + 1);
+                    }
+                    return out;
                   };
+                  const rowS = smooth(rowSum, 7);
+                  const colS = smooth(colSum, 7);
 
-                  const rowProj = new Array(imgHeight).fill(0);
-                  for (let y = 0; y < imgHeight; y++) {
-                    for (let x = 0; x < imgWidth; x++) {
-                      if (!isTransparent((y * imgWidth + x) * 4)) {
-                        rowProj[y]++;
-                      }
+                  // 4. Autocorrelation period detection
+                  const findPeriod = (arr, minLag, maxLag) => {
+                    let m = 0;
+                    for (let i = 0; i < arr.length; i++) m += arr[i];
+                    m /= arr.length;
+                    let best = -Infinity, bestK = minLag;
+                    for (let k = minLag; k <= maxLag; k++) {
+                      let s = 0;
+                      for (let i = 0; i + k < arr.length; i++) s += (arr[i] - m) * (arr[i + k] - m);
+                      if (s > best) { best = s; bestK = k; }
                     }
-                  }
-
-                  const findBoundaries = (proj, threshold = 2) => {
-                    const bounds = [];
-                    let inBlock = false;
-                    let start = 0;
-                    for (let i = 0; i < proj.length; i++) {
-                      if (!inBlock && proj[i] > threshold) {
-                        inBlock = true;
-                        start = i;
-                      } else if (inBlock && proj[i] <= threshold) {
-                        inBlock = false;
-                        bounds.push({ start, end: i, size: i - start });
-                      }
-                    }
-                    if (inBlock) bounds.push({ start, end: proj.length, size: proj.length - start });
-                    return bounds;
+                    return bestK;
                   };
+                  const rowPeriod = findPeriod(rowS, 40, Math.floor(H / 2));
+                  const colPeriod = findPeriod(colS, 40, Math.floor(W / 3));
 
-                  const rowBounds = findBoundaries(rowProj);
-                  if (rowBounds.length === 0) {
-                    setIsAdjusting(false);
-                    return;
-                  }
-
-                  const newOffsetY = rowBounds[0].start;
-                  const rowDistances = [];
-                  for (let i = 1; i < rowBounds.length; i++) rowDistances.push(rowBounds[i].start - rowBounds[i - 1].start);
-                  const newRowHeight = getMode(rowDistances) || rowBounds[0].size + 10;
-
-                  const colProj = new Array(imgWidth).fill(0);
-                  const midRow = rowBounds[Math.floor(rowBounds.length / 2)] || rowBounds[0];
-                  for (let x = 0; x < imgWidth; x++) {
-                    for (let y = midRow.start; y < midRow.end; y++) {
-                      if (!isTransparent((y * imgWidth + x) * 4)) {
-                        colProj[x]++;
+                  // 5. Phase: offset that minimizes content at the inferred boundaries
+                  const findPhase = (arr, period) => {
+                    let bestP = 0, bestScore = Infinity;
+                    for (let p = 0; p < period; p++) {
+                      let s = 0, n = 0;
+                      for (let k = 0; ; k++) {
+                        const i = p + k * period;
+                        if (i >= arr.length) break;
+                        for (let d = -2; d <= 2; d++) {
+                          const ii = i + d;
+                          if (ii >= 0 && ii < arr.length) { s += arr[ii]; n++; }
+                        }
                       }
+                      if (!n) continue;
+                      const avg = s / n;
+                      if (avg < bestScore) { bestScore = avg; bestP = p; }
                     }
+                    return bestP;
+                  };
+                  const yPhase = findPhase(rowS, rowPeriod);
+                  const xPhase = findPhase(colS, colPeriod);
+
+                  // 6. labelWidth via density jump
+                  let colMean = 0;
+                  for (let i = 0; i < colS.length; i++) colMean += colS[i];
+                  colMean /= colS.length;
+                  const labelThresh = colMean * 1.5;
+                  let labelEnd = xPhase;
+                  for (let x = xPhase; x < W; x++) {
+                    if (colS[x] > labelThresh) { labelEnd = x; break; }
                   }
+                  const labelWidth_est = Math.max(0, labelEnd - xPhase);
 
-                  const colBounds = findBoundaries(colProj);
-                  if (colBounds.length < 2) {
-                    setIsAdjusting(false);
-                    return;
-                  }
-
-                  const newOffsetX = colBounds[0].start;
-                  const newLabelWidth = colBounds[1].start - colBounds[0].start;
-
-                  const colDistances = [];
-                  for (let i = 2; i < colBounds.length; i++) colDistances.push(colBounds[i].start - colBounds[i - 1].start);
-                  const newSpriteWidth = getMode(colDistances) || (colBounds[1].end - colBounds[1].start) + 5;
-
-                  setOffsetX(Math.round(newOffsetX));
-                  setOffsetY(Math.round(newOffsetY));
-                  setRowHeight(Math.round(newRowHeight));
-                  setLabelWidth(Math.round(newLabelWidth));
-                  setSpriteWidth(Math.round(newSpriteWidth));
+                  setOffsetX(xPhase);
+                  setOffsetY(yPhase);
+                  setRowHeight(rowPeriod);
+                  setSpriteWidth(colPeriod);
+                  setLabelWidth(Math.round(labelWidth_est));
                 } catch (e) {
                   // CORS - cannot auto-adjust on cross-origin image
                 }
-
                 setIsAdjusting(false);
               }, 50);
             };
