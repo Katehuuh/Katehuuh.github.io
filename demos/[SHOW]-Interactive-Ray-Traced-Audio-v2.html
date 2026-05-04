@@ -1,0 +1,1784 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Ray-Traced Audio</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet" />
+  <style>
+:root{
+  --bg:#0e1013;
+  --panel:#171a21;
+  --panel-2:#1e2330;
+  --text:#d8dee9;
+  --muted:#98a1b3;
+  --accent:#00ffff;
+  --accent-2:#4ea1ff;
+  --ray:#35d0ff;
+  --los:#34d399;
+  --reflect:#f59e0b;
+  --particle:#f43f5e;
+  --player:#4cc9f0;
+  --source:#ff8c42;
+  --danger:#ff5c5c;
+  --ok:#22c55e;
+  --border:#252b38;
+  --chip:#0f172a;
+  --chip-text:#cbd5e1;
+  --btn:#1b202b;
+  --btn-hover:#232a39;
+  --btn-active:#2a3345;
+  --glow:#00e0ff33;
+  /* dynamic UI sizing via JS-set CSS variables */
+  --ui-gap: 6px;
+  --ui-pad-y: 6px;
+}
+
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;
+  background:radial-gradient(1200px 1200px at 120% -10%, #131720 0%, #0e1013 60%);
+  color:var(--text);
+  font-family:"Inter",system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+}
+
+.header{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  padding:10px 12px;
+  border-bottom:1px solid var(--border);
+  background:linear-gradient(180deg, #12151d, #0d1016);
+  box-shadow: 0 10px 30px #00000040 inset;
+}
+.header.compact .toolbar{
+  display:flex;
+  align-items:center;
+  gap: var(--ui-gap);
+}
+.toolbar-inline{
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: var(--ui-pad-y) 0;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+.toolbar-inline::-webkit-scrollbar{ height: 8px; }
+.toolbar-inline::-webkit-scrollbar-thumb{ background:#1f2736; border-radius:999px; }
+
+.divider{
+  width:1px;
+  height:24px;
+  background: var(--border);
+  flex: 0 0 auto;
+}
+
+.header.compact .toolbar-top{ display:none } /* legacy */
+.header.compact .toolbar-bottom{ display:none } /* legacy */
+.header h1{
+  margin:0 0 4px 0;
+  font-size:20px;
+  letter-spacing:0.2px;
+}
+.header p{
+  margin:0;
+  color:var(--muted);
+  font-size:13px;
+}
+.header .actions button{
+  background:var(--btn);
+  color:var(--text);
+  border:1px solid var(--border);
+  padding:10px 14px;
+  border-radius:10px;
+  cursor:pointer;
+}
+.header .actions button:hover{background:var(--btn-hover)}
+.header .actions button:active{background:var(--btn-active)}
+
+.icon-btn{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:34px; height:34px;
+  background:var(--btn);
+  color:var(--text);
+  border:1px solid var(--border);
+  border-radius:10px;
+  cursor:pointer;
+  box-shadow: 0 0 0 1px #0b0f16 inset;
+  font-size:16px;
+}
+.icon-btn:hover{background:var(--btn-hover)}
+.icon-btn:active{background:var(--btn-active)}
+.icon-btn.danger{color:#ff7b7b; border-color:#613333; background:#2a1515}
+.icon-btn.active{ outline: 2px solid #38bdf833; } /* visual cue when active */
+.icon-btn .emoji{ font-size:16px; line-height:1; }
+.ico{width:16px; height:16px}
+
+.mini{
+  height:34px;
+  background:var(--btn);
+  color:var(--text);
+  border:1px solid var(--border);
+  border-radius:10px;
+  padding:4px 8px;
+  box-shadow: 0 0 0 1px #0b0f16 inset;
+}
+select.mini{padding-right:28px}
+.slider.mini{padding:0; display:inline-flex; align-items:center}
+.slider.mini input[type="range"]{width:110px}
+
+.inline-opts{
+  display:inline-flex; gap:6px; align-items:center;
+  flex: 0 0 auto;
+}
+
+.chk.mini{display:inline-flex; align-items:center; gap:6px; padding:0 8px; background:var(--panel-2); border-radius:8px; height:34px; border:1px solid var(--border);}
+
+.metrics{
+  display:flex; gap:6px; flex-wrap:wrap;
+}
+.metrics .chip{background:var(--chip); border:1px solid #1f2a44}
+.metrics strong{color:#e7f1ff; font-weight:600}
+
+.container{
+  display:grid;
+  grid-template-columns: 340px 1fr;
+  gap:16px;
+  padding:16px;
+}
+.container.single{
+  display:block;
+  padding:12px;
+}
+@media (max-width: 1024px){
+  .container{grid-template-columns:1fr}
+}
+
+#controls{
+  background:var(--panel);
+  border:1px solid var(--border);
+  border-radius:16px;
+  padding:14px;
+  display:flex;
+  flex-direction:column;
+  gap:14px;
+  box-shadow: 0 0 0 1px #0b0f16 inset, 0 10px 30px #0006;
+}
+
+#controls h3{
+  margin: 0 0 8px 0;
+  font-size:13px;
+  color:#e5e7eb;
+  letter-spacing:0.4px;
+  text-transform:uppercase;
+}
+
+label{display:block; font-size:12px; margin: 6px 0;}
+select, input[type="range"], button{
+  width:100%;
+  background:var(--btn);
+  color:var(--text);
+  border:1px solid var(--border);
+  padding:10px;
+  border-radius:12px;
+  outline:none;
+  transition: all 0.15s ease;
+}
+button{cursor:pointer; box-shadow: 0 0 0 1px #0b0f16 inset;}
+button:hover{background:var(--btn-hover); box-shadow:0 0 0 1px var(--glow) inset;}
+button:active{background:var(--btn-active); transform: translateY(1px);}
+select:focus, input[type="range"]:focus{box-shadow:0 0 0 2px var(--glow)}
+
+input[type="range"]{
+  padding:6px 0;
+  appearance:none;
+  height: 32px;
+  background:transparent;
+}
+input[type="range"]::-webkit-slider-runnable-track{
+  background:linear-gradient(90deg, #1f2736, #1b2433);
+  height:6px; border-radius:6px;
+  box-shadow: 0 0 0 1px #0b0f16 inset;
+}
+input[type="range"]::-webkit-slider-thumb{
+  -webkit-appearance:none;
+  appearance:none;
+  width:18px; height:18px;
+  background:linear-gradient(180deg, #38bdf8, #2563eb);
+  border-radius:50%;
+  margin-top:-6px;
+  border:1px solid #0b2b43;
+  box-shadow:0 2px 8px #0ff3;
+}
+
+.sim-controls{
+  display:grid;
+  grid-template-columns: 1fr 1fr;
+  gap:10px;
+}
+.sim-controls button#explode{
+  grid-column: span 2;
+  background: #3a2323;
+  border-color:#5b2a2a;
+}
+
+#sandbox-tools .grid-3{
+  display:grid;
+  grid-template-columns:1fr 1fr 1fr;
+  gap:8px;
+}
+#sandbox-tools .grid-2{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:8px;
+}
+.toggle{
+  display:flex; gap:8px; align-items:center;
+  background:var(--panel-2);
+  padding:8px 10px; border-radius:10px;
+}
+.toggle.small{padding:6px 8px; font-size:12px}
+
+#info-display, #graph{
+  background:var(--panel-2);
+  padding:10px; border:1px solid var(--border);
+  border-radius:12px;
+}
+#ai-explainer{
+  display:none;
+}
+.metric{font-size:12px; margin:6px 0}
+#ai-output{
+  min-height:60px; font-size:13px; color:var(--muted);
+}
+
+.graph-inline{
+  margin-top:10px;
+  background:var(--panel-2);
+  border:1px solid var(--border);
+  border-radius:12px;
+  padding:6px;
+  max-width:300px;
+}
+
+.canvas-wrap{
+  position:relative;
+  background:linear-gradient(180deg, #11161f, #0c0f15);
+  border:1px solid var(--border);
+  border-radius:16px;
+  padding:10px;
+  box-shadow: 0 0 0 1px #0b0f16 inset;
+}
+#simulation-canvas{
+  width:100%;
+  height:auto;
+  max-height:75vh;
+  background: radial-gradient(800px 600px at 30% 10%, #0b0e14 0%, #0a0c11 60%);
+  border:1px solid var(--border);
+  border-radius:10px;
+}
+.legend{
+  position:absolute;
+  right:16px;
+  top:16px;
+  display:flex; gap:8px; flex-wrap:wrap;
+}
+.chip{
+  font-size:11px;
+  padding:6px 8px;
+  border-radius:999px;
+  background:var(--chip);
+  color:var(--chip-text);
+  border:1px solid #1f2a44;
+}
+.chip-ray{border-color:#103a48; color:#8be9ff;}
+.chip-los{border-color:#0b3a21; color:#8ef5b7;}
+.chip-reflect{border-color:#4b320b; color:#ffc46b;}
+.chip-particles{border-color:#4b0b1a; color:#ff8598;}
+.chip-player{border-color:#0b2a3e; color:#8dd6ff;}
+.chip-source{border-color:#4b220b; color:#ffc091;}
+
+.footer{
+  padding:10px 16px;
+  color:var(--muted);
+  border-top:1px solid var(--border);
+}
+
+/* Accessibility state */
+.access-enabled #audio-params{
+  display:none;
+}
+
+/* Tool state */
+.add-wall-active #simulation-canvas{
+  box-shadow: 0 0 0 2px #38bdf8 inset, 0 0 20px #38bdf833 inset;
+  cursor: crosshair;
+}
+
+/* Responsive adjustments */
+@media (max-width: 640px){
+  .header{gap:6px; padding:8px 10px;}
+  .icon-btn{width:32px; height:32px;}
+  .slider.mini input[type="range"]{width:84px}
+  .inline-opts{gap:4px}
+}
+
+  </style>
+</head>
+<body>
+  <header class="header compact">
+    <div class="toolbar toolbar-inline" aria-label="Simulation toolbar">
+      <button id="btn-start" class="icon-btn" title="Start / Stop">
+        <svg viewBox="0 0 24 24" class="ico"><path id="icon-start-shape" d="M8 5v14l11-7z" fill="currentColor"/></svg>
+      </button>
+      <button id="btn-reset" class="icon-btn" title="Reset Player & Source">
+        <span class="emoji" aria-hidden="true">↩️</span>
+      </button>
+
+      <div class="divider"></div>
+
+      <select id="sel-spatial" class="mini" title="Spatial Mode" aria-label="Spatial Mode">
+        <option value="stereo">Stereo</option>
+        <option value="v51">Virtual 5.1</option>
+      </select>
+
+      <label class="slider mini" title="Muffling">
+        <input id="rng-muffle" type="range" min="0" max="1" step="0.01" aria-label="Muffling" />
+      </label>
+      <label class="slider mini" title="Reverb Mix">
+        <input id="rng-echo" type="range" min="0" max="1" step="0.01" aria-label="Reverb" />
+      </label>
+
+      <button id="btn-access" class="icon-btn" title="Accessibility Mode">
+        <span class="emoji" aria-hidden="true">♿️</span>
+      </button>
+      <button id="btn-explode" class="icon-btn danger" title="Detonate (remove nearby destructible walls)">
+        <svg viewBox="0 0 24 24" class="ico"><path d="M11 3l1.5 4.5L17 9l-4.5 1.5L11 15l-1.5-4.5L5 9l4.5-1.5L11 3zM20 14l.8 2.2L23 17l-2.2.8L20 20l-.8-2.2L17 17l2.2-.8L20 14z" fill="currentColor"/></svg>
+      </button>
+
+      <div class="divider"></div>
+
+      <div class="inline-opts" title="New Wall Material/Thickness">
+        <select id="sel-mat" class="mini" aria-label="Wall Material">
+          <option value="drywall">Drywall</option>
+          <option value="wood">Wood</option>
+          <option value="glass">Glass</option>
+          <option value="stone">Stone</option>
+          <option value="metal">Metal</option>
+        </select>
+        <select id="sel-thick" class="mini" aria-label="Wall Thickness">
+          <option value="0.6">0.6</option>
+          <option value="1" selected>1.0</option>
+          <option value="1.4">1.4</option>
+          <option value="2">2.0</option>
+        </select>
+        <label class="chk mini" title="Destructible">
+          <input id="chk-dest" type="checkbox" aria-label="Destructible"> D
+        </label>
+      </div>
+
+      <button id="btn-clear" class="icon-btn" title="Clear Walls">
+        <span class="emoji" aria-hidden="true">🧹</span>
+      </button>
+    </div>
+
+    <div class="metrics">
+      <span class="chip">LOS <strong id="val-los">0%</strong></span>
+      <span class="chip">Muffle <strong id="val-muf">0.00</strong></span>
+      <span class="chip">Echo <strong id="val-echo">0.00</strong></span>
+    </div>
+  </header>
+
+  <main class="container single">
+    <section class="canvas-wrap">
+      <canvas id="simulation-canvas" width="1000" height="700"></canvas>
+      <div class="legend">
+        <span class="chip chip-ray">Rays</span>
+        <span class="chip chip-los">Line of Sight</span>
+        <span class="chip chip-reflect">Reflections</span>
+        <span class="chip chip-particles">Accessibility Particles</span>
+        <span class="chip chip-player">Player</span>
+        <span class="chip chip-source">Sound Source</span>
+      </div>
+    </section>
+    <section id="graph" class="graph-inline">
+      <canvas id="graph-canvas" width="280" height="80"></canvas>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <small>Tip: Drag the player (blue) and sound source (orange). Ctrl+Click canvas or use the bomb icon to remove nearby destructible walls. Accessibility Mode casts rays from the sound source and shows sound as particles.</small>
+  </footer>
+
+  <script type="module">
+// ===== core.js (primary) =====
+/* @tweakable toolbar icon/button size in CSS pixels */
+const UI_ICON_PX = 36;
+
+/* @tweakable global canvas grid spacing in pixels */
+const GRID_SPACING = 50;
+
+class Vec2{
+  constructor(x=0,y=0){this.x=x;this.y=y;}
+  clone(){return new Vec2(this.x,this.y)}
+  add(v){this.x+=v.x;this.y+=v.y;return this}
+  sub(v){this.x-=v.x;this.y-=v.y;return this}
+  mul(s){this.x*=s;this.y*=s;return this}
+  dot(v){return this.x*v.x+this.y*v.y}
+  len(){return Math.hypot(this.x,this.y)}
+  norm(){const l=this.len()||1;this.x/=l;this.y/=l;return this}
+  static fromAngle(a){return new Vec2(Math.cos(a),Math.sin(a))}
+}
+
+function dist(a,b){return Math.hypot(a.x-b.x, a.y-b.y)}
+function clamp(vmin, vmax, v){ return Math.max(vmin, Math.min(vmax, v)); }
+function clamp01(v){return Math.max(0,Math.min(1,v));}
+function rotate(v, angle){
+  const c=Math.cos(angle), s=Math.sin(angle);
+  return new Vec2(v.x*c - v.y*s, v.x*s + v.y*c);
+}
+function segmentIntersectsCircle(a,b, c, r){
+  const ab = new Vec2(b.x-a.x, b.y-a.y);
+  const ac = new Vec2(c.x-a.x, c.y-a.y);
+  const ab2 = ab.x*ab.x+ab.y*ab.y;
+  const proj = (ac.x*ab.x+ac.y*ab.y) / (ab2||1);
+  const t = Math.max(0, Math.min(1, proj));
+  const closest = new Vec2(a.x + ab.x*t, a.y + ab.y*t);
+  const d = dist(closest, c);
+  if(d<=r) return {hit:true, t};
+  return null;
+}
+
+
+// ===== core.js (secondary block; lerp/cross only, duplicates of Vec2/clamp commented out) =====
+/* @tweakable clamp helper lower/upper bounds are used widely to constrain values */
+/* clamp duplicated, defined in core1 */
+/* @tweakable helper to lerp coordinates in map generation (doors positioning) */
+const lerp = (a, b, t) => a + (b - a) * t;
+
+/* Vec2 duplicated, defined in core1 */
+const cross = (a, b) => a.x * b.y - a.y * b.x;
+
+
+// ===== entities.js =====
+
+/* @tweakable player radius in pixels */
+let PLAYER_RADIUS = 12;
+/* @tweakable sound source radius in pixels */
+let SOURCE_RADIUS = 12;
+
+/* @tweakable default new wall material */
+let DEFAULT_NEW_WALL_MATERIAL = 'drywall';
+/* @tweakable default new wall thickness */
+let DEFAULT_NEW_WALL_THICKNESS = 1;
+/* @tweakable default new wall destructible */
+let DEFAULT_NEW_WALL_DESTRUCTIBLE = false;
+
+const MATERIALS = {
+  air:   { name: "Air",    absorb: [0.00, 0.00, 0.00], reflect: 0.00, transmit: 1.00 },
+  wood:  { name: "Wood",   absorb: [0.20, 0.35, 0.45], reflect: 0.55, transmit: 0.10 },
+  drywall:{name: "Drywall",absorb: [0.12, 0.25, 0.35], reflect: 0.60, transmit: 0.15 },
+  glass: { name: "Glass",  absorb: [0.04, 0.10, 0.30], reflect: 0.70, transmit: 0.20 },
+  stone: { name: "Stone",  absorb: [0.03, 0.08, 0.12], reflect: 0.90, transmit: 0.02 },
+  metal: { name: "Metal",  absorb: [0.02, 0.05, 0.08], reflect: 0.93, transmit: 0.02 }
+};
+
+class Wall{
+  constructor(x1,y1,x2,y2, material='stone', thickness=1, destructible=false){
+    this.a=new Vec2(x1,y1);
+    this.b=new Vec2(x2,y2);
+    this.material=material;
+    this.thickness=thickness;
+    this.destructible=destructible;
+  }
+  draw(ctx){
+    ctx.save();
+    ctx.lineWidth=Math.max(1.5,1.5*this.thickness);
+    const stroke = this.destructible ? "#ff6666" : "#8b8b8b";
+    const grad = ctx.createLinearGradient(this.a.x,this.a.y,this.b.x,this.b.y);
+    grad.addColorStop(0, stroke);
+    grad.addColorStop(1, "#aeb6c2");
+    ctx.strokeStyle = grad;
+    ctx.globalAlpha=0.95;
+    ctx.beginPath();
+    ctx.moveTo(this.a.x,this.a.y);
+    ctx.lineTo(this.b.x,this.b.y);
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
+class Player{
+  constructor(x,y){this.x=x;this.y=y;this.radius=PLAYER_RADIUS;}
+  get pos(){return new Vec2(this.x,this.y)}
+  set pos(v){this.x=v.x;this.y=v.y;}
+  draw(ctx){
+    ctx.save();
+    ctx.shadowBlur=12; ctx.shadowColor="#1ea7ff55";
+    ctx.fillStyle="#12283a";
+    ctx.strokeStyle="#62c6ff";
+    ctx.lineWidth=2;
+    ctx.beginPath();
+    ctx.arc(this.x,this.y,this.radius,0,Math.PI*2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle="#62c6ff";
+    ctx.beginPath();
+    ctx.arc(this.x+this.radius*0.6,this.y,3,0,Math.PI*2);
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
+class SoundSource{
+  constructor(x,y){this.x=x;this.y=y;this.radius=SOURCE_RADIUS;}
+  get pos(){return new Vec2(this.x,this.y)}
+  set pos(v){this.x=v.x;this.y=v.y;}
+  draw(ctx){
+    ctx.save();
+    ctx.shadowBlur=10; ctx.shadowColor="#ffb38355";
+    ctx.fillStyle="#4a2a12";
+    ctx.strokeStyle="#ffad73";
+    ctx.lineWidth=2;
+    ctx.beginPath();
+    ctx.arc(this.x,this.y,this.radius,0,Math.PI*2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.globalAlpha=0.7;
+    ctx.strokeStyle="#ffad73";
+    for(let r=1;r<=3;r++){
+      ctx.beginPath();
+      ctx.arc(this.x,this.y,this.radius+6*r, -0.6,0.6);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+}
+
+class Particle{
+  constructor(p, color, life, size){
+    this.p=p.clone();
+    this.color=color;
+    this.life=life;
+    this.maxLife=life;
+    this.size=size;
+  }
+  update(dt){this.life=Math.max(0,this.life-dt)}
+  draw(ctx){
+    const t=this.life/this.maxLife;
+    ctx.save();
+    ctx.globalAlpha=0.18+0.82*t;
+    ctx.fillStyle=this.color;
+    ctx.beginPath();
+    ctx.arc(this.p.x,this.p.y,this.size*(0.5+0.5*t),0,Math.PI*2);
+    ctx.fill();
+    ctx.restore();
+  }
+  get alive(){return this.life>0}
+}
+
+class MapManager{
+  constructor(){ this.walls=[]; }
+  loadOfficeLayout(W,H){
+    this.walls.length=0;
+    const pad=40;
+    const box=(destructible=false)=>[
+      new Wall(pad,pad,W-pad,pad,'stone',2,destructible),
+      new Wall(W-pad,pad,W-pad,H-pad,'stone',2,destructible),
+      new Wall(W-pad,H-pad,pad,H-pad,'stone',2,destructible),
+      new Wall(pad,H-pad,pad,pad,'stone',2,destructible),
+    ];
+    const arr=[];
+    arr.push(...box(false));
+    for(let r=0;r<3;r++){
+      for(let c=0;c<4;c++){
+        const x=pad+60+c*200, y=pad+60+r*170;
+        const mat = (r+c)%2?'drywall':'wood';
+        arr.push(new Wall(x,y,x+120,y,mat,1,false));
+        arr.push(new Wall(x+120,y,x+120,y+90,mat,1,false));
+        arr.push(new Wall(x+120,y+90,x,y+90,mat,1,false));
+        arr.push(new Wall(x,y+90,x,y+45,mat,1,false));
+      }
+    }
+    this.walls = arr;
+  }
+  clear(){ this.walls.length=0; }
+  addWall(a,b,material=DEFAULT_NEW_WALL_MATERIAL, thickness=DEFAULT_NEW_WALL_THICKNESS, destructible=DEFAULT_NEW_WALL_DESTRUCTIBLE){
+    this.walls.push(new Wall(a.x,a.y,b.x,b.y, material, thickness, destructible));
+  }
+  explodeAt(p, radius){
+    this.walls = this.walls.filter(w=>{
+      if(!w.destructible) return true;
+      const vx=w.b.x-w.a.x, vy=w.b.y-w.a.y;
+      const wx=p.x-w.a.x, wy=p.y-w.a.y;
+      const c1=wx*vx+wy*vy;
+      const c2=vx*vx+vy*vy;
+      const t=Math.max(0,Math.min(1,c1/(c2||1)));
+      const cx=w.a.x+t*vx, cy=w.a.y+t*vy;
+      const d=Math.hypot(p.x-cx,p.y-cy);
+      return d>radius;
+    });
+  }
+}
+
+
+// ===== audio-engine.js =====
+
+/* @tweakable master output gain (0.0 - 1.0) */
+let MASTER_GAIN = 0.9;
+/* @tweakable footstep volume scalar (0.0 - 1.5) */
+let FOOTSTEP_GAIN = 1.2;
+/* @tweakable target tempo for footsteps in beats per minute */
+let FOOTSTEP_BPM = 98;
+/* @tweakable minimum lowpass cutoff Hz when fully muffled */
+const MIN_MUFFLE_FREQ = 220;
+/* @tweakable maximum lowpass cutoff Hz when clear */
+const MAX_MUFFLE_FREQ = 14000;
+/* @tweakable maximum echo events per frame */
+let ECHO_MAX_SPAWNS_PER_FRAME = 12;
+/* @tweakable echo taps per reflection */
+let ECHO_TAPS = 2;
+/* @tweakable dB floor for echo band gain */
+let ECHO_DB_FLOOR = -24;
+
+function dbFromEnergy(e){
+  return Math.max(ECHO_DB_FLOOR, Math.log10((e||0)+1e-4) * 20);
+}
+
+class AudioEngine{
+  constructor(){
+    this.ctx = null;
+    this.master = null;
+    this.dryBus = null;
+    this.wetBus = null;
+    this.eqLow = null; this.eqMid = null; this.eqHigh = null;
+    this.convolver = null;
+    this.active = false;
+    this.soundType = "footsteps";
+    this._interval = null;
+    this.mode = 'stereo';
+    this.routerIn = null;
+    this.stereoOut = null;
+    this.v51 = null;
+    this._echoBudget = ECHO_MAX_SPAWNS_PER_FRAME;
+    this.noiseBurstBuffer = null;
+    this._firstUnlockDone = false;
+  }
+  ensureContext(){
+    if(this.ctx) return;
+    this.ctx = new (window.AudioContext||window.webkitAudioContext)();
+    this.master = this.ctx.createGain();
+    this.master.gain.value = MASTER_GAIN;
+    this.master.connect(this.ctx.destination);
+
+    this.eqLow = this.ctx.createBiquadFilter(); this.eqLow.type='lowshelf'; this.eqLow.frequency.value=180;
+    this.eqMid = this.ctx.createBiquadFilter(); this.eqMid.type='peaking';  this.eqMid.frequency.value=1200; this.eqMid.Q.value=0.9;
+    this.eqHigh= this.ctx.createBiquadFilter(); this.eqHigh.type='highshelf';this.eqHigh.frequency.value=4000;
+
+    this.convolver = this.ctx.createConvolver();
+    this.convolver.buffer = this.makeImpulse(2.0, 2.5);
+    this.wetBus = this.ctx.createGain(); this.wetBus.gain.value = 0.25;
+
+    this.dryBus = this.ctx.createGain();
+    this.routerIn = this.ctx.createGain();
+    this.routerIn.connect(this.eqLow);
+    this.eqLow.connect(this.eqMid);
+    this.eqMid.connect(this.eqHigh);
+    this.eqHigh.connect(this.dryBus);
+    this.eqHigh.connect(this.convolver);
+
+    this.dryBus.connect(this.master);
+    this.convolver.connect(this.wetBus);
+    this.wetBus.connect(this.master);
+
+    this.stereoOut = this.ctx.createStereoPanner();
+    this.dryBus.disconnect();
+    this.eqHigh.connect(this.stereoOut);
+    this.stereoOut.connect(this.master);
+
+    this.setupVirtual51();
+
+    this.noiseBurstBuffer = this.ctx.createBuffer(1, Math.floor(this.ctx.sampleRate*0.22), this.ctx.sampleRate);
+    const d=this.noiseBurstBuffer.getChannelData(0);
+    for(let i=0;i<d.length;i++){
+      const t=i/d.length;
+      d[i]=(Math.random()*2-1)*Math.exp(-t*8);
+    }
+  }
+  async resume(){
+    this.ensureContext();
+    if(this.ctx.state !== 'running'){
+      try{ await this.ctx.resume(); }catch{}
+    }
+    // One-time tiny silent burst to fully unlock on iOS/Safari
+    if(!this._firstUnlockDone){
+      try{
+        const s=this.ctx.createBufferSource();
+        s.buffer=this.ctx.createBuffer(1, 1, this.ctx.sampleRate);
+        s.connect(this.master);
+        s.start();
+      }catch{}
+      this._firstUnlockDone = true;
+    }
+  }
+  setupVirtual51(){
+    const c=this.ctx;
+    this.v51 = {
+      in: c.createGain(),
+      FL: {gain:c.createGain(), pan: c.createPanner()},
+      FR: {gain:c.createGain(), pan: c.createPanner()},
+      C:  {gain:c.createGain(), pan: c.createPanner()},
+      SL: {gain:c.createGain(), pan: c.createPanner()},
+      SR: {gain:c.createGain(), pan: c.createPanner()},
+      LFE:{gain:c.createGain(), low: c.createBiquadFilter()},
+      sum: c.createGain()
+    };
+    const P = (node, x,y,z=0)=>{
+      node.panningModel='HRTF';
+      node.distanceModel='inverse';
+      node.refDistance=1;
+      node.rolloffFactor=0.5;
+      node.maxDistance=10000;
+      node.positionX.value = x; node.positionY.value = y; node.positionZ.value=z;
+    };
+    P(this.v51.FL.pan, -1, 0, -0.5);
+    P(this.v51.FR.pan,  1, 0, -0.5);
+    P(this.v51.C.pan,   0, 0, -1.0);
+    P(this.v51.SL.pan, -1, 0,  0.5);
+    P(this.v51.SR.pan,  1, 0,  0.5);
+
+    this.v51.LFE.low.type='lowpass';
+    this.v51.LFE.low.frequency.value=140;
+
+    const connectLeg = (leg)=>{ this.v51.in.connect(leg.gain); leg.gain.connect(leg.pan); leg.pan.connect(this.v51.sum); };
+    connectLeg(this.v51.FL); connectLeg(this.v51.FR); connectLeg(this.v51.C); connectLeg(this.v51.SL); connectLeg(this.v51.SR);
+    this.v51.in.connect(this.v51.LFE.gain);
+    this.v51.LFE.gain.connect(this.v51.LFE.low);
+    this.v51.LFE.low.connect(this.v51.sum);
+
+    this.v51.sum.gain.value = 0.9;
+    this.v51.sum.connect(this.master);
+  }
+  setSpatialMode(mode){
+    this.ensureContext();
+    if(this.mode === mode) return;
+    this.mode = mode;
+    try{ this.eqHigh.disconnect(); }catch{}
+    if(this.mode==='stereo'){
+      this.eqHigh.connect(this.stereoOut);
+      this.eqHigh.connect(this.convolver);
+      try{ this.v51.sum.disconnect(); }catch{}
+      this.stereoOut.connect(this.master);
+    }else{
+      this.eqHigh.connect(this.v51.in);
+      this.eqHigh.connect(this.convolver);
+      try{ this.v51.sum.disconnect(); }catch{}
+      this.v51.sum.connect(this.master);
+    }
+  }
+  makeImpulse(seconds, decay){
+    const c=this.ctx;
+    const rate = c.sampleRate;
+    const len = seconds * rate;
+    const impulse = c.createBuffer(2, len, rate);
+    for(let ch=0; ch<2; ch++){
+      const data=impulse.getChannelData(ch);
+      for(let i=0;i<len;i++){
+        const t=i/len;
+        data[i] = (Math.random()*2-1) * Math.pow(1-t, decay) * (0.7 + 0.3*Math.random());
+      }
+    }
+    return impulse;
+  }
+  setReverbMix(v){
+    if(!this.wetBus) return;
+    this.wetBus.gain.value = v;
+  }
+  setMuffleStrength(muffle){
+    if(!this.ctx || !this.eqHigh) return;
+    const minF = MIN_MUFFLE_FREQ, maxF = MAX_MUFFLE_FREQ;
+    const freq = minF * Math.pow(maxF/minF, 1 - muffle);
+    const highCutDb = -18 * muffle;
+    const midDipDb  = -8  * muffle;
+    const lowLiftDb =  4  * (muffle*0.6);
+    this.eqHigh.gain.setTargetAtTime(highCutDb, this.ctx.currentTime, 0.08);
+    this.eqMid.gain.setTargetAtTime(midDipDb, this.ctx.currentTime, 0.08);
+    this.eqLow.gain.setTargetAtTime(lowLiftDb, this.ctx.currentTime, 0.08);
+    // optional coloration tweak by muffle extremes
+    if(muffle>0.7 || muffle<0.2){
+      this.convolver.buffer = this.makeImpulse( muffle>0.5? 2.6:1.6, muffle>0.5? 2.8:2.2 );
+    }
+  }
+  setRoomImpulse(size){
+    if(!this.convolver) return;
+    const secs = size==='small'? 1.2 : 2.8;
+    const decay = size==='small'? 2.0 : 2.8;
+    this.convolver.buffer = this.makeImpulse(secs, decay);
+  }
+  /* @tweakable default and only sound used for playback */
+  start(_ignoredSoundType="footsteps"){
+    this.ensureContext();
+    // Attempt to resume in case the AudioContext is suspended by autoplay policy
+    this.resume();
+    this.soundType = "footsteps";
+    this.active = true;
+    if(this._interval){ clearInterval(this._interval); this._interval=null; }
+    this.loopFootsteps();
+  }
+  stop(){
+    this.active=false;
+    if(this._interval){clearInterval(this._interval); this._interval=null;}
+  }
+  // Gunshot kept for potential future use, but not referenced.
+  loopGunshot(){
+    if(this._interval){clearInterval(this._interval);}
+    const tick=()=>{ if(!this.active) return; this.playGunshot(); };
+    this._interval = setInterval(tick, 900);
+    tick();
+  }
+  loopFootsteps(){
+    if(this._interval){clearInterval(this._interval);}
+    const schedule=()=>{
+      if(!this.active) return;
+      this.playFootstep();
+      // alternating step timing
+      const beatMs = 60000/FOOTSTEP_BPM;
+      const next = Math.random()<0.5? beatMs*0.5 : beatMs*0.75;
+      this._interval = setTimeout(schedule, next);
+    };
+    schedule();
+  }
+  playGunshot(){
+    const c=this.ctx;
+    const src=c.createBufferSource();
+    const durSec = 0.6;
+    const buf=c.createBuffer(1, Math.floor(c.sampleRate*durSec), c.sampleRate);
+    const out=buf.getChannelData(0);
+    const inBuf=this.noiseBurstBuffer.getChannelData(0);
+    for(let i=0;i<out.length;i++){
+      const t=i/out.length;
+      const idx = Math.floor((i/out.length)*inBuf.length);
+      out[i] = (inBuf[idx]||0) * Math.exp(-t*6);
+    }
+    src.buffer=buf;
+    const env = c.createGain();
+    env.gain.setValueAtTime(0.0001, c.currentTime);
+    env.gain.exponentialRampToValueAtTime(1.0, c.currentTime+0.008);
+    env.gain.exponentialRampToValueAtTime(0.001, c.currentTime+0.35);
+    src.connect(env);
+    this.connectToOutput(env);
+    src.start();
+  }
+  playFootstep(){
+    const c=this.ctx;
+    if(!c) return;
+    const src=c.createBufferSource();
+    const dur = 0.16;
+    const buf=c.createBuffer(1, Math.floor(c.sampleRate*dur), c.sampleRate);
+    const data=buf.getChannelData(0);
+    for(let i=0;i<data.length;i++){
+      const t=i/data.length;
+      const env = Math.exp(-t*10);
+      const thump = Math.sin(2*Math.PI*(80+40*t) * (i/c.sampleRate));
+      data[i] = (thump*0.6 + (Math.random()*2-1)*0.15) * env;
+    }
+    src.buffer=buf;
+    const env = c.createGain();
+    env.gain.value=0.0001;
+    // Apply footstep gain scalar for better audibility
+    const peak = 0.8 * FOOTSTEP_GAIN;
+    env.gain.exponentialRampToValueAtTime(Math.max(0.06, peak), c.currentTime+0.01);
+    env.gain.exponentialRampToValueAtTime(0.001, c.currentTime+0.14);
+    src.connect(env);
+    this.connectToOutput(env);
+    src.start();
+  }
+  /* @tweakable explosion volume scalar */
+  playExplosion(){
+    this.ensureContext();
+    const c=this.ctx;
+    const src=c.createBufferSource();
+    const dur = 0.5;
+    const buf=c.createBuffer(1, Math.floor(c.sampleRate*dur), c.sampleRate);
+    const d=buf.getChannelData(0);
+    for(let i=0;i>d.length;i++){} // no-op to avoid accidental infinite loop
+    for(let i=0;i<d.length;i++){
+      const t=i/d.length;
+      const noise = (Math.random()*2-1) * Math.exp(-t*4);
+      const boom = Math.sin(2*Math.PI*(40+5*Math.random())*(i/c.sampleRate)) * Math.exp(-t*3);
+      d[i] = (noise*0.6 + boom*0.8);
+    }
+    src.buffer=buf;
+    const shaper=c.createWaveShaper();
+    shaper.curve = new Float32Array([ -1, -0.2, 0, 0.2, 1 ]);
+    const low=c.createBiquadFilter(); low.type='lowpass'; low.frequency.value=1600;
+    const g=c.createGain(); g.gain.value=0.7;
+    src.connect(shaper).connect(low).connect(g);
+    this.connectToOutput(g);
+    src.start();
+  }
+  connectToOutput(node){
+    node.connect(this.routerIn);
+  }
+  resetFrameBudgets(){
+    this._echoBudget = ECHO_MAX_SPAWNS_PER_FRAME;
+  }
+  spawnEcho(distance, bandEnergy){
+    if(!this.active || !this.ctx) return;
+    if(this._echoBudget<=0) return;
+    this._echoBudget--;
+    const c=this.ctx;
+    const metersPerPixel = 0.01;
+    const baseDelay = (distance * metersPerPixel) / 343;
+    const tapsCount = Math.max(1, Math.min(3, ECHO_TAPS));
+    for(let k=0;k<tapsCount;k++){
+      const tTap = baseDelay * (1 + 0.6*k) + 0.01*Math.random();
+      const gTap = clamp01((bandEnergy[0]+bandEnergy[1]+bandEnergy[2])/3) * (0.55 - 0.15*k);
+      const src=c.createBufferSource();
+      src.buffer=this.noiseBurstBuffer;
+      const delay = c.createDelay(3.0);
+      delay.delayTime.value = Math.min(3.0, tTap);
+      const low=c.createBiquadFilter(); low.type='lowshelf'; low.frequency.value=180;  low.gain.value = dbFromEnergy(bandEnergy[0])*0.6;
+      const mid=c.createBiquadFilter(); mid.type='peaking';  mid.frequency.value=1200; mid.Q.value=0.9; mid.gain.value = dbFromEnergy(bandEnergy[1])*0.6;
+      const high=c.createBiquadFilter();high.type='highshelf';high.frequency.value=4000; high.gain.value= dbFromEnergy(bandEnergy[2])*0.6;
+      const g=c.createGain(); g.gain.value = gTap;
+      src.connect(delay).connect(low).connect(mid).connect(high).connect(g).connect(this.master);
+      const when = c.currentTime + tTap;
+      src.start(when);
+      src.stop(when + this.noiseBurstBuffer.duration + 0.05);
+    }
+  }
+  updateSpatial(playerPos, sourcePos){
+    if(!this.ctx) return;
+    const dx = sourcePos.x - playerPos.x;
+    const dy = sourcePos.y - playerPos.y;
+    const ang = Math.atan2(dy, dx);
+    const dist = Math.max(20, Math.hypot(dx,dy));
+    const near = 1/Math.max(1, dist*0.02);
+    const front = Math.cos(ang)*0.5 + 0.5;
+    const right = Math.sin(ang)*0.5 + 0.5;
+    const back = 1 - front;
+    const FL = clamp01(front*(1-right));
+    const FR = clamp01(front*right);
+    const C  = clamp01(front*0.8);
+    const SL = clamp01(back*(1-right));
+    const SR = clamp01(back*right);
+    const LFE= clamp01(near*0.7);
+    const scale = near;
+    if(this.mode==='stereo'){
+      const pan = clamp(-1, 1, Math.sin(ang));
+      this.stereoOut.pan.setTargetAtTime(pan, this.ctx.currentTime, 0.05);
+    }else{
+      this.v51.FL.gain.gain.setTargetAtTime(FL*scale, this.ctx.currentTime, 0.05);
+      this.v51.FR.gain.gain.setTargetAtTime(FR*scale, this.ctx.currentTime, 0.05);
+      this.v51.C.gain.gain.setTargetAtTime(C*scale,  this.ctx.currentTime, 0.05);
+      this.v51.SL.gain.gain.setTargetAtTime(SL*scale, this.ctx.currentTime, 0.05);
+      this.v51.SR.gain.gain.setTargetAtTime(SR*scale, this.ctx.currentTime, 0.05);
+      this.v51.LFE.gain.gain.setTargetAtTime(LFE*scale, this.ctx.currentTime, 0.05);
+    }
+  }
+}
+
+
+// ===== sim.js =====
+
+/* @tweakable primary environment ray count (lower = faster) */
+let RAY_COUNT = 128;
+/* @tweakable number of line-of-sight detector rays (lower = faster) */
+let LOS_RAY_COUNT = 48;
+/* @tweakable maximum reflection bounces for echo rays (lower = faster) */
+let MAX_BOUNCES = 3;
+/* @tweakable energy threshold to terminate rays */
+let ENERGY_THRESHOLD = 0.02;
+/* @tweakable number of accessibility rays (lower = faster) */
+let ACCESSIBILITY_RAY_COUNT = 80;
+/* @tweakable maximum particles alive on screen */
+let MAX_PARTICLES = 450;
+/* @tweakable maximum new particles allowed per frame */
+let MAX_PARTICLES_PER_FRAME = 80;
+/* @tweakable simulate echo rays only every N frames (1 = every frame) */
+let ECHO_SIM_STEP = 2;
+/* @tweakable explosion radius in pixels */
+let EXPLOSION_RADIUS = 80;
+/* @tweakable smoothing factor for muffle changes (0 = no change, 1 = instant) */
+let MUFFLE_SMOOTH = 0.25;
+/* @tweakable initial muffle before first update */
+let INITIAL_MUFFLE = 0.3;
+/* @tweakable number of samples shown in LOS graph */
+let LOS_GRAPH_SAMPLES = 100;
+/* @tweakable the color of the LOS graph stroke */
+const LOS_GRAPH_COLOR = "#34d399";
+/* @tweakable the color of the LOS graph grid lines */
+const LOS_GRAPH_GRID_COLOR = "#1f2736";
+/* @tweakable the background fill color of the LOS graph */
+const LOS_GRAPH_BG = "#0e1118";
+
+/* @tweakable how many bounces to draw for visual rays (does not affect audio) */
+let VISUAL_BOUNCES = 2;
+/* @tweakable how many rays to draw visually around the player (does not affect audio) */
+let VISUAL_RAY_COUNT = 96;
+/* @tweakable length in pixels to draw each reflection segment indicator */
+let REFLECT_LINE_LEN = 42;
+
+class Ray{
+  constructor(origin, dir, energy=[1,1,1]){
+    this.origin=origin.clone();
+    this.dir=dir.clone().norm();
+    this.energy=energy.slice(0);
+    this.traveled=0;
+  }
+  intersectSegment(a,b){
+    const x1=this.origin.x,y1=this.origin.y;
+    const x2=x1+this.dir.x,y2=y1+this.dir.y;
+    const x3=a.x,y3=a.y,x4=b.x,y4=b.y;
+    const den=(x1-x2)*(y3-y4)-(y1-y2)*(x3-x4);
+    if(Math.abs(den)<1e-6) return null;
+    const t=((x1-x3)*(y3-y4)-(y1-y3)*(x3-x4))/den;
+    const u=-((x1-x2)*(y1-y3)-(y1-y2)*(x1-x3))/den;
+    if(t>0 && u>0 && u<1){
+      const px=x1+t*(x2-x1);
+      const py=y1+t*(y2-y1);
+      const dist=t;
+      return {point:new Vec2(px,py), dist};
+    }
+    return null;
+  }
+  closestHit(walls){
+    let minD=Infinity, hit=null, wallRef=null;
+    for(const w of walls){
+      const h=this.intersectSegment(w.a,w.b);
+      if(h && h.dist<minD){minD=h.dist; hit=h; wallRef=w;}
+    }
+    return hit?{...hit, wall:wallRef}:null;
+  }
+}
+
+function surfaceNormal(w){
+  const dx=w.b.x-w.a.x, dy=w.b.y-w.a.y;
+  const n = new Vec2(-dy, dx).norm();
+  return n;
+}
+function reflect(inc, normal){
+  const dot=inc.dot(normal);
+  return inc.clone().sub(normal.clone().mul(2*dot));
+}
+function sampleDirections(count){
+  const dirs=[];
+  for(let i=0;i<count;i++){
+    const a = (i/count)*Math.PI*2;
+    dirs.push(Vec2.fromAngle(a));
+  }
+  return dirs;
+}
+function falloff(distancePx){
+  const d = Math.max(1, distancePx*0.02);
+  return 1/(d*d);
+}
+
+function computeLineOfSightRatio(player, source, walls){
+  let clear=0;
+  const toSrc = new Vec2(source.x - player.x, source.y - player.y);
+  const baseLen = toSrc.len();
+  for(let i=0;i<LOS_RAY_COUNT;i++){
+    const jitter = (i - LOS_RAY_COUNT/2) / LOS_RAY_COUNT * 0.12;
+    const dir = rotate(toSrc, jitter).norm();
+    const ray = new Ray(player, dir);
+    const hit = ray.closestHit(walls);
+    if(!hit || hit.dist >= baseLen){ clear++; }
+  }
+  return clear/LOS_RAY_COUNT;
+}
+
+function simulateEchoRays({player, source, world, audio, frameIndex}){
+  let totalEchoEnergy=0;
+  let bandTotals=[0,0,0];
+  const dirs = sampleDirections(RAY_COUNT);
+  const playerR = player.radius;
+
+  for(const dir of dirs){
+    let r = new Ray(new Vec2(source.x,source.y), dir, [1,1,1]);
+    let b=0;
+    let traveled=0;
+    while(b<=MAX_BOUNCES && r.energy.some(e=>e>ENERGY_THRESHOLD)){
+      const hit = r.closestHit(world.walls);
+      let endPoint;
+      if(!hit){
+        endPoint = new Vec2(r.origin.x + r.dir.x*2000, r.origin.y + r.dir.y*2000);
+        const hitPlayer = segmentIntersectsCircle(r.origin, endPoint, new Vec2(player.x,player.y), playerR);
+        if(hitPlayer){
+          const segLen = 2000;
+          const travel = traveled + hitPlayer.t * segLen;
+          const eAt = r.energy.map(e=> e * falloff(travel));
+          const scalar = (eAt[0]+eAt[1]+eAt[2])/3;
+          bandTotals[0]+=eAt[0]; bandTotals[1]+=eAt[1]; bandTotals[2]+=eAt[2];
+          totalEchoEnergy += scalar;
+          audio.spawnEcho(travel, eAt);
+        }
+        break;
+      }else{
+        endPoint = hit.point;
+        const hitPlayer = segmentIntersectsCircle(r.origin, endPoint, new Vec2(player.x,player.y), playerR);
+        if(hitPlayer && hitPlayer.t < 1){
+          const travel = traveled + hit.dist + hitPlayer.t*600;
+          const eAt = r.energy.map(e=> e * falloff(travel));
+          const scalar = (eAt[0]+eAt[1]+eAt[2])/3;
+          bandTotals[0]+=eAt[0]; bandTotals[1]+=eAt[1]; bandTotals[2]+=eAt[2];
+          totalEchoEnergy += scalar;
+          audio.spawnEcho(travel, eAt);
+          r.energy = r.energy.map(e=>e*0.5);
+        }
+        const mat = MATERIALS[hit.wall.material] || MATERIALS.stone;
+        const thickness = hit.wall.thickness||1;
+        const absorbBands = mat.absorb.map(a=> 1 - Math.pow(1-a, thickness));
+        const refl = mat.reflect;
+        const trans = mat.transmit;
+
+        const n = surfaceNormal(hit.wall);
+        const reflDir = reflect(r.dir, n).norm();
+        const transmitDir = r.dir.clone().norm();
+
+        const reflectedEnergy = r.energy.map((e,i)=> e * refl * (1-absorbBands[i]));
+        const transmittedEnergy = r.energy.map((e,i)=> e * trans * (1-absorbBands[i]));
+
+        if(transmittedEnergy.some(e=>e>ENERGY_THRESHOLD)){
+          const tRayFar = new Vec2(endPoint.x + transmitDir.x*600, endPoint.y + transmitDir.y*600);
+          const hitPlayer2 = segmentIntersectsCircle(endPoint, tRayFar, new Vec2(player.x,player.y), playerR);
+          if(hitPlayer2){
+            const travel = traveled + hit.dist + hitPlayer2.t*600;
+            const eAt = transmittedEnergy.map(e=> e * falloff(travel));
+            const scalar = (eAt[0]+eAt[1]+eAt[2])/3;
+            bandTotals[0]+=eAt[0]; bandTotals[1]+=eAt[1]; bandTotals[2]+=eAt[2];
+            totalEchoEnergy += scalar;
+            audio.spawnEcho(travel, eAt);
+          }
+        }
+        b++;
+        r.origin = endPoint.clone().add(reflDir.clone().mul(0.5));
+        r.dir = reflDir;
+        traveled += hit.dist;
+        r.energy = reflectedEnergy.map((e,i)=> e * (1-absorbBands[i]));
+      }
+    }
+  }
+  return { total: totalEchoEnergy, bands: bandTotals };
+}
+
+function castAccessibilityRays({source, world, soundType, particles}){
+  const rays = sampleDirections(ACCESSIBILITY_RAY_COUNT);
+  let spawned = 0;
+  for(const dir of rays){
+    if(spawned >= MAX_PARTICLES_PER_FRAME) break;
+    const r = new Ray(new Vec2(source.x,source.y), dir, [1,1,1]);
+    const hit = r.closestHit(world.walls);
+    if(hit){
+      const color = soundType==='gunshot' ? "#ff4d6d" : "#34d399";
+      const size = soundType==='gunshot' ? 6 : 4;
+      particles.push(new Particle(hit.point, color, 0.6, size));
+      const n = surfaceNormal(hit.wall);
+      const rd = reflect(r.dir, n);
+      const p2 = new Vec2(hit.point.x + rd.x*20, hit.point.y + rd.y*20);
+      particles.push(new Particle(p2, color, 0.4, size*0.8));
+      spawned += 2;
+    }
+  }
+}
+
+
+// ===== maps.js =====
+
+class MapFactory {
+  static bounds(w, h) {
+    return [
+      new Wall(10, 10, w - 10, 10, "stone"),
+      new Wall(w - 10, 10, w - 10, h - 10, "stone"),
+      new Wall(w - 10, h - 10, 10, h - 10, "stone"),
+      new Wall(10, h - 10, 10, 10, "stone")
+    ];
+  }
+  static openSpace(w, h) { return MapFactory.bounds(w, h); }
+  static singleRoom(w, h) {
+    const walls = MapFactory.bounds(w, h);
+    walls.push(new Wall(w*0.25, h*0.25, w*0.75, h*0.25, "drywall"));
+    walls.push(new Wall(w*0.75, h*0.25, w*0.75, h*0.75, "drywall"));
+    walls.push(new Wall(w*0.75, h*0.75, w*0.25, h*0.75, "drywall"));
+    walls.push(new Wall(w*0.25, h*0.75, w*0.25, h*0.25, "drywall"));
+    return walls;
+  }
+  static maze(w, h) {
+    const walls = MapFactory.bounds(w, h);
+    const cols = 5, rows = 4;
+    for (let i = 1; i < cols; i++) {
+      const x = (w / cols) * i;
+      const gapY1 = (h/rows)*2 - 20, gapY2 = gapY1 + 40; // door gap
+      walls.push(new Wall(x, 10, x, gapY1, (i % 2 ? "stone" : "wood")));
+      walls.push(new Wall(x, gapY2, x, h - 10, (i % 2 ? "stone" : "wood")));
+    }
+    for (let j = 1; j < rows; j++) {
+      const y = (h / rows) * j;
+      const gapX1 = (w/cols)*3 - 20, gapX2 = gapX1 + 40; // door gap
+      walls.push(new Wall(10, y, gapX1, (j % 2 ? "drywall" : "glass")));
+      walls.push(new Wall(gapX2, y, w - 10, (j % 2 ? "drywall" : "glass")));
+    }
+    return walls;
+  }
+  static destructible(w, h) {
+    const walls = MapFactory.bounds(w, h);
+    walls.push(new Wall(w*0.25, h*0.3, w*0.75, h*0.3, "drywall", { destructible: true }));
+    walls.push(new Wall(w*0.25, h*0.6, w*0.75, h*0.6, "drywall", { destructible: true }));
+    walls.push(new Wall(w*0.25, h*0.3, w*0.25, h*0.6, "wood"));
+    walls.push(new Wall(w*0.75, h*0.3, w*0.75, h*0.6, "glass"));
+    return walls;
+  }
+  static office(w, h) {
+    const walls = MapFactory.bounds(w, h);
+    // Outer ring with door gaps
+    const door = /* @tweakable door opening width as fraction of side */ 0.12;
+    const gapX1 = lerp(w*0.15, w*0.85, 0.5 - door/2), gapX2 = lerp(w*0.15, w*0.85, 0.5 + door/2);
+    walls.push(new Wall(w*0.15,h*0.2, gapX1, h*0.2, "drywall"), new Wall(gapX2, h*0.2, w*0.85,h*0.2,"drywall"));
+    walls.push(new Wall(w*0.85,h*0.2, w*0.85, h*0.5 - (h*door/2), "glass"), new Wall(w*0.85, h*0.5 + (h*door/2), w*0.85,h*0.8,"glass"));
+    walls.push(new Wall(w*0.15,h*0.8, w*0.85,h*0.8,"drywall"));
+    walls.push(new Wall(w*0.15,h*0.2, w*0.15, h*0.8,"drywall"));
+    // Interior partitions of all materials with gaps as doors
+    walls.push(new Wall(w*0.5,h*0.2, w*0.5, h*0.35,"wood"), new Wall(w*0.5,h*0.45, w*0.5, h*0.8,"wood"));
+    walls.push(new Wall(w*0.15,h*0.5, w*0.45,h*0.5,"glass"), new Wall(w*0.55,h*0.5, w*0.85,h*0.5,"glass"));
+    walls.push(new Wall(w*0.5,h*0.35, w*0.75,h*0.35,"stone"), new Wall(w*0.78,h*0.35, w*0.85,h*0.35,"stone"));
+    walls.push(new Wall(w*0.5,h*0.65, w*0.7,h*0.65,"metal"), new Wall(w*0.72,h*0.65, w*0.85,h*0.65,"metal"));
+    return walls;
+  }
+  static forName(name, w, h) {
+    switch (name) {
+      case "Open Space": return MapFactory.openSpace(w, h);
+      case "Single Room": return MapFactory.singleRoom(w, h);
+      case "Maze": return MapFactory.maze(w, h);
+      case "Destructible Walls": return MapFactory.destructible(w, h);
+      case "Complex Office": return MapFactory.office(w, h);
+      default: return MapFactory.openSpace(w, h);
+    }
+  }
+  static impulseForMap(name, audio) {
+    if (name === "Open Space") audio.setImpulseResponse("outside");
+    else if (name === "Maze") audio.setImpulseResponse("hall");
+    else if (name === "Complex Office") audio.setImpulseResponse("hall");
+    else audio.setImpulseResponse("room");
+  }
+}
+
+
+// ===== diffraction module (unused by main; preserved as line comments to mirror original isolated-file behavior, since the original ends mid-function with an unbalanced brace) =====
+// /* @tweakable maximum K shortest paths to evaluate for diffraction */
+// const K_PATHS = 3;
+// 
+// 
+// const key = (v)=>`${v.x.toFixed(2)},${v.y.toFixed(2)}`;
+// 
+// function visible(a, b, walls) {
+//   const dx = b.x - a.x, dy = b.y - a.y;
+//   const dist = Math.hypot(dx, dy);
+//   if (dist < 1e-4) return true;
+//   // nudge endpoints inward along the segment to avoid grazing wall endpoints
+//   const nx = dx / dist, ny = dy / dist, EPS = 0.5; /* @tweakable endpoint nudge distance (px) */
+//   const aa = { x: a.x + nx*EPS, y: a.y + ny*EPS };
+//   const bb = { x: b.x - nx*EPS, y: b.y - ny*EPS };
+//   const dir = { x: bb.x - aa.x, y: bb.y - aa.y };
+//   const d2 = Math.hypot(dir.x, dir.y);
+//   const r = new Ray(aa, { x: dir.x, y: dir.y });
+//   const hit = r.closestHit(walls);
+//   // allow hits that are effectively at the far endpoint
+//   return !hit || hit.dist >= d2 - 1e-2;
+// }
+// 
+// /* @tweakable include source/player plus all wall vertices into visibility graph */
+// function buildVisibilityGraph(source, player, walls) {
+//   const nodes = [source, player];
+//   for (const w of walls) if (!(w.destructible && w.destroyed)) nodes.push(w.a, w.b);
+//   const unique = []; const seen = new Set();
+//   for (const n of nodes) { const k = key(n); if (!seen.has(k)) { seen.add(k); unique.push({ x: n.x, y: n.y }); } }
+//   const adj = new Map(unique.map(n => [key(n), []]));
+//   for (let i = 0; i < unique.length; i++) for (let j = i + 1; j < unique.length; j++) {
+//     const a = unique[i], b = unique[j];
+//     if (visible(a, b, walls)) {
+//       const d = Math.hypot(b.x - a.x, b.y - a.y);
+//       adj.get(key(a)).push({ to: key(b), w: d, p: b });
+//       adj.get(key(b)).push({ to: key(a), w: d, p: a });
+//     }
+//   }
+//   return { nodes: unique, adj, start: key(source), goal: key(player), lookup: (kstr)=> {
+//     const [x,y]=kstr.split(",").map(Number); return { x, y };
+//   }};
+// }
+// 
+// function dijkstra(start, goal, adj) {
+//   const dist = new Map([[start, 0]]), prev = new Map(); const Q = new Set([start]);
+//   while (Q.size) {
+//     let u=null, best=Infinity; for (const n of Q){ const d=dist.get(n)??Infinity; if(d<best){best=d;u=n;} }
+//     Q.delete(u); if (u === goal) break;
+//     for (const e of (adj.get(u) || [])) {
+//       const alt = (dist.get(u)??Infinity) + e.w;
+//       if (alt < (dist.get(e.to)??Infinity)) { dist.set(e.to, alt); prev.set(e.to, u); Q.add(e.to); }
+//     }
+//   }
+//   if (!dist.has(goal)) return null;
+//   const pathKeys=[]; let cur=goal; while(cur){ pathKeys.unshift(cur); cur=prev.get(cur); if(cur===start){ pathKeys.unshift(start); break; } }
+//   return { keys: [...new Set(pathKeys)], cost: dist.get(goal) };
+// }
+// 
+// /* @tweakable Yen's K-shortest simple implementation for small graphs */
+// function kShortestPaths(g, k = K_PATHS) {
+//   const A = []; const sp = dijkstra(g.start, g.goal, g.adj); if (!sp) return A;
+//   A.push(sp);
+//   const B = [];
+//   for (let kidx = 1; kidx < k; kidx++) {
+//     const prevPath = A[kidx - 1].keys;
+//     for (let i = 0; i < prevPath.length - 1; i++) {
+//       const spurNode = prevPath[i];
+//       const rootPath = prevPath.slice(0, i + 1);
+//       const removed = [];
+//       for (const p of A) {
+//         const pk = p.keys;
+//         if (pk.length > i && rootPath.every((rk, ri) => rk === pk[ri])) {
+//           const u = pk[i], v = pk[i + 1];
+//           const list = g.adj.get(u);
+//           const idx = list?.findIndex(e => e.to === v);
+//           if (idx >= 0) { removed.push({ u, idx, edge: list[idx] }); list.splice(idx, 1); }
+//         }
+//       }
+//       const spur = dijkstra(spurNode, g.goal, g.adj);
+//       if (spur) {
+//         const keys = [...rootPath.slice(0, -1), ...spur.keys];
+//         const uniq = []; const seen = new Set(); for (const kstr of keys){ if(!seen.has(kstr)){ seen.add(kstr); uniq.push(kstr); } }
+//         const cost = uniq.reduce((acc, cur, idx, arr) => {
+//           if (idx === 0) return 0;
+//           const prev = arr[idx - 1]; const e = (g.adj.get(prev) || []).find(x => x.to === cur);
+//           return acc + (e?.w ?? 0);
+//         }, 0);
+//         B.push({ keys: uniq, cost });
+//       }
+//       for (const r of removed) g.adj.get(r.u).splice(r.idx, 0, r.edge);
+//     }
+//     if (!B.length) break;
+//     B.sort((a, b) => a.cost - b.cost);
+//     const next = B.shift(); A.push(next);
+//   }
+//   return A.map(p => ({ points: p.keys.map(g.lookup), cost: p.cost }));
+// 
+
+// ===== render.js =====
+
+function drawGrid(ctx, W, H){
+  ctx.save();
+  ctx.globalAlpha=0.25;
+  ctx.strokeStyle="#1a2230";
+  ctx.lineWidth=1;
+  for(let x=0;x<=W;x+=GRID_SPACING){
+    ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke();
+  }
+  for(let y=0;y<=H;y+=GRID_SPACING){
+    ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawRays(ctx, player, source, world, {RAY_COUNT, LOS_RAY_COUNT, VISUAL_BOUNCES=1}, Ray, surfaceNormal, reflect, Vec2){
+  ctx.save();
+  ctx.lineWidth=1;
+  const envCount = RAY_COUNT;
+  // Multi-bounce visualization (lightweight)
+  for(let i=0;i<envCount;i++){
+    const a = (i/envCount)*Math.PI*2;
+    let origin = player.pos.clone();
+    let dir = Vec2.fromAngle(a);
+    let bounces = 0;
+    let energy = 1.0;
+    ctx.strokeStyle = "rgba(53,208,255,0.22)";
+    while(bounces <= VISUAL_BOUNCES && energy > 0.1){
+      const ray = new Ray(origin, dir);
+      const hit = ray.closestHit(world.walls);
+      const end = hit? hit.point : new Vec2(origin.x + dir.x*1200, origin.y + dir.y*1200);
+      ctx.beginPath();
+      ctx.moveTo(origin.x, origin.y);
+      ctx.lineTo(end.x, end.y);
+      ctx.stroke();
+      if(!hit) break;
+      // short reflection hint
+      ctx.strokeStyle = "rgba(245,158,11,0.25)";
+      const n = surfaceNormal(hit.wall);
+      const rDir = reflect(dir, n).norm();
+      const p2 = new Vec2(end.x + rDir.x*REFLECT_LINE_LEN, end.y + rDir.y*REFLECT_LINE_LEN);
+      ctx.beginPath();
+      ctx.moveTo(end.x, end.y);
+      ctx.lineTo(p2.x, p2.y);
+      ctx.stroke();
+      // continue
+      origin = end.clone().add(rDir.clone().mul(0.5));
+      dir = rDir;
+      bounces++;
+      energy *= 0.6;
+      ctx.strokeStyle = "rgba(53,208,255,0.18)";
+    }
+  }
+  // LOS rays from player to source (green)
+  ctx.strokeStyle = "rgba(52,211,153,0.6)";
+  const losCount=LOS_RAY_COUNT;
+  const dirToSrc = new Vec2(source.x - player.x, source.y - player.y);
+  const maxDist = Math.hypot(dirToSrc.x, dirToSrc.y);
+  for(let i=0;i<losCount;i++){
+    const jitter = (i - losCount/2) / losCount * 0.12;
+    const rot = (()=>{ const c=Math.cos(jitter), s=Math.sin(jitter); return new Vec2(dirToSrc.x*c - dirToSrc.y*s, dirToSrc.x*s + dirToSrc.y*c).norm(); })();
+    const ray = new Ray(player.pos, rot);
+    const hit = ray.closestHit(world.walls);
+    let end;
+    if(hit && hit.dist < maxDist){
+      end = hit.point; ctx.globalAlpha = 0.35;
+    }else{
+      end = new Vec2(player.x + rot.x*maxDist, player.y + rot.y*maxDist); ctx.globalAlpha = 0.85;
+    }
+    ctx.beginPath();
+    ctx.moveTo(player.x, player.y);
+    ctx.lineTo(end.x, end.y);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawLOSGraph(gctx, graphCanvas, losHistory){
+  if(!gctx) return;
+  const w = graphCanvas.width;
+  const h = graphCanvas.height;
+  gctx.clearRect(0,0,w,h);
+  gctx.fillStyle = LOS_GRAPH_BG;
+  gctx.fillRect(0,0,w,h);
+  gctx.strokeStyle = LOS_GRAPH_GRID_COLOR;
+  gctx.globalAlpha = 0.8;
+  gctx.lineWidth = 1;
+  gctx.beginPath();
+  const vStep = 40;
+  for(let x=0; x<=w; x+=vStep){ gctx.moveTo(x,0); gctx.lineTo(x,h); }
+  for(let i=0;i<=4;i++){ const y = (i/4)*h; gctx.moveTo(0,y); gctx.lineTo(w,y); }
+  gctx.stroke();
+
+  if(losHistory.length>1){
+    gctx.globalAlpha = 1.0;
+    gctx.strokeStyle = LOS_GRAPH_COLOR;
+    gctx.lineWidth = 2;
+    gctx.beginPath();
+    const n = losHistory.length;
+    for(let i=0;i<n;i++){
+      const x = (i/(n-1)) * (w-2) + 1;
+      const v = losHistory[i];
+      const y = h - (v * (h-2)) - 1;
+      if(i===0) gctx.moveTo(x,y);
+      else gctx.lineTo(x,y);
+    }
+    gctx.stroke();
+    gctx.globalAlpha = 0.15;
+    gctx.fillStyle = LOS_GRAPH_COLOR;
+    gctx.lineTo(((n-1)/(n-1))*(w-2)+1, h-1);
+    gctx.lineTo(1, h-1);
+    gctx.closePath();
+    gctx.fill();
+  }
+}
+
+
+// ===== ui.js =====
+
+/* @tweakable padding from canvas edges when dragging entities */
+let DRAG_CLAMP_PADDING = 16;
+/* @tweakable distance in pixels considered "grabbable" for player/source */
+let DRAG_HITPAD = 6;
+/* @tweakable emoji for accessibility toggle button */
+const ACCESSIBILITY_EMOJI = "♿️";
+/* @tweakable emoji for clear walls button */
+const CLEAR_WALLS_EMOJI = "🧹";
+/* @tweakable emoji for reset positions button */
+const RESET_EMOJI = "↩️";
+/* @tweakable horizontal gap between toolbar items in pixels */
+let UI_TOOLBAR_GAP = 6;
+/* @tweakable vertical padding inside the toolbar in pixels */
+let UI_TOOLBAR_PAD_Y = 6;
+
+function bindUI({canvas, world, player, source, audio, state}){
+  // Apply toolbar sizing via CSS variables
+  document.documentElement.style.setProperty('--ui-gap', UI_TOOLBAR_GAP + 'px');
+  document.documentElement.style.setProperty('--ui-pad-y', UI_TOOLBAR_PAD_Y + 'px');
+
+  // DOM
+  const startBtn = document.getElementById('btn-start');
+  const resetBtn = document.getElementById('btn-reset');
+  const explodeBtn = document.getElementById('btn-explode');
+  const clearBtn = document.getElementById('btn-clear');
+  const rngMuffle = document.getElementById('rng-muffle');
+  const rngEcho = document.getElementById('rng-echo');
+  const spatialSel = document.getElementById('sel-spatial');
+  const accessBtn = document.getElementById('btn-access');
+  const matSel = document.getElementById('sel-mat');
+  const thickSel = document.getElementById('sel-thick');
+  const destChk = document.getElementById('chk-dest');
+
+  const losEl = document.getElementById('val-los');
+  const mufEl = document.getElementById('val-muf');
+  const echEl = document.getElementById('val-echo');
+  const iconShape = document.getElementById('icon-start-shape');
+
+  // Apply emojis via tweakables
+  resetBtn.querySelector('.emoji')?.replaceChildren(document.createTextNode(RESET_EMOJI));
+  clearBtn.querySelector('.emoji')?.replaceChildren(document.createTextNode(CLEAR_WALLS_EMOJI));
+  accessBtn.querySelector('.emoji')?.replaceChildren(document.createTextNode(ACCESSIBILITY_EMOJI));
+
+  // Values
+  rngMuffle.value = String(state.userMuffle);
+  rngEcho.value = String(state.reverbMix);
+  spatialSel.value = state.spatialMode;
+
+  // Initialize new-wall UI to state defaults
+  if(state.newWall == null){
+    state.newWall = {
+      material: DEFAULT_NEW_WALL_MATERIAL,
+      thickness: DEFAULT_NEW_WALL_THICKNESS,
+      destructible: DEFAULT_NEW_WALL_DESTRUCTIBLE
+    };
+  }
+  if(matSel) matSel.value = state.newWall.material;
+  if(thickSel) thickSel.value = String(state.newWall.thickness);
+  if(destChk) destChk.checked = !!state.newWall.destructible;
+
+  // Buttons
+  startBtn.addEventListener('click', async ()=>{
+    await audio.resume();
+    state.running = !state.running;
+    if(state.running){
+      audio.start('footsteps');
+      iconShape.setAttribute('d','M6 5h4v14H6V5zm8 0h4v14h-4V5z'); // pause icon
+    }else{
+      audio.stop();
+      iconShape.setAttribute('d','M8 5v14l11-7z'); // play icon
+    }
+  });
+
+  resetBtn.addEventListener('click', ()=>{
+    player.pos=new Vec2(canvas.width*0.25, canvas.height*0.5);
+    source.pos=new Vec2(canvas.width*0.75, canvas.height*0.5);
+  });
+
+  explodeBtn.addEventListener('click', ()=>{
+    const center = new Vec2((player.x+source.x)/2, (player.y+source.y)/2);
+    world.explodeAt(center, state.explosionRadius);
+    audio.playExplosion?.();
+  });
+
+  clearBtn.addEventListener('click', ()=> world.clear());
+
+  // Live updates for audio UI (kept minimal to avoid breaking audio system)
+  spatialSel.addEventListener('change', ()=>{
+    state.spatialMode = spatialSel.value;
+    audio.setSpatialMode(state.spatialMode);
+  });
+  rngEcho.addEventListener('input', ()=>{
+    state.reverbMix = parseFloat(rngEcho.value);
+    audio.setReverbMix(state.reverbMix);
+  });
+  rngMuffle.addEventListener('input', ()=>{
+    state.userMuffle = parseFloat(rngMuffle.value);
+  });
+
+  // Persist new wall options
+  matSel?.addEventListener('change', ()=> state.newWall.material = matSel.value);
+  thickSel?.addEventListener('change', ()=> state.newWall.thickness = parseFloat(thickSel.value));
+  destChk?.addEventListener('change', ()=> state.newWall.destructible = !!destChk.checked);
+
+  // Dragging and "always-on" wall drawing
+  let dragging=null;
+  canvas.addEventListener('mousedown', (e)=>{
+    const p=getMouse(e, canvas);
+
+    // Ctrl+click explosion shortcut
+    if(e.ctrlKey){
+      world.explodeAt(p, state.explosionRadius);
+      audio.playExplosion?.();
+      return;
+    }
+
+    // Begin drag if clicking on an actor; this temporarily suspends wall placing
+    if(distance(p, player.pos) <= player.radius+DRAG_HITPAD){ dragging='player'; return; }
+    if(distance(p, source.pos) <= source.radius+DRAG_HITPAD){ dragging='source'; return; }
+
+    // Always-on add-wall: toggle between start and end points
+    if(!state.pendingWallStart){
+      state.pendingWallStart = clampToCanvas(p, canvas);
+      document.querySelector('.canvas-wrap')?.classList.add('pending-wall');
+    }else{
+      const end = clampToCanvas(p, canvas);
+      const nw = state.newWall || { material: DEFAULT_NEW_WALL_MATERIAL, thickness: DEFAULT_NEW_WALL_THICKNESS, destructible: DEFAULT_NEW_WALL_DESTRUCTIBLE };
+      world.addWall(state.pendingWallStart, end, nw.material, nw.thickness, nw.destructible);
+      state.pendingWallStart = null;
+      document.querySelector('.canvas-wrap')?.classList.remove('pending-wall');
+    }
+  });
+
+  window.addEventListener('mousemove', (e)=>{
+    const p=getMouse(e, canvas);
+    state.lastMouse = p;
+    if(!dragging) return;
+    if(dragging==='player'){ player.pos=clampToCanvas(p, canvas); }
+    else if(dragging==='source'){ source.pos=clampToCanvas(p, canvas); }
+  });
+
+  window.addEventListener('mouseup', ()=>{
+    dragging=null;
+  });
+
+  // Also try to unlock audio on any user interaction with the canvas
+  canvas.addEventListener('pointerdown', ()=>{ audio.resume(); }, {passive:true});
+
+  // Visual crosshair cue for always-on add-wall
+  document.body.classList.add('add-wall-active');
+
+  // Public metric updaters
+  return {
+    setMetrics({losPct, muffle, echo}){
+      const losEl = document.getElementById('val-los');
+      const mufEl = document.getElementById('val-muf');
+      const echEl = document.getElementById('val-echo');
+      if(losEl) losEl.textContent = Math.round(losPct*100)+"%";
+      if(mufEl) mufEl.textContent = muffle.toFixed(2);
+      if(echEl) echEl.textContent = echo.toFixed(2);
+    }
+  };
+}
+
+function getMouse(e, canvas){
+  const r=canvas.getBoundingClientRect();
+  return new Vec2(
+    (e.clientX - r.left) * (canvas.width/r.width),
+    (e.clientY - r.top) * (canvas.height/r.height)
+  );
+}
+
+/* @tweakable how close entities can be dragged to the canvas edge */
+function clampToCanvas(p, canvas){
+  const pad = DRAG_CLAMP_PADDING;
+  const x = Math.max(pad, Math.min(canvas.width - pad, p.x));
+  const y = Math.max(pad, Math.min(canvas.height - pad, p.y));
+  return new Vec2(x, y);
+}
+function distance(a,b){ return Math.hypot(a.x-b.x, a.y-b.y); }
+
+
+// ===== main.js =====
+
+
+const canvas = document.getElementById('simulation-canvas');
+const ctx = canvas.getContext('2d');
+const graphCanvas = document.getElementById('graph-canvas');
+const gctx = graphCanvas.getContext('2d');
+
+const W=canvas.width, H=canvas.height;
+
+const audio = new AudioEngine();
+const world = new MapManager();
+world.loadOfficeLayout(W, H); 
+
+const player = new Player(W*0.25, H*0.5);
+const source = new SoundSource(W*0.75, H*0.5);
+
+const state = {
+  running: false,
+  userMuffle: 0.5,
+  reverbMix: 0.25,
+  soundType: "footsteps",
+  spatialMode: "stereo",
+  accessibility: false,
+  // add-wall is always enabled; we only suspend while dragging
+  pendingWallStart: null,
+  explosionRadius: EXPLOSION_RADIUS,
+  lastMouse: new Vec2(W*0.5,H*0.5),
+  currentMuffle: INITIAL_MUFFLE,
+  newWall: {
+    material: DEFAULT_NEW_WALL_MATERIAL,
+    thickness: DEFAULT_NEW_WALL_THICKNESS,
+    destructible: DEFAULT_NEW_WALL_DESTRUCTIBLE
+  }
+};
+
+const ui = bindUI({canvas, world, player, source, audio, state});
+audio.setReverbMix(state.reverbMix);
+audio.setRoomImpulse('small');
+
+let particles = [];
+let losHistory = [];
+let frameIndex = 0;
+
+let lastTime=performance.now();
+
+function update(dt){
+  audio.resetFrameBudgets();
+
+  particles = particles.filter(p=>p.alive);
+  for(const p of particles){ p.update(dt); }
+  while(particles.length > 450) particles.shift();
+
+  const losRatio = computeLineOfSightRatio(player.pos, source.pos, world.walls);
+  losHistory.push(losRatio);
+  if(losHistory.length>LOS_GRAPH_SAMPLES) losHistory.shift();
+
+  const targetMuffle = Math.max(0, Math.min(1, (1-losRatio)*0.85 + state.userMuffle*0.15));
+  state.currentMuffle = state.currentMuffle + (targetMuffle - state.currentMuffle) * MUFFLE_SMOOTH;
+  audio.setMuffleStrength(state.currentMuffle);
+
+  let echoEnergy = { total: 0, bands: [0,0,0] };
+  if((frameIndex % ECHO_SIM_STEP) === 0){
+    echoEnergy = simulateEchoRays({player, source, world, audio, frameIndex});
+  }
+
+  if(state.accessibility){
+    castAccessibilityRays({source, world, soundType: state.soundType, particles});
+  }
+
+  audio.updateSpatial(player.pos, source.pos);
+
+  ui.setMetrics({losPct: losRatio, muffle: state.currentMuffle, echo: echoEnergy.total});
+
+  frameIndex++;
+}
+
+function draw(){
+  ctx.clearRect(0,0,W,H);
+  drawGrid(ctx, W, H);
+  for(const w of world.walls){ w.draw(ctx); }
+  drawRays(ctx, player, source, world, {RAY_COUNT: VISUAL_RAY_COUNT, LOS_RAY_COUNT, VISUAL_BOUNCES}, Ray, surfaceNormal, reflect, Vec2);
+  source.draw(ctx);
+  player.draw(ctx);
+  for(const p of particles){ p.draw(ctx); }
+  drawLOSGraph(gctx, graphCanvas, losHistory);
+
+  if(state.pendingWallStart){
+    ctx.save();
+    ctx.setLineDash([6,6]); ctx.lineWidth=2; ctx.strokeStyle="#38bdf8";
+    ctx.beginPath();
+    ctx.moveTo(state.pendingWallStart.x, state.pendingWallStart.y);
+    ctx.lineTo(state.lastMouse.x, state.lastMouse.y);
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
+function loop(t){
+  const dt = Math.min(0.05, (t-lastTime)/1000);
+  lastTime=t;
+  if(state.running){ update(dt); }
+  draw();
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+window.__rtAudio = { state, world, audio, player, source };
+
+  </script>
+</body>
+</html>

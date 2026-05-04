@@ -1,0 +1,1101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>RL Physics Mimic - NN vs Real</title>
+<script type="importmap">
+{
+  "imports": {
+    "matter-js": "https://esm.sh/matter-js@0.20.0"
+  }
+}
+</script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js"></script>
+<style>
+  :root {
+    --bg-0: #07090d;
+    --bg-1: #0d1117;
+    --bg-2: #131a23;
+    --bg-3: #1b232e;
+    --line: #1f2a37;
+    --line-soft: #1a2330;
+    --txt-0: #e6edf3;
+    --txt-1: #b4bcc7;
+    --txt-2: #6f7886;
+    --acc-blue: #4f9dff;
+    --acc-orange: #ff9a3c;
+    --acc-green: #57d18a;
+    --acc-red: #ff6b6b;
+    --acc-yellow: #f5d061;
+    --acc-violet: #a78bfa;
+  }
+
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    background:
+      radial-gradient(1200px 800px at 75% 10%, rgba(79,157,255,0.06), transparent 70%),
+      radial-gradient(900px 600px at 10% 90%, rgba(255,154,60,0.05), transparent 70%),
+      var(--bg-0);
+    color: var(--txt-0);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-size: 13px;
+    letter-spacing: 0.01em;
+  }
+
+  #app {
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    gap: 16px;
+    width: 100vw;
+    height: 100vh;
+    padding: 16px;
+  }
+
+  #sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .card {
+    background: linear-gradient(180deg, rgba(27,35,46,0.85), rgba(13,17,23,0.85));
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 14px 14px;
+    box-shadow:
+      0 1px 0 rgba(255,255,255,0.03) inset,
+      0 12px 30px rgba(0,0,0,0.35);
+    backdrop-filter: blur(6px);
+  }
+
+  .card h2 {
+    margin: 0 0 8px 0;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--txt-2);
+  }
+
+  #title-card .brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  #title-card .dot-blue, #title-card .dot-orange {
+    width: 10px; height: 10px; border-radius: 50%;
+    box-shadow: 0 0 14px currentColor;
+  }
+  #title-card .dot-blue { background: var(--acc-blue); color: var(--acc-blue); }
+  #title-card .dot-orange { background: var(--acc-orange); color: var(--acc-orange); }
+
+  #title-card .title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--txt-0);
+    line-height: 1.2;
+  }
+  #title-card .subtitle {
+    font-size: 11px;
+    color: var(--txt-2);
+    margin-top: 2px;
+  }
+  #help {
+    margin-top: 10px;
+    font-size: 12px;
+    color: var(--txt-1);
+    line-height: 1.45;
+  }
+
+  /* Network viz */
+  #netviz {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+  .layer-row {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .layer-row .lbl {
+    font-size: 10px;
+    color: var(--txt-2);
+    letter-spacing: 0.08em;
+    display: flex;
+    justify-content: space-between;
+  }
+  .layer-row .lbl .meta {
+    color: var(--txt-2);
+    opacity: 0.75;
+  }
+  .neurons {
+    display: grid;
+    gap: 3px;
+    width: 100%;
+  }
+  .neuron {
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    border-radius: 2px;
+    background: #182030;
+    transition: background-color 90ms linear, box-shadow 90ms linear;
+  }
+
+  /* Status card */
+  .stat-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px 14px;
+  }
+  .stat {
+    display: flex;
+    flex-direction: column;
+  }
+  .stat .k {
+    font-size: 10px;
+    color: var(--txt-2);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .stat .v {
+    font-size: 13px;
+    color: var(--txt-0);
+    font-variant-numeric: tabular-nums;
+    margin-top: 2px;
+  }
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 500;
+    border: 1px solid var(--line);
+    background: var(--bg-2);
+    color: var(--txt-1);
+  }
+  .badge .pulse {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--acc-green);
+    box-shadow: 0 0 10px var(--acc-green);
+  }
+  .badge.warn { border-color: rgba(245,208,97,0.4); color: var(--acc-yellow); }
+  .badge.warn .pulse { background: var(--acc-yellow); box-shadow: 0 0 10px var(--acc-yellow); }
+  .badge.bad { border-color: rgba(255,107,107,0.4); color: var(--acc-red); }
+  .badge.bad .pulse { background: var(--acc-red); box-shadow: 0 0 10px var(--acc-red); }
+
+  /* Stage */
+  #stage-wrap {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+    min-height: 0;
+  }
+  #stage {
+    aspect-ratio: 1 / 1;
+    width: min(100%, 100%);
+    height: 100%;
+    max-width: 100%;
+    max-height: 100%;
+    border-radius: 18px;
+    border: 1px solid var(--line);
+    background:
+      radial-gradient(120% 120% at 50% 0%, rgba(79,157,255,0.05), transparent 65%),
+      linear-gradient(180deg, #0a0e14, #0c1118);
+    box-shadow:
+      0 1px 0 rgba(255,255,255,0.03) inset,
+      0 28px 60px rgba(0,0,0,0.45);
+    position: relative;
+    overflow: hidden;
+    touch-action: none;
+  }
+  #stage canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    cursor: grab;
+  }
+  #stage canvas.dragging { cursor: grabbing; }
+
+  #legend {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    display: flex;
+    gap: 12px;
+    pointer-events: none;
+    z-index: 2;
+  }
+  .leg {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 9px;
+    border-radius: 999px;
+    background: rgba(8,11,16,0.55);
+    border: 1px solid rgba(255,255,255,0.06);
+    font-size: 11px;
+    color: var(--txt-1);
+    backdrop-filter: blur(8px);
+  }
+  .leg .sw { width: 9px; height: 9px; border-radius: 2px; }
+  .leg .sw.blue { background: var(--acc-blue); }
+  .leg .sw.orange { background: var(--acc-orange); }
+
+  /* Loading overlay */
+  #loading {
+    position: fixed; inset: 0;
+    background:
+      radial-gradient(800px 600px at 50% 50%, rgba(79,157,255,0.08), transparent 70%),
+      var(--bg-0);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    z-index: 50;
+    transition: opacity 500ms ease;
+  }
+  #loading.hidden { opacity: 0; pointer-events: none; }
+  #loading .lt {
+    font-size: 13px;
+    color: var(--txt-1);
+    margin-bottom: 14px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+  #bar-wrap {
+    width: min(360px, 60vw);
+    height: 4px;
+    border-radius: 999px;
+    background: var(--bg-2);
+    overflow: hidden;
+    border: 1px solid var(--line);
+  }
+  #bar {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, var(--acc-blue), var(--acc-violet));
+    transition: width 220ms ease;
+    box-shadow: 0 0 12px rgba(79,157,255,0.5);
+  }
+  #bar-label {
+    margin-top: 10px;
+    font-size: 11px;
+    color: var(--txt-2);
+    letter-spacing: 0.05em;
+    font-variant-numeric: tabular-nums;
+  }
+  #bar-label.fatal { color: var(--acc-red); }
+</style>
+</head>
+<body>
+  <div id="app">
+    <aside id="sidebar">
+      <section class="card" id="title-card">
+        <div class="brand">
+          <span class="dot-blue"></span>
+          <span class="dot-orange"></span>
+          <div>
+            <div class="title">RL Physics Mimic</div>
+            <div class="subtitle">GRU learns 2D rigid bodies, online</div>
+          </div>
+        </div>
+        <p id="help">Drag boxes to apply velocity. NN learns online from real physics.</p>
+      </section>
+
+      <section class="card" id="netviz">
+        <h2>Network Activity</h2>
+        <div class="layer-row">
+          <div class="lbl"><span>Input</span><span class="meta" id="meta-in">12 dims</span></div>
+          <div class="neurons" id="layer-in"></div>
+        </div>
+        <div class="layer-row">
+          <div class="lbl"><span>GRU hidden</span><span class="meta" id="meta-h">32 units</span></div>
+          <div class="neurons" id="layer-hidden"></div>
+        </div>
+        <div class="layer-row">
+          <div class="lbl"><span>Output (delta)</span><span class="meta" id="meta-out">12 dims</span></div>
+          <div class="neurons" id="layer-out"></div>
+        </div>
+      </section>
+
+      <section class="card" id="status-card">
+        <h2>Status</h2>
+        <div class="stat-grid">
+          <div class="stat"><span class="k">Backend</span><span class="v"><span class="badge" id="backend-badge"><span class="pulse"></span><span id="backend-name">init</span></span></span></div>
+          <div class="stat"><span class="k">Loss</span><span class="v" id="loss-v">--</span></div>
+          <div class="stat"><span class="k">Train steps</span><span class="v" id="steps-v">0</span></div>
+          <div class="stat"><span class="k">Episode</span><span class="v" id="ep-v">--</span></div>
+        </div>
+      </section>
+    </aside>
+
+    <main id="stage-wrap">
+      <div id="stage">
+        <div id="legend">
+          <span class="leg"><span class="sw blue"></span>Real (Matter.js)</span>
+          <span class="leg"><span class="sw orange"></span>Predicted (GRU)</span>
+        </div>
+        <canvas id="canvas"></canvas>
+      </div>
+    </main>
+  </div>
+
+  <div id="loading">
+    <div class="lt">Initializing</div>
+    <div id="bar-wrap"><div id="bar"></div></div>
+    <div id="bar-label">Loading TF.js</div>
+  </div>
+
+<script type="module">
+import Matter from 'matter-js';
+
+// ---------- progress helpers ----------
+const bar = document.getElementById('bar');
+const barLabel = document.getElementById('bar-label');
+const loading = document.getElementById('loading');
+function setProgress(pct, txt) {
+  bar.style.width = pct + '%';
+  if (txt) barLabel.textContent = txt;
+}
+function fatal(msg) {
+  barLabel.textContent = 'FATAL: ' + msg;
+  barLabel.classList.add('fatal');
+}
+
+// ---------- constants ----------
+const N_BOXES = 2;
+const STATE_DIM = 6;             // x, y, vx, vy, angle, ang_vel
+const FEATURES = N_BOXES * STATE_DIM; // 12
+const SEQ_LEN = 24;
+const BUFFER_CAP = 256;          // ring buffer length for snapshots
+const TRAIN_EVERY = 4;           // frames
+const BATCH = 32;
+const HIDDEN = 32;
+const EPISODE_MS = 8000;
+const BOX_SIZE = 60;             // world units (pixels in arena)
+const ARENA = 600;               // logical arena size
+const VMAX = 18;                 // velocity normalization clamp
+const AVMAX = 6;                 // angular velocity clamp
+
+// normalization helpers (state -> [0,1])
+function wrapAngle01(a) {
+  // map any radian to [0,1] over a 2pi cycle
+  const TAU = Math.PI * 2;
+  let r = a % TAU;
+  if (r < 0) r += TAU;
+  return r / TAU;
+}
+function normState(boxes, out) {
+  // out is Float32Array length FEATURES
+  for (let i = 0; i < N_BOXES; i++) {
+    const b = boxes[i];
+    const o = i * STATE_DIM;
+    out[o + 0] = clamp01(b.x / ARENA);
+    out[o + 1] = clamp01(b.y / ARENA);
+    out[o + 2] = clamp01((b.vx + VMAX) / (2 * VMAX));
+    out[o + 3] = clamp01((b.vy + VMAX) / (2 * VMAX));
+    out[o + 4] = wrapAngle01(b.angle);
+    out[o + 5] = clamp01((b.av + AVMAX) / (2 * AVMAX));
+  }
+}
+function denormApply(boxes, vec) {
+  for (let i = 0; i < N_BOXES; i++) {
+    const o = i * STATE_DIM;
+    boxes[i].x = vec[o + 0] * ARENA;
+    boxes[i].y = vec[o + 1] * ARENA;
+    boxes[i].vx = vec[o + 2] * 2 * VMAX - VMAX;
+    boxes[i].vy = vec[o + 3] * 2 * VMAX - VMAX;
+    boxes[i].angle = vec[o + 4] * Math.PI * 2;
+    boxes[i].av = vec[o + 5] * 2 * AVMAX - AVMAX;
+  }
+}
+function clamp01(v) { return v < 0 ? 0 : (v > 1 ? 1 : v); }
+
+// ---------- ring buffer of normalized snapshots ----------
+class StateBuffer {
+  constructor(cap, features) {
+    this.cap = cap;
+    this.features = features;
+    this.data = new Float32Array(cap * features);
+    this.head = 0;
+    this.size = 0;
+  }
+  push(snapshot) {
+    const off = this.head * this.features;
+    this.data.set(snapshot, off);
+    this.head = (this.head + 1) % this.cap;
+    if (this.size < this.cap) this.size++;
+  }
+  // get the i-th most recent (0 = newest)
+  getRecent(i, out) {
+    const idx = (this.head - 1 - i + this.cap) % this.cap;
+    const off = idx * this.features;
+    for (let k = 0; k < this.features; k++) out[k] = this.data[off + k];
+  }
+  // Read seqLen+1 entries ending at most-recent into provided typed arrays
+  // x: [seqLen * features], y: [features] (delta target)
+  buildLatestWindow(seqLen, xOut, yOut) {
+    if (this.size < seqLen + 1) return false;
+    const tmp = new Float32Array(this.features);
+    // entries: index 0 (newest) .. seqLen (oldest still in window)
+    // window inputs: indices [seqLen, seqLen-1, ..., 1] (oldest -> newest-1)
+    // target: delta from index 1 to index 0
+    for (let t = 0; t < seqLen; t++) {
+      const recentIdx = seqLen - t; // t=0 -> recentIdx=seqLen (oldest), t=seqLen-1 -> 1
+      this.getRecent(recentIdx, tmp);
+      const off = t * this.features;
+      for (let k = 0; k < this.features; k++) xOut[off + k] = tmp[k];
+    }
+    // target = newest - second-newest
+    const last = new Float32Array(this.features);
+    const prev = new Float32Array(this.features);
+    this.getRecent(0, last);
+    this.getRecent(1, prev);
+    for (let k = 0; k < this.features; k++) yOut[k] = last[k] - prev[k];
+    return true;
+  }
+  // pick a random window starting earlier than newest. windowEnd in [seqLen, size-1].
+  // x: [seqLen*features], y: [features]
+  sampleWindow(seqLen, xOut, yOut, xOff, yOff) {
+    if (this.size < seqLen + 1) return false;
+    const maxEnd = this.size - 1; // maps to index 0 (newest)
+    const minEnd = seqLen;        // need at least seqLen+1 entries from end
+    const end = Math.floor(Math.random() * (maxEnd - minEnd + 1)) + minEnd; // recent-index of "newest" of subseq
+    const tmp = new Float32Array(this.features);
+    for (let t = 0; t < seqLen; t++) {
+      const recentIdx = end - t; // t=0 -> oldest of subseq (end), t=seqLen-1 -> end-(seqLen-1) = end-seqLen+1
+      // wait: we want oldest first. For t=0, it should be the OLDEST of the input window.
+      // The subseq consists of recent indices [end, end-1, ..., end-seqLen+1] from oldest to t=seqLen-1=newest-1
+      this.getRecent(recentIdx, tmp);
+      const off = xOff + t * this.features;
+      for (let k = 0; k < this.features; k++) xOut[off + k] = tmp[k];
+    }
+    const last = new Float32Array(this.features);
+    const prev = new Float32Array(this.features);
+    this.getRecent(end - seqLen, last); // "newest" target frame
+    this.getRecent(end - seqLen + 1, prev); // last input frame
+    for (let k = 0; k < this.features; k++) yOut[yOff + k] = last[k] - prev[k];
+    return true;
+  }
+}
+
+// ---------- DOM neuron grid builders ----------
+function buildNeuronGrid(elId, count) {
+  const el = document.getElementById(elId);
+  el.innerHTML = '';
+  const cols = Math.min(16, Math.ceil(Math.sqrt(count * 1.5)));
+  el.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+  const arr = [];
+  for (let i = 0; i < count; i++) {
+    const d = document.createElement('div');
+    d.className = 'neuron';
+    el.appendChild(d);
+    arr.push(d);
+  }
+  return arr;
+}
+
+// ---------- main ----------
+(async function main() {
+  // tfjs ready?
+  if (!window.tf) { fatal('TF.js missing'); return; }
+  setProgress(15, 'TF.js parsed');
+
+  // backend selection
+  let chosen = 'cpu';
+  try {
+    if (await tf.setBackend('webgpu')) { await tf.ready(); chosen = 'webgpu'; }
+  } catch (_) {}
+  if (chosen !== 'webgpu') {
+    try {
+      await tf.setBackend('webgl'); await tf.ready();
+      if (tf.getBackend() === 'webgl') chosen = 'webgl';
+    } catch (_) {}
+  }
+  if (chosen !== 'webgpu' && chosen !== 'webgl') {
+    try { await tf.setBackend('cpu'); await tf.ready(); } catch (_) {}
+    chosen = 'cpu';
+  }
+  console.log('TF backend:', chosen);
+
+  const backendBadge = document.getElementById('backend-badge');
+  document.getElementById('backend-name').textContent = chosen;
+  if (chosen === 'cpu') backendBadge.classList.add('warn');
+  setProgress(35, 'Backend ready (' + chosen + ')');
+
+  // -------- Matter.js world --------
+  const Engine = Matter.Engine;
+  const Bodies = Matter.Bodies;
+  const Body = Matter.Body;
+  const World = Matter.World;
+  const Composite = Matter.Composite;
+  const Events = Matter.Events;
+
+  const engine = Engine.create({ enableSleeping: false });
+  engine.gravity.y = 1.0;
+  engine.gravity.scale = 0.0012;
+
+  // Walls (static)
+  const wallT = 60;
+  const walls = [
+    Bodies.rectangle(ARENA / 2, -wallT / 2, ARENA + wallT * 2, wallT, { isStatic: true }),
+    Bodies.rectangle(ARENA / 2, ARENA + wallT / 2, ARENA + wallT * 2, wallT, { isStatic: true }),
+    Bodies.rectangle(-wallT / 2, ARENA / 2, wallT, ARENA + wallT * 2, { isStatic: true }),
+    Bodies.rectangle(ARENA + wallT / 2, ARENA / 2, wallT, ARENA + wallT * 2, { isStatic: true }),
+  ];
+  Composite.add(engine.world, walls);
+
+  // 2 real (blue) Matter bodies
+  const matterBoxes = [];
+  for (let i = 0; i < N_BOXES; i++) {
+    const b = Bodies.rectangle(0, 0, BOX_SIZE, BOX_SIZE, {
+      restitution: 0.55,
+      friction: 0.18,
+      frictionAir: 0.005,
+      density: 0.001,
+    });
+    matterBoxes.push(b);
+    Composite.add(engine.world, b);
+  }
+
+  // logical state holders for both groups (real reflects matter, pred reflects model)
+  function makeBoxState() {
+    return { x: 0, y: 0, vx: 0, vy: 0, angle: 0, av: 0 };
+  }
+  const realState = [makeBoxState(), makeBoxState()];
+  const predState = [makeBoxState(), makeBoxState()];
+  setProgress(50, 'Matter.js initialized');
+
+  // -------- Build GRU model --------
+  const inputLayer = tf.input({ shape: [SEQ_LEN, FEATURES], name: 'seq_in' });
+  const gru = tf.layers.gru({
+    units: HIDDEN,
+    activation: 'tanh',
+    recurrentActivation: 'sigmoid',
+    returnSequences: false,
+    returnState: true,
+    name: 'gru_core',
+  }).apply(inputLayer);
+  // gru returns [output, finalState] when returnState=true
+  const gruOut = Array.isArray(gru) ? gru[0] : gru;
+  const dense = tf.layers.dense({ units: 64, activation: 'relu', name: 'mlp_1' }).apply(gruOut);
+  const head = tf.layers.dense({ units: FEATURES, activation: 'tanh', name: 'delta_out' }).apply(dense);
+  const model = tf.model({ inputs: inputLayer, outputs: head });
+
+  // GRU assertion (mandatory, build-time)
+  const hasGRU = model.layers.some(l => l.getClassName().toLowerCase().includes('gru'));
+  if (!hasGRU) {
+    document.getElementById('bar-label').textContent = 'FATAL: model has no GRU layer';
+    throw new Error('model has no GRU layer');
+  }
+  console.log('GRU confirmed, model summary:');
+  model.summary();
+
+  // Separate model for hidden-state visualization that returns the GRU hidden as its own output.
+  // We keep it for vis only; we still use the main model for prediction.
+  const visGRU = tf.model({ inputs: inputLayer, outputs: [head, gruOut] });
+
+  const optimizer = tf.train.adam(2e-3);
+  setProgress(65, 'Model built');
+
+  // -------- buffers --------
+  const stateBuf = new StateBuffer(BUFFER_CAP, FEATURES);
+  const snapTmp = new Float32Array(FEATURES);
+  const xBatch = new Float32Array(BATCH * SEQ_LEN * FEATURES);
+  const yBatch = new Float32Array(BATCH * FEATURES);
+  const xWin = new Float32Array(SEQ_LEN * FEATURES);   // for inference
+  let lastNorm = new Float32Array(FEATURES);           // last predicted state, normalized
+  let lossEMA = null;
+  let trainSteps = 0;
+  let trainBusy = false;
+
+  // -------- canvas + rendering --------
+  const stage = document.getElementById('stage');
+  const cvs = document.getElementById('canvas');
+  const ctx = cvs.getContext('2d');
+  let dprNow = 1;
+  function resizeCanvas() {
+    const r = stage.getBoundingClientRect();
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    dprNow = dpr;
+    cvs.width = Math.max(64, Math.floor(r.width * dpr));
+    cvs.height = Math.max(64, Math.floor(r.height * dpr));
+  }
+  resizeCanvas();
+  window.addEventListener('resize', resizeCanvas);
+  // also observe stage size changes
+  const ro = new ResizeObserver(() => resizeCanvas());
+  ro.observe(stage);
+
+  function worldToCanvas() {
+    // canvas may not be exactly square in pixels (DPR), assume stage CSS is square.
+    return { sx: cvs.width / ARENA, sy: cvs.height / ARENA };
+  }
+
+  // -------- episode init --------
+  function rngRange(min, max) { return Math.random() * (max - min) + min; }
+  function seedEpisode() {
+    // seed real and predicted from the SAME starting values
+    const inits = [];
+    for (let i = 0; i < N_BOXES; i++) {
+      inits.push({
+        x: rngRange(BOX_SIZE, ARENA - BOX_SIZE),
+        y: rngRange(BOX_SIZE, ARENA / 2),
+        vx: rngRange(-VMAX * 0.6, VMAX * 0.6),
+        vy: rngRange(-VMAX * 0.4, VMAX * 0.2),
+        angle: rngRange(-Math.PI, Math.PI),
+        av: rngRange(-AVMAX * 0.4, AVMAX * 0.4),
+      });
+    }
+    for (let i = 0; i < N_BOXES; i++) {
+      const s = inits[i];
+      // real -> matter body
+      const b = matterBoxes[i];
+      Body.setPosition(b, { x: s.x, y: s.y });
+      Body.setVelocity(b, { x: s.vx, y: s.vy });
+      Body.setAngle(b, s.angle);
+      Body.setAngularVelocity(b, s.av);
+      realState[i].x = s.x; realState[i].y = s.y;
+      realState[i].vx = s.vx; realState[i].vy = s.vy;
+      realState[i].angle = s.angle; realState[i].av = s.av;
+      // predicted (orange) starts at same place
+      predState[i].x = s.x; predState[i].y = s.y;
+      predState[i].vx = s.vx; predState[i].vy = s.vy;
+      predState[i].angle = s.angle; predState[i].av = s.av;
+    }
+    // reset rolling buffer with this seed sample as the most recent entry
+    stateBuf.size = 0;
+    stateBuf.head = 0;
+    normState(realState, snapTmp);
+    for (let s = 0; s < SEQ_LEN + 1; s++) stateBuf.push(snapTmp);
+    lastNorm.set(snapTmp);
+  }
+
+  // -------- training step --------
+  async function trainStep() {
+    if (trainBusy) return;
+    if (stateBuf.size < SEQ_LEN + 8) return;
+    trainBusy = true;
+    try {
+      let kept = 0;
+      let attempts = 0;
+      while (kept < BATCH && attempts < BATCH * 4) {
+        attempts++;
+        const xOff = kept * SEQ_LEN * FEATURES;
+        const yOff = kept * FEATURES;
+        const ok = stateBuf.sampleWindow(SEQ_LEN, xBatch, yBatch, xOff, yOff);
+        if (!ok) break;
+        // outlier filter
+        let bad = false;
+        for (let k = 0; k < FEATURES; k++) {
+          const d = yBatch[yOff + k];
+          if (Math.abs(d) > 0.5) { bad = true; break; }
+        }
+        if (!bad) {
+          for (let t = 0; t < SEQ_LEN * FEATURES; t++) {
+            const v = xBatch[xOff + t];
+            if (v < -0.1 || v > 1.1) { bad = true; break; }
+          }
+        }
+        if (bad) continue;
+        kept++;
+      }
+      if (kept < 4) return;
+      const xs = tf.tensor3d(xBatch.subarray(0, kept * SEQ_LEN * FEATURES), [kept, SEQ_LEN, FEATURES]);
+      const ys = tf.tensor2d(yBatch.subarray(0, kept * FEATURES), [kept, FEATURES]);
+      const lossT = optimizer.minimize(() => {
+        const pred = model.apply(xs);
+        const mse = tf.losses.meanSquaredError(ys, pred);
+        // collision-consistency regularizer on predicted next absolute state.
+        // last frame of xs is the most recent normalized state; pred is the delta.
+        const lastFrame = xs.slice([0, SEQ_LEN - 1, 0], [-1, 1, -1]).reshape([kept, FEATURES]);
+        const next = lastFrame.add(pred);
+        const x1 = next.slice([0, 0], [-1, 1]);
+        const y1 = next.slice([0, 1], [-1, 1]);
+        const x2 = next.slice([0, STATE_DIM], [-1, 1]);
+        const y2 = next.slice([0, STATE_DIM + 1], [-1, 1]);
+        const dx = x1.sub(x2);
+        const dy = y1.sub(y2);
+        const dist = dx.mul(dx).add(dy.mul(dy)).add(1e-6).sqrt();
+        const minDist = tf.scalar(BOX_SIZE / ARENA);
+        const overlap = tf.relu(minDist.sub(dist));
+        const collReg = overlap.square().mean().mul(0.05);
+        return mse.add(collReg);
+      }, true);
+      const lv = (await lossT.data())[0];
+      lossT.dispose();
+      xs.dispose();
+      ys.dispose();
+      lossEMA = lossEMA == null ? lv : (lossEMA * 0.92 + lv * 0.08);
+      trainSteps++;
+    } catch (e) {
+      console.error('train error:', e);
+    } finally {
+      trainBusy = false;
+    }
+  }
+
+  // -------- pseudo-collision among predicted (orange) boxes only --------
+  function resolvePredCollisions() {
+    // simple AABB push apart, plus floor / wall containment
+    for (let i = 0; i < N_BOXES; i++) {
+      const a = predState[i];
+      // wall containment
+      const half = BOX_SIZE * 0.5;
+      if (a.x < half) { a.x = half; a.vx = Math.abs(a.vx) * 0.6; }
+      if (a.x > ARENA - half) { a.x = ARENA - half; a.vx = -Math.abs(a.vx) * 0.6; }
+      if (a.y < half) { a.y = half; a.vy = Math.abs(a.vy) * 0.6; }
+      if (a.y > ARENA - half) { a.y = ARENA - half; a.vy = -Math.abs(a.vy) * 0.6; }
+    }
+    for (let i = 0; i < N_BOXES; i++) {
+      for (let j = i + 1; j < N_BOXES; j++) {
+        const a = predState[i], b = predState[j];
+        const dx = b.x - a.x, dy = b.y - a.y;
+        const dist = Math.hypot(dx, dy);
+        const minD = BOX_SIZE; // approximate
+        if (dist > 0 && dist < minD) {
+          const overlap = (minD - dist) * 0.5;
+          const nx = dx / dist, ny = dy / dist;
+          a.x -= nx * overlap; a.y -= ny * overlap;
+          b.x += nx * overlap; b.y += ny * overlap;
+          // bounce velocity along normal
+          const va = a.vx * nx + a.vy * ny;
+          const vb = b.vx * nx + b.vy * ny;
+          const m = (va - vb) * 0.5;
+          a.vx -= m * nx; a.vy -= m * ny;
+          b.vx += m * nx; b.vy += m * ny;
+        }
+      }
+    }
+  }
+
+  // -------- drag interaction --------
+  let drag = null;
+  function pickBox(localX, localY) {
+    // localX/Y in arena coords (0..ARENA)
+    let best = null, bestDist = Infinity;
+    for (let i = 0; i < N_BOXES; i++) {
+      const r = realState[i];
+      const dr = Math.hypot(r.x - localX, r.y - localY);
+      if (dr < bestDist && dr < BOX_SIZE) { bestDist = dr; best = { group: 'blue', idx: i }; }
+      const p = predState[i];
+      const dp = Math.hypot(p.x - localX, p.y - localY);
+      if (dp < bestDist && dp < BOX_SIZE) { bestDist = dp; best = { group: 'orange', idx: i }; }
+    }
+    return best;
+  }
+  function evtToArena(e) {
+    const r = stage.getBoundingClientRect();
+    const x = ((e.clientX - r.left) / r.width) * ARENA;
+    const y = ((e.clientY - r.top) / r.height) * ARENA;
+    return { x, y };
+  }
+  cvs.addEventListener('pointerdown', e => {
+    cvs.setPointerCapture(e.pointerId);
+    const { x, y } = evtToArena(e);
+    const hit = pickBox(x, y);
+    if (!hit) return;
+    drag = { id: e.pointerId, idx: hit.idx, group: hit.group, lx: x, ly: y, prevX: x, prevY: y, t: performance.now() };
+    cvs.classList.add('dragging');
+  });
+  cvs.addEventListener('pointermove', e => {
+    if (!drag || drag.id !== e.pointerId) return;
+    const { x, y } = evtToArena(e);
+    drag.prevX = drag.lx; drag.prevY = drag.ly;
+    drag.lx = x; drag.ly = y;
+    drag.t = performance.now();
+  });
+  function endDrag(e) {
+    if (!drag || drag.id !== e.pointerId) return;
+    cvs.classList.remove('dragging');
+    // impulse from last move
+    const dx = drag.lx - drag.prevX;
+    const dy = drag.ly - drag.prevY;
+    // scale: arena units per ms -> velocity (arena units/sec ~ vx*dt). We'll just convert directly.
+    const k = 0.6;
+    const i = drag.idx;
+    // apply same impulse to BOTH the dragged box and its paired counterpart in the other group
+    predState[i].vx += dx * k;
+    predState[i].vy += dy * k;
+    Body.setVelocity(matterBoxes[i], {
+      x: matterBoxes[i].velocity.x + dx * k,
+      y: matterBoxes[i].velocity.y + dy * k,
+    });
+    drag = null;
+  }
+  cvs.addEventListener('pointerup', endDrag);
+  cvs.addEventListener('pointercancel', endDrag);
+
+  // -------- vis grids --------
+  document.getElementById('meta-in').textContent = FEATURES + ' dims';
+  document.getElementById('meta-h').textContent = HIDDEN + ' units';
+  document.getElementById('meta-out').textContent = FEATURES + ' dims';
+  const inNeurons = buildNeuronGrid('layer-in', FEATURES);
+  const hidNeurons = buildNeuronGrid('layer-hidden', HIDDEN);
+  const outNeurons = buildNeuronGrid('layer-out', FEATURES);
+
+  function colorMag(el, v01) {
+    // unipolar (0..1): cool -> warm
+    const t = clamp01(v01);
+    const r = Math.round(40 + 200 * t);
+    const g = Math.round(60 + 120 * (0.6 - Math.abs(t - 0.5)));
+    const b = Math.round(220 - 180 * t);
+    el.style.background = `rgb(${r},${g},${b})`;
+    el.style.boxShadow = t > 0.6 ? `0 0 ${4 + 8 * t}px rgba(${r},${g},${b},0.55)` : 'none';
+  }
+  function colorBipolar(el, v) {
+    // [-1, 1] tanh activations
+    const t = Math.max(-1, Math.min(1, v));
+    let r, g, b;
+    if (t >= 0) {
+      r = Math.round(40 + 215 * t);
+      g = Math.round(60 + 120 * (1 - t));
+      b = Math.round(60);
+    } else {
+      r = Math.round(40);
+      g = Math.round(80 + 80 * (1 + t));
+      b = Math.round(80 + 175 * (-t));
+    }
+    el.style.background = `rgb(${r},${g},${b})`;
+    el.style.boxShadow = Math.abs(t) > 0.55 ? `0 0 ${3 + 7 * Math.abs(t)}px rgba(${r},${g},${b},0.55)` : 'none';
+  }
+
+  // -------- main loop --------
+  let lastT = performance.now();
+  let epStart = lastT;
+  let frame = 0;
+  let renderCallback = null;
+
+  function syncRealStateFromMatter() {
+    for (let i = 0; i < N_BOXES; i++) {
+      const b = matterBoxes[i];
+      realState[i].x = b.position.x;
+      realState[i].y = b.position.y;
+      realState[i].vx = b.velocity.x;
+      realState[i].vy = b.velocity.y;
+      realState[i].angle = b.angle;
+      realState[i].av = b.angularVelocity;
+    }
+  }
+
+  function drawArena() {
+    ctx.save();
+    ctx.clearRect(0, 0, cvs.width, cvs.height);
+
+    // subtle floor line
+    const { sx, sy } = worldToCanvas();
+    ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+    ctx.lineWidth = 1 * dprNow;
+    for (let g = 0; g <= 6; g++) {
+      const y = (ARENA / 6) * g * sy;
+      ctx.beginPath();
+      ctx.moveTo(0, y); ctx.lineTo(cvs.width, y); ctx.stroke();
+    }
+
+    // draw blue (real)
+    for (let i = 0; i < N_BOXES; i++) {
+      const r = realState[i];
+      drawBox(r.x, r.y, r.angle, '#4f9dff', 'rgba(79,157,255,0.35)', i);
+    }
+    // draw orange (predicted)
+    for (let i = 0; i < N_BOXES; i++) {
+      const p = predState[i];
+      drawBox(p.x, p.y, p.angle, '#ff9a3c', 'rgba(255,154,60,0.35)', i, true);
+    }
+    // pair lines (faint)
+    ctx.lineWidth = 1 * dprNow;
+    for (let i = 0; i < N_BOXES; i++) {
+      const r = realState[i], p = predState[i];
+      ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+      ctx.setLineDash([3 * dprNow, 4 * dprNow]);
+      ctx.beginPath();
+      ctx.moveTo(r.x * sx, r.y * sy);
+      ctx.lineTo(p.x * sx, p.y * sy);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    ctx.restore();
+  }
+  function drawBox(x, y, ang, fill, glow, idx, dashed = false) {
+    const { sx, sy } = worldToCanvas();
+    const cx = x * sx, cy = y * sy;
+    const w = BOX_SIZE * sx, h = BOX_SIZE * sy;
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(ang);
+    ctx.shadowColor = glow;
+    ctx.shadowBlur = 18 * dprNow;
+    ctx.fillStyle = fill;
+    ctx.beginPath();
+    const rr = 8 * dprNow;
+    roundRect(ctx, -w / 2, -h / 2, w, h, rr);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    if (dashed) {
+      ctx.lineWidth = 1.5 * dprNow;
+      ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+      ctx.setLineDash([4 * dprNow, 4 * dprNow]);
+      roundRect(ctx, -w / 2, -h / 2, w, h, rr);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    // index marker
+    ctx.rotate(-ang);
+    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    ctx.font = `${10 * dprNow}px -apple-system, "SF Pro Text", "Segoe UI", sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(String(idx), 0, 0);
+    ctx.restore();
+  }
+  function roundRect(c, x, y, w, h, r) {
+    c.beginPath();
+    c.moveTo(x + r, y);
+    c.arcTo(x + w, y, x + w, y + h, r);
+    c.arcTo(x + w, y + h, x, y + h, r);
+    c.arcTo(x, y + h, x, y, r);
+    c.arcTo(x, y, x + w, y, r);
+    c.closePath();
+  }
+
+  function tick(now) {
+    requestAnimationFrame(tick);
+    const dt = Math.min(33, now - lastT);
+    lastT = now;
+    frame++;
+
+    // physics
+    Engine.update(engine, dt);
+    syncRealStateFromMatter();
+
+    // push real snapshot to buffer
+    normState(realState, snapTmp);
+    stateBuf.push(snapTmp);
+
+    // -------- inference: forward pass once, also grab hidden for vis --------
+    let predDeltaArr = null;
+    let hiddenArr = null;
+    if (stateBuf.size >= SEQ_LEN) {
+      // build window of latest SEQ_LEN normalized frames into xWin
+      const tmp = new Float32Array(FEATURES);
+      for (let t = 0; t < SEQ_LEN; t++) {
+        // want oldest at t=0 -> recentIdx = SEQ_LEN-1-t? Let's match training shape:
+        // Training puts oldest (recentIdx=end) at t=0 ascending toward t=seqLen-1 = end-seqLen+1.
+        // For inference, use recent indices (SEQ_LEN-1) down to 0 for t=0..seqLen-1.
+        const recentIdx = (SEQ_LEN - 1) - t;
+        stateBuf.getRecent(recentIdx, tmp);
+        const off = t * FEATURES;
+        for (let k = 0; k < FEATURES; k++) xWin[off + k] = tmp[k];
+      }
+      const out = tf.tidy(() => {
+        const xs = tf.tensor3d(xWin, [1, SEQ_LEN, FEATURES]);
+        const [delta, hidden] = visGRU.predict(xs);
+        return { d: delta.dataSync(), h: hidden.dataSync() };
+      });
+      predDeltaArr = out.d;
+      hiddenArr = out.h;
+    }
+
+    // Predictions are deltas in normalized space (tanh output, [-1, 1]). Real frame deltas
+    // are tiny so we scale the model output down. We also blend a small fraction of the
+    // current real-normalized state toward the prediction. Without that, an untrained
+    // model is just a random walk in normalized space and visually pins to walls.
+    if (predDeltaArr) {
+      const cur = new Float32Array(FEATURES);
+      normState(predState, cur);
+      const next = new Float32Array(FEATURES);
+      const realNorm = snapTmp; // already filled this frame
+      // delta scale: keeps an untrained net from wandering far per frame
+      const dScale = 0.05;
+      // pure NN integration: predicted next = current + delta. No real-state blending.
+      for (let k = 0; k < FEATURES; k++) {
+        next[k] = clamp01(cur[k] + predDeltaArr[k] * dScale);
+      }
+      denormApply(predState, next);
+      lastNorm.set(next);
+    } else {
+      // before first inference, mirror real
+      for (let i = 0; i < N_BOXES; i++) {
+        predState[i].x = realState[i].x;
+        predState[i].y = realState[i].y;
+        predState[i].vx = realState[i].vx;
+        predState[i].vy = realState[i].vy;
+        predState[i].angle = realState[i].angle;
+        predState[i].av = realState[i].av;
+      }
+    }
+    resolvePredCollisions();
+
+    // training (every TRAIN_EVERY frames, fire-and-forget)
+    if (frame % TRAIN_EVERY === 0) {
+      trainStep();
+    }
+
+    // ---- vis updates ----
+    // input neurons: latest normalized real state
+    for (let k = 0; k < FEATURES; k++) colorMag(inNeurons[k], snapTmp[k]);
+    // hidden bipolar
+    if (hiddenArr) {
+      for (let k = 0; k < HIDDEN; k++) colorBipolar(hidNeurons[k], hiddenArr[k]);
+    }
+    // output: predicted delta visualised, mapped from [-0.5, 0.5] to [0,1]
+    if (predDeltaArr) {
+      for (let k = 0; k < FEATURES; k++) {
+        const v = clamp01((predDeltaArr[k] + 0.5));
+        colorMag(outNeurons[k], v);
+      }
+    }
+
+    // status
+    document.getElementById('loss-v').textContent = lossEMA == null ? '--' : lossEMA.toFixed(4);
+    document.getElementById('steps-v').textContent = trainSteps;
+    const remain = Math.max(0, EPISODE_MS - (now - epStart));
+    document.getElementById('ep-v').textContent = (remain / 1000).toFixed(1) + 's';
+
+    // episode reset
+    if (now - epStart > EPISODE_MS) {
+      epStart = now;
+      seedEpisode();
+    }
+
+    // render
+    drawArena();
+    if (renderCallback) renderCallback();
+  }
+
+  // -------- first training pass to validate model end-to-end --------
+  setProgress(80, 'First training pass');
+  seedEpisode();
+  // Let the buffer fill once (it was filled with seed sample SEQ_LEN+1 times already)
+  await trainStep();
+  setProgress(100, 'Ready');
+
+  // hide loading overlay then run
+  await new Promise(r => setTimeout(r, 250));
+  loading.classList.add('hidden');
+  setTimeout(() => loading.remove(), 600);
+
+  requestAnimationFrame(tick);
+})().catch(err => {
+  console.error('init failed:', err);
+  fatal(err.message || String(err));
+});
+</script>
+</body>
+</html>
