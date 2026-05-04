@@ -1022,7 +1022,7 @@ function buildNeuronGrid(elId, count) {
       const next = new Float32Array(FEATURES);
       const realNorm = snapTmp; // already filled this frame
       // delta scale: keeps an untrained net from wandering far per frame
-      const dScale = 0.05;
+      const dScale = 1.0;
       // pure NN integration: predicted next = current + delta. No real-state blending.
       for (let k = 0; k < FEATURES; k++) {
         next[k] = clamp01(cur[k] + predDeltaArr[k] * dScale);
