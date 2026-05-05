@@ -1,6 +1,11 @@
 {
   "demos": [
     {
+      "name": "[SHOW]-LLM-Controlled-Snake",
+      "type": "file",
+      "filename": "[SHOW]-LLM-Controlled-Snake.html"
+    },
+    {
       "name": "[TOOL]-Sprite-Sheet-Analyzer",
       "type": "file",
       "filename": "[TOOL]-Sprite-Sheet-Analyzer.html"
