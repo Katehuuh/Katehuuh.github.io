@@ -400,6 +400,14 @@ const AVMAX = 6;                 // angular velocity clamp
 // (well inside tanh's linear region) instead of a near-zero value where
 // gradients vanish.
 const OUT_SCALE = 0.05;
+// Multi-step rollout horizon. The model is unrolled K times each train
+// step, feeding its own prediction back into the input window, and the
+// summed K-step MSE is what's backpropped. This teaches the GRU
+// trajectory stability instead of just one-frame accuracy, which is
+// what lets the demo run autonomously (no anchor-to-real cheat) without
+// drifting. K=4 is a compromise: enough horizon to learn integration
+// dynamics, short enough to keep gradient explosions tractable.
+const ROLLOUT = 4;
 
 // normalization helpers (state -> [0,1])
 function wrapAngle01(a) {
@@ -499,6 +507,32 @@ class StateBuffer {
     this.getRecent(end - seqLen, last); // "newest" target frame
     this.getRecent(end - seqLen + 1, prev); // last input frame
     for (let k = 0; k < this.features; k++) yOut[yOff + k] = last[k] - prev[k];
+    return true;
+  }
+  // Multi-step variant: K future delta targets so the optimizer can
+  // unroll the model K times and backprop through the chain.
+  // x: [seqLen*features], y: [K*features] (K consecutive deltas).
+  sampleMultiStepWindow(seqLen, K, xOut, yOut, xOff, yOff) {
+    if (this.size < seqLen + K + 1) return false;
+    const maxEnd = this.size - 1;
+    const minEnd = seqLen + K - 1;
+    const end = Math.floor(Math.random() * (maxEnd - minEnd + 1)) + minEnd;
+    const tmp = new Float32Array(this.features);
+    for (let t = 0; t < seqLen; t++) {
+      const recentIdx = end - t;
+      this.getRecent(recentIdx, tmp);
+      const off = xOff + t * this.features;
+      for (let k = 0; k < this.features; k++) xOut[off + k] = tmp[k];
+    }
+    const prev = new Float32Array(this.features);
+    const cur = new Float32Array(this.features);
+    this.getRecent(end - seqLen + 1, prev); // last input frame
+    for (let s = 0; s < K; s++) {
+      this.getRecent(end - seqLen - s, cur); // step s+1 target frame
+      const off = yOff + s * this.features;
+      for (let k = 0; k < this.features; k++) yOut[off + k] = cur[k] - prev[k];
+      prev.set(cur);
+    }
     return true;
   }
 }
@@ -626,8 +660,11 @@ function buildNeuronGrid(elId, count) {
   const stateBuf = new StateBuffer(BUFFER_CAP, FEATURES);
   const snapTmp = new Float32Array(FEATURES);
   const xBatch = new Float32Array(BATCH * SEQ_LEN * FEATURES);
-  const yBatch = new Float32Array(BATCH * FEATURES);
-  const xWin = new Float32Array(SEQ_LEN * FEATURES);   // for inference
+  const yBatch = new Float32Array(BATCH * ROLLOUT * FEATURES); // K-step targets
+  // predBuffer is the autonomous prediction window: we feed the model its
+  // OWN past predictions, not the real history, so orange genuinely simulates
+  // independently. Reset on each episode to match the seed state.
+  const predBuffer = new Float32Array(SEQ_LEN * FEATURES);
   let lastNorm = new Float32Array(FEATURES);           // last predicted state, normalized
   let lossEMA = null;
   let trainSteps = 0;
@@ -693,12 +730,22 @@ function buildNeuronGrid(elId, count) {
     normState(realState, snapTmp);
     for (let s = 0; s < SEQ_LEN + 1; s++) stateBuf.push(snapTmp);
     lastNorm.set(snapTmp);
+    // Seed predBuffer with the same constant sequence so the autonomous
+    // inference path starts identical to real and diverges naturally.
+    for (let t = 0; t < SEQ_LEN; t++) {
+      for (let k = 0; k < FEATURES; k++) predBuffer[t * FEATURES + k] = snapTmp[k];
+    }
   }
 
-  // -------- training step --------
+  // -------- training step (multi-step rollout) --------
+  // Sample (history, K-future-deltas), unroll the model K times feeding
+  // each predicted next-state back as the new tail of the window, sum
+  // the K per-step MSEs, backprop through the entire chain. This is the
+  // change that buys autonomous (no anchor) inference: the GRU optimizes
+  // for K-step trajectory accuracy, not just one-frame accuracy.
   async function trainStep() {
     if (trainBusy) return;
-    if (stateBuf.size < SEQ_LEN + 8) return;
+    if (stateBuf.size < SEQ_LEN + ROLLOUT + 1) return;
     trainBusy = true;
     try {
       let kept = 0;
@@ -706,14 +753,13 @@ function buildNeuronGrid(elId, count) {
       while (kept < BATCH && attempts < BATCH * 4) {
         attempts++;
         const xOff = kept * SEQ_LEN * FEATURES;
-        const yOff = kept * FEATURES;
-        const ok = stateBuf.sampleWindow(SEQ_LEN, xBatch, yBatch, xOff, yOff);
+        const yOff = kept * ROLLOUT * FEATURES;
+        const ok = stateBuf.sampleMultiStepWindow(SEQ_LEN, ROLLOUT, xBatch, yBatch, xOff, yOff);
         if (!ok) break;
-        // outlier filter
+        // outlier filter: any per-step delta with magnitude >0.5 is a glitch.
         let bad = false;
-        for (let k = 0; k < FEATURES; k++) {
-          const d = yBatch[yOff + k];
-          if (Math.abs(d) > 0.5) { bad = true; break; }
+        for (let k = 0; k < ROLLOUT * FEATURES; k++) {
+          if (Math.abs(yBatch[yOff + k]) > 0.5) { bad = true; break; }
         }
         if (!bad) {
           for (let t = 0; t < SEQ_LEN * FEATURES; t++) {
@@ -726,32 +772,44 @@ function buildNeuronGrid(elId, count) {
       }
       if (kept < 4) return;
       const xs = tf.tensor3d(xBatch.subarray(0, kept * SEQ_LEN * FEATURES), [kept, SEQ_LEN, FEATURES]);
-      const ys = tf.tensor2d(yBatch.subarray(0, kept * FEATURES), [kept, FEATURES]);
+      const ys = tf.tensor3d(yBatch.subarray(0, kept * ROLLOUT * FEATURES), [kept, ROLLOUT, FEATURES]);
+      const outScale = tf.scalar(OUT_SCALE);
+      const minDist = tf.scalar(BOX_SIZE / ARENA);
       const lossT = optimizer.minimize(() => {
-        const pred = model.apply(xs);
-        // Match the inference-side scaling: target is delta/OUT_SCALE so the
-        // head learns to output values in tanh's healthy range.
-        const ysScaled = ys.div(tf.scalar(OUT_SCALE));
-        const mse = tf.losses.meanSquaredError(ysScaled, pred);
-        // collision-consistency regularizer on predicted next absolute state.
-        // pred is the head output in scaled space; multiply back by OUT_SCALE
-        // to get the actual delta when summing with lastFrame.
-        const lastFrame = xs.slice([0, SEQ_LEN - 1, 0], [-1, 1, -1]).reshape([kept, FEATURES]);
-        const next = lastFrame.add(pred.mul(tf.scalar(OUT_SCALE)));
-        const x1 = next.slice([0, 0], [-1, 1]);
-        const y1 = next.slice([0, 1], [-1, 1]);
-        const x2 = next.slice([0, STATE_DIM], [-1, 1]);
-        const y2 = next.slice([0, STATE_DIM + 1], [-1, 1]);
-        const dx = x1.sub(x2);
-        const dy = y1.sub(y2);
-        const dist = dx.mul(dx).add(dy.mul(dy)).add(1e-6).sqrt();
-        const minDist = tf.scalar(BOX_SIZE / ARENA);
-        const overlap = tf.relu(minDist.sub(dist));
-        const collReg = overlap.square().mean().mul(0.05);
-        return mse.add(collReg);
+        // Roll the K-step window forward inside the gradient tape. We need
+        // to predict K times, each pass conditioned on (real history) + (own
+        // predictions so far). slice/concat keep the chain differentiable.
+        let win = xs;
+        let totalLoss = tf.scalar(0);
+        let collTotal = tf.scalar(0);
+        for (let s = 0; s < ROLLOUT; s++) {
+          const pred = model.apply(win); // [kept, FEATURES] tanh in [-1,1]
+          // step target in scaled space (target/OUT_SCALE)
+          const tgt = ys.slice([0, s, 0], [-1, 1, -1]).reshape([kept, FEATURES]).div(outScale);
+          totalLoss = totalLoss.add(tf.losses.meanSquaredError(tgt, pred));
+          // collision-consistency on the absolute next state for THIS step.
+          const lastFrame = win.slice([0, SEQ_LEN - 1, 0], [-1, 1, -1]).reshape([kept, FEATURES]);
+          const next = lastFrame.add(pred.mul(outScale));
+          const dx = next.slice([0, 0], [-1, 1]).sub(next.slice([0, STATE_DIM], [-1, 1]));
+          const dy = next.slice([0, 1], [-1, 1]).sub(next.slice([0, STATE_DIM + 1], [-1, 1]));
+          const dist = dx.mul(dx).add(dy.mul(dy)).add(1e-6).sqrt();
+          const overlap = tf.relu(minDist.sub(dist));
+          collTotal = collTotal.add(overlap.square().mean());
+          // shift window: drop oldest frame, append predicted next state
+          if (s < ROLLOUT - 1) {
+            const tail = win.slice([0, 1, 0], [-1, SEQ_LEN - 1, -1]);
+            const nextExpanded = next.reshape([kept, 1, FEATURES]);
+            win = tail.concat(nextExpanded, 1);
+          }
+        }
+        const meanLoss = totalLoss.div(tf.scalar(ROLLOUT));
+        const meanColl = collTotal.div(tf.scalar(ROLLOUT)).mul(tf.scalar(0.05));
+        return meanLoss.add(meanColl);
       }, true);
       const lv = (await lossT.data())[0];
       lossT.dispose();
+      outScale.dispose();
+      minDist.dispose();
       xs.dispose();
       ys.dispose();
       lossEMA = lossEMA == null ? lv : (lossEMA * 0.92 + lv * 0.08);
@@ -1000,23 +1058,18 @@ function buildNeuronGrid(elId, count) {
     normState(realState, snapTmp);
     stateBuf.push(snapTmp);
 
-    // -------- inference: forward pass once, also grab hidden for vis --------
+    // -------- inference: autonomous integration via predBuffer --------
+    // No anchor. The model's input window is its OWN past predictions; the
+    // predicted next state appends to predBuffer and the oldest frame falls
+    // off. This is the honest demo - orange's trajectory is whatever the GRU
+    // generates from the seed, with no leakage from real state. Multi-step
+    // rollout training is what makes this visually stable; without it the
+    // chain diverges almost immediately.
     let predDeltaArr = null;
     let hiddenArr = null;
     if (stateBuf.size >= SEQ_LEN) {
-      // build window of latest SEQ_LEN normalized frames into xWin
-      const tmp = new Float32Array(FEATURES);
-      for (let t = 0; t < SEQ_LEN; t++) {
-        // want oldest at t=0 -> recentIdx = SEQ_LEN-1-t? Let's match training shape:
-        // Training puts oldest (recentIdx=end) at t=0 ascending toward t=seqLen-1 = end-seqLen+1.
-        // For inference, use recent indices (SEQ_LEN-1) down to 0 for t=0..seqLen-1.
-        const recentIdx = (SEQ_LEN - 1) - t;
-        stateBuf.getRecent(recentIdx, tmp);
-        const off = t * FEATURES;
-        for (let k = 0; k < FEATURES; k++) xWin[off + k] = tmp[k];
-      }
       const out = tf.tidy(() => {
-        const xs = tf.tensor3d(xWin, [1, SEQ_LEN, FEATURES]);
+        const xs = tf.tensor3d(predBuffer, [1, SEQ_LEN, FEATURES]);
         const [delta, hidden] = visGRU.predict(xs);
         return { d: delta.dataSync(), h: hidden.dataSync() };
       });
@@ -1024,22 +1077,15 @@ function buildNeuronGrid(elId, count) {
       hiddenArr = out.h;
     }
 
-    // Predictions are deltas in normalized space (tanh output, [-1, 1]). Real frame deltas
-    // are tiny so we scale the model output down. We also blend a small fraction of the
-    // current real-normalized state toward the prediction. Without that, an untrained
-    // model is just a random walk in normalized space and visually pins to walls.
     if (predDeltaArr) {
-      // Anchor each prediction to the current REAL state so the GRU shows
-      // "where it thinks blue will be next frame" instead of accumulating
-      // open-loop drift over thousands of auto-regressive steps. One-step
-      // training only guarantees one-step accuracy; closing the loop here
-      // converts that into visible trajectory tracking. OUT_SCALE rescales
-      // the tanh head back to actual normalized-delta magnitude.
-      const cur = snapTmp;
+      const lastFrame = predBuffer.subarray((SEQ_LEN - 1) * FEATURES);
       const next = new Float32Array(FEATURES);
       for (let k = 0; k < FEATURES; k++) {
-        next[k] = clamp01(cur[k] + predDeltaArr[k] * OUT_SCALE);
+        next[k] = clamp01(lastFrame[k] + predDeltaArr[k] * OUT_SCALE);
       }
+      // Roll predBuffer forward: drop oldest frame, append next.
+      predBuffer.copyWithin(0, FEATURES, SEQ_LEN * FEATURES);
+      predBuffer.set(next, (SEQ_LEN - 1) * FEATURES);
       denormApply(predState, next);
       lastNorm.set(next);
     } else {
