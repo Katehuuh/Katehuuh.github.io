@@ -219,6 +219,15 @@
 
             useEffect(() => {
               if (!image) return;
+              // Reset per-row frame counters when the row count changes -
+              // useRef's initial value is only evaluated on first mount, so
+              // image swaps or grid resizes that ADD rows would otherwise
+              // leave the new tail indices undefined, NaN-poisoning every
+              // animation tick on those rows (ATTACK row would freeze on
+              // frame 0 while earlier rows still cycled).
+              if (currentFrames.current.length !== rows.length) {
+                currentFrames.current = new Array(rows.length).fill(0);
+              }
               const frameDuration = 1000 / fps;
 
               const animate = (timestamp) => {
