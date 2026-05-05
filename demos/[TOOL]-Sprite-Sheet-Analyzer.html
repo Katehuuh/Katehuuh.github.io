@@ -291,15 +291,15 @@
             }
 
             // Inline mode: lives inside the same panel as the grid view, so
-            // no outer card chrome - just a tight header + horizontally
-            // scrollable strip of row previews.
+            // no outer card chrome - just a tight header + a wrap-flow row of
+            // previews. flex-wrap instead of overflow-x-auto so previews stack
+            // onto a second row instead of forcing horizontal scroll.
             return React.createElement('div', { className: "flex flex-col gap-1" },
-              React.createElement('div', { className: "text-xs uppercase tracking-wider text-cyan-400/80 font-semibold" }, "Animation preview"),
-              React.createElement('div', { className: "flex gap-2 overflow-x-auto pb-1" },
+              React.createElement('div', { className: "flex flex-wrap gap-2" },
                 rows.map((sprites, index) => {
                   if (sprites.length === 0) return null;
                   const originalRowIndex = sprites[0].row;
-                  return React.createElement('div', { key: index, className: "flex flex-col items-center bg-gray-900/50 p-1 rounded border border-gray-700 flex-shrink-0" },
+                  return React.createElement('div', { key: index, className: "flex flex-col items-center bg-gray-900/50 p-1 rounded border border-gray-700" },
                     React.createElement('span', { className: "text-[10px] text-gray-400 mb-0.5" }, `r${originalRowIndex}`),
                     React.createElement('canvas', {
                       ref: (el) => {
@@ -482,7 +482,7 @@
 
             useEffect(() => {
               // Try the original Ryu reference; fall back to a synthetic sheet if the network blocks it.
-              const DEFAULT_SPRITE_SHEET_URL = 'https://i.imgur.com/gA32p4K.png';
+              const DEFAULT_SPRITE_SHEET_URL = 'https://i.imgur.com/6MNjsFF.png';
               const img = new Image();
               img.crossOrigin = 'anonymous';
               img.onload = () => {
@@ -736,16 +736,14 @@
 
               if (useWhiteBackground) {
                 try {
+                  // Replaces whatever Strip BG turned transparent (alpha<64)
+                  // with opaque white. Was hardcoded to swap rgb(128,128,128)
+                  // only - useless once auto-detect can land on any bg color.
                   const imageData = ctx.getImageData(imageTopLeftX, imageTopLeftY, scaledWidth, scaledHeight);
                   const data = imageData.data;
-                  const R = 128, G = 128, B = 128, tolerance = 10;
                   for (let i = 0; i < data.length; i += 4) {
-                    if (Math.abs(data[i] - R) < tolerance &&
-                        Math.abs(data[i + 1] - G) < tolerance &&
-                        Math.abs(data[i + 2] - B) < tolerance) {
-                      data[i] = 255;
-                      data[i + 1] = 255;
-                      data[i + 2] = 255;
+                    if (data[i + 3] < 64) {
+                      data[i] = 255; data[i + 1] = 255; data[i + 2] = 255; data[i + 3] = 255;
                     }
                   }
                   ctx.putImageData(imageData, imageTopLeftX, imageTopLeftY);
