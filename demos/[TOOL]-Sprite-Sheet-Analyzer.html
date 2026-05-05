@@ -998,32 +998,33 @@
                   //    are the low-density gaps between sprite columns/rows, so
                   //    detect those minima directly and median their spacing.
                   //    Falls back to autocorrelation if too few minima are found.
-                  // Local minima detection.
-                  //  Step A: collect strict-on-at-least-one-side local minima
-                  //          (skips flat plateaus, so a uniform-mask image
-                  //          returns nothing instead of every-pixel-as-valley).
-                  //  Step B: filter to the deepest fraction by value. Without
-                  //          this, sub-character dips (gaps between hair, body,
-                  //          weapon) survive and inflate the valley count - on
-                  //          a 6-cell sheet we'd see 20+ "valleys" and median
-                  //          spacing collapsed to ~1/3 of the true cell period.
-                  //          The TRUE inter-sprite gaps are pure background
-                  //          (lowest projection density) so depth-filtering
-                  //          isolates them cleanly.
-                  //  Step C: NMS within the deep set (greedy, deepest first).
-                  const findValleys = (arr, minSep) => {
+                  // Peak/valley detection with NMS + extremity filter.
+                  // dir = -1: deepest valleys first (low values).
+                  // dir = +1: tallest peaks first (high values).
+                  // Keep top 30% by extremity, then NMS by minSep.
+                  // Peaks are more reliable than valleys on sparse-subject
+                  // sheets: sprite rows produce one prominent peak each in
+                  // rowSum (a single dense row of bodies) but valleys
+                  // multiply into sub-character dips between hair/body/limbs.
+                  const findExtrema = (arr, minSep, dir) => {
                     const candidates = [];
                     for (let i = 1; i < arr.length - 1; i++) {
-                      if (arr[i] < arr[i - 1] && arr[i] <= arr[i + 1]) candidates.push(i);
-                      else if (arr[i] <= arr[i - 1] && arr[i] < arr[i + 1]) candidates.push(i);
+                      if (dir < 0) {
+                        if (arr[i] < arr[i - 1] && arr[i] <= arr[i + 1]) candidates.push(i);
+                        else if (arr[i] <= arr[i - 1] && arr[i] < arr[i + 1]) candidates.push(i);
+                      } else {
+                        if (arr[i] > arr[i - 1] && arr[i] >= arr[i + 1]) candidates.push(i);
+                        else if (arr[i] >= arr[i - 1] && arr[i] > arr[i + 1]) candidates.push(i);
+                      }
                     }
                     if (!candidates.length) return [];
-                    const sorted = [...candidates].sort((a, b) => arr[a] - arr[b]);
+                    const sorted = [...candidates].sort((a, b) =>
+                      dir < 0 ? arr[a] - arr[b] : arr[b] - arr[a]);
                     const keepN = Math.max(2, Math.floor(sorted.length * 0.3));
-                    const deepest = sorted.slice(0, keepN);
+                    const top = sorted.slice(0, keepN);
                     const taken = new Uint8Array(arr.length);
                     const picked = [];
-                    for (const c of deepest) {
+                    for (const c of top) {
                       if (taken[c]) continue;
                       picked.push(c);
                       const lo = Math.max(0, c - minSep);
@@ -1033,6 +1034,8 @@
                     picked.sort((a, b) => a - b);
                     return picked;
                   };
+                  const findValleys = (arr, minSep) => findExtrema(arr, minSep, -1);
+                  const findPeaks = (arr, minSep) => findExtrema(arr, minSep, +1);
                   const medianSpacing = (valleys) => {
                     if (valleys.length < 2) return 0;
                     const gaps = [];
@@ -1063,12 +1066,19 @@
                     }
                     return bestK;
                   };
-                  // Use valley-spacing for both axes; fall back to autocorr.
+                  // Use peaks (sprite-row centers / sprite-col centers) as
+                  // the primary signal for period; fall back to autocorr only
+                  // when fewer than 3 prominent peaks survived NMS.
+                  // Valley arrays kept for the debug trail and fallback.
+                  const rowPeaks = findPeaks(rowS, 40);
+                  const colPeaks = findPeaks(colS, 40);
                   const rowValleys = findValleys(rowS, 40);
                   const colValleys = findValleys(colS, 40);
-                  const rowPeriod = (rowValleys.length >= 3 ? medianSpacing(rowValleys) : 0)
+                  const rowPeriod = (rowPeaks.length >= 3 ? medianSpacing(rowPeaks) : 0)
+                    || (rowValleys.length >= 3 ? medianSpacing(rowValleys) : 0)
                     || acPeriod(rowS, 40, Math.floor(H / 2));
-                  const colPeriod = (colValleys.length >= 3 ? medianSpacing(colValleys) : 0)
+                  const colPeriod = (colPeaks.length >= 3 ? medianSpacing(colPeaks) : 0)
+                    || (colValleys.length >= 3 ? medianSpacing(colValleys) : 0)
                     || acPeriod(colS, 40, Math.floor(W / 3));
 
                   // 5. Phase: offset that minimizes content at the inferred boundaries
@@ -1127,12 +1137,16 @@
                   setDebugInfo({
                     bg: `rgb(${bgR}, ${bgG}, ${bgB})`,
                     subjectPct: subjectPct.toFixed(1),
+                    rowPeaks: rowPeaks.length,
+                    colPeaks: colPeaks.length,
                     rowValleys: rowValleys.length,
                     colValleys: colValleys.length,
                     rowPeriod: rowPeriod.toFixed(1),
                     colPeriod: colPeriod.toFixed(1),
                     labelWidth: Math.round(labelWidth_est),
-                    method: (rowValleys.length >= 3 && colValleys.length >= 3) ? 'gap-spacing' : 'autocorrelation',
+                    method: (rowPeaks.length >= 3 && colPeaks.length >= 3) ? 'peak-spacing'
+                      : (rowValleys.length >= 3 && colValleys.length >= 3) ? 'valley-spacing'
+                      : 'autocorrelation',
                     applied: valid ? 'yes' : 'no (degenerate detection)',
                   });
                   setTimeout(() => setDebugInfo(null), 3000);
@@ -1334,7 +1348,8 @@
                     },
                       React.createElement('div', { className: "text-cyan-300 font-semibold" }, "auto-adjust trail (3s)"),
                       React.createElement('div', null, `bg=${debugInfo.bg}  subject=${debugInfo.subjectPct}%  method=${debugInfo.method}`),
-                      React.createElement('div', null, `colPeriod=${debugInfo.colPeriod}  rowPeriod=${debugInfo.rowPeriod}  labelWidth=${debugInfo.labelWidth}  valleys: col=${debugInfo.colValleys} row=${debugInfo.rowValleys}  applied=${debugInfo.applied}`)
+                      React.createElement('div', null, `colPeriod=${debugInfo.colPeriod}  rowPeriod=${debugInfo.rowPeriod}  labelWidth=${debugInfo.labelWidth}`),
+                      React.createElement('div', null, `peaks: col=${debugInfo.colPeaks} row=${debugInfo.rowPeaks}  valleys: col=${debugInfo.colValleys} row=${debugInfo.rowValleys}  applied=${debugInfo.applied}`)
                     )
                   ),
                   // Animation preview lives inside the same column to keep the
