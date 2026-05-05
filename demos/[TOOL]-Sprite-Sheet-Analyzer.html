@@ -290,33 +290,33 @@
               return null;
             }
 
-            return React.createElement('div', { className: "mt-6 bg-gray-800 rounded-lg shadow-2xl p-6" },
-              React.createElement('h2', { className: "text-2xl font-bold text-cyan-400 mb-4 border-b border-gray-700 pb-2" },
-                "Animation Preview"
-              ),
-              React.createElement('div', { className: "grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4" },
+            // Inline mode: lives inside the same panel as the grid view, so
+            // no outer card chrome - just a tight header + horizontally
+            // scrollable strip of row previews.
+            return React.createElement('div', { className: "flex flex-col gap-1" },
+              React.createElement('div', { className: "text-xs uppercase tracking-wider text-cyan-400/80 font-semibold" }, "Animation preview"),
+              React.createElement('div', { className: "flex gap-2 overflow-x-auto pb-1" },
                 rows.map((sprites, index) => {
                   if (sprites.length === 0) return null;
                   const originalRowIndex = sprites[0].row;
-                  return React.createElement('div', { key: index, className: "flex flex-col items-center bg-gray-900/50 p-3 rounded-md border border-gray-700" },
-                    React.createElement('h3', { className: "text-sm font-semibold text-gray-300 mb-2" }, `Row ${index + 1} (Original: ${originalRowIndex})`),
+                  return React.createElement('div', { key: index, className: "flex flex-col items-center bg-gray-900/50 p-1 rounded border border-gray-700 flex-shrink-0" },
+                    React.createElement('span', { className: "text-[10px] text-gray-400 mb-0.5" }, `r${originalRowIndex}`),
                     React.createElement('canvas', {
                       ref: (el) => {
-                        if (el) {
-                          canvasRefs.current.set(index, el);
-                        } else {
-                          canvasRefs.current.delete(index);
-                        }
+                        if (el) canvasRefs.current.set(index, el);
+                        else canvasRefs.current.delete(index);
                       },
                       width: spriteWidth,
                       height: rowHeight,
                       className: "bg-checkered rounded-sm",
                       style: {
                         imageRendering: 'pixelated',
+                        height: '88px',
+                        width: 'auto',
                         '--check-color-1': '#4a5568',
-                        '--check-color-2': '#2d3748'
+                        '--check-color-2': '#2d3748',
                       },
-                      'aria-label': `Animation preview for original row ${originalRowIndex}`
+                      'aria-label': `Animation preview for original row ${originalRowIndex}`,
                     })
                   );
                 })
@@ -458,7 +458,12 @@
 
             const [gridVisible, setGridVisible] = useState(true);
             const [useWhiteBackground, setUseWhiteBackground] = useState(false);
-            const [makeGreyTransparent, setMakeGreyTransparent] = useState(true);
+            // Was two separate toggles ("Make Grey Transparent" hardcoded
+            // to #a2a2a2, plus the white-replace cleanup). Merged into one
+            // adaptive "Strip BG" that samples corners to detect any solid
+            // background color (grey, navy, black, white, ...).
+            const [stripBg, setStripBg] = useState(true);
+            const [debugInfo, setDebugInfo] = useState(null);
             const [labelWidth, setLabelWidth] = useState(INITIAL_STATE.labelWidth);
             const [spriteWidth, setSpriteWidth] = useState(INITIAL_STATE.spriteWidth);
             const [rowHeight, setRowHeight] = useState(INITIAL_STATE.rowHeight);
@@ -520,7 +525,7 @@
                 return;
               }
 
-              if (!makeGreyTransparent) {
+              if (!stripBg) {
                 setProcessedImage(null);
                 return;
               }
@@ -539,29 +544,44 @@
               try {
                 const imageData = ctx.getImageData(0, 0, image.width, image.height);
                 const data = imageData.data;
+                const W = image.width, H = image.height;
 
-                const saturationThreshold = 0.25;
-                const targetLightness = 162;
-                const lightnessTolerance = 80;
-
+                // Sample corner patches to detect ANY solid background color.
+                // Hardcoded grey (#a2a2a2) only worked on certain assets;
+                // corner sampling generalizes to navy, black, white, etc.
+                const cs = Math.min(24, Math.floor(Math.min(W, H) / 10));
+                const samples = [];
+                const grab = (x0, y0) => {
+                  for (let y = y0; y < y0 + cs && y < H; y++)
+                    for (let x = x0; x < x0 + cs && x < W; x++) {
+                      const idx = (y * W + x) * 4;
+                      if (data[idx + 3] < 64) continue;
+                      samples.push([data[idx], data[idx + 1], data[idx + 2]]);
+                    }
+                };
+                grab(0, 0); grab(W - cs, 0); grab(0, H - cs); grab(W - cs, H - cs);
+                const median = (k) => {
+                  if (!samples.length) return 128;
+                  const v = samples.map(p => p[k]).sort((a, b) => a - b);
+                  return v[v.length >> 1];
+                };
+                const bgR = median(0), bgG = median(1), bgB = median(2);
+                // Variance check: if corners disagree wildly, the bg isn't
+                // solid (gradient or actual content) and we skip stripping.
+                let varSum = 0;
+                for (const [r, g, b] of samples) {
+                  varSum += (r - bgR) ** 2 + (g - bgG) ** 2 + (b - bgB) ** 2;
+                }
+                const varAvg = samples.length ? varSum / samples.length : 0;
+                if (varAvg > 60 * 60) {
+                  // Not a solid background: don't strip.
+                  setProcessedImage(null);
+                  return;
+                }
+                const TOL2 = 50 * 50;
                 for (let i = 0; i < data.length; i += 4) {
-                  const r = data[i];
-                  const g = data[i + 1];
-                  const b = data[i + 2];
-
-                  const max = Math.max(r, g, b);
-                  const min = Math.min(r, g, b);
-                  const lightness = (max + min) / 2;
-
-                  let saturation = 0;
-                  if (max !== min) {
-                    const d = max - min;
-                    saturation = lightness > 127.5 ? d / (510 - max - min) : d / (max + min);
-                  }
-
-                  if (saturation < saturationThreshold && Math.abs(lightness - targetLightness) < lightnessTolerance) {
-                    data[i + 3] = 0;
-                  }
+                  const dr = data[i] - bgR, dg = data[i + 1] - bgG, db = data[i + 2] - bgB;
+                  if ((dr * dr + dg * dg + db * db) / 3 < TOL2) data[i + 3] = 0;
                 }
                 ctx.putImageData(imageData, 0, 0);
                 setProcessedImage(canvas);
@@ -569,7 +589,7 @@
                 // CORS rejection: fall back to original image rather than null
                 setProcessedImage(null);
               }
-            }, [image, makeGreyTransparent]);
+            }, [image, stripBg]);
 
             const loadImageFromFile = useCallback((file) => {
               if (!file) return;
@@ -887,11 +907,35 @@
                   const rowS = smooth(rowSum, 7);
                   const colS = smooth(colSum, 7);
 
-                  // 4. Autocorrelation period detection with sub-pixel refinement.
-                  //    The integer-lag argmax overshoots when wider poses (run, attack
-                  //    swing) pull mass past the true cell boundary; parabolic fit
-                  //    around the peak recovers the true continuous period.
-                  const findPeriod = (arr, minLag, maxLag) => {
+                  // 4. Period detection via valley spacing (median).
+                  //    Earlier autocorrelation overshot because wider poses (run,
+                  //    attack swing) inflated the discrete peak. Cell BOUNDARIES
+                  //    are the low-density gaps between sprite columns/rows, so
+                  //    detect those minima directly and median their spacing.
+                  //    Falls back to autocorrelation if too few minima are found.
+                  const findValleys = (arr, minSep) => {
+                    // local minima at scale minSep: arr[i] is the lowest in
+                    // [i - minSep/2, i + minSep/2].
+                    const half = Math.max(8, Math.floor(minSep / 2));
+                    const valleys = [];
+                    for (let i = half; i < arr.length - half; i++) {
+                      let lo = arr[i], isMin = true;
+                      for (let j = -half; j <= half; j++) {
+                        if (arr[i + j] < lo) { isMin = false; break; }
+                      }
+                      if (isMin) valleys.push(i);
+                    }
+                    return valleys;
+                  };
+                  const medianSpacing = (valleys) => {
+                    if (valleys.length < 2) return 0;
+                    const gaps = [];
+                    for (let i = 1; i < valleys.length; i++) gaps.push(valleys[i] - valleys[i - 1]);
+                    gaps.sort((a, b) => a - b);
+                    return gaps[gaps.length >> 1];
+                  };
+                  // Autocorrelation fallback (used when gap detection underflows)
+                  const acPeriod = (arr, minLag, maxLag) => {
                     let m = 0;
                     for (let i = 0; i < arr.length; i++) m += arr[i];
                     m /= arr.length;
@@ -903,7 +947,6 @@
                       ac[k] = s;
                       if (s > best) { best = s; bestK = k; }
                     }
-                    // Parabolic interpolation around the peak
                     if (bestK > minLag && bestK < maxLag) {
                       const f0 = ac[bestK - 1], f1 = ac[bestK], f2 = ac[bestK + 1];
                       const denom = f0 - 2 * f1 + f2;
@@ -914,8 +957,13 @@
                     }
                     return bestK;
                   };
-                  const rowPeriod = findPeriod(rowS, 40, Math.floor(H / 2));
-                  const colPeriod = findPeriod(colS, 40, Math.floor(W / 3));
+                  // Use valley-spacing for both axes; fall back to autocorr.
+                  const rowValleys = findValleys(rowS, 40);
+                  const colValleys = findValleys(colS, 40);
+                  const rowPeriod = (rowValleys.length >= 3 ? medianSpacing(rowValleys) : 0)
+                    || acPeriod(rowS, 40, Math.floor(H / 2));
+                  const colPeriod = (colValleys.length >= 3 ? medianSpacing(colValleys) : 0)
+                    || acPeriod(colS, 40, Math.floor(W / 3));
 
                   // 5. Phase: offset that minimizes content at the inferred boundaries
                   const findPhase = (arr, period) => {
@@ -957,6 +1005,21 @@
                   setRowHeight(Math.round(rowPeriod));
                   setSpriteWidth(Math.round(colPeriod));
                   setLabelWidth(Math.round(labelWidth_est));
+
+                  // Show a 3s debug trail so the user can screenshot what the
+                  // detector saw vs. what the grid drew.
+                  const subjectPx = mask.reduce((a, v) => a + v, 0);
+                  setDebugInfo({
+                    bg: `rgb(${bgR}, ${bgG}, ${bgB})`,
+                    subjectPct: ((subjectPx / (W * H)) * 100).toFixed(1),
+                    rowValleys: rowValleys.length,
+                    colValleys: colValleys.length,
+                    rowPeriod: rowPeriod.toFixed(1),
+                    colPeriod: colPeriod.toFixed(1),
+                    labelWidth: Math.round(labelWidth_est),
+                    method: (rowValleys.length >= 3 && colValleys.length >= 3) ? 'gap-spacing' : 'autocorrelation',
+                  });
+                  setTimeout(() => setDebugInfo(null), 3000);
                 } catch (e) {
                   // CORS - cannot auto-adjust on cross-origin image
                 }
@@ -1133,10 +1196,10 @@
 
             return React.createElement('div', null,
               React.createElement('div', { className: "grid grid-cols-1 lg:grid-cols-3 gap-6" },
-                React.createElement('div', { className: "lg:col-span-2 bg-gray-800 rounded-lg shadow-2xl p-4 flex justify-center items-center" },
+                React.createElement('div', { className: "lg:col-span-2 bg-gray-800 rounded-lg shadow-2xl p-4 flex flex-col gap-3" },
                   React.createElement('div', {
                       ref: canvasContainerRef,
-                      className: `w-full h-[60vh] lg:h-[75vh] bg-gray-900/50 rounded-md border ${isDragOver ? 'border-cyan-400 drop-target-active' : 'border-gray-700'} relative overflow-hidden`,
+                      className: `w-full h-[42vh] lg:h-[50vh] bg-gray-900/50 rounded-md border ${isDragOver ? 'border-cyan-400 drop-target-active' : 'border-gray-700'} relative overflow-hidden`,
                       onDragOver: handleDragOver,
                       onDragEnter: handleDragOver,
                       onDragLeave: handleDragLeave,
@@ -1149,8 +1212,25 @@
                     React.createElement('canvas', {
                       ref: canvasRef,
                       className: `transition-opacity duration-300 ${isLoading ? 'opacity-50' : 'opacity-100'}`
-                    })
-                  )
+                    }),
+                    debugInfo && React.createElement('div', {
+                      className: "absolute bottom-2 left-2 right-2 bg-gray-900/90 border border-cyan-500/40 rounded-md p-2 text-xs font-mono text-cyan-100 z-30 pointer-events-none",
+                    },
+                      React.createElement('div', { className: "text-cyan-300 font-semibold" }, "auto-adjust trail (3s)"),
+                      React.createElement('div', null, `bg=${debugInfo.bg}  subject=${debugInfo.subjectPct}%  method=${debugInfo.method}`),
+                      React.createElement('div', null, `colPeriod=${debugInfo.colPeriod}  rowPeriod=${debugInfo.rowPeriod}  labelWidth=${debugInfo.labelWidth}  valleys: col=${debugInfo.colValleys} row=${debugInfo.rowValleys}`)
+                    )
+                  ),
+                  // Animation preview lives inside the same column to keep the
+                  // grid view + previews on screen together; the controls panel
+                  // is on the right (lg) or below (mobile).
+                  imageToDraw && animationRows.length > 0 && React.createElement(AnimationPreviewer, {
+                    image: imageToDraw,
+                    rows: animationRows,
+                    spriteWidth: spriteWidth,
+                    rowHeight: rowHeight,
+                    fps: fps,
+                  })
                 ),
                 React.createElement('div', { className: "bg-gray-800 rounded-lg shadow-2xl p-6 flex flex-col space-y-4" },
                   React.createElement('div', { className: "flex justify-between items-center pb-2 border-b border-gray-700" },
@@ -1194,16 +1274,16 @@
                       title: "Copy the remix prompt to clipboard for use in an external image-gen tool"
                     }, React.createElement(WandIcon), "Copy Remix Prompt"),
                     React.createElement('div', { className: "flex items-center justify-between p-2 bg-gray-700/50 rounded-md" },
-                      React.createElement('label', { htmlFor: "grey-bg-toggle", className: "text-sm font-medium text-gray-300 select-none" }, "Make Grey Transparent (#a2a2a2)"),
+                      React.createElement('label', { htmlFor: "strip-bg-toggle", className: "text-sm font-medium text-gray-300 select-none", title: "Auto-detects the background color from the corners and strips solid backgrounds. Skips when the bg isn't uniform." }, "Strip BG (auto-detect)"),
                       React.createElement('label', { className: "relative inline-flex items-center cursor-pointer" },
-                        React.createElement('input', { type: "checkbox", id: "grey-bg-toggle", className: "sr-only peer", checked: makeGreyTransparent, onChange: () => setMakeGreyTransparent(!makeGreyTransparent) }),
+                        React.createElement('input', { type: "checkbox", id: "strip-bg-toggle", className: "sr-only peer", checked: stripBg, onChange: () => setStripBg(!stripBg) }),
                         React.createElement('div', { className: "w-11 h-6 bg-gray-600 rounded-full peer peer-focus:ring-2 peer-focus:ring-cyan-400 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-500" })
                       )
                     ),
                     React.createElement('div', { className: "flex items-center justify-between p-2 bg-gray-700/50 rounded-md" },
-                      React.createElement('label', { htmlFor: "bg-toggle", className: "text-sm font-medium text-gray-300 select-none" }, "Replace Gray BG with White"),
+                      React.createElement('label', { htmlFor: "white-bg-toggle", className: "text-sm font-medium text-gray-300 select-none" }, "Display on white"),
                       React.createElement('label', { className: "relative inline-flex items-center cursor-pointer" },
-                        React.createElement('input', { type: "checkbox", id: "bg-toggle", className: "sr-only peer", checked: useWhiteBackground, onChange: () => setUseWhiteBackground(!useWhiteBackground) }),
+                        React.createElement('input', { type: "checkbox", id: "white-bg-toggle", className: "sr-only peer", checked: useWhiteBackground, onChange: () => setUseWhiteBackground(!useWhiteBackground) }),
                         React.createElement('div', { className: "w-11 h-6 bg-gray-600 rounded-full peer peer-focus:ring-2 peer-focus:ring-cyan-400 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-500" })
                       )
                     )
@@ -1262,13 +1342,6 @@
                   )
                 )
               ),
-              imageToDraw && animationRows.length > 0 && React.createElement(AnimationPreviewer, {
-                image: imageToDraw,
-                rows: animationRows,
-                spriteWidth: spriteWidth,
-                rowHeight: rowHeight,
-                fps: fps
-              }),
               toast && React.createElement('div', { className: "toast" }, toast)
             );
           };
