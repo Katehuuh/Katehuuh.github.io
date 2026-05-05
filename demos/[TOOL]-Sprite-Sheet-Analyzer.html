@@ -887,16 +887,30 @@
                   const rowS = smooth(rowSum, 7);
                   const colS = smooth(colSum, 7);
 
-                  // 4. Autocorrelation period detection
+                  // 4. Autocorrelation period detection with sub-pixel refinement.
+                  //    The integer-lag argmax overshoots when wider poses (run, attack
+                  //    swing) pull mass past the true cell boundary; parabolic fit
+                  //    around the peak recovers the true continuous period.
                   const findPeriod = (arr, minLag, maxLag) => {
                     let m = 0;
                     for (let i = 0; i < arr.length; i++) m += arr[i];
                     m /= arr.length;
+                    const ac = new Float32Array(maxLag + 2);
                     let best = -Infinity, bestK = minLag;
                     for (let k = minLag; k <= maxLag; k++) {
                       let s = 0;
                       for (let i = 0; i + k < arr.length; i++) s += (arr[i] - m) * (arr[i + k] - m);
+                      ac[k] = s;
                       if (s > best) { best = s; bestK = k; }
+                    }
+                    // Parabolic interpolation around the peak
+                    if (bestK > minLag && bestK < maxLag) {
+                      const f0 = ac[bestK - 1], f1 = ac[bestK], f2 = ac[bestK + 1];
+                      const denom = f0 - 2 * f1 + f2;
+                      if (denom !== 0) {
+                        const shift = 0.5 * (f0 - f2) / denom;
+                        if (Math.abs(shift) < 1) return bestK + shift;
+                      }
                     }
                     return bestK;
                   };
@@ -938,10 +952,10 @@
                   // No labels (or label region too narrow to be real): skip
                   const labelWidth_est = labelEnd - xPhase < 8 ? 0 : Math.max(0, labelEnd - xPhase);
 
-                  setOffsetX(xPhase);
-                  setOffsetY(yPhase);
-                  setRowHeight(rowPeriod);
-                  setSpriteWidth(colPeriod);
+                  setOffsetX(Math.round(xPhase));
+                  setOffsetY(Math.round(yPhase));
+                  setRowHeight(Math.round(rowPeriod));
+                  setSpriteWidth(Math.round(colPeriod));
                   setLabelWidth(Math.round(labelWidth_est));
                 } catch (e) {
                   // CORS - cannot auto-adjust on cross-origin image
