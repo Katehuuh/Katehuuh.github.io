@@ -913,24 +913,32 @@
                   //    are the low-density gaps between sprite columns/rows, so
                   //    detect those minima directly and median their spacing.
                   //    Falls back to autocorrelation if too few minima are found.
-                  // Local minima with non-max suppression. Old plateau-vulnerable
-                  // version returned every interior index when the smoothed
-                  // projection was flat (no strictly-lower neighbor exists), which
-                  // then collapsed median-spacing to 1px and produced a solid wall
-                  // of 1-cell-wide grid lines (red-screen bug). NMS instead picks
-                  // the deepest dips first and rejects anything within minSep.
+                  // Local minima detection.
+                  //  Step A: collect strict-on-at-least-one-side local minima
+                  //          (skips flat plateaus, so a uniform-mask image
+                  //          returns nothing instead of every-pixel-as-valley).
+                  //  Step B: filter to the deepest fraction by value. Without
+                  //          this, sub-character dips (gaps between hair, body,
+                  //          weapon) survive and inflate the valley count - on
+                  //          a 6-cell sheet we'd see 20+ "valleys" and median
+                  //          spacing collapsed to ~1/3 of the true cell period.
+                  //          The TRUE inter-sprite gaps are pure background
+                  //          (lowest projection density) so depth-filtering
+                  //          isolates them cleanly.
+                  //  Step C: NMS within the deep set (greedy, deepest first).
                   const findValleys = (arr, minSep) => {
                     const candidates = [];
                     for (let i = 1; i < arr.length - 1; i++) {
-                      // strict on at least one side: skip flat plateaus entirely
                       if (arr[i] < arr[i - 1] && arr[i] <= arr[i + 1]) candidates.push(i);
                       else if (arr[i] <= arr[i - 1] && arr[i] < arr[i + 1]) candidates.push(i);
                     }
                     if (!candidates.length) return [];
                     const sorted = [...candidates].sort((a, b) => arr[a] - arr[b]);
+                    const keepN = Math.max(2, Math.floor(sorted.length * 0.3));
+                    const deepest = sorted.slice(0, keepN);
                     const taken = new Uint8Array(arr.length);
                     const picked = [];
-                    for (const c of sorted) {
+                    for (const c of deepest) {
                       if (taken[c]) continue;
                       picked.push(c);
                       const lo = Math.max(0, c - minSep);
