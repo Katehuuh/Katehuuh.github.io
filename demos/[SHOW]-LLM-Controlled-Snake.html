@@ -1,0 +1,660 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>LLM-controlled snake</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #161a22;
+    --panel-2: #1b212c;
+    --border: #242b38;
+    --text: #d6dae3;
+    --muted: #8b94a7;
+    --accent: #9cdcfe;
+    --accent-2: #c586c0;
+    --ok: #6ec07a;
+    --warn: #d7ba7d;
+    --err: #f48771;
+    --food: #ce9178;
+    --body: #569cd6;
+    --head: #9cdcfe;
+    --wall: #444a58;
+    --empty: #1d2330;
+    --grid: #2a3240;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-size: 14px;
+    overflow: hidden;
+  }
+  .app {
+    display: grid;
+    grid-template-columns: minmax(360px, 1fr) minmax(360px, 1fr);
+    height: 100vh;
+    gap: 1px;
+    background: var(--border);
+  }
+  .pane {
+    background: var(--panel);
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    min-width: 0;
+  }
+  .pane-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel-2);
+  }
+  .pane-header h1 {
+    font-size: 13px;
+    font-weight: 600;
+    margin: 0;
+    letter-spacing: 0.02em;
+    color: var(--text);
+  }
+  .pane-header .meta {
+    font-size: 12px;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .pane-header .meta span { color: var(--text); }
+  .pane-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .canvas-wrap {
+    flex: 1 1 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    min-height: 0;
+  }
+  canvas {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    image-rendering: pixelated;
+    max-width: 100%;
+    max-height: 100%;
+    aspect-ratio: 1 / 1;
+  }
+  .status-bar {
+    border-top: 1px solid var(--border);
+    padding: 10px 16px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px 20px;
+    align-items: center;
+    background: var(--panel-2);
+    font-size: 12px;
+  }
+  .status-bar .label { color: var(--muted); }
+  .status-bar .value { color: var(--text); font-variant-numeric: tabular-nums; }
+  .status-bar .value.ok { color: var(--ok); }
+  .status-bar .value.err { color: var(--err); }
+  .status-bar .value.warn { color: var(--warn); }
+  .controls {
+    margin-left: auto;
+    display: flex;
+    gap: 8px;
+  }
+  button {
+    background: var(--panel);
+    color: var(--text);
+    border: 1px solid var(--border);
+    padding: 6px 12px;
+    border-radius: 4px;
+    font: inherit;
+    font-size: 12px;
+    cursor: pointer;
+    transition: background 0.12s, border-color 0.12s;
+  }
+  button:hover:not(:disabled) {
+    background: var(--panel-2);
+    border-color: var(--accent);
+  }
+  button:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+  .conv {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    padding: 12px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .conv::-webkit-scrollbar { width: 8px; }
+  .conv::-webkit-scrollbar-track { background: var(--panel); }
+  .conv::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+  .msg {
+    border: 1px solid var(--border);
+    border-left-width: 3px;
+    border-radius: 4px;
+    padding: 8px 10px;
+    background: var(--panel-2);
+    font-size: 12px;
+    line-height: 1.45;
+  }
+  .msg .who {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 4px;
+  }
+  .msg .body {
+    font-family: "JetBrains Mono", "SF Mono", Consolas, "Liberation Mono", monospace;
+    white-space: pre-wrap;
+    word-break: break-word;
+    color: var(--text);
+  }
+  .msg.system { border-left-color: var(--muted); }
+  .msg.system .who { color: var(--muted); }
+  .msg.gamestate { border-left-color: var(--accent); }
+  .msg.gamestate .who { color: var(--accent); }
+  .msg.user { border-left-color: var(--accent-2); }
+  .msg.user .who { color: var(--accent-2); }
+  .msg.airesponse { border-left-color: var(--ok); }
+  .msg.airesponse .who { color: var(--ok); }
+  .msg.error { border-left-color: var(--err); background: rgba(244,135,113,0.06); }
+  .msg.error .who { color: var(--err); }
+  .msg.retry { border-left-color: var(--warn); }
+  .msg.retry .who { color: var(--warn); }
+  .loader {
+    padding: 16px;
+    margin: 12px 16px;
+    border: 1px dashed var(--border);
+    border-radius: 4px;
+    background: var(--panel-2);
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .loader .progress {
+    margin-top: 8px;
+    height: 4px;
+    background: var(--panel);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .loader .bar {
+    height: 100%;
+    width: 0%;
+    background: var(--accent);
+    transition: width 0.2s ease;
+  }
+  .loader.hidden { display: none; }
+  @media (max-width: 760px) {
+    .app { grid-template-columns: 1fr; grid-template-rows: minmax(40vh, 1fr) minmax(40vh, 1fr); }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <section class="pane">
+    <header class="pane-header">
+      <h1>Snake board</h1>
+      <div class="meta">
+        Score <span id="score">0</span> &middot; Status <span id="game-status">Loading model</span>
+      </div>
+    </header>
+    <div class="pane-body">
+      <div class="canvas-wrap">
+        <canvas id="game-canvas" width="500" height="500"></canvas>
+      </div>
+      <div class="status-bar">
+        <span><span class="label">Next move</span> <span class="value" id="next-move">-</span></span>
+        <span><span class="label">Inferences</span> <span class="value" id="infer-count">0</span></span>
+        <span><span class="label">Last latency</span> <span class="value" id="latency">-</span></span>
+        <div class="controls">
+          <button id="restart-btn" disabled>Restart</button>
+          <button id="copy-debug-btn">Copy debug log</button>
+        </div>
+      </div>
+    </div>
+  </section>
+  <section class="pane">
+    <header class="pane-header">
+      <h1>Conversation with local model</h1>
+      <div class="meta" id="model-meta">model: <span id="model-name">-</span></div>
+    </header>
+    <div class="pane-body">
+      <div class="loader" id="loader">
+        <div id="loader-text">Initializing local model. First load downloads weights to your browser cache (one-time, may take 30-60s).</div>
+        <div class="progress"><div class="bar" id="loader-bar"></div></div>
+      </div>
+      <div class="conv" id="conversation-log"></div>
+    </div>
+  </section>
+</div>
+
+<script type="module">
+// Local LLM transport: web-llm, runs the model via WebGPU in the browser.
+// No network calls after the initial weight download (cached in IndexedDB by the lib).
+import * as webllm from "https://esm.run/@mlc-ai/web-llm";
+
+// Game config
+const GRID_SIZE = 10;
+const GAME_SPEED_MS = 1000;
+const WALL_CHAR = '#';
+const EMPTY_CHAR = 'X';
+const HEAD_CHAR = 'H';
+const BODY_CHAR = 'B';
+const FOOD_CHAR = 'F';
+
+// Model config. Qwen2.5-0.5B is the smallest reliable instruction-tuned chat
+// model in web-llm's prebuilt list as of 2026; q4f16_1 keeps download under ~400MB.
+const MODEL_ID = "Qwen2.5-0.5B-Instruct-q4f16_1-MLC";
+
+const COLORS = {
+  background: '#0f1115',
+  wall: '#444a58',
+  empty: '#1d2330',
+  head: '#9cdcfe',
+  body: '#569cd6',
+  food: '#ce9178',
+  grid: '#2a3240'
+};
+
+// DOM
+const canvas = document.getElementById('game-canvas');
+const ctx = canvas.getContext('2d');
+const gameStatusElement = document.getElementById('game-status');
+const scoreElement = document.getElementById('score');
+const nextMoveElement = document.getElementById('next-move');
+const inferCountElement = document.getElementById('infer-count');
+const latencyElement = document.getElementById('latency');
+const restartBtn = document.getElementById('restart-btn');
+const copyDebugBtn = document.getElementById('copy-debug-btn');
+const conversationLog = document.getElementById('conversation-log');
+const loaderEl = document.getElementById('loader');
+const loaderText = document.getElementById('loader-text');
+const loaderBar = document.getElementById('loader-bar');
+const modelNameEl = document.getElementById('model-name');
+
+modelNameEl.textContent = MODEL_ID;
+
+// Game state
+let snake = [];
+let food = {};
+let direction = '';
+let nextDirection = '';
+let gameInterval = null;
+let score = 0;
+let gameOver = false;
+let waitingForAI = false;
+let conversationHistory = [];
+let cachedMove = null;
+let cachedValidMoves = [];
+let inferenceCount = 0;
+
+// Engine state
+let engine = null;
+let engineReady = false;
+
+const CELL_SIZE = canvas.width / GRID_SIZE;
+
+// Draw an empty board immediately so the canvas isn't blank during model load.
+drawEmptyBoard();
+
+restartBtn.addEventListener('click', restartGame);
+copyDebugBtn.addEventListener('click', copyDebugLog);
+
+// Boot the engine, then auto-start the game.
+bootEngine().then(() => {
+  initGame();
+}).catch(err => {
+  console.error(err);
+  loaderText.textContent = 'Failed to load model: ' + (err && err.message ? err.message : String(err));
+  appendToConversationLog('Error', 'Engine init failed: ' + (err && err.message ? err.message : String(err)));
+  gameStatusElement.textContent = 'Init failed';
+});
+
+async function bootEngine() {
+  loaderEl.classList.remove('hidden');
+  gameStatusElement.textContent = 'Loading model';
+
+  const initProgress = (report) => {
+    // report.progress is 0..1, report.text describes phase
+    const pct = typeof report.progress === 'number' ? Math.round(report.progress * 100) : 0;
+    loaderBar.style.width = pct + '%';
+    loaderText.textContent = report.text || ('Loading ' + pct + '%');
+  };
+
+  engine = await webllm.CreateMLCEngine(MODEL_ID, { initProgressCallback: initProgress });
+  engineReady = true;
+  loaderEl.classList.add('hidden');
+  appendToConversationLog('System', 'Local model ready: ' + MODEL_ID);
+}
+
+function initGame() {
+  snake = [{ x: Math.floor(GRID_SIZE / 2), y: Math.floor(GRID_SIZE / 2) }];
+  score = 0;
+  scoreElement.textContent = score;
+  direction = '';
+  nextDirection = '';
+  gameOver = false;
+  waitingForAI = false;
+  conversationHistory = [];
+  cachedMove = null;
+  cachedValidMoves = [];
+  inferenceCount = 0;
+  inferCountElement.textContent = '0';
+  latencyElement.textContent = '-';
+
+  // Don't wipe load-time system messages; the caller decides. Here we keep a fresh log
+  // per game so retries from previous runs don't confuse the conversation panel.
+  conversationLog.innerHTML = '';
+  appendToConversationLog('System', 'New game. Grid ' + GRID_SIZE + 'x' + GRID_SIZE + '. Model has full conversation history.');
+
+  placeFood();
+  draw();
+
+  gameStatusElement.textContent = 'Running';
+  nextMoveElement.textContent = 'Thinking';
+  restartBtn.disabled = true;
+
+  if (gameInterval) clearInterval(gameInterval);
+  gameInterval = setInterval(gameLoop, GAME_SPEED_MS);
+
+  getAIMove();
+}
+
+function restartGame() {
+  initGame();
+}
+
+function gameLoop() {
+  if (gameOver) return;
+
+  // Hold current direction if a move is still pending and nothing cached.
+  if (waitingForAI && !cachedMove) {
+    return;
+  }
+  if (cachedMove) {
+    nextDirection = cachedMove;
+    cachedMove = null;
+  }
+  if (nextDirection) direction = nextDirection;
+  if (!direction) return;
+
+  const head = { ...snake[0] };
+  switch (direction) {
+    case 'UP': head.y--; break;
+    case 'DOWN': head.y++; break;
+    case 'LEFT': head.x--; break;
+    case 'RIGHT': head.x++; break;
+  }
+
+  // Only game-over when the snake actually moves into a wall or itself.
+  if (isCollision(head)) {
+    endGame();
+    return;
+  }
+
+  snake.unshift(head);
+  if (head.x === food.x && head.y === food.y) {
+    score++;
+    scoreElement.textContent = score;
+    placeFood();
+    appendToConversationLog('GameState', 'Food eaten. Score ' + score + '. New food at (' + food.x + ',' + food.y + ').');
+  } else {
+    snake.pop();
+  }
+
+  draw();
+  getAIMove();
+}
+
+function isCollision(position) {
+  if (position.x < 0 || position.y < 0 || position.x >= GRID_SIZE || position.y >= GRID_SIZE) {
+    return true;
+  }
+  for (let i = 0; i < snake.length; i++) {
+    if (position.x === snake[i].x && position.y === snake[i].y) return true;
+  }
+  return false;
+}
+
+function placeFood() {
+  let valid = false;
+  while (!valid) {
+    food = { x: Math.floor(Math.random() * GRID_SIZE), y: Math.floor(Math.random() * GRID_SIZE) };
+    valid = true;
+    for (let i = 0; i < snake.length; i++) {
+      if (food.x === snake[i].x && food.y === snake[i].y) { valid = false; break; }
+    }
+  }
+}
+
+function drawEmptyBoard() {
+  ctx.fillStyle = COLORS.background;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.strokeStyle = COLORS.grid;
+  for (let i = 0; i <= GRID_SIZE; i++) {
+    ctx.beginPath(); ctx.moveTo(i * CELL_SIZE, 0); ctx.lineTo(i * CELL_SIZE, canvas.height); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, i * CELL_SIZE); ctx.lineTo(canvas.width, i * CELL_SIZE); ctx.stroke();
+  }
+}
+
+function draw() {
+  drawEmptyBoard();
+  for (let y = 0; y < GRID_SIZE; y++) {
+    for (let x = 0; x < GRID_SIZE; x++) {
+      drawCell(x, y, COLORS.empty);
+    }
+  }
+  drawCell(food.x, food.y, COLORS.food);
+  for (let i = 1; i < snake.length; i++) drawCell(snake[i].x, snake[i].y, COLORS.body);
+  if (snake.length > 0) drawCell(snake[0].x, snake[0].y, COLORS.head);
+}
+
+function drawCell(x, y, color) {
+  ctx.fillStyle = color;
+  ctx.fillRect(x * CELL_SIZE + 1, y * CELL_SIZE + 1, CELL_SIZE - 2, CELL_SIZE - 2);
+}
+
+async function getAIMove() {
+  if (gameOver) return;
+  if (!engineReady || !engine) return;
+  if (waitingForAI) return;
+
+  waitingForAI = true;
+  nextMoveElement.textContent = 'Thinking';
+
+  const gridState = generateGridState();
+  const validMoves = getValidMoves();
+  cachedValidMoves = validMoves;
+
+  // Note: borders are drawn as walls in the grid but the playable area is the
+  // full 10x10. Walls are not gameover-triggering until the snake moves into one.
+  const userPrompt =
+    'Current 10x10 grid:\n' + gridState + '\n' +
+    'Symbols: H head, B body, F food, X empty.\n' +
+    'Head position: (' + snake[0].x + ',' + snake[0].y + '). Food: (' + food.x + ',' + food.y + ').\n' +
+    'Valid moves right now: ' + (validMoves.length ? validMoves.join(', ') : 'NONE') + '.\n' +
+    'Reply with exactly one word from the valid list.';
+
+  conversationHistory.push({ role: 'user', content: userPrompt });
+  appendToConversationLog('GameState', userPrompt);
+
+  const systemPrompt =
+    'You control a snake on a 10x10 grid. Respond with exactly one word: UP, DOWN, LEFT, or RIGHT. ' +
+    'Pick a move from the valid list given each turn. Aim for the food F. Do not reverse into your own body.';
+
+  const messages = [{ role: 'system', content: systemPrompt }, ...conversationHistory];
+
+  let aiText = '';
+  const start = performance.now();
+  try {
+    const completion = await engine.chat.completions.create({
+      messages,
+      max_tokens: 8,
+      temperature: 0.2,
+    });
+    aiText = (completion && completion.choices && completion.choices[0] && completion.choices[0].message && completion.choices[0].message.content) || '';
+    aiText = String(aiText).trim();
+    const dt = Math.round(performance.now() - start);
+    inferenceCount++;
+    inferCountElement.textContent = String(inferenceCount);
+    latencyElement.textContent = dt + ' ms';
+  } catch (err) {
+    appendToConversationLog('Error', 'Inference failed: ' + (err && err.message ? err.message : String(err)));
+    fallbackMove(validMoves);
+    waitingForAI = false;
+    return;
+  }
+
+  conversationHistory.push({ role: 'assistant', content: aiText });
+  appendToConversationLog('AIResponse', aiText || '(empty response)');
+
+  const chosen = pickValidFrom(aiText, validMoves);
+  if (chosen) {
+    nextDirection = chosen;
+    cachedMove = chosen;
+    nextMoveElement.textContent = chosen;
+  } else {
+    appendToConversationLog('Retry', 'Model output not in valid set. Falling back to a valid move.');
+    fallbackMove(validMoves);
+  }
+
+  waitingForAI = false;
+}
+
+function pickValidFrom(text, validMoves) {
+  if (!text) return null;
+  const upper = text.toUpperCase();
+  // Prefer exact match against the cached valid set.
+  if (validMoves.includes(upper)) return upper;
+  // Otherwise scan response for any valid token.
+  for (const m of validMoves) {
+    const re = new RegExp('\\b' + m + '\\b');
+    if (re.test(upper)) return m;
+  }
+  return null;
+}
+
+function fallbackMove(validMoves) {
+  if (!validMoves || validMoves.length === 0) {
+    nextMoveElement.textContent = 'no valid moves';
+    return;
+  }
+  const m = validMoves[Math.floor(Math.random() * validMoves.length)];
+  nextDirection = m;
+  cachedMove = m;
+  nextMoveElement.textContent = m + ' (fallback)';
+}
+
+function getValidMoves() {
+  const moves = [];
+  const head = snake[0];
+  // Disallow 180 reverse only if snake has a body segment behind the head.
+  const reverseOf = { UP: 'DOWN', DOWN: 'UP', LEFT: 'RIGHT', RIGHT: 'LEFT' };
+  const banned = (snake.length > 1 && direction) ? reverseOf[direction] : null;
+  const dirs = [
+    { dir: 'UP', dx: 0, dy: -1 },
+    { dir: 'DOWN', dx: 0, dy: 1 },
+    { dir: 'LEFT', dx: -1, dy: 0 },
+    { dir: 'RIGHT', dx: 1, dy: 0 },
+  ];
+  for (const { dir, dx, dy } of dirs) {
+    if (dir === banned) continue;
+    const np = { x: head.x + dx, y: head.y + dy };
+    if (!isCollision(np)) moves.push(dir);
+  }
+  return moves;
+}
+
+function generateGridState() {
+  const grid = Array(GRID_SIZE).fill().map(() => Array(GRID_SIZE).fill(EMPTY_CHAR));
+  for (let i = 1; i < snake.length; i++) {
+    const { x, y } = snake[i];
+    if (x >= 0 && x < GRID_SIZE && y >= 0 && y < GRID_SIZE) grid[y][x] = BODY_CHAR;
+  }
+  if (snake.length > 0) {
+    const { x, y } = snake[0];
+    if (x >= 0 && x < GRID_SIZE && y >= 0 && y < GRID_SIZE) grid[y][x] = HEAD_CHAR;
+  }
+  if (food && typeof food.x === 'number') grid[food.y][food.x] = FOOD_CHAR;
+  return grid.map(row => row.join('')).join('\n');
+}
+
+function endGame() {
+  gameOver = true;
+  if (gameInterval) clearInterval(gameInterval);
+  gameStatusElement.textContent = 'Game over';
+  restartBtn.disabled = false;
+  appendToConversationLog('System', 'Game over. Final score ' + score + '. Inferences ' + inferenceCount + '.');
+}
+
+function appendToConversationLog(kind, message) {
+  const wrap = document.createElement('div');
+  const cls = kind.replace(/\s+/g, '').toLowerCase();
+  wrap.className = 'msg ' + cls;
+  const who = document.createElement('div');
+  who.className = 'who';
+  who.textContent = kind;
+  const body = document.createElement('div');
+  body.className = 'body';
+  body.textContent = message;
+  wrap.appendChild(who);
+  wrap.appendChild(body);
+  conversationLog.appendChild(wrap);
+  conversationLog.scrollTop = conversationLog.scrollHeight;
+}
+
+function copyDebugLog() {
+  const lines = [];
+  lines.push('# LLM-controlled snake debug log');
+  lines.push('Model: ' + MODEL_ID);
+  lines.push('Grid: ' + GRID_SIZE + 'x' + GRID_SIZE);
+  lines.push('Inferences: ' + inferenceCount);
+  lines.push('Score: ' + score);
+  lines.push('');
+  for (const m of conversationHistory) {
+    lines.push('## ' + m.role.toUpperCase());
+    lines.push(m.content);
+    lines.push('');
+  }
+  const text = lines.join('\n');
+  const done = () => {
+    const prev = copyDebugBtn.textContent;
+    copyDebugBtn.textContent = 'Copied';
+    setTimeout(() => { copyDebugBtn.textContent = prev; }, 1200);
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(done).catch(() => {
+      fallbackCopy(text); done();
+    });
+  } else {
+    fallbackCopy(text); done();
+  }
+}
+
+function fallbackCopy(text) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed';
+  ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.select();
+  try { document.execCommand('copy'); } catch {}
+  document.body.removeChild(ta);
+}
+</script>
+</body>
+</html>

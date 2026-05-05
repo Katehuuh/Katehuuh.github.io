@@ -1011,6 +1011,13 @@
                 });
                 const bgRGB = [(bgKey >> 16) & 255, (bgKey >> 8) & 255, bgKey & 255];
 
+                // Tolerance-based fg test, not exact match. AI-generated
+                // sprites have anti-aliased edges that drift a few RGB units
+                // from the solid bg color; an exact-match test marks every AA
+                // pixel as foreground and bridges all sprites into one giant
+                // blob (was failing with blobCount=1 on the user's sheet).
+                const TOL2 = 30 * 30;
+                const bgR = (bgKey >> 16) & 255, bgG = (bgKey >> 8) & 255, bgB = bgKey & 255;
                 const mask = new Uint8Array(total);
                 if (hasAlpha) {
                   for (let i = 0, p = 0; i < data.length; i += 4, p++) {
@@ -1018,8 +1025,8 @@
                   }
                 } else {
                   for (let i = 0, p = 0; i < data.length; i += 4, p++) {
-                    const key = (data[i] << 16) | (data[i + 1] << 8) | data[i + 2];
-                    if (key !== bgKey) mask[p] = 1;
+                    const dr = data[i] - bgR, dg = data[i + 1] - bgG, db = data[i + 2] - bgB;
+                    if ((dr * dr + dg * dg + db * db) / 3 > TOL2) mask[p] = 1;
                   }
                 }
 
@@ -1140,20 +1147,51 @@
                   labels = findLabelCandidates(spriteWidth);
                   labelIds = new Set(labels.map(label => label.first.id));
                   spriteBoxes = bboxes.filter(bbox => !labelIds.has(bbox.id));
-                  if (spriteBoxes.length) {
-                    spriteWidth = Math.max(16, Math.round(median(spriteBoxes.map(b => b.w))));
-                  }
                 }
 
-                const rowHeights = rows.map(row => {
+                // Cell pitch from inter-blob centroid spacing within rows,
+                // not from per-blob bbox width. Bbox is the TIGHT box around
+                // sprite content; the actual cell pitch is bbox + bg padding
+                // between cells. Median centroid-to-centroid distance across
+                // all consecutive sprite-blob pairs in each row gives the
+                // true pitch. Falls back to median bbox width if too few
+                // multi-blob rows.
+                const interSpacings = [];
+                for (const row of rows) {
+                  const sprites = row.filter(b => !labelIds.has(b.id));
+                  for (let i = 1; i < sprites.length; i++) {
+                    interSpacings.push(sprites[i].cx - sprites[i - 1].cx);
+                  }
+                }
+                if (interSpacings.length >= 3) {
+                  spriteWidth = Math.max(16, Math.round(median(interSpacings)));
+                }
+
+                // Same idea for row pitch: median row-centroid spacing.
+                const rowCys = rows.map(row => {
                   let top = Infinity, bottom = -Infinity;
                   for (const bbox of row) {
                     if (bbox.y < top) top = bbox.y;
                     if (bbox.bottom > bottom) bottom = bbox.bottom;
                   }
-                  return bottom - top;
+                  return (top + bottom) / 2;
                 });
-                const rowHeight = Math.round(median(rowHeights));
+                const rowSpacings = [];
+                for (let i = 1; i < rowCys.length; i++) {
+                  rowSpacings.push(rowCys[i] - rowCys[i - 1]);
+                }
+                let rowHeight;
+                if (rowSpacings.length >= 1) {
+                  rowHeight = Math.round(median(rowSpacings));
+                } else {
+                  // Single row: fall back to row content height.
+                  let top = Infinity, bottom = -Infinity;
+                  for (const bbox of rows[0] || []) {
+                    if (bbox.y < top) top = bbox.y;
+                    if (bbox.bottom > bottom) bottom = bbox.bottom;
+                  }
+                  rowHeight = Math.max(16, Math.round(bottom - top));
+                }
 
                 let firstRowTop = Infinity;
                 for (const bbox of rows[0] || []) {
@@ -1210,7 +1248,11 @@
                   ctx.drawImage(targetImage, 0, 0);
 
                   const { mask, bgRGB } = foregroundMask(tempCanvas);
-                  const tile = 2;
+                  // tile=6: 6x6 source pixels per tile, OR-aggregated. Bigger
+                  // tiles bridge bg-colored pockets inside characters (dark
+                  // clothing, hair gaps that color-match bg) without merging
+                  // adjacent characters whose gap is >> 6 source px.
+                  const tile = 6;
                   const { small, sw, sh } = downscaleMask(mask, W, H, tile);
                   const components = flood8(small, sw, sh);
                   const params = deriveGridParams(components, tile, W, H);
@@ -1437,9 +1479,8 @@
                       className: "absolute bottom-2 left-2 right-2 bg-gray-900/90 border border-cyan-500/40 rounded-md p-2 text-xs font-mono text-cyan-100 z-30 pointer-events-none",
                     },
                       React.createElement('div', { className: "text-cyan-300 font-semibold" }, "auto-adjust trail (3s)"),
-                      React.createElement('div', null, `bg=${debugInfo.bg}  subject=${debugInfo.subjectPct}%  method=${debugInfo.method}`),
-                      React.createElement('div', null, `colPeriod=${debugInfo.colPeriod}  rowPeriod=${debugInfo.rowPeriod}  labelWidth=${debugInfo.labelWidth}`),
-                      React.createElement('div', null, `peaks: col=${debugInfo.colPeaks} row=${debugInfo.rowPeaks}  valleys: col=${debugInfo.colValleys} row=${debugInfo.rowValleys}  applied=${debugInfo.applied}`)
+                      React.createElement('div', null, `bg=${debugInfo.bg}  blobs=${debugInfo.blobCount}  rows=${debugInfo.rowCount}`),
+                      React.createElement('div', null, `spriteWidth=${debugInfo.spriteWidth}  rowHeight=${debugInfo.rowHeight}  labelWidth=${debugInfo.labelWidth}  applied=${debugInfo.applied}`)
                     )
                   ),
                   // Animation preview lives inside the same column to keep the
