@@ -311,7 +311,7 @@
                       className: "bg-checkered rounded-sm",
                       style: {
                         imageRendering: 'pixelated',
-                        height: '88px',
+                        height: '220px',
                         width: 'auto',
                         '--check-color-1': '#4a5568',
                         '--check-color-2': '#2d3748',
@@ -913,19 +913,32 @@
                   //    are the low-density gaps between sprite columns/rows, so
                   //    detect those minima directly and median their spacing.
                   //    Falls back to autocorrelation if too few minima are found.
+                  // Local minima with non-max suppression. Old plateau-vulnerable
+                  // version returned every interior index when the smoothed
+                  // projection was flat (no strictly-lower neighbor exists), which
+                  // then collapsed median-spacing to 1px and produced a solid wall
+                  // of 1-cell-wide grid lines (red-screen bug). NMS instead picks
+                  // the deepest dips first and rejects anything within minSep.
                   const findValleys = (arr, minSep) => {
-                    // local minima at scale minSep: arr[i] is the lowest in
-                    // [i - minSep/2, i + minSep/2].
-                    const half = Math.max(8, Math.floor(minSep / 2));
-                    const valleys = [];
-                    for (let i = half; i < arr.length - half; i++) {
-                      let lo = arr[i], isMin = true;
-                      for (let j = -half; j <= half; j++) {
-                        if (arr[i + j] < lo) { isMin = false; break; }
-                      }
-                      if (isMin) valleys.push(i);
+                    const candidates = [];
+                    for (let i = 1; i < arr.length - 1; i++) {
+                      // strict on at least one side: skip flat plateaus entirely
+                      if (arr[i] < arr[i - 1] && arr[i] <= arr[i + 1]) candidates.push(i);
+                      else if (arr[i] <= arr[i - 1] && arr[i] < arr[i + 1]) candidates.push(i);
                     }
-                    return valleys;
+                    if (!candidates.length) return [];
+                    const sorted = [...candidates].sort((a, b) => arr[a] - arr[b]);
+                    const taken = new Uint8Array(arr.length);
+                    const picked = [];
+                    for (const c of sorted) {
+                      if (taken[c]) continue;
+                      picked.push(c);
+                      const lo = Math.max(0, c - minSep);
+                      const hi = Math.min(arr.length - 1, c + minSep);
+                      for (let j = lo; j <= hi; j++) taken[j] = 1;
+                    }
+                    picked.sort((a, b) => a - b);
+                    return picked;
                   };
                   const medianSpacing = (valleys) => {
                     if (valleys.length < 2) return 0;
@@ -1000,24 +1013,34 @@
                   // No labels (or label region too narrow to be real): skip
                   const labelWidth_est = labelEnd - xPhase < 8 ? 0 : Math.max(0, labelEnd - xPhase);
 
-                  setOffsetX(Math.round(xPhase));
-                  setOffsetY(Math.round(yPhase));
-                  setRowHeight(Math.round(rowPeriod));
-                  setSpriteWidth(Math.round(colPeriod));
-                  setLabelWidth(Math.round(labelWidth_est));
+                  // Sanity check: reject implausibly small periods. Prevents the
+                  // red-screen bug where a degenerate detection (mask is all-1
+                  // or all-0) would drive sprite cells down to 1px wide.
+                  const MIN_PERIOD = 20;
+                  const subjectPx = mask.reduce((a, v) => a + v, 0);
+                  const subjectPct = (subjectPx / (W * H)) * 100;
+                  const valid = rowPeriod >= MIN_PERIOD && colPeriod >= MIN_PERIOD
+                    && subjectPct > 1 && subjectPct < 99;
+                  if (valid) {
+                    setOffsetX(Math.round(xPhase));
+                    setOffsetY(Math.round(yPhase));
+                    setRowHeight(Math.round(rowPeriod));
+                    setSpriteWidth(Math.round(colPeriod));
+                    setLabelWidth(Math.round(labelWidth_est));
+                  }
 
                   // Show a 3s debug trail so the user can screenshot what the
                   // detector saw vs. what the grid drew.
-                  const subjectPx = mask.reduce((a, v) => a + v, 0);
                   setDebugInfo({
                     bg: `rgb(${bgR}, ${bgG}, ${bgB})`,
-                    subjectPct: ((subjectPx / (W * H)) * 100).toFixed(1),
+                    subjectPct: subjectPct.toFixed(1),
                     rowValleys: rowValleys.length,
                     colValleys: colValleys.length,
                     rowPeriod: rowPeriod.toFixed(1),
                     colPeriod: colPeriod.toFixed(1),
                     labelWidth: Math.round(labelWidth_est),
                     method: (rowValleys.length >= 3 && colValleys.length >= 3) ? 'gap-spacing' : 'autocorrelation',
+                    applied: valid ? 'yes' : 'no (degenerate detection)',
                   });
                   setTimeout(() => setDebugInfo(null), 3000);
                 } catch (e) {
@@ -1218,7 +1241,7 @@
                     },
                       React.createElement('div', { className: "text-cyan-300 font-semibold" }, "auto-adjust trail (3s)"),
                       React.createElement('div', null, `bg=${debugInfo.bg}  subject=${debugInfo.subjectPct}%  method=${debugInfo.method}`),
-                      React.createElement('div', null, `colPeriod=${debugInfo.colPeriod}  rowPeriod=${debugInfo.rowPeriod}  labelWidth=${debugInfo.labelWidth}  valleys: col=${debugInfo.colValleys} row=${debugInfo.rowValleys}`)
+                      React.createElement('div', null, `colPeriod=${debugInfo.colPeriod}  rowPeriod=${debugInfo.rowPeriod}  labelWidth=${debugInfo.labelWidth}  valleys: col=${debugInfo.colValleys} row=${debugInfo.rowValleys}  applied=${debugInfo.applied}`)
                     )
                   ),
                   // Animation preview lives inside the same column to keep the
