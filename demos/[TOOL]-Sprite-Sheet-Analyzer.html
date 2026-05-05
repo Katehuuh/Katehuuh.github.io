@@ -463,6 +463,11 @@
             // adaptive "Strip BG" that samples corners to detect any solid
             // background color (grey, navy, black, white, ...).
             const [stripBg, setStripBg] = useState(true);
+            // bgColor is the reference background color used by the strip
+            // step. Seeded by corner auto-detect on each new image, but the
+            // user can override via the color picker when corners aren't
+            // representative (sprite extends to corner, gradient bg, etc.).
+            const [bgColor, setBgColor] = useState('#151a22');
             const [debugInfo, setDebugInfo] = useState(null);
             const [labelWidth, setLabelWidth] = useState(INITIAL_STATE.labelWidth);
             const [spriteWidth, setSpriteWidth] = useState(INITIAL_STATE.spriteWidth);
@@ -545,43 +550,89 @@
                 const imageData = ctx.getImageData(0, 0, image.width, image.height);
                 const data = imageData.data;
                 const W = image.width, H = image.height;
-
-                // Sample corner patches to detect ANY solid background color.
-                // Hardcoded grey (#a2a2a2) only worked on certain assets;
-                // corner sampling generalizes to navy, black, white, etc.
-                const cs = Math.min(24, Math.floor(Math.min(W, H) / 10));
-                const samples = [];
-                const grab = (x0, y0) => {
-                  for (let y = y0; y < y0 + cs && y < H; y++)
-                    for (let x = x0; x < x0 + cs && x < W; x++) {
-                      const idx = (y * W + x) * 4;
-                      if (data[idx + 3] < 64) continue;
-                      samples.push([data[idx], data[idx + 1], data[idx + 2]]);
-                    }
-                };
-                grab(0, 0); grab(W - cs, 0); grab(0, H - cs); grab(W - cs, H - cs);
-                const median = (k) => {
-                  if (!samples.length) return 128;
-                  const v = samples.map(p => p[k]).sort((a, b) => a - b);
-                  return v[v.length >> 1];
-                };
-                const bgR = median(0), bgG = median(1), bgB = median(2);
-                // Variance check: if corners disagree wildly, the bg isn't
-                // solid (gradient or actual content) and we skip stripping.
-                let varSum = 0;
-                for (const [r, g, b] of samples) {
-                  varSum += (r - bgR) ** 2 + (g - bgG) ** 2 + (b - bgB) ** 2;
-                }
-                const varAvg = samples.length ? varSum / samples.length : 0;
-                if (varAvg > 60 * 60) {
-                  // Not a solid background: don't strip.
-                  setProcessedImage(null);
-                  return;
-                }
+                // Resolve reference bg color from the user's picker. '#rrggbb'.
+                const hex = (bgColor || '#000000').replace('#', '');
+                const bgR = parseInt(hex.substr(0, 2), 16) || 0;
+                const bgG = parseInt(hex.substr(2, 2), 16) || 0;
+                const bgB = parseInt(hex.substr(4, 2), 16) || 0;
                 const TOL2 = 50 * 50;
-                for (let i = 0; i < data.length; i += 4) {
-                  const dr = data[i] - bgR, dg = data[i + 1] - bgG, db = data[i + 2] - bgB;
-                  if ((dr * dr + dg * dg + db * db) / 3 < TOL2) data[i + 3] = 0;
+
+                // Step 1: per-pixel "matches bg" mask.
+                const isBg = new Uint8Array(W * H);
+                for (let y = 0; y < H; y++) {
+                  for (let x = 0; x < W; x++) {
+                    const i = (y * W + x) * 4;
+                    if (data[i + 3] < 64) { isBg[y * W + x] = 1; continue; }
+                    const dr = data[i] - bgR, dg = data[i + 1] - bgG, db = data[i + 2] - bgB;
+                    if ((dr * dr + dg * dg + db * db) / 3 < TOL2) isBg[y * W + x] = 1;
+                  }
+                }
+
+                // Step 2: erode to find "cores" - pixels inside ≥(2R+1)x(2R+1)
+                // solid-bg blocks. Computed via summed area table so this stays
+                // O(W*H) regardless of erosion radius.
+                const ERODE_R = 5;
+                const sat = new Uint32Array(W * H);
+                for (let y = 0; y < H; y++) {
+                  let rowSum = 0;
+                  for (let x = 0; x < W; x++) {
+                    rowSum += isBg[y * W + x];
+                    sat[y * W + x] = (y > 0 ? sat[(y - 1) * W + x] : 0) + rowSum;
+                  }
+                }
+                const N = 2 * ERODE_R + 1;
+                const TARGET = N * N;
+                const finalMask = new Uint8Array(W * H);
+                const stack = [];
+                for (let y = ERODE_R; y < H - ERODE_R; y++) {
+                  for (let x = ERODE_R; x < W - ERODE_R; x++) {
+                    const x0 = x - ERODE_R, x1 = x + ERODE_R;
+                    const y0 = y - ERODE_R, y1 = y + ERODE_R;
+                    let sum = sat[y1 * W + x1];
+                    if (x0 > 0) sum -= sat[y1 * W + (x0 - 1)];
+                    if (y0 > 0) sum -= sat[(y0 - 1) * W + x1];
+                    if (x0 > 0 && y0 > 0) sum += sat[(y0 - 1) * W + (x0 - 1)];
+                    if (sum === TARGET) {
+                      const idx = y * W + x;
+                      finalMask[idx] = 1;
+                      stack.push(idx);
+                    }
+                  }
+                }
+
+                // Step 3: reconstruction by dilation. Flood-fill from cores
+                // outward through all bg-matching pixels. This is what the
+                // user asked for: "what is attached to a block of 10x10+ can
+                // be extrapolated, but not start from a small center". Tiny
+                // bg-colored pockets inside characters (shadow nooks that
+                // happen to match the bg color) have no core to seed from
+                // and remain opaque.
+                while (stack.length) {
+                  const idx = stack.pop();
+                  const x = idx % W;
+                  const y = (idx - x) / W;
+                  // 4-connectivity: cardinal neighbors only
+                  if (x + 1 < W) {
+                    const n = idx + 1;
+                    if (!finalMask[n] && isBg[n]) { finalMask[n] = 1; stack.push(n); }
+                  }
+                  if (x > 0) {
+                    const n = idx - 1;
+                    if (!finalMask[n] && isBg[n]) { finalMask[n] = 1; stack.push(n); }
+                  }
+                  if (y + 1 < H) {
+                    const n = idx + W;
+                    if (!finalMask[n] && isBg[n]) { finalMask[n] = 1; stack.push(n); }
+                  }
+                  if (y > 0) {
+                    const n = idx - W;
+                    if (!finalMask[n] && isBg[n]) { finalMask[n] = 1; stack.push(n); }
+                  }
+                }
+
+                // Apply: alpha=0 only on the reconstructed final mask.
+                for (let i = 0; i < W * H; i++) {
+                  if (finalMask[i]) data[i * 4 + 3] = 0;
                 }
                 ctx.putImageData(imageData, 0, 0);
                 setProcessedImage(canvas);
@@ -589,7 +640,43 @@
                 // CORS rejection: fall back to original image rather than null
                 setProcessedImage(null);
               }
-            }, [image, stripBg]);
+            }, [image, stripBg, bgColor]);
+
+            // Auto-detect bgColor from corners on every new image. User can
+            // override afterward via the color picker; that override sticks
+            // until the next image is loaded.
+            useEffect(() => {
+              if (!image) return;
+              const canvas = document.createElement('canvas');
+              canvas.width = image.width;
+              canvas.height = image.height;
+              const ctx = canvas.getContext('2d');
+              if (!ctx) return;
+              try {
+                ctx.drawImage(image, 0, 0);
+                const data = ctx.getImageData(0, 0, image.width, image.height).data;
+                const W = image.width, H = image.height;
+                const cs = Math.min(24, Math.floor(Math.min(W, H) / 10));
+                const samples = [];
+                const grab = (x0, y0) => {
+                  for (let y = y0; y < y0 + cs && y < H; y++)
+                    for (let x = x0; x < x0 + cs && x < W; x++) {
+                      const i = (y * W + x) * 4;
+                      if (data[i + 3] < 64) continue;
+                      samples.push([data[i], data[i + 1], data[i + 2]]);
+                    }
+                };
+                grab(0, 0); grab(W - cs, 0); grab(0, H - cs); grab(W - cs, H - cs);
+                if (!samples.length) return;
+                const med = (k) => {
+                  const v = samples.map(p => p[k]).sort((a, b) => a - b);
+                  return v[v.length >> 1];
+                };
+                const r = med(0), g = med(1), b = med(2);
+                const hex = '#' + [r, g, b].map(v => v.toString(16).padStart(2, '0')).join('');
+                setBgColor(hex);
+              } catch (_) { /* CORS, leave bgColor as-is */ }
+            }, [image]);
 
             const loadImageFromFile = useCallback((file) => {
               if (!file) return;
@@ -1303,7 +1390,16 @@
                       title: "Copy the remix prompt to clipboard for use in an external image-gen tool"
                     }, React.createElement(WandIcon), "Copy Remix Prompt"),
                     React.createElement('div', { className: "flex items-center justify-between p-2 bg-gray-700/50 rounded-md" },
-                      React.createElement('label', { htmlFor: "strip-bg-toggle", className: "text-sm font-medium text-gray-300 select-none", title: "Auto-detects the background color from the corners and strips solid backgrounds. Skips when the bg isn't uniform." }, "Strip BG (auto-detect)"),
+                      React.createElement('div', { className: "flex items-center gap-2" },
+                        React.createElement('label', { htmlFor: "strip-bg-toggle", className: "text-sm font-medium text-gray-300 select-none", title: "Strips solid bg via erosion + flood-fill propagation. Auto-fills bg color from image corners; pick manually if corners aren't representative. Small bg-colored pockets inside characters stay opaque." }, "Strip BG"),
+                        React.createElement('input', {
+                          type: "color",
+                          value: bgColor,
+                          onChange: (e) => setBgColor(e.target.value),
+                          className: "w-8 h-6 rounded border border-gray-600 bg-transparent cursor-pointer",
+                          title: `BG color (auto-detected from corners on load): ${bgColor}`,
+                        })
+                      ),
                       React.createElement('label', { className: "relative inline-flex items-center cursor-pointer" },
                         React.createElement('input', { type: "checkbox", id: "strip-bg-toggle", className: "sr-only peer", checked: stripBg, onChange: () => setStripBg(!stripBg) }),
                         React.createElement('div', { className: "w-11 h-6 bg-gray-600 rounded-full peer peer-focus:ring-2 peer-focus:ring-cyan-400 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-500" })
