@@ -334,7 +334,48 @@
           };
 
           // ---------- SpriteAnalyzer ----------
-          const REMIX_PROMPT = 'Using the same placement and type of animation, adapt to replace the current 2D game sprite character animation with the "girl with long hair". Carefully analyze the image and its movement, and replace accordingly. Each character in the grid MUST be changed to the corresponding action pose. This means idle, walk, run, jump, and attack 1 will need to be adapted to an "girl with long hair" style sprite in 2D animation.';
+          // Original prompt (text-to-image edit style, kept for reference):
+          //   'Using the same placement and type of animation, adapt to replace the current 2D
+          //    game sprite character animation with the "girl with long hair". Carefully
+          //    analyze the image and its movement, and replace accordingly. Each character in
+          //    the grid MUST be changed to the corresponding action pose. This means idle,
+          //    walk, run, jump, and attack 1 will need to be adapted to an "girl with long
+          //    hair" style sprite in 2D animation.'
+          //
+          // Replaced by buildRemixPrompt(state) below: text-to-image generation (NOT edit),
+          // precise pixel layout from the current sliders, bg-color reservation clause so
+          // strip-bg has a uniform target post-generation.
+          const buildRemixPrompt = (s) => {
+            const cellsPerRow = (s.imageW > 0 && s.spriteWidth > 0)
+              ? Math.max(1, Math.floor((s.imageW - s.offsetX - s.labelWidth) / s.spriteWidth))
+              : 6;
+            const rowsCount = (s.imageH > 0 && s.rowHeight > 0)
+              ? Math.max(1, Math.floor((s.imageH - s.offsetY) / s.rowHeight))
+              : 5;
+            const labels = ['IDLE', 'WALK', 'RUN', 'JUMP', 'ATTACK 1'];
+            const rowSpec = labels.slice(0, rowsCount).map((l, i) => `  Row ${i}: ${l}`).join('\n');
+            return [
+              'Generate a NEW 2D pixel-art sprite sheet (do not edit any reference image; output a fresh image).',
+              `Subject: "girl with long hair". Style: 2D pixel art, consistent character design across all poses (face, hair, outfit identical, only pose differs).`,
+              '',
+              'Image specification:',
+              `  Total size: ${s.imageW} x ${s.imageH} px.`,
+              `  Background: solid uniform color ${s.bgColor.toUpperCase()}. The background MUST be reserved exactly as ${s.bgColor.toUpperCase()} - no gradient, no shading, no noise, no anti-aliasing into bg color elsewhere - so post-processing can cleanly strip it.`,
+              `  Layout: ${rowsCount} rows x ${cellsPerRow} columns, strict regular grid, no padding between cells.`,
+              `  Cell size: ${s.spriteWidth} x ${s.rowHeight} px each.`,
+              `  Row label strip: ${s.labelWidth} px wide on the LEFT edge of every row, contains uppercase row name in a contrasting yellow color. No text inside sprite cells.`,
+              `  Grid origin (top-left of first sprite cell): x=${s.offsetX + s.labelWidth}, y=${s.offsetY}.`,
+              '',
+              'Rows (top to bottom):',
+              rowSpec,
+              '',
+              'Per-cell rules:',
+              '  Each character is centered horizontally within its cell.',
+              '  Hair flow, weapon extension, and limb spread must stay inside the cell bounds. NO crossing into the next cell.',
+              '  Frame N+1 within a row depicts the next phase of the same animation (consistent timing).',
+              '  Sprite art is anti-aliased internally but the BACKGROUND area remains pure solid bg color - no halo or gradient near sprite edges.',
+            ].join('\n');
+          };
 
           // Build a synthetic sprite sheet so the demo works offline / without external images.
           // Layout matches INITIAL_STATE: labelWidth=303, spriteWidth=192, rowHeight=215,
@@ -564,7 +605,7 @@
                 const bgR = parseInt(hex.substr(0, 2), 16) || 0;
                 const bgG = parseInt(hex.substr(2, 2), 16) || 0;
                 const bgB = parseInt(hex.substr(4, 2), 16) || 0;
-                const TOL2 = 50 * 50;
+                const TOL2 = 30 * 30; // tighter than auto-detect: user picked the exact color
 
                 // Step 1: per-pixel "matches bg" mask.
                 const isBg = new Uint8Array(W * H);
@@ -893,13 +934,19 @@
             };
 
             const handleCopyRemixPrompt = async () => {
+              const prompt = buildRemixPrompt({
+                imageW: imageDimensions.width,
+                imageH: imageDimensions.height,
+                spriteWidth, rowHeight, labelWidth,
+                offsetX, offsetY, bgColor,
+              });
               try {
-                await navigator.clipboard.writeText(REMIX_PROMPT);
+                await navigator.clipboard.writeText(prompt);
                 setToast('Prompt copied');
               } catch (e) {
                 // fallback for browsers without clipboard permission
                 const ta = document.createElement('textarea');
-                ta.value = REMIX_PROMPT;
+                ta.value = prompt;
                 document.body.appendChild(ta);
                 ta.select();
                 try { document.execCommand('copy'); setToast('Prompt copied'); }
@@ -959,7 +1006,7 @@
                     return v[v.length >> 1];
                   };
                   const bgR = median(0), bgG = median(1), bgB = median(2);
-                  const TOL2 = 50 * 50; // squared per-channel-mean threshold
+                  const TOL2 = 30 * 30; // tighter than auto-detect: user picked the exact color // squared per-channel-mean threshold
 
                   const mask = new Uint8Array(W * H);
                   for (let y = 0; y < H; y++) {
@@ -1509,9 +1556,6 @@
               React.createElement('main', { className: "w-full max-w-7xl" },
                 React.createElement(SpriteAnalyzer)
               ),
-              React.createElement('footer', { className: "w-full max-w-7xl mt-8 text-center text-gray-500" },
-                React.createElement('p', null, "Self-contained build, runs in-browser via Babel.")
-              )
             );
           };
 
