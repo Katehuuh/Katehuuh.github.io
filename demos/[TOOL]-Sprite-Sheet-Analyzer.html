@@ -355,8 +355,7 @@
             const labels = ['IDLE', 'WALK', 'RUN', 'JUMP', 'ATTACK 1'];
             const rowSpec = labels.slice(0, rowsCount).map((l, i) => `  Row ${i}: ${l}`).join('\n');
             return [
-              'Generate a NEW 2D pixel-art sprite sheet (do not edit any reference image; output a fresh image).',
-              `Subject: "girl with long hair". Style: 2D pixel art, consistent character design across all poses (face, hair, outfit identical, only pose differs).`,
+              `Generate a 2D pixel-art sprite sheet. Subject: "girl with long hair". Style: 2D pixel art, consistent character design across all poses (face, hair, outfit identical, only pose differs).`,
               '',
               'Image specification:',
               `  Total size: ${s.imageW} x ${s.imageH} px.`,
