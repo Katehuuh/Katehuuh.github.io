@@ -392,6 +392,14 @@ const BOX_SIZE = 60;             // world units (pixels in arena)
 const ARENA = 600;               // logical arena size
 const VMAX = 18;                 // velocity normalization clamp
 const AVMAX = 6;                 // angular velocity clamp
+// Per-feature delta cap. Real per-frame deltas at 60fps are <0.05 in
+// normalized state space; mapping the tanh head's [-1,1] to [-0.05,0.05]
+// keeps an untrained model from teleporting orange across the arena
+// before training has a chance to converge. Training target is rescaled
+// by 1/OUT_SCALE so a real delta of 0.02 trains the head toward 0.4
+// (well inside tanh's linear region) instead of a near-zero value where
+// gradients vanish.
+const OUT_SCALE = 0.05;
 
 // normalization helpers (state -> [0,1])
 function wrapAngle01(a) {
@@ -721,11 +729,15 @@ function buildNeuronGrid(elId, count) {
       const ys = tf.tensor2d(yBatch.subarray(0, kept * FEATURES), [kept, FEATURES]);
       const lossT = optimizer.minimize(() => {
         const pred = model.apply(xs);
-        const mse = tf.losses.meanSquaredError(ys, pred);
+        // Match the inference-side scaling: target is delta/OUT_SCALE so the
+        // head learns to output values in tanh's healthy range.
+        const ysScaled = ys.div(tf.scalar(OUT_SCALE));
+        const mse = tf.losses.meanSquaredError(ysScaled, pred);
         // collision-consistency regularizer on predicted next absolute state.
-        // last frame of xs is the most recent normalized state; pred is the delta.
+        // pred is the head output in scaled space; multiply back by OUT_SCALE
+        // to get the actual delta when summing with lastFrame.
         const lastFrame = xs.slice([0, SEQ_LEN - 1, 0], [-1, 1, -1]).reshape([kept, FEATURES]);
-        const next = lastFrame.add(pred);
+        const next = lastFrame.add(pred.mul(tf.scalar(OUT_SCALE)));
         const x1 = next.slice([0, 0], [-1, 1]);
         const y1 = next.slice([0, 1], [-1, 1]);
         const x2 = next.slice([0, STATE_DIM], [-1, 1]);
@@ -1021,12 +1033,12 @@ function buildNeuronGrid(elId, count) {
       // "where it thinks blue will be next frame" instead of accumulating
       // open-loop drift over thousands of auto-regressive steps. One-step
       // training only guarantees one-step accuracy; closing the loop here
-      // converts that into visible trajectory tracking.
+      // converts that into visible trajectory tracking. OUT_SCALE rescales
+      // the tanh head back to actual normalized-delta magnitude.
       const cur = snapTmp;
       const next = new Float32Array(FEATURES);
-      const dScale = 1.0;
       for (let k = 0; k < FEATURES; k++) {
-        next[k] = clamp01(cur[k] + predDeltaArr[k] * dScale);
+        next[k] = clamp01(cur[k] + predDeltaArr[k] * OUT_SCALE);
       }
       denormApply(predState, next);
       lastNorm.set(next);
