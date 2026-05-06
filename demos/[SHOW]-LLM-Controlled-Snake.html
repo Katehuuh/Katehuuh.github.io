@@ -263,7 +263,7 @@ const FOOD_CHAR = 'F';
 const MODEL_ID = "Qwen3.5-2B-q4f16_1-MLC";
 const CONTEXT_WINDOW = 32768;        // Qwen3.5 native max - chatOpts override may or may not stick
 const MAX_HISTORY_TURNS = 0;         // 0 = no history. History=1 caused RIGHT-LEFT pendulum (model copies inverse of prior answer). Each turn independent now.
-const MAX_TOKENS_PER_REPLY = 16384;  // 16k - generous reasoning budget; salvage logic catches any truncation
+const MAX_TOKENS_PER_REPLY = 20480;  // 20k - generous reasoning budget per user request
 
 const COLORS = {
   background: '#0f1115',
@@ -552,7 +552,8 @@ async function getAIMove() {
 
   // Trim conversation history so we stay well under context_window_size and
   // inference stays fast. Keep the most recent MAX_HISTORY_TURNS user/assistant pairs.
-  const trimmed = conversationHistory.slice(-MAX_HISTORY_TURNS * 2);
+  // slice(-0*2)=slice(0) returns the FULL array, so handle 0 explicitly.
+  const trimmed = MAX_HISTORY_TURNS > 0 ? conversationHistory.slice(-MAX_HISTORY_TURNS * 2) : [];
   const messages = [{ role: 'system', content: systemPrompt }, ...trimmed];
 
   let aiText = '';
@@ -677,14 +678,14 @@ function generateGridState() {
   }
   if (food && typeof food.x === 'number') inner[food.y][food.x] = FOOD_CHAR;
 
-  const colHeader = '      ' + Array.from({ length: GRID_SIZE }, (_, i) => i).join(' ');
-  const wallTop = '    # ' + Array.from({ length: GRID_SIZE }, () => '#').join(' ') + ' #';
+  // No # wall ring - walls are implicit at the edges. Prompt language says
+  // "walls outside" so model treats out-of-bounds as the wall.
+  const colHeader = '    ' + Array.from({ length: GRID_SIZE }, (_, i) => i).join(' ');
   const rows = inner.map((row, i) => {
     const label = String(i).padStart(2, ' ');
-    return label + '  # ' + row.join(' ') + ' #';
+    return label + '  ' + row.join(' ');
   });
-  const wallBot = wallTop;
-  return [colHeader, wallTop, ...rows, wallBot].join('\n');
+  return [colHeader, ...rows].join('\n');
 }
 
 function endGame() {
