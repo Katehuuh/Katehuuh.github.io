@@ -552,8 +552,10 @@ async function getAIMove() {
 
   // Trim conversation history so we stay well under context_window_size and
   // inference stays fast. Keep the most recent MAX_HISTORY_TURNS user/assistant pairs.
-  // slice(-0*2)=slice(0) returns the FULL array, so handle 0 explicitly.
-  const trimmed = MAX_HISTORY_TURNS > 0 ? conversationHistory.slice(-MAX_HISTORY_TURNS * 2) : [];
+  // Send: last N prior pairs + the just-pushed current user prompt.
+  // With MAX_HISTORY_TURNS=0 -> just the current user message (which is required).
+  const totalToInclude = MAX_HISTORY_TURNS * 2 + 1;
+  const trimmed = conversationHistory.slice(-totalToInclude);
   const messages = [{ role: 'system', content: systemPrompt }, ...trimmed];
 
   let aiText = '';
