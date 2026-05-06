@@ -542,7 +542,7 @@ async function getAIMove() {
   appendToConversationLog('GameState', userPrompt);
 
   const systemPrompt =
-    'Snake game on ' + GRID_SIZE + 'x' + GRID_SIZE + ' grid. ^v<> = snake head pointing UP/DOWN/LEFT/RIGHT, ' +
+    'Snake game on ' + GRID_SIZE + 'x' + GRID_SIZE + ' grid. H = snake head, ' +
     '- = horizontal body segment, | = vertical body segment, F = food, X = empty cell, ' +
     '# = WALL (moving INTO a # ends the game; if your head is adjacent to a #, do NOT pick the direction that would put you on the #). ' +
     'Columns 0-' + (GRID_SIZE - 1) + ' left to right, rows 0-' + (GRID_SIZE - 1) + ' top to bottom. ' +
@@ -563,14 +563,13 @@ async function getAIMove() {
       // Official Qwen3 thinking-mode general settings per the model card.
       // "DO NOT use greedy decoding (low temperature)" - low temp causes
       // rote single-token output.
-      // Qwen3.5 thinking-mode-for-text base settings, presence_penalty
-      // bumped to the 2.0 cap per codex rescue advice to harder-suppress
-      // the "Wait, looking at the prompt text" repetition spiral. No
-      // frequency_penalty (would over-penalize the short direction words).
+      // Official Qwen3.5 thinking-mode-for-text settings (HF model card).
+      // 2.0 caused language mixing failure mode (model output "DOWN\nFOLLOW UP,
+      // FOLLOW R2..." gibberish) per Qwen's own warning. Sticking to 1.5.
       temperature: 1.0,
       top_p: 0.95,
       top_k: 20,
-      presence_penalty: 2.0,
+      presence_penalty: 1.5,
     });
     aiText = (completion && completion.choices && completion.choices[0] && completion.choices[0].message && completion.choices[0].message.content) || '';
     aiText = String(aiText);
@@ -673,14 +672,11 @@ function generateGridState() {
   }
   if (snake.length > 0) {
     const { x, y } = snake[0];
-    // Directional arrow for the head shows current heading at a glance, so
-    // the model sees which way the 180-reverse rule will block.
-    const arrow = direction === 'UP' ? '^'
-                : direction === 'DOWN' ? 'v'
-                : direction === 'LEFT' ? '<'
-                : direction === 'RIGHT' ? '>'
-                : HEAD_CHAR;
-    if (x >= 0 && x < GRID_SIZE && y >= 0 && y < GRID_SIZE) inner[y][x] = arrow;
+    // H consistently across turns. Directional arrows ^v<> were tried for
+    // "shows heading at a glance" but no A/B data justified them; simpler
+    // glyph is better for a 2B model that may misread direction-symbol
+    // changes between turns.
+    if (x >= 0 && x < GRID_SIZE && y >= 0 && y < GRID_SIZE) inner[y][x] = HEAD_CHAR;
   }
   if (food && typeof food.x === 'number') inner[food.y][food.x] = FOOD_CHAR;
 
