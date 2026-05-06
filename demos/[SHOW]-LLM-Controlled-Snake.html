@@ -519,18 +519,24 @@ async function getAIMove() {
     ? 'UP, DOWN, LEFT, or RIGHT'
     : (allowed.slice(0, -1).join(', ') + ', or ' + allowed[allowed.length - 1]);
 
-  // Numeric delta + ASCII grid. The pure-numeric variant (run 11) had no
-  // body info so the model couldn't avoid self-collision once snake grew.
-  // The ASCII grid puts head (^v<>), body (-, |), food (F), walls (#) all
-  // visible so the model can navigate around its own trail.
+  // Codex rescue advice: position sentence FIRST (model re-reads from top
+  // when confused; grid-first triggers re-spiral on the grid). Edge labels
+  // in parens mirror what # encodes - factual, not a filter. Anchor word
+  // shortened from "Answer one word:" to "Move:" (compact completion trigger).
+  const edgeTags = [];
+  if (head.y === 0) edgeTags.push('TOP WALL');
+  if (head.y === GRID_SIZE - 1) edgeTags.push('BOTTOM WALL');
+  if (head.x === 0) edgeTags.push('LEFT WALL');
+  if (head.x === GRID_SIZE - 1) edgeTags.push('RIGHT WALL');
+  const headTag = edgeTags.length ? ' (' + edgeTags.join(', ') + ')' : '';
+  const dxStr = dCol > 0 ? dCol + ' RIGHT' : dCol < 0 ? -dCol + ' LEFT' : 'same column';
+  const dyStr = dRow > 0 ? dRow + ' DOWN' : dRow < 0 ? -dRow + ' UP' : 'same row';
+
   const userPrompt =
+    'Head at col ' + head.x + ' row ' + head.y + headTag + '. ' +
+    'Food at col ' + food.x + ' row ' + food.y + ' (' + dxStr + ', ' + dyStr + ').\n' +
     gridState + '\n' +
-    'Snake head at column ' + head.x + ', row ' + head.y + '. ' +
-    'Food at column ' + food.x + ', row ' + food.y + '. ' +
-    'Food is ' + (dCol > 0 ? dCol + ' RIGHT' : dCol < 0 ? -dCol + ' LEFT' : '0') + ' and ' +
-    (dRow > 0 ? dRow + ' DOWN' : dRow < 0 ? -dRow + ' UP' : '0') + ' from head. ' +
-    'Avoid moving into your own body (- or |) or a wall (#). ' +
-    'Which direction moves head toward food (F) without crashing? Answer one word: ' + choicesStr + '.';
+    'Avoid your body (- or |) and walls (#). Move (' + choicesStr + '):';
 
   conversationHistory.push({ role: 'user', content: userPrompt });
   appendToConversationLog('GameState', userPrompt);
@@ -557,13 +563,14 @@ async function getAIMove() {
       // Official Qwen3 thinking-mode general settings per the model card.
       // "DO NOT use greedy decoding (low temperature)" - low temp causes
       // rote single-token output.
-      // Official Qwen3.5 thinking-mode for text tasks (HF model card):
-      // temperature=1.0, top_p=0.95, top_k=20, presence_penalty=1.5,
-      // repetition_penalty=1.0 (no extra freq/repetition penalty).
+      // Qwen3.5 thinking-mode-for-text base settings, presence_penalty
+      // bumped to the 2.0 cap per codex rescue advice to harder-suppress
+      // the "Wait, looking at the prompt text" repetition spiral. No
+      // frequency_penalty (would over-penalize the short direction words).
       temperature: 1.0,
       top_p: 0.95,
       top_k: 20,
-      presence_penalty: 1.5,
+      presence_penalty: 2.0,
     });
     aiText = (completion && completion.choices && completion.choices[0] && completion.choices[0].message && completion.choices[0].message.content) || '';
     aiText = String(aiText);
