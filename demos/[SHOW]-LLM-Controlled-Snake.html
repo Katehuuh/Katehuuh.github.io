@@ -509,15 +509,18 @@ async function getAIMove() {
              : dRow > 0   ? 'food is ' + dRow + ' rows BELOW head (south)'
              :              'food is ' + (-dRow) + ' rows ABOVE head (north)';
 
-  // Run 11 winning prompt: numeric facts only, no grid, no choice list.
-  // Concise sentence with delta in plain English forces the model to engage
-  // with the simple math instead of pattern-matching on grid layout tokens.
+  // Numeric delta + ASCII grid. The pure-numeric variant (run 11) had no
+  // body info so the model couldn't avoid self-collision once snake grew.
+  // The ASCII grid puts head (^v<>), body (-, |), food (F), walls (#) all
+  // visible so the model can navigate around its own trail.
   const userPrompt =
+    gridState + '\n' +
     'Snake head at column ' + head.x + ', row ' + head.y + '. ' +
     'Food at column ' + food.x + ', row ' + food.y + '. ' +
     'Food is ' + (dCol > 0 ? dCol + ' RIGHT' : dCol < 0 ? -dCol + ' LEFT' : '0') + ' and ' +
     (dRow > 0 ? dRow + ' DOWN' : dRow < 0 ? -dRow + ' UP' : '0') + ' from head. ' +
-    'Which direction moves head toward food? Answer one word: UP, DOWN, LEFT, or RIGHT.';
+    'Avoid moving into your own body (- or |) or a wall (#). ' +
+    'Which direction moves head toward food without crashing? Answer one word: UP, DOWN, LEFT, or RIGHT.';
 
   conversationHistory.push({ role: 'user', content: userPrompt });
   appendToConversationLog('GameState', userPrompt);
