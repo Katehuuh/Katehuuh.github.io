@@ -498,8 +498,7 @@ async function getAIMove() {
   appendToConversationLog('GameState', userPrompt);
 
   const systemPrompt =
-    'You control a snake on a 10x10 grid. Each turn, output one word at the end: UP, DOWN, LEFT, or RIGHT. ' +
-    'You may reason briefly inside <think>...</think> first, then on the next line write the single direction word as your final answer. ' +
+    'You control a snake on a 10x10 grid. Each turn, output one word: UP, DOWN, LEFT, or RIGHT. ' +
     'Plan a path toward F (food), avoid moving into your own body or out of the grid (rows 0-9, cols 0-9). ' +
     'Snake length grows when you reach F.';
 
