@@ -536,8 +536,9 @@ async function getAIMove() {
     'Head at col ' + head.x + ' row ' + head.y + headTag + '. ' +
     'Food at col ' + food.x + ' row ' + food.y + ' (' + dxStr + ', ' + dyStr + ').\n' +
     gridState + '\n' +
-    'Avoid your body (- or |) and walls outside. Answer with one word: ' + choicesStr + '.\n' +
-    'Think step by step with reasoning and pick direction to Move to the food (F).';
+    'Avoid your own body (- or |) and the outer walls. ' +
+    'Think step by step, then pick the direction that moves toward the food (F). ' +
+    'Answer with exactly one word: ' + choicesStr + '.';
 
   conversationHistory.push({ role: 'user', content: userPrompt });
   appendToConversationLog('GameState', userPrompt);
