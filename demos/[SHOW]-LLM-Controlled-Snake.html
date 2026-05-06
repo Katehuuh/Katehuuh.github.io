@@ -522,23 +522,16 @@ async function getAIMove() {
   // Codex rescue advice: position sentence FIRST (model re-reads from top
   // when confused; grid-first triggers re-spiral on the grid). Edge labels
   // in parens mirror what # encodes - factual, not a filter. Anchor word
-  // shortened from "Answer one word:" to "Move:" (compact completion trigger).
-  const edgeTags = [];
-  if (head.y === 0) edgeTags.push('TOP WALL');
-  if (head.y === GRID_SIZE - 1) edgeTags.push('BOTTOM WALL');
-  if (head.x === 0) edgeTags.push('LEFT WALL');
-  if (head.x === GRID_SIZE - 1) edgeTags.push('RIGHT WALL');
-  const headTag = edgeTags.length ? ' (' + edgeTags.join(', ') + ')' : '';
-  const dxStr = dCol > 0 ? dCol + ' RIGHT' : dCol < 0 ? -dCol + ' LEFT' : 'same column';
-  const dyStr = dRow > 0 ? dRow + ' DOWN' : dRow < 0 ? -dRow + ' UP' : 'same row';
-
+  // User-validated format (100% correct on near-food disambiguation in the
+  // standalone tester): grid wrapped in code fence, no labels, bulleted
+  // constraint, then "Think step by step" trigger.
   const userPrompt =
-    'Head at col ' + head.x + ' row ' + head.y + headTag + '. ' +
-    'Food at col ' + food.x + ' row ' + food.y + ' (' + dxStr + ', ' + dyStr + ').\n' +
+    'Grid:\n' +
+    '```\n' +
     gridState + '\n' +
-    'Avoid your own body (- or |) and the outer walls. ' +
-    'Think step by step, then pick the direction so H moves toward the food (F). ' +
-    'Answer with exactly one word: ' + choicesStr + '.';
+    '```\n' +
+    '- Avoid your own body (- or |) and the outer walls.\n' +
+    'Think step by step, then pick the direction so H moves toward the food (F). Answer with exactly one word: ' + choicesStr + '.';
 
   conversationHistory.push({ role: 'user', content: userPrompt });
   appendToConversationLog('GameState', userPrompt);
@@ -565,15 +558,14 @@ async function getAIMove() {
     const completion = await engine.chat.completions.create({
       messages,
       max_tokens: MAX_TOKENS_PER_REPLY,
-      // Official Qwen3 thinking-mode general settings per the model card.
-      // "DO NOT use greedy decoding (low temperature)" - low temp causes
-      // rote single-token output.
-      // Official Qwen3.5 thinking-mode-for-text settings (HF model card).
-      // 2.0 caused language mixing failure mode (model output "DOWN\nFOLLOW UP,
-      // FOLLOW R2..." gibberish) per Qwen's own warning. Sticking to 1.5.
+      // Official Qwen3.5 thinking-mode-for-general-tasks per HF model card
+      // (also confirmed by /r/LocalLLaMA "infinite thinking loops" thread):
+      // temperature=1.0, top_p=0.95, top_k=20, min_p=0.0,
+      // presence_penalty=1.5, repetition_penalty=1.0 (= no extra rep penalty).
       temperature: 1.0,
       top_p: 0.95,
       top_k: 20,
+      min_p: 0.0,
       presence_penalty: 1.5,
     });
     aiText = (completion && completion.choices && completion.choices[0] && completion.choices[0].message && completion.choices[0].message.content) || '';
@@ -681,14 +673,10 @@ function generateGridState() {
   }
   if (food && typeof food.x === 'number') inner[food.y][food.x] = FOOD_CHAR;
 
-  // No # wall ring - walls are implicit at the edges. Prompt language says
-  // "walls outside" so model treats out-of-bounds as the wall.
-  const colHeader = '    ' + Array.from({ length: GRID_SIZE }, (_, i) => i).join(' ');
-  const rows = inner.map((row, i) => {
-    const label = String(i).padStart(2, ' ');
-    return label + '  ' + row.join(' ');
-  });
-  return [colHeader, ...rows].join('\n');
+  // Bare cells, no row/col labels, no wall ring. User's standalone tester
+  // confirmed this format gives 100% correct answer on the near-food
+  // disambiguation case while labeled grids triggered the spiral.
+  return inner.map(row => row.join(' ')).join('\n');
 }
 
 function endGame() {
