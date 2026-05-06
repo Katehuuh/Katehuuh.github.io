@@ -1,6 +1,11 @@
 {
   "demos": [
     {
+      "name": "[TOOL]-Local-LLM-Prompt-Tester",
+      "type": "file",
+      "filename": "[TOOL]-Local-LLM-Prompt-Tester.html"
+    },
+    {
       "name": "[SHOW]-LLM-Controlled-Snake",
       "type": "file",
       "filename": "[SHOW]-LLM-Controlled-Snake.html"
