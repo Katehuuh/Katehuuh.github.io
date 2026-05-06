@@ -488,58 +488,30 @@ async function getAIMove() {
   // If it picks a wall move, snake dies. That is intentional; helping the model
   // dodge walls turns the demo into a "fancy random fallback" rather than an
   // honest test of whether the model can reason about the grid.
-  // Codex-reviewed prompt: explicit (col, row) for head + food, step-by-step
-  // delta arithmetic, one few-shot example to anchor the axis convention,
-  // and the grid drawn with row + column labels so the model can COUNT,
-  // not visually guess. None of this leaks "valid moves"; it's all factual
-  // grounding the model could derive from the grid on its own.
+  // Drastically simplified prompt. Previous 700-token elaborate spec
+  // (axis rules + step-by-step delta + 3 few-shot examples + labeled grid)
+  // produced an empty <think></think> and rote "RIGHT" output every turn:
+  // small models short-circuit on heavy spec. This minimal version forces
+  // the model to actually look at the small numeric delta and pick from
+  // four words. No few-shot. No axis preamble. Just facts + question.
   const head = snake[0];
   const dCol = food.x - head.x;
   const dRow = food.y - head.y;
-  const horiz = dCol === 0 ? '0, food is in the SAME column'
-    : (dCol > 0 ? dCol + ', food is ' + dCol + ' columns to the RIGHT'
-                : -dCol + ' columns to the LEFT (delta is negative: ' + dCol + ')');
-  const vert = dRow === 0 ? '0, food is in the SAME row'
-    : (dRow > 0 ? dRow + ', food is ' + dRow + ' rows DOWN'
-                : -dRow + ' rows UP (delta is negative: ' + dRow + ')');
 
   const userPrompt =
-    'Current snake game state.\n\n' +
-    'Head position: (col=' + head.x + ', row=' + head.y + ')\n' +
-    'Food position: (col=' + food.x + ', row=' + food.y + ')\n\n' +
-    'Delta from head to food:\n' +
-    '  food_col - head_col = ' + food.x + ' - ' + head.x + ' = ' + horiz + '\n' +
-    '  food_row - head_row = ' + food.y + ' - ' + head.y + ' = ' + vert + '\n\n' +
-    'Few-shot examples (study how delta sign maps to direction):\n' +
-    '  Example A: head (col=2, row=6), food (col=2, row=3).\n' +
-    '    food_col - head_col = 0, food_row - head_row = -3.\n' +
-    '    food is 0 columns away and 3 rows UP -> answer: UP.\n' +
-    '  Example B: head (col=7, row=4), food (col=2, row=4).\n' +
-    '    food_col - head_col = -5, food_row - head_row = 0.\n' +
-    '    food is 5 columns to the LEFT and 0 rows away -> answer: LEFT.\n' +
-    '  Example C: head (col=3, row=3), food (col=8, row=7).\n' +
-    '    food_col - head_col = 5, food_row - head_row = 4.\n' +
-    '    food is 5 columns to the RIGHT and 4 rows DOWN -> two options here, RIGHT or DOWN both move toward food. Pick the axis with the larger absolute delta -> RIGHT (|5| > |4|).\n\n' +
-    'Grid with coordinates (row labels on the left, column labels on top):\n' +
-    gridState + '\n\n' +
-    'Symbols: H = your head, B = your body, F = food, X = empty cell, # = wall (you die if you move into one).\n' +
-    'Reply with exactly one word: UP, DOWN, LEFT, or RIGHT.';
+    'Snake head at column ' + head.x + ', row ' + head.y + '. ' +
+    'Food at column ' + food.x + ', row ' + food.y + '. ' +
+    'Food is ' + (dCol > 0 ? dCol + ' RIGHT' : dCol < 0 ? -dCol + ' LEFT' : '0') + ' and ' +
+    (dRow > 0 ? dRow + ' DOWN' : dRow < 0 ? -dRow + ' UP' : '0') + ' from head. ' +
+    'Which direction moves head toward food? Answer one word: UP, DOWN, LEFT, or RIGHT.';
 
   conversationHistory.push({ role: 'user', content: userPrompt });
   appendToConversationLog('GameState', userPrompt);
 
   const systemPrompt =
-    'You control a snake on a 10x10 playable grid.\n\n' +
-    'Use coordinates first, then the ASCII grid as confirmation.\n\n' +
-    'Coordinate rules:\n' +
-    '- Positions are written as (col, row).\n' +
-    '- col increases from LEFT to RIGHT: 0, 1, 2, ..., 9.\n' +
-    '- row increases from TOP to BOTTOM: 0, 1, 2, ..., 9.\n' +
-    '- UP means row - 1.\n' +
-    '- DOWN means row + 1.\n' +
-    '- LEFT means col - 1.\n' +
-    '- RIGHT means col + 1.\n\n' +
-    'Choose the one-step direction that moves the snake head toward the food while avoiding walls and body cells. Do not explain. Your final answer must be exactly one word.';
+    'Snake game. Grid columns 0-9 left to right, rows 0-9 top to bottom. ' +
+    'UP = row minus 1, DOWN = row plus 1, LEFT = col minus 1, RIGHT = col plus 1. ' +
+    'Move toward food. Answer with one word only.';
 
   // Trim conversation history so we stay well under context_window_size and
   // inference stays fast. Keep the most recent MAX_HISTORY_TURNS user/assistant pairs.
