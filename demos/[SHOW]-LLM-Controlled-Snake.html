@@ -256,12 +256,13 @@ const HEAD_CHAR = 'H';
 const BODY_CHAR = 'B';
 const FOOD_CHAR = 'F';
 
-// Model config. Qwen3.5-4B has enough headroom for stable reasoning on a
-// 10x10 grid (the 0.8B and 2B variants get into repetition loops on small
-// model sizes). q4f16_1 keeps the download around 2.4 GB - one-time cost,
-// cached in IndexedDB by web-llm. Native ctx 32k; we use 16k. Reasoning is
-// left ENABLED (Qwen3 default); we strip <think>...</think> before parsing.
-const MODEL_ID = "Qwen3.5-4B-q4f16_1-MLC";
+// Model config. Qwen3.5-2B fits comfortably in the browser's per-origin
+// Cache API quota (~1.2 GB). The 4B variant at 2.4 GB hits "Failed to
+// execute 'add' on 'Cache': Unexpected internal error" on most browsers
+// (origin only gets ~5-10% of disk by default). 2B is the largest size
+// reliably cacheable in-browser. Reasoning is left ENABLED (Qwen3 default);
+// we strip <think>...</think> before parsing.
+const MODEL_ID = "Qwen3.5-2B-q4f16_1-MLC";
 const CONTEXT_WINDOW = 32768;     // Qwen3.5 native max
 const MAX_HISTORY_TURNS = 6;      // cap conversation history to avoid token blowup
 const MAX_TOKENS_PER_REPLY = 32768; // give reasoning the full window; model will stop at natural end
