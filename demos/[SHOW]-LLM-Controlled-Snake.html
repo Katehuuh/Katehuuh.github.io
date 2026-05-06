@@ -530,7 +530,7 @@ async function getAIMove() {
     'Food is ' + (dCol > 0 ? dCol + ' RIGHT' : dCol < 0 ? -dCol + ' LEFT' : '0') + ' and ' +
     (dRow > 0 ? dRow + ' DOWN' : dRow < 0 ? -dRow + ' UP' : '0') + ' from head. ' +
     'Avoid moving into your own body (- or |) or a wall (#). ' +
-    'Which direction moves head toward food without crashing? Answer one word: ' + choicesStr + '.';
+    'Which direction moves head toward food (F) without crashing? Answer one word: ' + choicesStr + '.';
 
   conversationHistory.push({ role: 'user', content: userPrompt });
   appendToConversationLog('GameState', userPrompt);
