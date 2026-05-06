@@ -256,12 +256,12 @@ const HEAD_CHAR = 'H';
 const BODY_CHAR = 'B';
 const FOOD_CHAR = 'F';
 
-// Model config. Qwen3.5-2B is large enough for coherent reasoning on the
-// snake grid (the 0.8B variant gets stuck in <think> repetition loops).
-// q4f16_1 keeps the download around 1.2 GB. Native ctx 32k; we use 16k.
-// Reasoning is left ENABLED (Qwen3 default) since it improves move quality;
-// we strip <think>...</think> from the response before parsing the direction.
-const MODEL_ID = "Qwen3.5-2B-q4f16_1-MLC";
+// Model config. Qwen3.5-4B has enough headroom for stable reasoning on a
+// 10x10 grid (the 0.8B and 2B variants get into repetition loops on small
+// model sizes). q4f16_1 keeps the download around 2.4 GB - one-time cost,
+// cached in IndexedDB by web-llm. Native ctx 32k; we use 16k. Reasoning is
+// left ENABLED (Qwen3 default); we strip <think>...</think> before parsing.
+const MODEL_ID = "Qwen3.5-4B-q4f16_1-MLC";
 const CONTEXT_WINDOW = 16384;
 const MAX_HISTORY_TURNS = 6;     // tighter cap because reasoning expands replies
 const MAX_TOKENS_PER_REPLY = 512; // room for <think> reasoning + the final direction
