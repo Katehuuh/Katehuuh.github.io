@@ -557,10 +557,11 @@ async function getAIMove() {
       // Official Qwen3 thinking-mode general settings per the model card.
       // "DO NOT use greedy decoding (low temperature)" - low temp causes
       // rote single-token output.
-      temperature: 0.4, // run 11 (score=10) used temp=0.4 - testing if it reproduces the high-score outlier
+      temperature: 0.4,
       top_p: 0.95,
-      top_k: 10, // tightened from 20 to suppress wall-suicide variance
-      presence_penalty: 1.5,
+      top_k: 10,
+      presence_penalty: 2.0,   // max Qwen tolerates; suppresses "Wait, looking at..." spirals
+      frequency_penalty: 0.5,  // token-level repetition suppression on top of presence
     });
     aiText = (completion && completion.choices && completion.choices[0] && completion.choices[0].message && completion.choices[0].message.content) || '';
     aiText = String(aiText);
@@ -597,7 +598,9 @@ async function getAIMove() {
   // can capture the full per-turn picture without relying on DOM scraping.
   console.log('[snake] turn', inferenceCount, '\nPROMPT:\n' + userPrompt + '\n\nRAW RESPONSE:\n' + aiText + '\n\nCLEANED:\n' + cleanedText);
 
-  const chosen = pickValidFrom(cleanedText);
+  // Try cleaned text first, fall back to scanning the full raw response if
+  // the cleaned text is empty (e.g. <think></think> with nothing else).
+  const chosen = pickValidFrom(cleanedText) || pickValidFrom(aiText);
   if (chosen) {
     nextDirection = chosen;
     cachedMove = chosen;
