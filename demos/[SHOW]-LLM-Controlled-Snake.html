@@ -537,7 +537,7 @@ async function getAIMove() {
     'Food at col ' + food.x + ' row ' + food.y + ' (' + dxStr + ', ' + dyStr + ').\n' +
     gridState + '\n' +
     'Avoid your own body (- or |) and the outer walls. ' +
-    'Think step by step, then pick the direction that moves toward the food (F). ' +
+    'Think step by step, then pick the direction so H moves toward the food (F). ' +
     'Answer with exactly one word: ' + choicesStr + '.';
 
   conversationHistory.push({ role: 'user', content: userPrompt });
