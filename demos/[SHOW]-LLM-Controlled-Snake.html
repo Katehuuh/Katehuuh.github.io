@@ -260,10 +260,10 @@ const FOOD_CHAR = 'F';
 // combo found so far: SmolLM2-1.7B and Qwen3.5-2B@low-temp both rote-output
 // "RIGHT" every turn. With temp 1.0 + presence_penalty 1.5, Qwen3.5-2B
 // actually navigates (food eaten in run 19).
-const MODEL_ID = "Ministral-3-3B-Reasoning-2512-q4f32_1-MLC";
+const MODEL_ID = "Qwen3.5-2B-q4f16_1-MLC";
 const CONTEXT_WINDOW = 32768;        // Qwen3.5 native max - chatOpts override may or may not stick
 const MAX_HISTORY_TURNS = 0;         // 0 = no history. History=1 caused RIGHT-LEFT pendulum (model copies inverse of prior answer). Each turn independent now.
-const MAX_TOKENS_PER_REPLY = 20480;  // 20k - generous reasoning budget per user request
+const MAX_TOKENS_PER_REPLY = 20;     // 20 token cap - non-thinking mode, just enough for a direction word
 
 const COLORS = {
   background: '#0f1115',
@@ -536,16 +536,13 @@ async function getAIMove() {
   conversationHistory.push({ role: 'user', content: userPrompt });
   appendToConversationLog('GameState', userPrompt);
 
-  // Ministral-3-3B-Reasoning system prompt template per the model card.
   const systemPrompt =
-    '# HOW YOU SHOULD THINK AND ANSWER\n\n' +
-    'First draft your thinking process (inner monologue) until you arrive at a response. ' +
-    'Format your response using Markdown, and use LaTeX for any mathematical equations. ' +
-    'Write both your thoughts and the response in the same language as the input.\n\n' +
-    'Your thinking process must follow the template below:[THINK]Your thoughts or/and draft, ' +
-    'like working through an exercise on scratch paper. Be as casual and as long as you want ' +
-    'until you are confident to generate the response to the user.[/THINK]Here, provide a ' +
-    'self-contained response.';
+    'Snake game on ' + GRID_SIZE + 'x' + GRID_SIZE + ' grid. H = snake head, ' +
+    '- = horizontal body segment, | = vertical body segment, F = food, X = empty cell, ' +
+    '# = WALL (moving INTO a # ends the game; if your head is adjacent to a #, do NOT pick the direction that would put you on the #). ' +
+    'Columns 0-' + (GRID_SIZE - 1) + ' left to right, rows 0-' + (GRID_SIZE - 1) + ' top to bottom. ' +
+    'UP decreases row, DOWN increases row, LEFT decreases column, RIGHT increases column. ' +
+    'Pick the direction that reduces distance from head to food without hitting a wall. Reply with one word only.';
 
   // Trim conversation history so we stay well under context_window_size and
   // inference stays fast. Keep the most recent MAX_HISTORY_TURNS user/assistant pairs.
@@ -561,8 +558,14 @@ async function getAIMove() {
     const completion = await engine.chat.completions.create({
       messages,
       max_tokens: MAX_TOKENS_PER_REPLY,
-      // Ministral-3-3B-Reasoning recommended sampling: temperature 0.7.
-      temperature: 0.7,
+      // Official Qwen3.5 NON-thinking-mode for text tasks per HF model card.
+      // Qwen3.5 does not support the /think /nothink soft switch (Qwen3 only).
+      // No stop sequences. Hard 20-token cap stops any spiral cold.
+      temperature: 1.0,
+      top_p: 1.0,
+      top_k: 20,
+      min_p: 0.0,
+      presence_penalty: 2.0,
     });
     aiText = (completion && completion.choices && completion.choices[0] && completion.choices[0].message && completion.choices[0].message.content) || '';
     aiText = String(aiText);
@@ -583,14 +586,8 @@ async function getAIMove() {
   // If max_tokens truncated mid-reasoning (no </think> close), fall back to
   // scanning the raw text for a direction word - sometimes the model emits
   // "I think DOWN is correct" before truncating, and that DOWN is salvageable.
-  // Ministral-3-3B-Reasoning uses [THINK]...[/THINK] markers.
-  // Qwen3 used <think>...</think>. Handle both for forward/backward compat.
   let cleanedText;
-  if (aiText.includes('[/THINK]')) {
-    cleanedText = aiText.replace(/^[\s\S]*\[\/THINK\]/, '').trim();
-  } else if (aiText.includes('[THINK]')) {
-    cleanedText = aiText.replace(/^[\s\S]*\[THINK\]/, '').trim();
-  } else if (aiText.includes('</think>')) {
+  if (aiText.includes('</think>')) {
     cleanedText = aiText.replace(/^[\s\S]*<\/think>/, '').trim();
   } else if (aiText.includes('<think>')) {
     cleanedText = aiText.replace(/^[\s\S]*<think>/, '').trim();
