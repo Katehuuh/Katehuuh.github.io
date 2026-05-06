@@ -510,10 +510,16 @@ async function getAIMove() {
     'Delta from head to food:\n' +
     '  food_col - head_col = ' + food.x + ' - ' + head.x + ' = ' + horiz + '\n' +
     '  food_row - head_row = ' + food.y + ' - ' + head.y + ' = ' + vert + '\n\n' +
-    'Few-shot example:\n' +
-    '  If head is at (col=2, row=6) and food is at (col=2, row=3), then\n' +
-    '  food_col - head_col = 0 and food_row - head_row = -3.\n' +
-    '  The food is 0 columns away and 3 rows UP, so the correct move is UP.\n\n' +
+    'Few-shot examples (study how delta sign maps to direction):\n' +
+    '  Example A: head (col=2, row=6), food (col=2, row=3).\n' +
+    '    food_col - head_col = 0, food_row - head_row = -3.\n' +
+    '    food is 0 columns away and 3 rows UP -> answer: UP.\n' +
+    '  Example B: head (col=7, row=4), food (col=2, row=4).\n' +
+    '    food_col - head_col = -5, food_row - head_row = 0.\n' +
+    '    food is 5 columns to the LEFT and 0 rows away -> answer: LEFT.\n' +
+    '  Example C: head (col=3, row=3), food (col=8, row=7).\n' +
+    '    food_col - head_col = 5, food_row - head_row = 4.\n' +
+    '    food is 5 columns to the RIGHT and 4 rows DOWN -> two options here, RIGHT or DOWN both move toward food. Pick the axis with the larger absolute delta -> RIGHT (|5| > |4|).\n\n' +
     'Grid with coordinates (row labels on the left, column labels on top):\n' +
     gridState + '\n\n' +
     'Symbols: H = your head, B = your body, F = food, X = empty cell, # = wall (you die if you move into one).\n' +
