@@ -263,7 +263,7 @@ const FOOD_CHAR = 'F';
 const MODEL_ID = "Qwen3.5-2B-q4f16_1-MLC";
 const CONTEXT_WINDOW = 32768;        // Qwen3.5 native max - chatOpts override may or may not stick
 const MAX_HISTORY_TURNS = 1;         // 1 prior pair so model sees its own previous answer and avoids DOWN-UP oscillation
-const MAX_TOKENS_PER_REPLY = 256;    // tight cap: brief reasoning + answer fits, spirals get cut and fallback fires
+const MAX_TOKENS_PER_REPLY = 1024;   // headroom for reasoning + answer; salvage logic catches truncated <think>
 
 const COLORS = {
   background: '#0f1115',
@@ -509,6 +509,16 @@ async function getAIMove() {
              : dRow > 0   ? 'food is ' + dRow + ' rows BELOW head (south)'
              :              'food is ' + (-dRow) + ' rows ABOVE head (north)';
 
+  // Filter the 180-reverse direction out of the prompt choice list. Standard
+  // snake rule: cannot reverse onto own neck. Showing only the legal 3 (or 4
+  // when snake has length 1 / first move) simplifies the model's decision.
+  const reverseOf = { UP: 'DOWN', DOWN: 'UP', LEFT: 'RIGHT', RIGHT: 'LEFT' };
+  const banned = (snake.length > 1 && direction) ? reverseOf[direction] : null;
+  const allowed = ['UP', 'DOWN', 'LEFT', 'RIGHT'].filter(d => d !== banned);
+  const choicesStr = allowed.length === 4
+    ? 'UP, DOWN, LEFT, or RIGHT'
+    : (allowed.slice(0, -1).join(', ') + ', or ' + allowed[allowed.length - 1]);
+
   // Numeric delta + ASCII grid. The pure-numeric variant (run 11) had no
   // body info so the model couldn't avoid self-collision once snake grew.
   // The ASCII grid puts head (^v<>), body (-, |), food (F), walls (#) all
@@ -520,7 +530,7 @@ async function getAIMove() {
     'Food is ' + (dCol > 0 ? dCol + ' RIGHT' : dCol < 0 ? -dCol + ' LEFT' : '0') + ' and ' +
     (dRow > 0 ? dRow + ' DOWN' : dRow < 0 ? -dRow + ' UP' : '0') + ' from head. ' +
     'Avoid moving into your own body (- or |) or a wall (#). ' +
-    'Which direction moves head toward food without crashing? Answer one word: UP, DOWN, LEFT, or RIGHT.';
+    'Which direction moves head toward food without crashing? Answer one word: ' + choicesStr + '.';
 
   conversationHistory.push({ role: 'user', content: userPrompt });
   appendToConversationLog('GameState', userPrompt);
