@@ -491,8 +491,10 @@ async function getAIMove() {
   // dodge walls turns the demo into a "fancy random fallback" rather than an
   // honest test of whether the model can reason about the grid.
   const userPrompt =
-    'Current 10x10 grid:\n' + gridState + '\n' +
-    'Symbols: H = your head, B = your body, F = food, X = empty.\n' +
+    'Current grid (10x10 playable area inside a wall ring):\n' + gridState + '\n' +
+    'Symbols: H = your head, B = your body, F = food, X = empty cell, # = wall (you die if you move into one).\n' +
+    'Coordinates: row 0 is at the top, row 9 at the bottom. UP decreases the row index, DOWN increases it. ' +
+    'Column 0 is at the left, column 9 at the right. LEFT decreases the column index, RIGHT increases it.\n' +
     'Reply with exactly one word: UP, DOWN, LEFT, or RIGHT.';
 
   conversationHistory.push({ role: 'user', content: userPrompt });
@@ -591,16 +593,22 @@ function fallbackRandom() {
 }
 
 function generateGridState() {
-  const grid = Array(GRID_SIZE).fill().map(() => Array(GRID_SIZE).fill(EMPTY_CHAR));
+  // Render with a visible wall ring (#) so the model SEES the boundary,
+  // not just an implicit "edge of text". Inner area is GRID_SIZE x GRID_SIZE
+  // playable cells; outer ring is one cell of wall on each side.
+  const W = GRID_SIZE + 2;
+  const grid = Array(W).fill().map(() => Array(W).fill(WALL_CHAR));
+  for (let y = 1; y <= GRID_SIZE; y++)
+    for (let x = 1; x <= GRID_SIZE; x++) grid[y][x] = EMPTY_CHAR;
   for (let i = 1; i < snake.length; i++) {
     const { x, y } = snake[i];
-    if (x >= 0 && x < GRID_SIZE && y >= 0 && y < GRID_SIZE) grid[y][x] = BODY_CHAR;
+    if (x >= 0 && x < GRID_SIZE && y >= 0 && y < GRID_SIZE) grid[y + 1][x + 1] = BODY_CHAR;
   }
   if (snake.length > 0) {
     const { x, y } = snake[0];
-    if (x >= 0 && x < GRID_SIZE && y >= 0 && y < GRID_SIZE) grid[y][x] = HEAD_CHAR;
+    if (x >= 0 && x < GRID_SIZE && y >= 0 && y < GRID_SIZE) grid[y + 1][x + 1] = HEAD_CHAR;
   }
-  if (food && typeof food.x === 'number') grid[food.y][food.x] = FOOD_CHAR;
+  if (food && typeof food.x === 'number') grid[food.y + 1][food.x + 1] = FOOD_CHAR;
   return grid.map(row => row.join('')).join('\n');
 }
 
