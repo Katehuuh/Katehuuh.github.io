@@ -508,21 +508,15 @@ async function getAIMove() {
              : dRow > 0   ? 'food is ' + dRow + ' rows BELOW head (south)'
              :              'food is ' + (-dRow) + ' rows ABOVE head (north)';
 
-  // Standard snake rule: cannot reverse 180. Filter the reverse option out
-  // of the offered choices so the model never wastes a turn picking it.
-  // Wall-collision moves are NOT filtered - that's still on the model.
-  const reverseOf = { UP: 'DOWN', DOWN: 'UP', LEFT: 'RIGHT', RIGHT: 'LEFT' };
-  const banned = (snake.length > 1 && direction) ? reverseOf[direction] : null;
-  const allowed = ['UP', 'DOWN', 'LEFT', 'RIGHT'].filter(d => d !== banned);
-  const choicesStr = allowed.length === 4
-    ? 'UP, DOWN, LEFT, or RIGHT'
-    : (allowed.slice(0, -1).join(', ') + ', or ' + allowed[allowed.length - 1]);
-
+  // Run 11 winning prompt: numeric facts only, no grid, no choice list.
+  // Concise sentence with delta in plain English forces the model to engage
+  // with the simple math instead of pattern-matching on grid layout tokens.
   const userPrompt =
-    gridState + '\n' +
-    'Head at (col=' + head.x + ', row=' + head.y + '). Food at (col=' + food.x + ', row=' + food.y + ').\n' +
-    horiz + '. ' + vert + '.\n' +
-    'Best direction (' + choicesStr + '):';
+    'Snake head at column ' + head.x + ', row ' + head.y + '. ' +
+    'Food at column ' + food.x + ', row ' + food.y + '. ' +
+    'Food is ' + (dCol > 0 ? dCol + ' RIGHT' : dCol < 0 ? -dCol + ' LEFT' : '0') + ' and ' +
+    (dRow > 0 ? dRow + ' DOWN' : dRow < 0 ? -dRow + ' UP' : '0') + ' from head. ' +
+    'Which direction moves head toward food? Answer one word: UP, DOWN, LEFT, or RIGHT.';
 
   conversationHistory.push({ role: 'user', content: userPrompt });
   appendToConversationLog('GameState', userPrompt);
