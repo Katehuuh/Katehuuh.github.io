@@ -508,11 +508,21 @@ async function getAIMove() {
              : dRow > 0   ? 'food is ' + dRow + ' rows BELOW head (south)'
              :              'food is ' + (-dRow) + ' rows ABOVE head (north)';
 
+  // Standard snake rule: cannot reverse 180. Filter the reverse option out
+  // of the offered choices so the model never wastes a turn picking it.
+  // Wall-collision moves are NOT filtered - that's still on the model.
+  const reverseOf = { UP: 'DOWN', DOWN: 'UP', LEFT: 'RIGHT', RIGHT: 'LEFT' };
+  const banned = (snake.length > 1 && direction) ? reverseOf[direction] : null;
+  const allowed = ['UP', 'DOWN', 'LEFT', 'RIGHT'].filter(d => d !== banned);
+  const choicesStr = allowed.length === 4
+    ? 'UP, DOWN, LEFT, or RIGHT'
+    : (allowed.slice(0, -1).join(', ') + ', or ' + allowed[allowed.length - 1]);
+
   const userPrompt =
     gridState + '\n' +
     'Head at (col=' + head.x + ', row=' + head.y + '). Food at (col=' + food.x + ', row=' + food.y + ').\n' +
     horiz + '. ' + vert + '.\n' +
-    'Best direction (UP, DOWN, LEFT, or RIGHT):';
+    'Best direction (' + choicesStr + '):';
 
   conversationHistory.push({ role: 'user', content: userPrompt });
   appendToConversationLog('GameState', userPrompt);
