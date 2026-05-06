@@ -543,7 +543,7 @@ async function getAIMove() {
       // Official Qwen3 thinking-mode general settings per the model card.
       // "DO NOT use greedy decoding (low temperature)" - low temp causes
       // rote single-token output.
-      temperature: 1.0,
+      temperature: 0.7, // tuned down from official 1.0 - less variance, fewer wall-kamikaze runs
       top_p: 0.95,
       top_k: 20,
       presence_penalty: 1.5,
