@@ -490,32 +490,52 @@ async function getAIMove() {
   // If it picks a wall move, snake dies. That is intentional; helping the model
   // dodge walls turns the demo into a "fancy random fallback" rather than an
   // honest test of whether the model can reason about the grid.
-  // Factual spatial summary derived from the grid. NOT a "safe moves" hint.
-  // Just states where head and food are and the raw delta. The model still has
-  // to choose a direction; nothing is filtered.
+  // Codex-reviewed prompt: explicit (col, row) for head + food, step-by-step
+  // delta arithmetic, one few-shot example to anchor the axis convention,
+  // and the grid drawn with row + column labels so the model can COUNT,
+  // not visually guess. None of this leaks "valid moves"; it's all factual
+  // grounding the model could derive from the grid on its own.
   const head = snake[0];
-  const dx = food.x - head.x;
-  const dy = food.y - head.y;
-  const horiz = dx === 0 ? 'same column' : (dx > 0 ? dx + ' tiles to the RIGHT' : -dx + ' tiles to the LEFT');
-  const vert = dy === 0 ? 'same row' : (dy > 0 ? dy + ' tiles DOWN' : -dy + ' tiles UP');
+  const dCol = food.x - head.x;
+  const dRow = food.y - head.y;
+  const horiz = dCol === 0 ? '0, food is in the SAME column'
+    : (dCol > 0 ? dCol + ', food is ' + dCol + ' columns to the RIGHT'
+                : -dCol + ' columns to the LEFT (delta is negative: ' + dCol + ')');
+  const vert = dRow === 0 ? '0, food is in the SAME row'
+    : (dRow > 0 ? dRow + ', food is ' + dRow + ' rows DOWN'
+                : -dRow + ' rows UP (delta is negative: ' + dRow + ')');
 
   const userPrompt =
-    'Current grid (10x10 playable area inside a wall ring):\n' + gridState + '\n' +
+    'Current snake game state.\n\n' +
+    'Head position: (col=' + head.x + ', row=' + head.y + ')\n' +
+    'Food position: (col=' + food.x + ', row=' + food.y + ')\n\n' +
+    'Delta from head to food:\n' +
+    '  food_col - head_col = ' + food.x + ' - ' + head.x + ' = ' + horiz + '\n' +
+    '  food_row - head_row = ' + food.y + ' - ' + head.y + ' = ' + vert + '\n\n' +
+    'Few-shot example:\n' +
+    '  If head is at (col=2, row=6) and food is at (col=2, row=3), then\n' +
+    '  food_col - head_col = 0 and food_row - head_row = -3.\n' +
+    '  The food is 0 columns away and 3 rows UP, so the correct move is UP.\n\n' +
+    'Grid with coordinates (row labels on the left, column labels on top):\n' +
+    gridState + '\n\n' +
     'Symbols: H = your head, B = your body, F = food, X = empty cell, # = wall (you die if you move into one).\n' +
-    'Coordinates: column index increases LEFT to RIGHT (0..9), row index increases TOP to BOTTOM (0..9). ' +
-    'UP = row index minus 1, DOWN = row index plus 1, LEFT = col index minus 1, RIGHT = col index plus 1.\n' +
-    'Head is at (col=' + head.x + ', row=' + head.y + '). ' +
-    'Food is at (col=' + food.x + ', row=' + food.y + '). ' +
-    'Food is ' + horiz + ' and ' + vert + ' relative to your head.\n' +
     'Reply with exactly one word: UP, DOWN, LEFT, or RIGHT.';
 
   conversationHistory.push({ role: 'user', content: userPrompt });
   appendToConversationLog('GameState', userPrompt);
 
   const systemPrompt =
-    'You control a snake on a 10x10 grid. Each turn, output one word: UP, DOWN, LEFT, or RIGHT. ' +
-    'Plan a path toward F (food), avoid moving into your own body or out of the grid (rows 0-9, cols 0-9). ' +
-    'Snake length grows when you reach F.';
+    'You control a snake on a 10x10 playable grid.\n\n' +
+    'Use coordinates first, then the ASCII grid as confirmation.\n\n' +
+    'Coordinate rules:\n' +
+    '- Positions are written as (col, row).\n' +
+    '- col increases from LEFT to RIGHT: 0, 1, 2, ..., 9.\n' +
+    '- row increases from TOP to BOTTOM: 0, 1, 2, ..., 9.\n' +
+    '- UP means row - 1.\n' +
+    '- DOWN means row + 1.\n' +
+    '- LEFT means col - 1.\n' +
+    '- RIGHT means col + 1.\n\n' +
+    'Choose the one-step direction that moves the snake head toward the food while avoiding walls and body cells. Do not explain. Your final answer must be exactly one word.';
 
   // Trim conversation history so we stay well under context_window_size and
   // inference stays fast. Keep the most recent MAX_HISTORY_TURNS user/assistant pairs.
@@ -605,23 +625,28 @@ function fallbackRandom() {
 }
 
 function generateGridState() {
-  // Render with a visible wall ring (#) so the model SEES the boundary,
-  // not just an implicit "edge of text". Inner area is GRID_SIZE x GRID_SIZE
-  // playable cells; outer ring is one cell of wall on each side.
-  const W = GRID_SIZE + 2;
-  const grid = Array(W).fill().map(() => Array(W).fill(WALL_CHAR));
-  for (let y = 1; y <= GRID_SIZE; y++)
-    for (let x = 1; x <= GRID_SIZE; x++) grid[y][x] = EMPTY_CHAR;
+  // Render the grid with column labels across the top and row labels down
+  // the left, plus a # wall ring around the playable cells. Lets the model
+  // count instead of guessing positions visually.
+  const inner = Array(GRID_SIZE).fill().map(() => Array(GRID_SIZE).fill(EMPTY_CHAR));
   for (let i = 1; i < snake.length; i++) {
     const { x, y } = snake[i];
-    if (x >= 0 && x < GRID_SIZE && y >= 0 && y < GRID_SIZE) grid[y + 1][x + 1] = BODY_CHAR;
+    if (x >= 0 && x < GRID_SIZE && y >= 0 && y < GRID_SIZE) inner[y][x] = BODY_CHAR;
   }
   if (snake.length > 0) {
     const { x, y } = snake[0];
-    if (x >= 0 && x < GRID_SIZE && y >= 0 && y < GRID_SIZE) grid[y + 1][x + 1] = HEAD_CHAR;
+    if (x >= 0 && x < GRID_SIZE && y >= 0 && y < GRID_SIZE) inner[y][x] = HEAD_CHAR;
   }
-  if (food && typeof food.x === 'number') grid[food.y + 1][food.x + 1] = FOOD_CHAR;
-  return grid.map(row => row.join('')).join('\n');
+  if (food && typeof food.x === 'number') inner[food.y][food.x] = FOOD_CHAR;
+
+  const colHeader = '      ' + Array.from({ length: GRID_SIZE }, (_, i) => i).join(' ');
+  const wallTop = '    # ' + Array.from({ length: GRID_SIZE }, () => '#').join(' ') + ' #';
+  const rows = inner.map((row, i) => {
+    const label = String(i).padStart(2, ' ');
+    return label + '  # ' + row.join(' ') + ' #';
+  });
+  const wallBot = wallTop;
+  return [colHeader, wallTop, ...rows, wallBot].join('\n');
 }
 
 function endGame() {
