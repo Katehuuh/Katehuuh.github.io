@@ -256,15 +256,15 @@ const HEAD_CHAR = 'H';
 const BODY_CHAR = 'B';
 const FOOD_CHAR = 'F';
 
-// Model config. Qwen3.5-0.8B is the newest small chat model in web-llm's
-// prebuilt list (Qwen3.5 family is current as of 2026, beats Qwen3 and
-// Qwen2.5 on small-model benchmarks). q4f16_1 keeps the download around
-// 500MB. Native context is 32k; we raise context_window_size from the
-// 4096 default so growing conversation history fits.
-const MODEL_ID = "Qwen3.5-0.8B-q4f16_1-MLC";
-const CONTEXT_WINDOW = 16384; // halve the 32k native cap to stay snappy
-const MAX_HISTORY_TURNS = 8;  // cap conversation history to avoid token blowup
-const MAX_TOKENS_PER_REPLY = 512; // room for Qwen3.5's <think> reasoning + final move
+// Model config. Qwen3.5-2B is large enough for coherent reasoning on the
+// snake grid (the 0.8B variant gets stuck in <think> repetition loops).
+// q4f16_1 keeps the download around 1.2 GB. Native ctx 32k; we use 16k.
+// Reasoning is left ENABLED (Qwen3 default) since it improves move quality;
+// we strip <think>...</think> from the response before parsing the direction.
+const MODEL_ID = "Qwen3.5-2B-q4f16_1-MLC";
+const CONTEXT_WINDOW = 16384;
+const MAX_HISTORY_TURNS = 6;     // tighter cap because reasoning expands replies
+const MAX_TOKENS_PER_REPLY = 512; // room for <think> reasoning + the final direction
 
 const COLORS = {
   background: '#0f1115',
@@ -498,8 +498,9 @@ async function getAIMove() {
   appendToConversationLog('GameState', userPrompt);
 
   const systemPrompt =
-    'You control a snake on a 10x10 grid. Each turn, output one word: UP, DOWN, LEFT, or RIGHT. ' +
-    'Plan a path toward F (food), avoid moving into your own body or out of the grid. ' +
+    'You control a snake on a 10x10 grid. Each turn, output one word at the end: UP, DOWN, LEFT, or RIGHT. ' +
+    'You may reason briefly inside <think>...</think> first, then on the next line write the single direction word as your final answer. ' +
+    'Plan a path toward F (food), avoid moving into your own body or out of the grid (rows 0-9, cols 0-9). ' +
     'Snake length grows when you reach F.';
 
   // Trim conversation history so we stay well under context_window_size and
