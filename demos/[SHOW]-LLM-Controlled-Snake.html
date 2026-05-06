@@ -263,9 +263,9 @@ const FOOD_CHAR = 'F';
 // reliably cacheable in-browser. Reasoning is left ENABLED (Qwen3 default);
 // we strip <think>...</think> before parsing.
 const MODEL_ID = "Qwen3.5-2B-q4f16_1-MLC";
-const CONTEXT_WINDOW = 32768;     // Qwen3.5 native max
-const MAX_HISTORY_TURNS = 6;      // cap conversation history to avoid token blowup
-const MAX_TOKENS_PER_REPLY = 32768; // give reasoning the full window; model will stop at natural end
+const CONTEXT_WINDOW = 32768;        // Qwen3.5 native max - chatOpts override may or may not stick
+const MAX_HISTORY_TURNS = 1;         // 1 prior pair only; the rich axis-label prompt is ~700 tokens
+const MAX_TOKENS_PER_REPLY = 1024;   // bounded so output stays fast; reasoning has plenty here
 
 const COLORS = {
   background: '#0f1115',
