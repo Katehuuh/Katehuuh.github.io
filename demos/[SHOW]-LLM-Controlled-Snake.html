@@ -256,13 +256,14 @@ const HEAD_CHAR = 'H';
 const BODY_CHAR = 'B';
 const FOOD_CHAR = 'F';
 
-// Model config. Qwen3.5-2B fits comfortably in the browser's per-origin
-// Cache API quota (~1.2 GB). The 4B variant at 2.4 GB hits "Failed to
-// execute 'add' on 'Cache': Unexpected internal error" on most browsers
-// (origin only gets ~5-10% of disk by default). 2B is the largest size
-// reliably cacheable in-browser. Reasoning is left ENABLED (Qwen3 default);
-// we strip <think>...</think> before parsing.
-const MODEL_ID = "Qwen3.5-2B-q4f16_1-MLC";
+// Model config. Llama-3.2-3B-Instruct (~1.8 GB q4f16_1) is a strong
+// non-reasoning instruction follower. The Qwen3.5-2B reasoning variant
+// either spirals in <think> or emits empty thinking and outputs the same
+// direction every turn at low temperatures. Llama-3.2-3B has no <think>
+// channel so output is direct, and 3B params is enough headroom for the
+// spatial task. 1.8 GB fits the browser Cache API quota (4B at 2.4 GB
+// hit "Failed to execute 'add' on 'Cache'").
+const MODEL_ID = "Llama-3.2-3B-Instruct-q4f16_1-MLC";
 const CONTEXT_WINDOW = 32768;        // Qwen3.5 native max - chatOpts override may or may not stick
 const MAX_HISTORY_TURNS = 1;         // 1 prior pair only; the rich axis-label prompt is ~700 tokens
 const MAX_TOKENS_PER_REPLY = 384;    // bounded so model can't spiral into "Wait, looking at..." loops
@@ -548,7 +549,7 @@ async function getAIMove() {
     const completion = await engine.chat.completions.create({
       messages,
       max_tokens: MAX_TOKENS_PER_REPLY,
-      temperature: 0.1, // near-deterministic so reasoning chain drives output, not sampling
+      temperature: 0.3, // moderate so the model picks a real direction, not a single rote token
     });
     aiText = (completion && completion.choices && completion.choices[0] && completion.choices[0].message && completion.choices[0].message.content) || '';
     aiText = String(aiText);
