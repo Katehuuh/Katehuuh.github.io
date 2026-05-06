@@ -557,11 +557,13 @@ async function getAIMove() {
       // Official Qwen3 thinking-mode general settings per the model card.
       // "DO NOT use greedy decoding (low temperature)" - low temp causes
       // rote single-token output.
-      temperature: 0.4,
+      // Official Qwen3.5 thinking-mode for text tasks (HF model card):
+      // temperature=1.0, top_p=0.95, top_k=20, presence_penalty=1.5,
+      // repetition_penalty=1.0 (no extra freq/repetition penalty).
+      temperature: 1.0,
       top_p: 0.95,
-      top_k: 10,
-      presence_penalty: 2.0,   // max Qwen tolerates; suppresses "Wait, looking at..." spirals
-      frequency_penalty: 0.5,  // token-level repetition suppression on top of presence
+      top_k: 20,
+      presence_penalty: 1.5,
     });
     aiText = (completion && completion.choices && completion.choices[0] && completion.choices[0].message && completion.choices[0].message.content) || '';
     aiText = String(aiText);
