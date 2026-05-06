@@ -537,7 +537,7 @@ async function getAIMove() {
     'Food at col ' + food.x + ' row ' + food.y + ' (' + dxStr + ', ' + dyStr + ').\n' +
     gridState + '\n' +
     'Avoid your body (- or |) and walls outside. Answer with one word: ' + choicesStr + '.\n' +
-    'Think step by step with reasoning and pick one Move:';
+    'Think step by step with reasoning and pick direction to Move to the food (F).';
 
   conversationHistory.push({ role: 'user', content: userPrompt });
   appendToConversationLog('GameState', userPrompt);
@@ -673,10 +673,6 @@ function generateGridState() {
   }
   if (snake.length > 0) {
     const { x, y } = snake[0];
-    // H consistently across turns. Directional arrows ^v<> were tried for
-    // "shows heading at a glance" but no A/B data justified them; simpler
-    // glyph is better for a 2B model that may misread direction-symbol
-    // changes between turns.
     if (x >= 0 && x < GRID_SIZE && y >= 0 && y < GRID_SIZE) inner[y][x] = HEAD_CHAR;
   }
   if (food && typeof food.x === 'number') inner[food.y][food.x] = FOOD_CHAR;
