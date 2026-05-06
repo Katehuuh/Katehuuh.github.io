@@ -256,9 +256,15 @@ const HEAD_CHAR = 'H';
 const BODY_CHAR = 'B';
 const FOOD_CHAR = 'F';
 
-// Model config. Qwen2.5-0.5B is the smallest reliable instruction-tuned chat
-// model in web-llm's prebuilt list as of 2026; q4f16_1 keeps download under ~400MB.
-const MODEL_ID = "Qwen2.5-0.5B-Instruct-q4f16_1-MLC";
+// Model config. Qwen3.5-0.8B is the newest small chat model in web-llm's
+// prebuilt list (Qwen3.5 family is current as of 2026, beats Qwen3 and
+// Qwen2.5 on small-model benchmarks). q4f16_1 keeps the download around
+// 500MB. Native context is 32k; we raise context_window_size from the
+// 4096 default so growing conversation history fits.
+const MODEL_ID = "Qwen3.5-0.8B-q4f16_1-MLC";
+const CONTEXT_WINDOW = 16384; // halve the 32k native cap to stay snappy
+const MAX_HISTORY_TURNS = 8;  // cap conversation history to avoid token blowup
+const MAX_TOKENS_PER_REPLY = 512; // room for Qwen3.5's <think> reasoning + final move
 
 const COLORS = {
   background: '#0f1115',
@@ -299,7 +305,6 @@ let gameOver = false;
 let waitingForAI = false;
 let conversationHistory = [];
 let cachedMove = null;
-let cachedValidMoves = [];
 let inferenceCount = 0;
 
 // Engine state
@@ -335,7 +340,10 @@ async function bootEngine() {
     loaderText.textContent = report.text || ('Loading ' + pct + '%');
   };
 
-  engine = await webllm.CreateMLCEngine(MODEL_ID, { initProgressCallback: initProgress });
+  engine = await webllm.CreateMLCEngine(MODEL_ID, {
+    initProgressCallback: initProgress,
+    chatOpts: { context_window_size: CONTEXT_WINDOW },
+  });
   engineReady = true;
   loaderEl.classList.add('hidden');
   appendToConversationLog('System', 'Local model ready: ' + MODEL_ID);
@@ -351,7 +359,6 @@ function initGame() {
   waitingForAI = false;
   conversationHistory = [];
   cachedMove = null;
-  cachedValidMoves = [];
   inferenceCount = 0;
   inferCountElement.textContent = '0';
   latencyElement.textContent = '-';
@@ -477,106 +484,109 @@ async function getAIMove() {
   nextMoveElement.textContent = 'Thinking';
 
   const gridState = generateGridState();
-  const validMoves = getValidMoves();
-  cachedValidMoves = validMoves;
 
-  // Note: borders are drawn as walls in the grid but the playable area is the
-  // full 10x10. Walls are not gameover-triggering until the snake moves into one.
+  // No valid-moves hint, no head/food coordinates. The LLM gets the grid only.
+  // If it picks a wall move, snake dies. That is intentional; helping the model
+  // dodge walls turns the demo into a "fancy random fallback" rather than an
+  // honest test of whether the model can reason about the grid.
   const userPrompt =
     'Current 10x10 grid:\n' + gridState + '\n' +
-    'Symbols: H head, B body, F food, X empty.\n' +
-    'Head position: (' + snake[0].x + ',' + snake[0].y + '). Food: (' + food.x + ',' + food.y + ').\n' +
-    'Valid moves right now: ' + (validMoves.length ? validMoves.join(', ') : 'NONE') + '.\n' +
-    'Reply with exactly one word from the valid list.';
+    'Symbols: H = your head, B = your body, F = food, X = empty.\n' +
+    'Reply with exactly one word: UP, DOWN, LEFT, or RIGHT.';
 
   conversationHistory.push({ role: 'user', content: userPrompt });
   appendToConversationLog('GameState', userPrompt);
 
   const systemPrompt =
-    'You control a snake on a 10x10 grid. Respond with exactly one word: UP, DOWN, LEFT, or RIGHT. ' +
-    'Pick a move from the valid list given each turn. Aim for the food F. Do not reverse into your own body.';
+    'You control a snake on a 10x10 grid. Each turn, output one word: UP, DOWN, LEFT, or RIGHT. ' +
+    'Plan a path toward F (food), avoid moving into your own body or out of the grid. ' +
+    'Snake length grows when you reach F.';
 
-  const messages = [{ role: 'system', content: systemPrompt }, ...conversationHistory];
+  // Trim conversation history so we stay well under context_window_size and
+  // inference stays fast. Keep the most recent MAX_HISTORY_TURNS user/assistant pairs.
+  const trimmed = conversationHistory.slice(-MAX_HISTORY_TURNS * 2);
+  const messages = [{ role: 'system', content: systemPrompt }, ...trimmed];
 
   let aiText = '';
   const start = performance.now();
   try {
     const completion = await engine.chat.completions.create({
       messages,
-      max_tokens: 8,
-      temperature: 0.2,
+      max_tokens: MAX_TOKENS_PER_REPLY,
+      temperature: 0.4,
     });
     aiText = (completion && completion.choices && completion.choices[0] && completion.choices[0].message && completion.choices[0].message.content) || '';
-    aiText = String(aiText).trim();
+    aiText = String(aiText);
     const dt = Math.round(performance.now() - start);
     inferenceCount++;
     inferCountElement.textContent = String(inferenceCount);
     latencyElement.textContent = dt + ' ms';
   } catch (err) {
     appendToConversationLog('Error', 'Inference failed: ' + (err && err.message ? err.message : String(err)));
-    fallbackMove(validMoves);
+    console.error('[snake] inference failed:', err);
+    fallbackRandom();
     waitingForAI = false;
     return;
   }
 
-  conversationHistory.push({ role: 'assistant', content: aiText });
-  appendToConversationLog('AIResponse', aiText || '(empty response)');
+  // Strip Qwen3/Qwen3.5 <think>...</think> reasoning before parsing the move.
+  // Handle unterminated open tag (when max_tokens cuts off inside reasoning).
+  const cleanedText = aiText
+    .replace(/<think>[\s\S]*?<\/think>/g, '')
+    .replace(/<think>[\s\S]*$/g, '')
+    .trim();
 
-  const chosen = pickValidFrom(aiText, validMoves);
+  conversationHistory.push({ role: 'assistant', content: cleanedText || aiText.trim() });
+  appendToConversationLog('AIResponse', cleanedText || '(only thinking, no move emitted)');
+
+  // Detailed console log so the headed-Playwright test (or browser devtools)
+  // can capture the full per-turn picture without relying on DOM scraping.
+  console.log('[snake] turn', inferenceCount, '\nPROMPT:\n' + userPrompt + '\n\nRAW RESPONSE:\n' + aiText + '\n\nCLEANED:\n' + cleanedText);
+
+  const chosen = pickValidFrom(cleanedText);
   if (chosen) {
     nextDirection = chosen;
     cachedMove = chosen;
     nextMoveElement.textContent = chosen;
   } else {
-    appendToConversationLog('Retry', 'Model output not in valid set. Falling back to a valid move.');
-    fallbackMove(validMoves);
+    appendToConversationLog('Retry', 'Model output had no direction word. Picking random direction (snake may die).');
+    fallbackRandom();
   }
 
   waitingForAI = false;
 }
 
-function pickValidFrom(text, validMoves) {
+function pickValidFrom(text) {
   if (!text) return null;
   const upper = text.toUpperCase();
-  // Prefer exact match against the cached valid set.
-  if (validMoves.includes(upper)) return upper;
-  // Otherwise scan response for any valid token.
-  for (const m of validMoves) {
+  const allDirs = ['UP', 'DOWN', 'LEFT', 'RIGHT'];
+  // Disallow only 180-reverse (standard snake rule, NOT wall-avoidance).
+  const reverseOf = { UP: 'DOWN', DOWN: 'UP', LEFT: 'RIGHT', RIGHT: 'LEFT' };
+  const banned = (snake.length > 1 && direction) ? reverseOf[direction] : null;
+  // Prefer single-word exact match.
+  if (allDirs.includes(upper) && upper !== banned) return upper;
+  // Else find first direction word in the response (skip banned reverse).
+  for (const m of allDirs) {
+    if (m === banned) continue;
     const re = new RegExp('\\b' + m + '\\b');
     if (re.test(upper)) return m;
   }
   return null;
 }
 
-function fallbackMove(validMoves) {
-  if (!validMoves || validMoves.length === 0) {
-    nextMoveElement.textContent = 'no valid moves';
-    return;
-  }
-  const m = validMoves[Math.floor(Math.random() * validMoves.length)];
-  nextDirection = m;
-  cachedMove = m;
-  nextMoveElement.textContent = m + ' (fallback)';
-}
-
-function getValidMoves() {
-  const moves = [];
-  const head = snake[0];
-  // Disallow 180 reverse only if snake has a body segment behind the head.
+// True random fallback. NOT wall-aware. If model fails to emit a direction
+// word, pick any non-reverse direction; if that runs into a wall, the snake
+// dies and the user has to restart. That is by design - we want to see if
+// the model can actually navigate, not have a safety net play for it.
+function fallbackRandom() {
+  const allDirs = ['UP', 'DOWN', 'LEFT', 'RIGHT'];
   const reverseOf = { UP: 'DOWN', DOWN: 'UP', LEFT: 'RIGHT', RIGHT: 'LEFT' };
   const banned = (snake.length > 1 && direction) ? reverseOf[direction] : null;
-  const dirs = [
-    { dir: 'UP', dx: 0, dy: -1 },
-    { dir: 'DOWN', dx: 0, dy: 1 },
-    { dir: 'LEFT', dx: -1, dy: 0 },
-    { dir: 'RIGHT', dx: 1, dy: 0 },
-  ];
-  for (const { dir, dx, dy } of dirs) {
-    if (dir === banned) continue;
-    const np = { x: head.x + dx, y: head.y + dy };
-    if (!isCollision(np)) moves.push(dir);
-  }
-  return moves;
+  const choices = banned ? allDirs.filter(d => d !== banned) : allDirs;
+  const m = choices[Math.floor(Math.random() * choices.length)];
+  nextDirection = m;
+  cachedMove = m;
+  nextMoveElement.textContent = m + ' (random fallback)';
 }
 
 function generateGridState() {
