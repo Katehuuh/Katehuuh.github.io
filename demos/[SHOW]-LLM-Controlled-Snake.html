@@ -567,11 +567,18 @@ async function getAIMove() {
   }
 
   // Strip Qwen3/Qwen3.5 <think>...</think> reasoning before parsing the move.
-  // Handle unterminated open tag (when max_tokens cuts off inside reasoning).
-  const cleanedText = aiText
-    .replace(/<think>[\s\S]*?<\/think>/g, '')
-    .replace(/<think>[\s\S]*$/g, '')
-    .trim();
+  // If the response contains a closed </think>, take only the content after it.
+  // If max_tokens truncated mid-reasoning (no </think> close), fall back to
+  // scanning the raw text for a direction word - sometimes the model emits
+  // "I think DOWN is correct" before truncating, and that DOWN is salvageable.
+  let cleanedText;
+  if (aiText.includes('</think>')) {
+    cleanedText = aiText.replace(/^[\s\S]*<\/think>/, '').trim();
+  } else if (aiText.includes('<think>')) {
+    cleanedText = aiText.replace(/^[\s\S]*<think>/, '').trim();
+  } else {
+    cleanedText = aiText.trim();
+  }
 
   conversationHistory.push({ role: 'assistant', content: cleanedText || aiText.trim() });
   appendToConversationLog('AIResponse', cleanedText || '(only thinking, no move emitted)');
