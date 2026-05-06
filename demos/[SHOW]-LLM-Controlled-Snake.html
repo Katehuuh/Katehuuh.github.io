@@ -497,13 +497,22 @@ async function getAIMove() {
   const dCol = food.x - head.x;
   const dRow = food.y - head.y;
 
+  // Declarative spatial facts, no questions. End with "Best direction:" anchor
+  // so the model completes the answer instead of debating with itself in <think>.
+  const heading = direction || 'NONE (initial)';
+  const horiz = dCol === 0 ? 'food in same column as head'
+              : dCol > 0   ? 'food is ' + dCol + ' columns RIGHT of head'
+              :              'food is ' + (-dCol) + ' columns LEFT of head';
+  const vert = dRow === 0 ? 'food in same row as head'
+             : dRow > 0   ? 'food is ' + dRow + ' rows BELOW head (DOWN)'
+             :              'food is ' + (-dRow) + ' rows ABOVE head (UP)';
+
   const userPrompt =
-    'Grid:\n' + gridState + '\n\n' +
-    'Head at column ' + head.x + ', row ' + head.y + '. ' +
-    'Food at column ' + food.x + ', row ' + food.y + '. ' +
-    'Food is ' + (dCol > 0 ? dCol + ' RIGHT' : dCol < 0 ? -dCol + ' LEFT' : '0') + ' and ' +
-    (dRow > 0 ? dRow + ' DOWN' : dRow < 0 ? -dRow + ' UP' : '0') + ' from head.\n' +
-    'Reply with one word: UP, DOWN, LEFT, or RIGHT.';
+    gridState + '\n' +
+    'Head: (col=' + head.x + ', row=' + head.y + ') facing ' + heading + '.\n' +
+    'Food: (col=' + food.x + ', row=' + food.y + ').\n' +
+    horiz + '. ' + vert + '.\n' +
+    'Best direction (UP, DOWN, LEFT, or RIGHT):';
 
   conversationHistory.push({ role: 'user', content: userPrompt });
   appendToConversationLog('GameState', userPrompt);
