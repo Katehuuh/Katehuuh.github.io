@@ -262,9 +262,9 @@ const FOOD_CHAR = 'F';
 // cached in IndexedDB by web-llm. Native ctx 32k; we use 16k. Reasoning is
 // left ENABLED (Qwen3 default); we strip <think>...</think> before parsing.
 const MODEL_ID = "Qwen3.5-4B-q4f16_1-MLC";
-const CONTEXT_WINDOW = 16384;
-const MAX_HISTORY_TURNS = 6;     // tighter cap because reasoning expands replies
-const MAX_TOKENS_PER_REPLY = 512; // room for <think> reasoning + the final direction
+const CONTEXT_WINDOW = 32768;     // Qwen3.5 native max
+const MAX_HISTORY_TURNS = 6;      // cap conversation history to avoid token blowup
+const MAX_TOKENS_PER_REPLY = 32768; // give reasoning the full window; model will stop at natural end
 
 const COLORS = {
   background: '#0f1115',
