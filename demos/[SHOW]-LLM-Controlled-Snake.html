@@ -263,7 +263,7 @@ const FOOD_CHAR = 'F';
 const MODEL_ID = "Qwen3.5-2B-q4f16_1-MLC";
 const CONTEXT_WINDOW = 32768;        // Qwen3.5 native max - chatOpts override may or may not stick
 const MAX_HISTORY_TURNS = 1;         // 1 prior pair only; the rich axis-label prompt is ~700 tokens
-const MAX_TOKENS_PER_REPLY = 4096;   // big headroom so reasoning finishes before truncation cuts the direction word
+const MAX_TOKENS_PER_REPLY = 256;    // tight cap: brief reasoning + answer fits, spirals get cut and fallback fires
 
 const COLORS = {
   background: '#0f1115',
@@ -509,7 +509,7 @@ async function getAIMove() {
   appendToConversationLog('GameState', userPrompt);
 
   const systemPrompt =
-    'Snake game on ' + GRID_SIZE + 'x' + GRID_SIZE + ' grid. H = head, F = food, X = empty, # = wall. ' +
+    'Snake game on ' + GRID_SIZE + 'x' + GRID_SIZE + ' grid. ^v<> = snake head pointing UP/DOWN/LEFT/RIGHT, B = body, F = food, X = empty, # = wall. ' +
     'Columns 0-' + (GRID_SIZE - 1) + ' left to right, rows 0-' + (GRID_SIZE - 1) + ' top to bottom. ' +
     'UP decreases row, DOWN increases row, LEFT decreases column, RIGHT increases column. ' +
     'Pick the direction that reduces distance from head to food. Reply with one word only.';
@@ -612,7 +612,14 @@ function generateGridState() {
   }
   if (snake.length > 0) {
     const { x, y } = snake[0];
-    if (x >= 0 && x < GRID_SIZE && y >= 0 && y < GRID_SIZE) inner[y][x] = HEAD_CHAR;
+    // Directional arrow for the head shows current heading at a glance, so
+    // the model sees which way the 180-reverse rule will block.
+    const arrow = direction === 'UP' ? '^'
+                : direction === 'DOWN' ? 'v'
+                : direction === 'LEFT' ? '<'
+                : direction === 'RIGHT' ? '>'
+                : HEAD_CHAR;
+    if (x >= 0 && x < GRID_SIZE && y >= 0 && y < GRID_SIZE) inner[y][x] = arrow;
   }
   if (food && typeof food.x === 'number') inner[food.y][food.x] = FOOD_CHAR;
 
