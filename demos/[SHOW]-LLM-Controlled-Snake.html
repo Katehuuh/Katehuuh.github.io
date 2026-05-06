@@ -265,7 +265,7 @@ const FOOD_CHAR = 'F';
 const MODEL_ID = "Qwen3.5-2B-q4f16_1-MLC";
 const CONTEXT_WINDOW = 32768;        // Qwen3.5 native max - chatOpts override may or may not stick
 const MAX_HISTORY_TURNS = 1;         // 1 prior pair only; the rich axis-label prompt is ~700 tokens
-const MAX_TOKENS_PER_REPLY = 1024;   // bounded so output stays fast; reasoning has plenty here
+const MAX_TOKENS_PER_REPLY = 384;    // bounded so model can't spiral into "Wait, looking at..." loops
 
 const COLORS = {
   background: '#0f1115',
@@ -548,7 +548,7 @@ async function getAIMove() {
     const completion = await engine.chat.completions.create({
       messages,
       max_tokens: MAX_TOKENS_PER_REPLY,
-      temperature: 0.4,
+      temperature: 0.1, // near-deterministic so reasoning chain drives output, not sampling
     });
     aiText = (completion && completion.choices && completion.choices[0] && completion.choices[0].message && completion.choices[0].message.content) || '';
     aiText = String(aiText);
