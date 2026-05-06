@@ -262,7 +262,7 @@ const FOOD_CHAR = 'F';
 // actually navigates (food eaten in run 19).
 const MODEL_ID = "Qwen3.5-2B-q4f16_1-MLC";
 const CONTEXT_WINDOW = 32768;        // Qwen3.5 native max - chatOpts override may or may not stick
-const MAX_HISTORY_TURNS = 1;         // 1 prior pair so model sees its own previous answer and avoids DOWN-UP oscillation
+const MAX_HISTORY_TURNS = 0;         // 0 = no history. History=1 caused RIGHT-LEFT pendulum (model copies inverse of prior answer). Each turn independent now.
 const MAX_TOKENS_PER_REPLY = 16384;  // 16k - generous reasoning budget; salvage logic catches any truncation
 
 const COLORS = {
@@ -536,7 +536,8 @@ async function getAIMove() {
     'Head at col ' + head.x + ' row ' + head.y + headTag + '. ' +
     'Food at col ' + food.x + ' row ' + food.y + ' (' + dxStr + ', ' + dyStr + ').\n' +
     gridState + '\n' +
-    'Avoid your body (- or |) and walls (#). Move (' + choicesStr + '):';
+    'Avoid your body (- or |) and walls outside. Answer with one word: ' + choicesStr + '.\n' +
+    'Think step by step with reasoning and pick one Move:';
 
   conversationHistory.push({ role: 'user', content: userPrompt });
   appendToConversationLog('GameState', userPrompt);
