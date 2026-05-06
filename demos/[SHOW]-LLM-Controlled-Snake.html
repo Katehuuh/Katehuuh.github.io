@@ -529,10 +529,11 @@ async function getAIMove() {
 
   const systemPrompt =
     'Snake game on ' + GRID_SIZE + 'x' + GRID_SIZE + ' grid. ^v<> = snake head pointing UP/DOWN/LEFT/RIGHT, ' +
-    '- = horizontal body segment, | = vertical body segment, F = food, X = empty, # = wall. ' +
+    '- = horizontal body segment, | = vertical body segment, F = food, X = empty cell, ' +
+    '# = WALL (moving INTO a # ends the game; if your head is adjacent to a #, do NOT pick the direction that would put you on the #). ' +
     'Columns 0-' + (GRID_SIZE - 1) + ' left to right, rows 0-' + (GRID_SIZE - 1) + ' top to bottom. ' +
     'UP decreases row, DOWN increases row, LEFT decreases column, RIGHT increases column. ' +
-    'Pick the direction that reduces distance from head to food. Reply with one word only.';
+    'Pick the direction that reduces distance from head to food without hitting a wall. Reply with one word only.';
 
   // Trim conversation history so we stay well under context_window_size and
   // inference stays fast. Keep the most recent MAX_HISTORY_TURNS user/assistant pairs.
