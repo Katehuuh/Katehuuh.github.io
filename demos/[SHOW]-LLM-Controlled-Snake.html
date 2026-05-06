@@ -256,11 +256,12 @@ const HEAD_CHAR = 'H';
 const BODY_CHAR = 'B';
 const FOOD_CHAR = 'F';
 
-// Model config. Qwen3.5-2B q4f16_1 (~1.2 GB) is the largest model that
-// reliably fits the browser Cache API alongside whatever the user already
-// cached. Llama-3.2-3B (1.8 GB) and Qwen3.5-4B (2.4 GB) both hit the quota.
-// Reasoning is the Qwen3 default; we strip <think>...</think> before parsing.
-const MODEL_ID = "Qwen3.5-2B-q4f16_1-MLC";
+// Model config. SmolLM2-1.7B (~1.0 GB) is non-reasoning - no <think> channel,
+// no spirals, no rote-output collapse. Qwen3.5-2B's reasoning kept getting
+// confused on small spatial deltas (occasionally REVERSING direction). For a
+// 6x6 snake with simple delta-based decisions, direct instruction following
+// beats reasoning that overthinks.
+const MODEL_ID = "SmolLM2-1.7B-Instruct-q4f16_1-MLC";
 const CONTEXT_WINDOW = 32768;        // Qwen3.5 native max - chatOpts override may or may not stick
 const MAX_HISTORY_TURNS = 0;         // snake is reactive - no temporal context needed; each turn independent
 const MAX_TOKENS_PER_REPLY = 256;    // tight cap: brief reasoning + answer fits, spirals get cut and fallback fires
@@ -546,13 +547,11 @@ async function getAIMove() {
     const completion = await engine.chat.completions.create({
       messages,
       max_tokens: MAX_TOKENS_PER_REPLY,
-      // Official Qwen3 thinking-mode general settings per the model card.
-      // "DO NOT use greedy decoding (low temperature)" - it caused our
-      // earlier rote-output failures.
-      temperature: 1.0,
-      top_p: 0.95,
-      top_k: 20,
-      presence_penalty: 1.5, // suppress repetition spirals ("Wait, looking at...")
+      // SmolLM2 settings: classic instruction-following, no reasoning channel
+      // so we can use moderate temperature without thinking-mode tricks.
+      temperature: 0.5,
+      top_p: 0.9,
+      presence_penalty: 0.5,
     });
     aiText = (completion && completion.choices && completion.choices[0] && completion.choices[0].message && completion.choices[0].message.content) || '';
     aiText = String(aiText);
