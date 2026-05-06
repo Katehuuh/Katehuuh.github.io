@@ -387,15 +387,16 @@ function restartGame() {
 function gameLoop() {
   if (gameOver) return;
 
-  // Hold current direction if a move is still pending and nothing cached.
-  if (waitingForAI && !cachedMove) {
+  // Strict no-cheat rule: a snake move must come from a fresh AI decision.
+  // If no cachedMove is queued, we wait. Never reuse stale `nextDirection`
+  // - that would be the script taking a turn on the LLM's behalf.
+  if (!cachedMove) {
+    if (!waitingForAI) getAIMove();
     return;
   }
-  if (cachedMove) {
-    nextDirection = cachedMove;
-    cachedMove = null;
-  }
-  if (nextDirection) direction = nextDirection;
+  direction = cachedMove;
+  nextDirection = direction;
+  cachedMove = null;
   if (!direction) return;
 
   const head = { ...snake[0] };
@@ -417,7 +418,7 @@ function gameLoop() {
     score++;
     scoreElement.textContent = score;
     placeFood();
-    appendToConversationLog('GameState', 'Food eaten. Score ' + score + '. New food at (' + food.x + ',' + food.y + ').');
+    appendToConversationLog('FoodEvent', 'Food eaten. Score ' + score + '. New food at (' + food.x + ',' + food.y + ').');
   } else {
     snake.pop();
   }
