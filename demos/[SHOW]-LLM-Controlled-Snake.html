@@ -262,7 +262,7 @@ const FOOD_CHAR = 'F';
 // Reasoning is the Qwen3 default; we strip <think>...</think> before parsing.
 const MODEL_ID = "Qwen3.5-2B-q4f16_1-MLC";
 const CONTEXT_WINDOW = 32768;        // Qwen3.5 native max - chatOpts override may or may not stick
-const MAX_HISTORY_TURNS = 1;         // 1 prior pair only; the rich axis-label prompt is ~700 tokens
+const MAX_HISTORY_TURNS = 0;         // snake is reactive - no temporal context needed; each turn independent
 const MAX_TOKENS_PER_REPLY = 256;    // tight cap: brief reasoning + answer fits, spirals get cut and fallback fires
 
 const COLORS = {
@@ -544,7 +544,13 @@ async function getAIMove() {
     const completion = await engine.chat.completions.create({
       messages,
       max_tokens: MAX_TOKENS_PER_REPLY,
-      temperature: 0.4, // settings that produced score=3 in 26 moves on a previous test run
+      // Official Qwen3 thinking-mode general settings per the model card.
+      // "DO NOT use greedy decoding (low temperature)" - it caused our
+      // earlier rote-output failures.
+      temperature: 1.0,
+      top_p: 0.95,
+      top_k: 20,
+      presence_penalty: 1.5, // suppress repetition spirals ("Wait, looking at...")
     });
     aiText = (completion && completion.choices && completion.choices[0] && completion.choices[0].message && completion.choices[0].message.content) || '';
     aiText = String(aiText);
