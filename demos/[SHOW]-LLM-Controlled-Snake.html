@@ -528,7 +528,8 @@ async function getAIMove() {
   appendToConversationLog('GameState', userPrompt);
 
   const systemPrompt =
-    'Snake game on ' + GRID_SIZE + 'x' + GRID_SIZE + ' grid. ^v<> = snake head pointing UP/DOWN/LEFT/RIGHT, B = body, F = food, X = empty, # = wall. ' +
+    'Snake game on ' + GRID_SIZE + 'x' + GRID_SIZE + ' grid. ^v<> = snake head pointing UP/DOWN/LEFT/RIGHT, ' +
+    '- = horizontal body segment, | = vertical body segment, F = food, X = empty, # = wall. ' +
     'Columns 0-' + (GRID_SIZE - 1) + ' left to right, rows 0-' + (GRID_SIZE - 1) + ' top to bottom. ' +
     'UP decreases row, DOWN increases row, LEFT decreases column, RIGHT increases column. ' +
     'Pick the direction that reduces distance from head to food. Reply with one word only.';
@@ -631,9 +632,16 @@ function generateGridState() {
   // the left, plus a # wall ring around the playable cells. Lets the model
   // count instead of guessing positions visually.
   const inner = Array(GRID_SIZE).fill().map(() => Array(GRID_SIZE).fill(EMPTY_CHAR));
+  // Body segments rendered with directional glyphs - matches the segment to
+  // its neighbor closer to the head: '-' if horizontal, '|' if vertical.
+  // Visually the snake reads as a connected line instead of repeated B's.
   for (let i = 1; i < snake.length; i++) {
-    const { x, y } = snake[i];
-    if (x >= 0 && x < GRID_SIZE && y >= 0 && y < GRID_SIZE) inner[y][x] = BODY_CHAR;
+    const cur = snake[i];
+    const prev = snake[i - 1];
+    let glyph = BODY_CHAR;
+    if (cur.y === prev.y) glyph = '-';
+    else if (cur.x === prev.x) glyph = '|';
+    if (cur.x >= 0 && cur.x < GRID_SIZE && cur.y >= 0 && cur.y < GRID_SIZE) inner[cur.y][cur.x] = glyph;
   }
   if (snake.length > 0) {
     const { x, y } = snake[0];
