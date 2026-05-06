@@ -490,11 +490,23 @@ async function getAIMove() {
   // If it picks a wall move, snake dies. That is intentional; helping the model
   // dodge walls turns the demo into a "fancy random fallback" rather than an
   // honest test of whether the model can reason about the grid.
+  // Factual spatial summary derived from the grid. NOT a "safe moves" hint.
+  // Just states where head and food are and the raw delta. The model still has
+  // to choose a direction; nothing is filtered.
+  const head = snake[0];
+  const dx = food.x - head.x;
+  const dy = food.y - head.y;
+  const horiz = dx === 0 ? 'same column' : (dx > 0 ? dx + ' tiles to the RIGHT' : -dx + ' tiles to the LEFT');
+  const vert = dy === 0 ? 'same row' : (dy > 0 ? dy + ' tiles DOWN' : -dy + ' tiles UP');
+
   const userPrompt =
     'Current grid (10x10 playable area inside a wall ring):\n' + gridState + '\n' +
     'Symbols: H = your head, B = your body, F = food, X = empty cell, # = wall (you die if you move into one).\n' +
-    'Coordinates: row 0 is at the top, row 9 at the bottom. UP decreases the row index, DOWN increases it. ' +
-    'Column 0 is at the left, column 9 at the right. LEFT decreases the column index, RIGHT increases it.\n' +
+    'Coordinates: column index increases LEFT to RIGHT (0..9), row index increases TOP to BOTTOM (0..9). ' +
+    'UP = row index minus 1, DOWN = row index plus 1, LEFT = col index minus 1, RIGHT = col index plus 1.\n' +
+    'Head is at (col=' + head.x + ', row=' + head.y + '). ' +
+    'Food is at (col=' + food.x + ', row=' + food.y + '). ' +
+    'Food is ' + horiz + ' and ' + vert + ' relative to your head.\n' +
     'Reply with exactly one word: UP, DOWN, LEFT, or RIGHT.';
 
   conversationHistory.push({ role: 'user', content: userPrompt });
