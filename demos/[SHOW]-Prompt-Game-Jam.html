@@ -208,7 +208,7 @@
     scene.add(line);
   })();
 
-  // Checkpoints (invisible) — array of world-space (x, z) gates
+  // Checkpoints (invisible) - array of world-space (x, z) gates
   const checkpoints = [];
   (function buildCheckpoints() {
     const mid = (TRACK_INNER + TRACK_OUTER) / 2;
@@ -218,7 +218,7 @@
     }
   })();
 
-  // Boost pads — visible glowing strips
+  // Boost pads - visible glowing strips
   const boostPads = [];
   (function buildBoostPads() {
     const mid = (TRACK_INNER + TRACK_OUTER) / 2;
@@ -259,7 +259,7 @@
   })();
 
   // ------------------------------------------------------------
-  // Ship model — proper sleek racing hull (no random cones)
+  // Ship model - proper sleek racing hull (no random cones)
   // Built from an extruded silhouette + cockpit dome + 2 engines.
   // ------------------------------------------------------------
   function makeShip(color) {
