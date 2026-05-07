@@ -568,6 +568,13 @@ const player = {
 };
 scene.add(player.mesh);
 
+// Race state declared up here (findSpawn touches it; const TDZ would crash
+// on the immediate findSpawn() call below if these were declared later).
+let raceTime = 0;
+let raceRunning = false;
+const recordingSamples = []; // {t, x, y, z, heading} every ~120ms during a run
+let recordingStartTime = -1;
+
 function findSpawn() {
   // Spawn at peak, slightly off so we can ski toward checkpoints
   const x = 0, z = -TERRAIN_RADIUS * 0.8;
@@ -614,13 +621,9 @@ addEventListener("keyup", (e) => {
 });
 
 // ============================================================
-// Race / time / personal best
+// Race / time / personal best (raceTime etc are hoisted above findSpawn)
 // ============================================================
-let raceTime = 0;
-let raceRunning = false;
 let bestTime = parseFloat(localStorage.getItem("snowriders.best") || "0") || null;
-const recordingSamples = []; // {t, x, y, z, heading} every ~120ms during a run
-let recordingStartTime = -1;
 let bestRun = JSON.parse(localStorage.getItem("snowriders.bestRun") || "null"); // [{t,x,y,z,heading}]
 
 function saveBest(time) {
