@@ -516,55 +516,293 @@ const checkpoints = [];
 // ============================================================
 // Player (skier) - custom physics, samples heightAt directly
 // ============================================================
-function makeSkierMesh(color) {
-  const g = new THREE.Group();
-  const bodyMat = new THREE.MeshStandardMaterial({ color, roughness: 0.6 });
-  const torso = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.7, 0.35), bodyMat);
-  torso.position.y = 1.05;
-  torso.castShadow = true; torso.receiveShadow = true;
-  g.add(torso);
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.18, 8, 8), new THREE.MeshStandardMaterial({ color: 0xffd0a0, roughness: 0.7 }));
-  head.position.y = 1.55;
-  head.castShadow = true;
-  g.add(head);
-  // helmet
-  const helmet = new THREE.Mesh(new THREE.SphereGeometry(0.21, 8, 6, 0, Math.PI * 2, 0, Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x222 }));
-  helmet.position.y = 1.6;
-  helmet.castShadow = true;
-  g.add(helmet);
-  // arms
-  const armMat = new THREE.MeshStandardMaterial({ color, roughness: 0.6 });
-  for (const dx of [-0.36, 0.36]) {
-    const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.6, 6), armMat);
-    arm.rotation.z = dx > 0 ? -0.2 : 0.2;
-    arm.position.set(dx, 1.05, 0);
-    arm.castShadow = true;
-    g.add(arm);
+// ============================================================
+// Rigged humanoid skier - low-poly box-built character with a
+// joint hierarchy, pose-lerp animation (ski / tuck / air states),
+// and a tumbling ragdoll on high-speed crashes.
+// ============================================================
+
+// Pose targets: [rx, ry, rz] per joint, in joint-local radians.
+// Skier faces +Z by default (so when group.rotation.y = heading, it points where heading wants).
+const POSES = {
+  ski: { // default crouched ski stance
+    pelvis:    [ 0.18,  0.00,  0.00],
+    torso:     [-0.06,  0.00,  0.00],
+    head:      [-0.10,  0.00,  0.00],
+    lShoulder: [-0.55,  0.00, -0.18],
+    rShoulder: [-0.55,  0.00,  0.18],
+    lElbow:    [-0.55,  0.00,  0.00],
+    rElbow:    [-0.55,  0.00,  0.00],
+    lHip:      [-0.30,  0.00,  0.05],
+    rHip:      [-0.30,  0.00, -0.05],
+    lKnee:     [ 0.55,  0.00,  0.00],
+    rKnee:     [ 0.55,  0.00,  0.00]
+  },
+  tuck: { // crouched low, arms tight in
+    pelvis:    [ 0.55,  0.00,  0.00],
+    torso:     [-0.20,  0.00,  0.00],
+    head:      [-0.25,  0.00,  0.00],
+    lShoulder: [-0.95,  0.00, -0.05],
+    rShoulder: [-0.95,  0.00,  0.05],
+    lElbow:    [-1.30,  0.00,  0.00],
+    rElbow:    [-1.30,  0.00,  0.00],
+    lHip:      [-0.65,  0.00,  0.00],
+    rHip:      [-0.65,  0.00,  0.00],
+    lKnee:     [ 1.10,  0.00,  0.00],
+    rKnee:     [ 1.10,  0.00,  0.00]
+  },
+  air: { // arms wide for balance, legs straighter
+    pelvis:    [ 0.05,  0.00,  0.00],
+    torso:     [ 0.00,  0.00,  0.00],
+    head:      [ 0.05,  0.00,  0.00],
+    lShoulder: [-0.10,  0.00, -0.55],
+    rShoulder: [-0.10,  0.00,  0.55],
+    lElbow:    [-0.20,  0.00,  0.00],
+    rElbow:    [-0.20,  0.00,  0.00],
+    lHip:      [-0.10,  0.00,  0.05],
+    rHip:      [-0.10,  0.00, -0.05],
+    lKnee:     [ 0.15,  0.00,  0.00],
+    rKnee:     [ 0.15,  0.00,  0.00]
   }
-  // legs
-  for (const dx of [-0.13, 0.13]) {
-    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.6, 6), new THREE.MeshStandardMaterial({ color: 0x202028, roughness: 0.6 }));
-    leg.position.set(dx, 0.4, 0);
-    leg.castShadow = true;
-    g.add(leg);
+};
+
+class Skier {
+  constructor(color, withFace = true) {
+    this.color = color;
+    this.state = "ski";        // ski | tuck | air | ragdoll
+    this.poseBlend = 0.18;
+    this.ragdoll = false;
+    this.ragdollTimer = 0;
+    this.ragdollVel = new THREE.Vector3();
+    this.ragdollAng = new THREE.Vector3();
+    this.ragdollPos = new THREE.Vector3();
+    this.lean = 0;
+    this.group = new THREE.Group();
+    this._buildRig(color, withFace);
   }
-  // skis
-  for (const dx of [-0.18, 0.18]) {
-    const ski = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.05, 1.6), new THREE.MeshStandardMaterial({ color: 0x111, roughness: 0.4 }));
-    ski.position.set(dx, 0.07, 0);
-    ski.castShadow = true; ski.receiveShadow = true;
-    g.add(ski);
+
+  _buildRig(color, withFace) {
+    const skinMat   = new THREE.MeshStandardMaterial({ color: 0xfdd2a8, roughness: 0.85, flatShading: true });
+    const jacketMat = new THREE.MeshStandardMaterial({ color, roughness: 0.7,  flatShading: true });
+    const pantsMat  = new THREE.MeshStandardMaterial({ color: 0x2d3242, roughness: 0.7, flatShading: true });
+    const helmetMat = new THREE.MeshStandardMaterial({ color: 0x14141c, roughness: 0.4, metalness: 0.3 });
+    const dark      = new THREE.MeshBasicMaterial({ color: 0x111111 });
+    const goggleMat = new THREE.MeshStandardMaterial({ color: 0x303a4a, roughness: 0.2, metalness: 0.6 });
+    const skiMat    = new THREE.MeshStandardMaterial({ color: 0xe8344a, roughness: 0.4 });
+    const poleMat   = new THREE.MeshStandardMaterial({ color: 0x9a9a9a, roughness: 0.55, metalness: 0.4 });
+
+    const addMesh = (parent, geo, mat, x, y, z) => {
+      const m = new THREE.Mesh(geo, mat);
+      m.position.set(x || 0, y || 0, z || 0);
+      m.castShadow = true; m.receiveShadow = true;
+      parent.add(m);
+      return m;
+    };
+
+    // Pelvis (root) at hip height (root y=0 = ground at boot bottom)
+    this.pelvis = new THREE.Group();
+    this.pelvis.position.set(0, 0.78, 0);
+    this.group.add(this.pelvis);
+    addMesh(this.pelvis, new THREE.BoxGeometry(0.34, 0.20, 0.26), pantsMat, 0, 0, 0);
+
+    // Torso (child of pelvis)
+    this.torso = new THREE.Group();
+    this.torso.position.set(0, 0.16, 0);
+    this.pelvis.add(this.torso);
+    addMesh(this.torso, new THREE.BoxGeometry(0.46, 0.50, 0.30), jacketMat, 0, 0.20, 0);
+    // Backpack hump for silhouette
+    addMesh(this.torso, new THREE.BoxGeometry(0.30, 0.32, 0.10), pantsMat, 0, 0.18, -0.18);
+
+    // Head + face
+    this.head = new THREE.Group();
+    this.head.position.set(0, 0.52, 0);
+    this.torso.add(this.head);
+    // Skull (skin)
+    addMesh(this.head, new THREE.BoxGeometry(0.24, 0.26, 0.22), skinMat, 0, 0, 0);
+    if (withFace) {
+      // Helmet covering top
+      addMesh(this.head, new THREE.BoxGeometry(0.26, 0.16, 0.24), helmetMat, 0, 0.10, 0);
+      // Goggles strap (thin band wrapping eyes)
+      addMesh(this.head, new THREE.BoxGeometry(0.28, 0.07, 0.23), goggleMat, 0, 0.02, 0);
+      // Eyes (small dark dots inside the goggles)
+      addMesh(this.head, new THREE.BoxGeometry(0.04, 0.025, 0.02), dark, -0.06, 0.02, 0.115);
+      addMesh(this.head, new THREE.BoxGeometry(0.04, 0.025, 0.02), dark,  0.06, 0.02, 0.115);
+      // Nose - small wedge sticking out
+      addMesh(this.head, new THREE.BoxGeometry(0.04, 0.05, 0.06), skinMat, 0, -0.05, 0.13);
+      // Mouth - thin dark line below nose
+      addMesh(this.head, new THREE.BoxGeometry(0.07, 0.012, 0.02), dark, 0, -0.10, 0.115);
+    }
+
+    // Shoulders + arms (left)
+    this.lShoulder = new THREE.Group();
+    this.lShoulder.position.set(-0.24, 0.36, 0);
+    this.torso.add(this.lShoulder);
+    addMesh(this.lShoulder, new THREE.BoxGeometry(0.10, 0.30, 0.10), jacketMat, 0, -0.15, 0);
+    this.lElbow = new THREE.Group();
+    this.lElbow.position.set(0, -0.30, 0);
+    this.lShoulder.add(this.lElbow);
+    addMesh(this.lElbow, new THREE.BoxGeometry(0.09, 0.26, 0.09), jacketMat, 0, -0.13, 0);
+    addMesh(this.lElbow, new THREE.BoxGeometry(0.10, 0.10, 0.10), skinMat, 0, -0.30, 0); // hand
+    addMesh(this.lElbow, new THREE.CylinderGeometry(0.014, 0.014, 0.95, 6), poleMat, 0, -0.78, 0.05);
+    // Right arm (mirror)
+    this.rShoulder = new THREE.Group();
+    this.rShoulder.position.set(0.24, 0.36, 0);
+    this.torso.add(this.rShoulder);
+    addMesh(this.rShoulder, new THREE.BoxGeometry(0.10, 0.30, 0.10), jacketMat, 0, -0.15, 0);
+    this.rElbow = new THREE.Group();
+    this.rElbow.position.set(0, -0.30, 0);
+    this.rShoulder.add(this.rElbow);
+    addMesh(this.rElbow, new THREE.BoxGeometry(0.09, 0.26, 0.09), jacketMat, 0, -0.13, 0);
+    addMesh(this.rElbow, new THREE.BoxGeometry(0.10, 0.10, 0.10), skinMat, 0, -0.30, 0);
+    addMesh(this.rElbow, new THREE.CylinderGeometry(0.014, 0.014, 0.95, 6), poleMat, 0, -0.78, 0.05);
+
+    // Hips + legs (left)
+    this.lHip = new THREE.Group();
+    this.lHip.position.set(-0.13, -0.05, 0);
+    this.pelvis.add(this.lHip);
+    addMesh(this.lHip, new THREE.BoxGeometry(0.13, 0.34, 0.14), pantsMat, 0, -0.17, 0);
+    this.lKnee = new THREE.Group();
+    this.lKnee.position.set(0, -0.34, 0);
+    this.lHip.add(this.lKnee);
+    addMesh(this.lKnee, new THREE.BoxGeometry(0.12, 0.30, 0.13), pantsMat, 0, -0.15, 0);
+    addMesh(this.lKnee, new THREE.BoxGeometry(0.13, 0.10, 0.20), helmetMat, 0, -0.32, 0.04); // boot
+    addMesh(this.lKnee, new THREE.BoxGeometry(0.12, 0.04, 1.50), skiMat, 0, -0.39, 0.05);    // ski
+    // Right leg (mirror)
+    this.rHip = new THREE.Group();
+    this.rHip.position.set(0.13, -0.05, 0);
+    this.pelvis.add(this.rHip);
+    addMesh(this.rHip, new THREE.BoxGeometry(0.13, 0.34, 0.14), pantsMat, 0, -0.17, 0);
+    this.rKnee = new THREE.Group();
+    this.rKnee.position.set(0, -0.34, 0);
+    this.rHip.add(this.rKnee);
+    addMesh(this.rKnee, new THREE.BoxGeometry(0.12, 0.30, 0.13), pantsMat, 0, -0.15, 0);
+    addMesh(this.rKnee, new THREE.BoxGeometry(0.13, 0.10, 0.20), helmetMat, 0, -0.32, 0.04);
+    addMesh(this.rKnee, new THREE.BoxGeometry(0.12, 0.04, 1.50), skiMat, 0, -0.39, 0.05);
+
+    // Snap to default ski pose so first frame doesn't show the t-pose
+    this._joints = [this.pelvis, this.torso, this.head, this.lShoulder, this.rShoulder, this.lElbow, this.rElbow, this.lHip, this.rHip, this.lKnee, this.rKnee];
+    this._jointNames = ["pelvis","torso","head","lShoulder","rShoulder","lElbow","rElbow","lHip","rHip","lKnee","rKnee"];
+    const t = POSES.ski;
+    for (const name of this._jointNames) {
+      const j = this[name], r = t[name];
+      j.rotation.set(r[0], r[1], r[2]);
+    }
   }
-  return g;
+
+  setState(s) { this.state = s; }
+  setLean(rz) { this.lean = rz; }
+
+  triggerRagdoll(velocity, heading) {
+    if (this.ragdoll) return;
+    this.ragdoll = true;
+    this.state = "ragdoll";
+    this.ragdollTimer = 2.0;
+    this.ragdollPos.copy(this.group.position);
+    // some forward momentum carries; small lift; some random spin
+    this.ragdollVel.set(velocity.x * 0.6, Math.max(velocity.y * 0.4, 3.5), velocity.z * 0.6);
+    this.ragdollAng.set(
+      (Math.random() * 2 - 1) * 7,
+      (Math.random() * 2 - 1) * 4,
+      (Math.random() * 2 - 1) * 7
+    );
+    // Limbs flop with random angular vel
+    for (const j of this._joints) {
+      j.userData.ragdollAng = new THREE.Vector3(
+        (Math.random() * 2 - 1) * 5,
+        (Math.random() * 2 - 1) * 3,
+        (Math.random() * 2 - 1) * 5
+      );
+    }
+  }
+
+  recover(pos, heading) {
+    this.ragdoll = false;
+    this.state = "ski";
+    this.group.position.copy(pos);
+    this.group.position.y -= 0;
+    this.group.rotation.set(0, heading, 0);
+    for (const j of this._joints) {
+      j.rotation.set(0, 0, 0);
+      j.userData.ragdollAng = null;
+    }
+    // Snap to ski pose
+    const t = POSES.ski;
+    for (const name of this._jointNames) {
+      const j = this[name], r = t[name];
+      j.rotation.set(r[0], r[1], r[2]);
+    }
+  }
+
+  // Drive the rig from current player state. Pos is the FOOT position
+  // (we offset internally so pelvis sits at +0.78m above foot).
+  step(dt, footPos, heading) {
+    if (this.ragdoll) {
+      this.ragdollTimer -= dt;
+      // tumble whole body
+      this.ragdollVel.y -= 18 * dt;
+      this.ragdollVel.multiplyScalar(0.992);
+      this.ragdollPos.addScaledVector(this.ragdollVel, dt);
+      // ground snap (the foot of the body group)
+      const gy = heightAt(this.ragdollPos.x, this.ragdollPos.z) + 0.05;
+      if (this.ragdollPos.y < gy) {
+        this.ragdollPos.y = gy;
+        this.ragdollVel.y = Math.max(this.ragdollVel.y, -this.ragdollVel.y * 0.35);
+        this.ragdollVel.x *= 0.7;
+        this.ragdollVel.z *= 0.7;
+        this.ragdollAng.multiplyScalar(0.85);
+      }
+      this.group.position.copy(this.ragdollPos);
+      this.group.rotation.x += this.ragdollAng.x * dt;
+      this.group.rotation.y += this.ragdollAng.y * dt;
+      this.group.rotation.z += this.ragdollAng.z * dt;
+      this.ragdollAng.multiplyScalar(0.985);
+      // limbs flop
+      for (const j of this._joints) {
+        const r = j.userData.ragdollAng;
+        if (r) {
+          j.rotation.x += r.x * dt * 0.45;
+          j.rotation.y += r.y * dt * 0.35;
+          j.rotation.z += r.z * dt * 0.45;
+          r.multiplyScalar(0.97);
+        }
+      }
+      return; // no pose blending while ragdolling
+    }
+
+    // Normal posed mode: position group at foot, rotate toward heading
+    this.group.position.copy(footPos);
+    // Quaternion lerp on heading for smooth turns
+    this.group.rotation.set(0, heading, 0);
+    // Lerp each joint rotation toward state pose
+    const target = POSES[this.state] || POSES.ski;
+    const b = this.poseBlend;
+    for (const name of this._jointNames) {
+      const j = this[name], r = target[name];
+      if (!r) continue;
+      j.rotation.x += (r[0] - j.rotation.x) * b;
+      j.rotation.y += (r[1] - j.rotation.y) * b;
+      j.rotation.z += (r[2] - j.rotation.z) * b;
+    }
+    // Apply lean (turn body roll)
+    this.torso.rotation.z += (this.lean - this.torso.rotation.z) * 0.18;
+  }
 }
 
+// Backward-compat wrapper used by ghost / peer / leaderboard avatar code
+function makeSkierMesh(color) {
+  return new Skier(color, true).group;
+}
+
+const playerSkier = new Skier(myColor, true);
 const player = {
-  mesh: makeSkierMesh(myColor),
+  mesh: playerSkier.group,
+  skier: playerSkier,
   pos: new THREE.Vector3(0, 0, 0),
   vel: new THREE.Vector3(0, 0, 0),
-  heading: Math.PI, // face down the slope (toward +z initially)
+  heading: Math.PI,
   airborne: false,
-  finished: false
+  finished: false,
+  crashCooldown: 0
 };
 scene.add(player.mesh);
 
@@ -775,7 +1013,16 @@ function tickPlayer(dt) {
   // Speed cap
   if (player.vel.lengthSq() > MAX_SPEED * MAX_SPEED) player.vel.setLength(MAX_SPEED);
 
-  // ---- Tree collisions (push out + speed loss) ----
+  // ---- Tree + rock collisions: push out, lose speed, ragdoll if fast ----
+  function tryCrash(speed, hardThreshold) {
+    if (player.skier.ragdoll) return;
+    if (speed > hardThreshold && player.crashCooldown <= 0) {
+      player.skier.triggerRagdoll(player.vel, player.heading);
+      player.crashCooldown = 2.4;
+      flashCrash();
+    }
+  }
+  const speedNow = player.vel.length();
   for (const t of trees) {
     const dx = player.pos.x - t.x;
     const dz = player.pos.z - t.z;
@@ -786,8 +1033,8 @@ function tickPlayer(dt) {
       const k = (r - d) / d;
       player.pos.x += dx * k;
       player.pos.z += dz * k;
-      // hard slow on impact
       player.vel.multiplyScalar(0.35);
+      tryCrash(speedNow, 9);
       flashCrash();
     }
   }
@@ -802,8 +1049,16 @@ function tickPlayer(dt) {
       player.pos.x += dx * k;
       player.pos.z += dz * k;
       player.vel.multiplyScalar(0.4);
+      tryCrash(speedNow, 11);
       flashCrash();
     }
+  }
+  // Tick crash cooldown + auto-recover when ragdoll ends
+  player.crashCooldown = Math.max(0, player.crashCooldown - dt);
+  if (player.skier.ragdoll && player.skier.ragdollTimer <= 0) {
+    findSpawn();
+    player.skier.recover(player.pos, player.heading);
+    showBanner("Wipeout<small>respawning at peak</small>", 1500);
   }
 
   // ---- Failsafes ----
@@ -812,19 +1067,23 @@ function tickPlayer(dt) {
     showBanner("Out of bounds<small>respawned at peak</small>", 1500);
   }
 
-  // Sync visual mesh
-  player.mesh.position.copy(player.pos);
-  // Visual mesh is at FEET (0,0); we add a half-radius below pos
-  player.mesh.position.y -= PLAYER_RADIUS;
-  player.mesh.rotation.y = player.heading;
-
-  // Slight forward tilt based on slope and movement
-  const tiltN = slopeNormalAt(player.pos.x, player.pos.z);
-  const slopeAngle = Math.atan2(Math.sqrt(tiltN.x * tiltN.x + tiltN.z * tiltN.z), tiltN.y);
-  player.mesh.rotation.x = -slopeAngle * 0.6;
-  // Lean into turns
-  const targetLean = (keys.a ? 0.25 : 0) + (keys.d ? -0.25 : 0);
-  player.mesh.rotation.z += (targetLean - player.mesh.rotation.z) * 0.15;
+  // Drive the rigged skier. Choose state from current input/airborne.
+  // (Pose lerping happens inside skier.step.)
+  if (player.skier.ragdoll) {
+    // ragdoll runs itself; no pose drive
+  } else {
+    let state = "ski";
+    if (player.airborne) state = "air";
+    else if (keys.tuck) state = "tuck";
+    player.skier.setState(state);
+    // Lean into turns (body roll)
+    const targetLean = (keys.a ? 0.22 : 0) + (keys.d ? -0.22 : 0);
+    player.skier.setLean(targetLean);
+  }
+  // Foot position = pos minus ground half-radius
+  const footPos = _tmp.copy(player.pos);
+  footPos.y -= PLAYER_RADIUS;
+  player.skier.step(dt, footPos, player.heading);
 }
 
 let crashTimer = 0;
