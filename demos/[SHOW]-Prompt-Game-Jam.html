@@ -1,0 +1,794 @@
+<!-- source: https://x.com/levelsio/status/1901660771505021314 -->
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no" />
+  <title>Whisper Garden - Vibe Coding Game Jam</title>
+  <style>
+    :root {
+      --bg-1: #07090f;
+      --bg-2: #0d1320;
+      --ink: #e9eef7;
+      --ink-dim: #8893a8;
+      --accent: rgba(29, 155, 240, 0.9);
+      --accent-hot: rgba(29, 155, 240, 1);
+      --good: rgba(0, 186, 124, 0.95);
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; padding: 0;
+      width: 100%; height: 100%;
+      background: radial-gradient(120% 90% at 50% 30%, var(--bg-2) 0%, var(--bg-1) 70%, #04060b 100%);
+      color: var(--ink);
+      font: 13px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      overflow: hidden;
+      overscroll-behavior: none;
+      cursor: crosshair;
+    }
+    #stage {
+      position: fixed; inset: 0;
+      width: 100%; height: 100%;
+      display: block;
+    }
+    .panel {
+      position: fixed;
+      z-index: 10;
+      padding: 10px 14px;
+      color: var(--ink);
+      background: rgba(10, 14, 22, 0.62);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 10px;
+      font-size: 12px;
+      box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
+      pointer-events: none;
+      transition: opacity 0.3s ease;
+    }
+    #hud {
+      top: 14px; left: 14px;
+      min-width: 180px;
+    }
+    #hud .count {
+      color: var(--ink);
+      font-weight: 600;
+      letter-spacing: 0.02em;
+    }
+    #hud .name {
+      color: var(--ink-dim);
+      font-size: 11px;
+      margin-top: 2px;
+      letter-spacing: 0.04em;
+    }
+    #hud .name .you {
+      color: var(--ink);
+      font-weight: 600;
+    }
+    #help {
+      right: 14px; bottom: 14px;
+      max-width: 240px;
+      pointer-events: auto;
+      cursor: default;
+    }
+    #help .lines { color: var(--ink-dim); }
+    #help .lines b { color: var(--ink); font-weight: 600; }
+    #help .x {
+      position: absolute; top: 4px; right: 8px;
+      color: var(--ink-dim);
+      font-size: 14px; line-height: 1;
+      cursor: pointer;
+      padding: 4px 6px;
+      user-select: none;
+    }
+    #help .x:hover { color: var(--ink); }
+    #help.hidden { opacity: 0; pointer-events: none; }
+    #copy-prompt {
+      position: fixed; top: 14px; right: 14px; z-index: 11;
+      padding: 10px 14px;
+      color: #fff;
+      background: var(--accent);
+      border: 0; border-radius: 10px;
+      font: 13px/1.2 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+      transition: background 0.18s ease, transform 0.1s ease;
+    }
+    #copy-prompt:hover { background: var(--accent-hot); }
+    #copy-prompt:active { transform: scale(0.96); }
+    #copy-prompt.copied { background: var(--good); }
+    #toast {
+      position: fixed; bottom: 64px; right: 14px; z-index: 12;
+      padding: 8px 14px;
+      color: #fff;
+      background: rgba(0, 0, 0, 0.88);
+      border-radius: 8px;
+      font-size: 12px;
+      opacity: 0;
+      transform: translateY(8px);
+      transition: opacity 0.25s ease, transform 0.25s ease;
+      pointer-events: none;
+    }
+    #toast.show { opacity: 1; transform: translateY(0); }
+    #status-dot {
+      display: inline-block;
+      width: 6px; height: 6px; border-radius: 50%;
+      background: #555;
+      margin-right: 6px;
+      vertical-align: middle;
+      transition: background 0.3s ease;
+    }
+    #status-dot.ok { background: #4ad295; box-shadow: 0 0 8px #4ad295; }
+    #status-dot.solo { background: #d2a04a; }
+  </style>
+</head>
+<body>
+  <canvas id="stage"></canvas>
+
+  <div id="hud" class="panel">
+    <div class="count"><span id="status-dot" class="solo"></span><span id="peer-count">0 wanderers online</span></div>
+    <div class="name">you are <span class="you" id="self-name">...</span></div>
+  </div>
+
+  <button id="copy-prompt" type="button">Copy prompt template</button>
+  <div id="toast">Copied</div>
+
+  <div id="help" class="panel">
+    <span class="x" id="help-close" title="dismiss">x</span>
+    <div class="lines">
+      <b>click</b> to plant a seed<br/>
+      <b>hover</b> near a sprout to water it<br/>
+      blooms ring softly. plants fade after 2 min.
+    </div>
+  </div>
+
+  <script type="module">
+    // ============================================================
+    // Whisper Garden - a quiet shared garden for the Vibe Coding Game Jam
+    // Multiplayer transport: Trystero (BitTorrent trackers, no account)
+    // Single file. No external assets. Web Audio synthesis only.
+    // ============================================================
+
+    const PROMPT_TEMPLATE = "You will participate in the below and create a project based on the following X to play in the Game Jam: ``` I'm organizing the 🌟 2025 Vibe Coding Game Jam Deadline to enter: 25 March 2025, so you have 7 days - anyone can enter with their game - at least 80% code has to be written by AI - game has to be accessible on web without any login or signup and free-to-play (preferrably its own domain or subdomain) - game has to be multiplayer by default - can use any engine but usually ThreeJS is recommended - NO loading screens and heavy downloads (!!!) has to be almost instantly in the game (except maybe ask username if you want) The jury: me, and I will ask some real game dev people to jury too Gold, silver and bronze winners will be tweeted out and if companies want to sponsor prizes that works too General sponsors welcome to, just DM me! I hope this will help give the best vibe coded games more distribution! I'll add a form to enter your game below this tweet ``` Source: https://x.com/levelsio/status/1901660771505021314";
+
+    // --- Copy-prompt button --------------------------------------------------
+    const copyBtn = document.getElementById("copy-prompt");
+    const toastEl = document.getElementById("toast");
+    let toastTimer = null;
+    function showToast(msg) {
+      toastEl.textContent = msg;
+      toastEl.classList.add("show");
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toastEl.classList.remove("show"), 1600);
+    }
+    copyBtn.addEventListener("click", async () => {
+      let ok = false;
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(PROMPT_TEMPLATE);
+          ok = true;
+        }
+      } catch (_) { ok = false; }
+      if (!ok) {
+        // Fallback for file:// or permission-gated contexts.
+        try {
+          const ta = document.createElement("textarea");
+          ta.value = PROMPT_TEMPLATE;
+          ta.style.position = "fixed";
+          ta.style.left = "-9999px";
+          ta.style.opacity = "0";
+          document.body.appendChild(ta);
+          ta.focus(); ta.select();
+          ok = document.execCommand("copy");
+          document.body.removeChild(ta);
+        } catch (_) { ok = false; }
+      }
+      if (ok) {
+        copyBtn.classList.add("copied");
+        copyBtn.textContent = "Copied";
+        showToast("Prompt copied to clipboard");
+        setTimeout(() => {
+          copyBtn.classList.remove("copied");
+          copyBtn.textContent = "Copy prompt template";
+        }, 1600);
+      } else {
+        showToast("Copy failed - select manually");
+      }
+    });
+
+    // --- Help dismiss --------------------------------------------------------
+    document.getElementById("help-close").addEventListener("click", () => {
+      document.getElementById("help").classList.add("hidden");
+    });
+
+    // --- Self-name (deterministic, just for show) ----------------------------
+    const ADJ = ["Indigo","Velvet","Quiet","Hollow","Slow","Soft","Glass","Amber","Drifting","Pale","Lichen","Cobalt","Mossy","Hushed","Ember","Tidal","Lunar","Foggy","Gilded","Wisp","Ochre","Dusk","Pewter","Saffron"];
+    const NOUN = ["Cypress","Heron","Lantern","Cinder","Hollow","Ripple","Fern","Marrow","Vesper","Bramble","Aster","Petal","Brook","Cairn","Hollow","Reed","Quill","Spire","Loom","Pollen","Grove","Drift","Halo","Cinder"];
+    function nameFromId(id) {
+      let h = 2166136261 >>> 0;
+      for (let i = 0; i < id.length; i++) {
+        h ^= id.charCodeAt(i);
+        h = Math.imul(h, 16777619) >>> 0;
+      }
+      const a = ADJ[h % ADJ.length];
+      const n = NOUN[(h >>> 8) % NOUN.length];
+      return a + " " + n;
+    }
+    function hueFromId(id) {
+      let h = 5381 >>> 0;
+      for (let i = 0; i < id.length; i++) h = ((h << 5) + h + id.charCodeAt(i)) >>> 0;
+      return h % 360;
+    }
+
+    // --- Canvas + DPR --------------------------------------------------------
+    const canvas = document.getElementById("stage");
+    const ctx = canvas.getContext("2d", { alpha: true });
+    let DPR = 1, W = 0, H = 0;
+    function resize() {
+      DPR = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+      W = window.innerWidth;
+      H = window.innerHeight;
+      canvas.width = Math.round(W * DPR);
+      canvas.height = Math.round(H * DPR);
+      canvas.style.width = W + "px";
+      canvas.style.height = H + "px";
+      ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+      ctx.imageSmoothingEnabled = true;
+    }
+    resize();
+    window.addEventListener("resize", resize);
+
+    // --- State ---------------------------------------------------------------
+    const PLANTS = new Map();      // plantId -> plant record
+    const PEERS = new Map();       // peerId -> { x, y, lastSeen, name, hue }
+    let SELF_ID = "local-" + Math.random().toString(36).slice(2, 10);
+    let SELF_HUE = hueFromId(SELF_ID);
+    let SELF_NAME = nameFromId(SELF_ID);
+    document.getElementById("self-name").textContent = SELF_NAME;
+
+    const mouse = { x: W / 2, y: H / 2, has: false, down: false };
+    canvas.addEventListener("pointermove", e => {
+      mouse.x = e.clientX; mouse.y = e.clientY; mouse.has = true;
+    }, { passive: true });
+    canvas.addEventListener("pointerdown", e => {
+      mouse.x = e.clientX; mouse.y = e.clientY; mouse.has = true;
+      plantSeed(mouse.x, mouse.y, SELF_ID);
+      ensureAudio();
+    }, { passive: true });
+    window.addEventListener("blur", () => { mouse.has = false; });
+
+    // --- Web Audio (lazy) ----------------------------------------------------
+    let AC = null, MASTER = null;
+    function ensureAudio() {
+      if (AC) return AC;
+      try {
+        AC = new (window.AudioContext || window.webkitAudioContext)();
+        MASTER = AC.createGain();
+        MASTER.gain.value = 0.18;
+        // Gentle low-pass for a soft pad-like quality.
+        const lp = AC.createBiquadFilter();
+        lp.type = "lowpass";
+        lp.frequency.value = 2400;
+        MASTER.connect(lp);
+        lp.connect(AC.destination);
+      } catch (_) { AC = null; }
+      return AC;
+    }
+    // Soft pluck-like tone for blooms / waters.
+    function playTone(freq, dur = 1.6, gain = 0.6, type = "sine") {
+      if (!AC) return;
+      const t0 = AC.currentTime;
+      const o = AC.createOscillator();
+      const g = AC.createGain();
+      o.type = type;
+      o.frequency.value = freq;
+      // Slight detune for warmth.
+      const o2 = AC.createOscillator();
+      const g2 = AC.createGain();
+      o2.type = type;
+      o2.frequency.value = freq * 1.005;
+      g.gain.setValueAtTime(0, t0);
+      g.gain.linearRampToValueAtTime(gain * 0.6, t0 + 0.05);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+      g2.gain.setValueAtTime(0, t0);
+      g2.gain.linearRampToValueAtTime(gain * 0.4, t0 + 0.08);
+      g2.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+      o.connect(g); g.connect(MASTER);
+      o2.connect(g2); g2.connect(MASTER);
+      o.start(t0); o2.start(t0);
+      o.stop(t0 + dur + 0.05); o2.stop(t0 + dur + 0.05);
+    }
+    function bloomTone(hue, y) {
+      if (!AC) return;
+      // Pentatonic-ish pitches, rooted on a low fundamental.
+      const scale = [0, 3, 5, 7, 10, 12, 15, 17, 19];
+      const idx = Math.floor((1 - Math.min(1, Math.max(0, y / H))) * (scale.length - 1));
+      const semis = scale[idx];
+      const freq = 220 * Math.pow(2, semis / 12);
+      // Slight pitch offset by hue so different planters sound distinct.
+      const det = Math.pow(2, ((hue / 360) - 0.5) / 36);
+      playTone(freq * det, 2.2, 0.5, "sine");
+    }
+    function waterTone() {
+      if (!AC) return;
+      playTone(660 + Math.random() * 80, 0.35, 0.18, "triangle");
+    }
+
+    // --- Plants --------------------------------------------------------------
+    // Plant record: { id, peerId, hue, x, y, t0, growth (0..1), bloomed, lastWater, watered, seed }
+    const PLANT_GROW_MS = 10000;     // 10s to fully grow
+    const PLANT_BLOOM_MS = 30000;    // 30s for bloom
+    const PLANT_LIFE_MS = 120000;    // 2 min lifetime
+    const PLANT_FADE_MS = 8000;      // last 8s fade
+
+    function makeSeedNumber(plantId) {
+      // Deterministic 32-bit seed from plantId string.
+      let h = 0x811c9dc5 >>> 0;
+      for (let i = 0; i < plantId.length; i++) {
+        h ^= plantId.charCodeAt(i);
+        h = Math.imul(h, 0x01000193) >>> 0;
+      }
+      return h || 1;
+    }
+    function mulberry32(a) {
+      return function () {
+        a = (a + 0x6D2B79F5) >>> 0;
+        let t = a;
+        t = Math.imul(t ^ (t >>> 15), t | 1);
+        t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      };
+    }
+
+    function plantSeed(x, y, peerId, opts = {}) {
+      const id = opts.id || (peerId.slice(0, 6) + "-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 6));
+      if (PLANTS.has(id)) return PLANTS.get(id);
+      const t0 = opts.t0 || Date.now();
+      const hue = opts.hue != null ? opts.hue : (peerId === SELF_ID ? SELF_HUE : hueFromId(peerId));
+      const rec = {
+        id, peerId, hue,
+        x, y, t0,
+        watered: 0,        // 0..1, accelerates growth
+        lastWater: 0,
+        bloomed: false,
+        seed: makeSeedNumber(id),
+      };
+      PLANTS.set(id, rec);
+      // Broadcast if local origin.
+      if (peerId === SELF_ID && net.send) {
+        try { net.send.plant({ id, x, y, t0, hue }); } catch (_) {}
+      }
+      return rec;
+    }
+
+    function applyWater(plantId, fromPeer) {
+      const p = PLANTS.get(plantId);
+      if (!p) return;
+      p.watered = Math.min(1, p.watered + 0.06);
+      p.lastWater = Date.now();
+      if (fromPeer === SELF_ID) waterTone();
+    }
+
+    // --- Trystero P2P (with graceful fallback) -------------------------------
+    const net = {
+      ready: false,
+      mode: "solo",
+      send: { plant: null, water: null, cursor: null },
+      room: null,
+    };
+    const APP_ID = "vibe-coding-jam-whisper-garden-2026";
+    const ROOM_ID = "garden-main";
+
+    async function startNetwork() {
+      let joinRoom = null;
+      // Try torrent strategy first.
+      try {
+        const mod = await import("https://esm.sh/trystero@0.21.5/torrent");
+        joinRoom = mod.joinRoom;
+      } catch (_) {
+        joinRoom = null;
+      }
+      // Fallback: mqtt.
+      if (!joinRoom) {
+        try {
+          const mod = await import("https://esm.sh/trystero@0.21.5/mqtt");
+          joinRoom = mod.joinRoom;
+          net.mode = "mqtt";
+        } catch (_) {
+          joinRoom = null;
+        }
+      }
+      if (!joinRoom) {
+        net.mode = "solo";
+        updateStatus();
+        return;
+      }
+      let room;
+      try {
+        room = joinRoom({ appId: APP_ID }, ROOM_ID);
+      } catch (e) {
+        net.mode = "solo";
+        updateStatus();
+        return;
+      }
+      net.room = room;
+      // Identify ourselves.
+      try {
+        if (room.selfId) {
+          SELF_ID = room.selfId;
+          SELF_HUE = hueFromId(SELF_ID);
+          SELF_NAME = nameFromId(SELF_ID);
+          document.getElementById("self-name").textContent = SELF_NAME;
+        }
+      } catch (_) {}
+      // Actions.
+      try {
+        const [sendPlant, getPlant] = room.makeAction("plant");
+        const [sendWater, getWater] = room.makeAction("water");
+        const [sendCursor, getCursor] = room.makeAction("cursor");
+        const [sendHello, getHello] = room.makeAction("hello");
+
+        net.send.plant = (data) => sendPlant(data);
+        net.send.water = (data) => sendWater(data);
+        net.send.cursor = (data) => sendCursor(data);
+
+        getPlant((data, peerId) => {
+          if (!data || typeof data.x !== "number" || typeof data.y !== "number") return;
+          plantSeed(data.x, data.y, peerId, { id: data.id, t0: data.t0, hue: data.hue });
+        });
+        getWater((data, peerId) => {
+          if (!data || !data.id) return;
+          applyWater(data.id, peerId);
+        });
+        getCursor((data, peerId) => {
+          if (!data) return;
+          let p = PEERS.get(peerId);
+          if (!p) {
+            p = { x: data.x, y: data.y, lastSeen: Date.now(), name: nameFromId(peerId), hue: hueFromId(peerId) };
+            PEERS.set(peerId, p);
+          }
+          // Coords are normalized 0..1 - rescale to local viewport.
+          if (typeof data.nx === "number" && typeof data.ny === "number") {
+            p.x = data.nx * W;
+            p.y = data.ny * H;
+          } else {
+            p.x = data.x;
+            p.y = data.y;
+          }
+          p.lastSeen = Date.now();
+        });
+        getHello((data, peerId) => {
+          // When a new peer says hello, send them all our active plants.
+          if (!data || !data.want) return;
+          for (const p of PLANTS.values()) {
+            if (p.peerId !== SELF_ID) continue;
+            try { sendPlant({ id: p.id, x: p.x, y: p.y, t0: p.t0, hue: p.hue }, peerId); } catch (_) {}
+          }
+        });
+
+        room.onPeerJoin(peerId => {
+          PEERS.set(peerId, {
+            x: -50, y: -50,
+            lastSeen: Date.now(),
+            name: nameFromId(peerId),
+            hue: hueFromId(peerId),
+          });
+          // Ask them for catch-up; also announce self plants to them.
+          try { sendHello({ want: true }, peerId); } catch (_) {}
+          for (const p of PLANTS.values()) {
+            if (p.peerId !== SELF_ID) continue;
+            try { sendPlant({ id: p.id, x: p.x, y: p.y, t0: p.t0, hue: p.hue }, peerId); } catch (_) {}
+          }
+          updateStatus();
+        });
+        room.onPeerLeave(peerId => {
+          PEERS.delete(peerId);
+          updateStatus();
+        });
+        net.ready = true;
+        net.mode = net.mode === "mqtt" ? "mqtt" : "torrent";
+      } catch (e) {
+        net.ready = false;
+        net.mode = "solo";
+      }
+      updateStatus();
+    }
+
+    function updateStatus() {
+      const peerCount = PEERS.size;
+      const total = peerCount + 1;
+      const word = total === 1 ? "wanderer" : "wanderers";
+      const txt = peerCount === 0 ? "alone in the garden" : `${total} ${word} online`;
+      document.getElementById("peer-count").textContent = txt;
+      const dot = document.getElementById("status-dot");
+      dot.classList.remove("ok", "solo");
+      if (net.ready && peerCount > 0) dot.classList.add("ok");
+      else dot.classList.add("solo");
+    }
+    updateStatus();
+
+    // Periodic cursor broadcast (throttled).
+    let lastCursorSend = 0;
+    function maybeBroadcastCursor(now) {
+      if (!net.ready || !net.send.cursor) return;
+      if (!mouse.has) return;
+      if (now - lastCursorSend < 60) return; // ~16 Hz
+      lastCursorSend = now;
+      try { net.send.cursor({ nx: mouse.x / W, ny: mouse.y / H }); } catch (_) {}
+    }
+
+    // Watering: when our cursor is close to a plant, send water ticks.
+    let lastWaterSend = 0;
+    function maybeWaterFromMouse(now) {
+      if (!mouse.has) return;
+      if (now - lastWaterSend < 250) return;
+      const r = 70;
+      let target = null;
+      let bestD = r * r;
+      for (const p of PLANTS.values()) {
+        const dx = p.x - mouse.x, dy = p.y - mouse.y;
+        const d2 = dx * dx + dy * dy;
+        if (d2 < bestD) { bestD = d2; target = p; }
+      }
+      if (!target) return;
+      lastWaterSend = now;
+      // Local effect.
+      applyWater(target.id, SELF_ID);
+      // Broadcast (other peers will apply locally).
+      if (net.send.water) {
+        try { net.send.water({ id: target.id }); } catch (_) {}
+      }
+    }
+
+    // --- Rendering -----------------------------------------------------------
+    function clearFrame() {
+      // Subtle vignette + atmospheric particle wash via composited gradients.
+      ctx.clearRect(0, 0, W, H);
+      const g = ctx.createRadialGradient(W * 0.5, H * 0.62, 40, W * 0.5, H * 0.62, Math.max(W, H) * 0.7);
+      g.addColorStop(0, "rgba(20, 30, 50, 0.18)");
+      g.addColorStop(1, "rgba(0, 0, 0, 0)");
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, W, H);
+    }
+
+    // Stars: tiny ambient backdrop, deterministic per session.
+    const STARS = [];
+    (function seedStars() {
+      const rng = mulberry32(0xC0FFEE);
+      const n = 110;
+      for (let i = 0; i < n; i++) {
+        STARS.push({ x: rng(), y: rng(), s: rng() * 1.4 + 0.2, t: rng() * Math.PI * 2 });
+      }
+    })();
+    function drawStars(now) {
+      for (const s of STARS) {
+        const tw = 0.6 + 0.4 * Math.sin(now * 0.0005 + s.t);
+        ctx.fillStyle = `rgba(220, 230, 255, ${0.04 + 0.10 * tw})`;
+        const sx = s.x * W, sy = s.y * H * 0.55;
+        ctx.beginPath();
+        ctx.arc(sx, sy, s.s, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    function drawGround() {
+      const g = ctx.createLinearGradient(0, H * 0.55, 0, H);
+      g.addColorStop(0, "rgba(10, 18, 26, 0)");
+      g.addColorStop(0.6, "rgba(10, 18, 26, 0.22)");
+      g.addColorStop(1, "rgba(8, 14, 22, 0.55)");
+      ctx.fillStyle = g;
+      ctx.fillRect(0, H * 0.55, W, H * 0.45);
+    }
+
+    function plantAlpha(p, now) {
+      const age = now - p.t0;
+      if (age < PLANT_LIFE_MS - PLANT_FADE_MS) return 1;
+      if (age >= PLANT_LIFE_MS) return 0;
+      const k = (PLANT_LIFE_MS - age) / PLANT_FADE_MS;
+      return Math.max(0, Math.min(1, k));
+    }
+
+    function plantGrowth(p, now) {
+      const age = now - p.t0;
+      const baseRate = age / PLANT_GROW_MS;
+      // Watering accelerates growth slightly.
+      const watered = baseRate * (1 + 0.5 * p.watered);
+      return Math.max(0, Math.min(1, watered));
+    }
+
+    function drawPlant(p, now) {
+      const a = plantAlpha(p, now);
+      if (a <= 0) return;
+      const growth = plantGrowth(p, now);
+      const age = now - p.t0;
+      const bloomT = Math.min(1, Math.max(0, (age - PLANT_BLOOM_MS) / 4000));
+      if (!p.bloomed && age >= PLANT_BLOOM_MS) {
+        p.bloomed = true;
+        // Only play bloom tone for plants we can see (i.e. all of them) - soft.
+        bloomTone(p.hue, p.y);
+      }
+
+      // L-system / recursive branch draw, deterministic by seed.
+      const rng = mulberry32(p.seed);
+      // Rendering parameters.
+      const stemHueA = p.hue;
+      const stemHueB = (p.hue + 25) % 360;
+      const maxLen = 64 + rng() * 36;            // px height of stem
+      const branchAngle = 0.32 + rng() * 0.18;   // radians
+      const depth = 5;
+      const baseWidth = 2.2;
+      const sway = Math.sin(now * 0.0006 + p.seed * 0.001) * 0.04;
+      const bloomColor = `hsla(${(p.hue + 180) % 360}, 70%, 70%, ${a})`;
+
+      // Soft halo at base.
+      const haloR = 26 + 18 * growth + 10 * bloomT;
+      const halo = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, haloR);
+      halo.addColorStop(0, `hsla(${stemHueA}, 60%, 55%, ${0.18 * a * (0.4 + 0.6 * growth)})`);
+      halo.addColorStop(1, `hsla(${stemHueA}, 60%, 55%, 0)`);
+      ctx.fillStyle = halo;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, haloR, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+
+      function branch(len, angle, d, w, hue) {
+        if (d <= 0 || len < 1.2) return;
+        const x2 = Math.sin(angle) * len;
+        const y2 = -Math.cos(angle) * len;
+        ctx.strokeStyle = `hsla(${hue}, 55%, ${28 + d * 4}%, ${a})`;
+        ctx.lineWidth = Math.max(0.6, w);
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+        ctx.save();
+        ctx.translate(x2, y2);
+        // Two children with deterministic jitter.
+        const jL = (rng() - 0.5) * 0.18;
+        const jR = (rng() - 0.5) * 0.18;
+        branch(len * (0.62 + rng() * 0.1), angle - branchAngle + jL + sway, d - 1, w * 0.7, (hue + 6) % 360);
+        branch(len * (0.62 + rng() * 0.1), angle + branchAngle + jR + sway, d - 1, w * 0.7, (hue + 6) % 360);
+        // Petal at tip if bloomed and at leaf depth.
+        if (p.bloomed && d <= 2) {
+          const pr = (3.4 + rng() * 2.2) * (0.4 + 0.6 * bloomT);
+          ctx.fillStyle = `hsla(${(hue + 160) % 360}, 80%, 72%, ${0.85 * a * bloomT})`;
+          ctx.beginPath();
+          ctx.arc(0, 0, pr, 0, Math.PI * 2);
+          ctx.fill();
+          // Faint outer glow.
+          ctx.fillStyle = `hsla(${(hue + 160) % 360}, 80%, 72%, ${0.18 * a * bloomT})`;
+          ctx.beginPath();
+          ctx.arc(0, 0, pr * 2.3, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (!p.bloomed && d <= 1 && growth > 0.4) {
+          // Tiny bud while growing.
+          ctx.fillStyle = `hsla(${stemHueB}, 60%, 65%, ${0.5 * a})`;
+          ctx.beginPath();
+          ctx.arc(0, 0, 1.4 + growth * 1.6, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.restore();
+      }
+
+      // Scale by growth so it grows up out of the ground.
+      const scale = 0.15 + 0.85 * Math.pow(growth, 0.85);
+      ctx.scale(scale, scale);
+      branch(maxLen, 0, depth, baseWidth, stemHueA);
+      ctx.restore();
+
+      // Bloom flare on completion.
+      if (p.bloomed && bloomT < 1) {
+        const r = 30 + bloomT * 80;
+        const flare = ctx.createRadialGradient(p.x, p.y - maxLen * scale * 0.6, 0, p.x, p.y - maxLen * scale * 0.6, r);
+        flare.addColorStop(0, `hsla(${(p.hue + 160) % 360}, 80%, 75%, ${0.35 * (1 - bloomT) * a})`);
+        flare.addColorStop(1, `hsla(${(p.hue + 160) % 360}, 80%, 75%, 0)`);
+        ctx.fillStyle = flare;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y - maxLen * scale * 0.6, r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Watered shimmer.
+      if (p.watered > 0.02 && (now - p.lastWater) < 1200) {
+        const k = Math.max(0, 1 - (now - p.lastWater) / 1200);
+        ctx.strokeStyle = `hsla(200, 80%, 75%, ${0.45 * k * a})`;
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 18 + (1 - k) * 34, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    }
+
+    function drawSelfCursor() {
+      if (!mouse.has) return;
+      const x = mouse.x, y = mouse.y;
+      // Soft glow.
+      const r = 22;
+      const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+      g.addColorStop(0, `hsla(${SELF_HUE}, 70%, 70%, 0.55)`);
+      g.addColorStop(1, `hsla(${SELF_HUE}, 70%, 70%, 0)`);
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fill();
+      // Crosshair dot.
+      ctx.fillStyle = `hsla(${SELF_HUE}, 80%, 82%, 0.9)`;
+      ctx.beginPath();
+      ctx.arc(x, y, 2.4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    function drawPeerCursors(now) {
+      for (const [id, p] of PEERS) {
+        if (now - p.lastSeen > 8000) continue;
+        const r = 18;
+        const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r);
+        g.addColorStop(0, `hsla(${p.hue}, 70%, 70%, 0.45)`);
+        g.addColorStop(1, `hsla(${p.hue}, 70%, 70%, 0)`);
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = `hsla(${p.hue}, 80%, 82%, 0.85)`;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 2.0, 0, Math.PI * 2);
+        ctx.fill();
+        // Name label, faint.
+        ctx.font = "11px -apple-system, Segoe UI, Roboto, sans-serif";
+        ctx.fillStyle = `hsla(${p.hue}, 30%, 85%, 0.6)`;
+        ctx.fillText(p.name, p.x + 10, p.y - 8);
+      }
+    }
+
+    // --- Main loop -----------------------------------------------------------
+    let lastT = performance.now();
+    function frame(now) {
+      const dt = Math.min(0.05, (now - lastT) / 1000);
+      lastT = now;
+      const wallNow = Date.now();
+
+      // Decay watering.
+      for (const p of PLANTS.values()) {
+        p.watered = Math.max(0, p.watered - dt * 0.04);
+      }
+      // Cull old plants.
+      for (const [id, p] of PLANTS) {
+        if (wallNow - p.t0 > PLANT_LIFE_MS) PLANTS.delete(id);
+      }
+      // Cull stale peers (defensive - Trystero handles join/leave but lag happens).
+      for (const [id, p] of PEERS) {
+        if (wallNow - p.lastSeen > 45000) PEERS.delete(id);
+      }
+
+      maybeBroadcastCursor(now);
+      maybeWaterFromMouse(now);
+
+      clearFrame();
+      drawStars(now);
+      drawGround();
+
+      // Sort plants by y so foreground draws over background.
+      const ordered = Array.from(PLANTS.values()).sort((a, b) => a.y - b.y);
+      for (const p of ordered) drawPlant(p, wallNow);
+
+      drawPeerCursors(wallNow);
+      drawSelfCursor();
+
+      requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+
+    // Status refresh in case peers come/go without join/leave events firing.
+    setInterval(updateStatus, 2000);
+
+    // Kick off the network in the background so first paint is instant.
+    // Even if this never resolves, the game is fully playable solo.
+    startNetwork().catch(() => { net.mode = "solo"; updateStatus(); });
+  </script>
+</body>
+</html>
