@@ -1,0 +1,3783 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>X-ish toy clone</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #000000;
+    --fg: #e7e9ea;
+    --muted: #71767b;
+    --line: #2f3336;
+    --accent: #1d9bf0;
+    --accent-hover: #1a8cd8;
+    --card-bg: #16181c;
+    --hover-overlay: rgba(231,233,234,0.1);
+    --accent-blue-hover: rgba(29,155,240,0.1);
+    --accent-green-hover: rgba(0,186,124,0.1);
+    --accent-pink-hover: rgba(249,24,128,0.1);
+    --accent-green-text: rgb(0,186,124);
+    --accent-pink-text: rgb(249,24,128);
+    --header-bg: rgba(0,0,0,0.65);
+    --shadow: 0 0 15px rgba(255,255,255,0.06);
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: 'Chirp', 'Roboto', system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif;
+    font-size: 15px;
+    line-height: 1.3125;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  button { font-family: inherit; cursor: pointer; }
+  textarea { font-family: inherit; }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-thumb { background: var(--line); border-radius: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+
+  .layout {
+    display: grid;
+    grid-template-columns: 275px minmax(0, 600px) 350px;
+    max-width: 1265px;
+    margin: 0 auto;
+    gap: 0;
+  }
+
+  /* LEFT SIDEBAR */
+  .left {
+    position: sticky; top: 0;
+    height: 100vh;
+    padding: 0 12px;
+    display: flex; flex-direction: column;
+    border-right: 1px solid var(--line);
+  }
+  .brand {
+    width: 52px; height: 52px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 9999px;
+    margin: 2px 0;
+  }
+  .brand:hover { background: var(--hover-overlay); }
+  .nav { display: flex; flex-direction: column; }
+  .nav-item {
+    display: inline-flex; align-items: center; gap: 20px;
+    padding: 12px;
+    border-radius: 9999px;
+    color: var(--fg);
+    background: transparent;
+    border: 0;
+    font-size: 20px;
+    font-weight: 400;
+    cursor: pointer;
+    align-self: flex-start;
+    text-align: left;
+    transition: background-color .15s;
+  }
+  .nav-item:hover { background: var(--hover-overlay); }
+  .nav-item.active { font-weight: 700; }
+  .nav-item svg { width: 26.25px; height: 26.25px; }
+  .post-btn {
+    margin-top: 16px;
+    width: 100%;
+    padding: 16px;
+    background: var(--accent);
+    color: #fff;
+    border: 0;
+    border-radius: 9999px;
+    font-weight: 700;
+    font-size: 17px;
+    transition: background-color .15s;
+  }
+  .post-btn:hover { background: var(--accent-hover); }
+  .post-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .left-bottom {
+    margin-top: auto; padding: 12px 0;
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 8px;
+  }
+  .me-pill {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px;
+    border-radius: 9999px;
+    flex: 1;
+    cursor: pointer;
+    background: transparent;
+    border: 0;
+    color: var(--fg);
+    min-width: 0;
+  }
+  .me-pill:hover { background: var(--hover-overlay); }
+  .me-pill img { width: 40px; height: 40px; border-radius: 9999px; object-fit: cover; flex-shrink: 0; }
+  .me-pill .me-text { display: flex; flex-direction: column; min-width: 0; }
+  .me-pill .me-text strong, .me-pill .me-text span {
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    text-align: left;
+  }
+  .me-pill .me-text span { color: var(--muted); font-size: 14px; }
+  /* CENTER */
+  .center {
+    border-right: 1px solid var(--line);
+    min-height: 100vh;
+  }
+  .header {
+    position: sticky; top: 0; z-index: 10;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    background: var(--header-bg);
+    border-bottom: 1px solid var(--line);
+  }
+  .header-title { padding: 16px; font-size: 20px; font-weight: 700; }
+  .tabs { display: grid; grid-template-columns: 1fr 1fr; position: relative; }
+  .tabs::after {
+    content: '';
+    position: absolute;
+    left: calc(25% - 28px);
+    bottom: 0;
+    width: 56px; height: 4px;
+    background: var(--accent);
+    border-radius: 9999px;
+    transition: left .22s cubic-bezier(.2,.8,.2,1);
+  }
+  .tabs.following::after { left: calc(75% - 28px); }
+  .tab {
+    background: transparent;
+    border: 0;
+    color: var(--muted);
+    font-weight: 500;
+    padding: 16px;
+    cursor: pointer;
+    font-size: 15px;
+    position: relative;
+    transition: background-color .15s;
+  }
+  .tab:hover { background: var(--hover-overlay); }
+  .tab.active { color: var(--fg); font-weight: 700; }
+
+  .composer {
+    display: grid;
+    grid-template-columns: 48px 1fr;
+    gap: 12px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--line);
+  }
+  .composer img.avatar {
+    width: 40px; height: 40px; border-radius: 9999px; object-fit: cover;
+  }
+  .composer-body { display: flex; flex-direction: column; gap: 8px; }
+  .composer textarea {
+    background: transparent;
+    border: 0;
+    color: var(--fg);
+    font-size: 20px;
+    resize: none;
+    outline: none;
+    width: 100%;
+    min-height: 56px;
+    padding: 8px 0;
+  }
+  .composer textarea::placeholder { color: var(--muted); }
+  .composer-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding-top: 8px;
+    border-top: 1px solid var(--line);
+  }
+  .composer-actions { display: flex; gap: 4px; }
+  .composer-icon-btn {
+    width: 34px; height: 34px;
+    border: 0; background: transparent; color: var(--accent);
+    border-radius: 9999px; display: inline-flex; align-items: center; justify-content: center;
+  }
+  .composer-icon-btn:hover { background: var(--accent-blue-hover); }
+  .composer-post {
+    background: var(--accent);
+    color: #fff;
+    border: 0;
+    padding: 8px 16px;
+    border-radius: 9999px;
+    font-weight: 700;
+    font-size: 15px;
+  }
+  .composer-post:disabled { opacity: 0.5; cursor: not-allowed; }
+  .composer-post:not(:disabled):hover { background: var(--accent-hover); }
+  .char-counter {
+    width: 34px; height: 34px;
+    margin-right: 12px;
+    position: relative;
+    display: inline-flex; align-items: center; justify-content: center;
+    color: var(--accent);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+  }
+  .char-counter svg { width: 26px; height: 26px; transform: rotate(-90deg); }
+  .char-counter .track { stroke: var(--line); }
+  .char-counter .bar {
+    stroke: currentColor;
+    transition: stroke-dashoffset .16s, stroke .16s;
+  }
+  .char-counter.warn { color: #ffd400; }
+  .char-counter.danger, .char-counter.over { color: var(--accent-pink-text); }
+  .char-counter.over::after {
+    content: '';
+    position: absolute; inset: 2px;
+    border: 1px solid currentColor;
+    border-radius: 9999px;
+  }
+  .char-counter-num {
+    position: absolute;
+    inset: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+    color: currentColor;
+    font-weight: 700;
+  }
+
+  /* POST ROW */
+  .post {
+    display: grid;
+    grid-template-columns: 48px 1fr;
+    gap: 12px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--line);
+    transition: background-color .1s;
+    animation: postEnter .28s ease both;
+  }
+  .post.keyboard-focused {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+    background: rgba(29,155,240,0.08);
+  }
+  @keyframes postEnter {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes pop {
+    0%   { transform: scale(1); }
+    50%  { transform: scale(1.25); }
+    100% { transform: scale(1); }
+  }
+  .post-menu {
+    margin-left: auto;
+    width: 30px; height: 30px;
+    border-radius: 9999px;
+    border: 0;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center;
+    transition: background-color .15s, color .15s;
+    flex-shrink: 0;
+  }
+  .post-menu:hover { background: var(--accent-blue-hover); color: var(--accent); }
+  .post-menu svg { width: 18px; height: 18px; }
+  /* Removed cursor:pointer + hover-overlay on .post: there was no click handler
+     on the article itself, so the hand cursor was a UX lie. Hover stays subtle
+     via individual interactive children (avatar, name, actions). */
+  .post img.avatar {
+    width: 40px; height: 40px; border-radius: 9999px; object-fit: cover;
+    cursor: pointer;
+  }
+  .post-head { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+  .post-head .name { font-weight: 700; color: var(--fg); cursor: pointer; }
+  .post-head .name:hover { text-decoration: underline; }
+  .post-head .handle, .post-head .dot, .post-head .time { color: var(--muted); }
+  .verified-badge {
+    display: inline-flex; align-items: center;
+    color: var(--accent);
+    flex-shrink: 0;
+    margin-right: 2px;
+  }
+  .verified-badge.gold { color: #e2b719; }
+  .nav-badge {
+    position: absolute;
+    top: -2px; left: 18px;
+    background: var(--accent);
+    color: #fff;
+    border-radius: 9999px;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 0 5px;
+    min-width: 18px;
+    height: 18px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid var(--bg);
+    pointer-events: none;
+  }
+  .nav-item { position: relative; }
+  @keyframes bellPing {
+    0% { color: var(--fg); transform: scale(1); }
+    35% { color: var(--accent-green-text); transform: scale(1.18) rotate(-8deg); }
+    70% { color: var(--accent-green-text); transform: scale(1.05) rotate(6deg); }
+    100% { color: var(--fg); transform: scale(1); }
+  }
+  .nav-item.bell-ping svg,
+  .mobile-nav button.bell-ping svg {
+    animation: bellPing .85s cubic-bezier(.2,.8,.2,1);
+  }
+  @keyframes likeBurst {
+    0%   { transform: scale(1); }
+    25%  { transform: scale(0.1); }
+    50%  { transform: scale(1.4); }
+    75%  { transform: scale(0.95); }
+    100% { transform: scale(1); }
+  }
+  .action.like.bursting .icon-wrap { animation: likeBurst .45s cubic-bezier(.2,.8,.2,1); }
+  .post-body {
+    margin-top: 4px;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    color: var(--fg);
+  }
+  .post-image {
+    margin-top: 12px;
+    border-radius: 16px;
+    overflow: hidden;
+    border: 1px solid var(--line);
+    max-width: 100%;
+    /* Use min aspect ratio + max-height so a slow Pollinations response keeps a
+       visible skeleton, while a successful load can shrink to natural size. */
+    aspect-ratio: 16 / 9;
+    max-height: 510px;
+    position: relative;
+    background:
+      linear-gradient(110deg, var(--card-bg) 30%, rgba(255,255,255,0.04) 50%, var(--card-bg) 70%);
+    background-size: 200% 100%;
+    animation: img-skeleton 1.6s ease-in-out infinite;
+  }
+  .post-image.loaded {
+    animation: none;
+    background: var(--card-bg);
+    aspect-ratio: auto;
+  }
+  .post-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    opacity: 0;
+    transition: opacity .3s ease;
+  }
+  .post-image.loaded img { opacity: 1; height: auto; }
+  @keyframes img-skeleton {
+    0%   { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+  .post-meta { color: var(--muted); font-size: 13px; margin-top: 8px; }
+  .actions {
+    display: flex; justify-content: space-between;
+    margin-top: 8px;
+    max-width: 425px;
+  }
+  .action {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: transparent; border: 0;
+    color: var(--muted);
+    padding: 0;
+    font-size: 13px;
+    transition: color .15s;
+  }
+  .action .icon-wrap {
+    width: 34px; height: 34px;
+    display: inline-flex; align-items: center; justify-content: center;
+    border-radius: 9999px;
+    transition: background-color .15s;
+  }
+  .action svg { width: 18.75px; height: 18.75px; }
+  .action.reply:hover, .action.reply:hover .icon-wrap { color: var(--accent); }
+  .action.reply:hover .icon-wrap { background: var(--accent-blue-hover); }
+  .action.quote:hover, .action.quote:hover .icon-wrap { color: var(--accent); }
+  .action.quote:hover .icon-wrap { background: var(--accent-blue-hover); }
+  .action.retweet:hover, .action.retweet:hover .icon-wrap { color: var(--accent-green-text); }
+  .action.retweet:hover .icon-wrap { background: var(--accent-green-hover); }
+  .action.retweet.on { color: var(--accent-green-text); }
+  .action.like:hover, .action.like:hover .icon-wrap { color: var(--accent-pink-text); }
+  .action.like:hover .icon-wrap { background: var(--accent-pink-hover); }
+  .action.like.on { color: var(--accent-pink-text); }
+  .action.like.on svg { fill: var(--accent-pink-text); }
+  .action.bookmark:hover, .action.bookmark:hover .icon-wrap { color: var(--accent); }
+  .action.bookmark:hover .icon-wrap { background: var(--accent-blue-hover); }
+  .action.bookmark.on { color: var(--accent); }
+  .action.bookmark.on svg { fill: var(--accent); }
+  .action.share:hover, .action.share:hover .icon-wrap { color: var(--accent); }
+  .action.share:hover .icon-wrap { background: var(--accent-blue-hover); }
+
+  /* token links inside posts */
+  .tok-link { color: var(--accent); cursor: pointer; }
+  .tok-link:hover { text-decoration: underline; }
+  .new-posts-banner {
+    width: 100%;
+    border: 0;
+    border-bottom: 1px solid var(--line);
+    background: transparent;
+    color: var(--accent);
+    font-weight: 700;
+    font-size: 15px;
+    padding: 12px 16px;
+    cursor: pointer;
+    transition: background-color .15s;
+  }
+  .new-posts-banner:hover { background: var(--accent-blue-hover); }
+  .pull-refresh {
+    height: 0;
+    overflow: hidden;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--muted);
+    transition: height .16s ease;
+  }
+  .pull-refresh.ready { color: var(--accent-green-text); }
+  .pull-refresh .x-spinner { width: 24px; height: 24px; border-width: 2px; }
+  .quote-card {
+    margin-top: 12px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 10px 12px;
+    color: var(--fg);
+    background: rgba(255,255,255,0.02);
+  }
+  .quote-card .quote-head {
+    display: flex; align-items: center; gap: 4px;
+    font-size: 14px;
+    margin-bottom: 4px;
+  }
+  .quote-card .quote-name { font-weight: 700; }
+  .quote-card .quote-handle { color: var(--muted); }
+  .quote-card .quote-text {
+    color: var(--fg);
+    font-size: 14px;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+  }
+  .context-menu {
+    position: fixed;
+    z-index: 220;
+    min-width: 190px;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+    padding: 6px;
+  }
+  .context-menu button {
+    width: 100%;
+    border: 0;
+    background: transparent;
+    color: var(--fg);
+    text-align: left;
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 15px;
+    cursor: pointer;
+  }
+  .context-menu button:hover { background: var(--hover-overlay); }
+  .profile-hover-card {
+    position: fixed;
+    z-index: 210;
+    width: 292px;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    box-shadow: var(--shadow);
+    padding: 14px;
+    color: var(--fg);
+  }
+  .profile-hover-top {
+    display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+  }
+  .profile-hover-card img {
+    width: 56px; height: 56px;
+    border-radius: 9999px;
+    object-fit: cover;
+  }
+  .profile-hover-name { margin-top: 8px; font-weight: 800; font-size: 17px; }
+  .profile-hover-handle { color: var(--muted); font-size: 14px; }
+  .profile-hover-bio { margin-top: 10px; font-size: 14px; line-height: 1.35; }
+  .profile-hover-stats {
+    display: flex; gap: 14px;
+    margin-top: 10px;
+    color: var(--muted);
+    font-size: 14px;
+  }
+  .profile-hover-stats strong { color: var(--fg); font-weight: 700; }
+
+  /* Reply composer + comments */
+  .replies { padding: 0 16px 12px 76px; border-bottom: 1px solid var(--line); }
+  .reply-composer {
+    display: grid; grid-template-columns: 32px 1fr auto; gap: 8px;
+    align-items: center;
+    padding: 8px 0;
+  }
+  .reply-composer img { width: 32px; height: 32px; border-radius: 9999px; object-fit: cover; }
+  .reply-composer input {
+    background: transparent; border: 0; outline: none;
+    color: var(--fg); font-size: 15px; padding: 6px 0;
+  }
+  .reply-composer button {
+    background: var(--accent); color: #fff; border: 0;
+    padding: 6px 14px; border-radius: 9999px; font-weight: 700;
+  }
+  .reply-composer button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .comment {
+    display: grid; grid-template-columns: 32px 1fr; gap: 8px;
+    padding: 8px 0;
+    border-top: 1px dashed var(--line);
+  }
+  .comment img { width: 32px; height: 32px; border-radius: 9999px; object-fit: cover; cursor: pointer; }
+  .comment .c-head { font-size: 13px; }
+  .comment .c-head strong { color: var(--fg); }
+  .comment .c-head span { color: var(--muted); margin-left: 4px; }
+  .comment .c-body { color: var(--fg); white-space: pre-wrap; overflow-wrap: anywhere; }
+
+  /* RIGHT SIDEBAR */
+  .right { padding: 0 16px; scrollbar-width: none; }
+  .right::-webkit-scrollbar { width: 0; background: transparent; }
+  .right-sticky { position: sticky; top: 0; padding-top: 8px; }
+  .search-wrap {
+    position: relative;
+    margin-bottom: 16px;
+  }
+  .search-wrap input {
+    width: 100%;
+    background: var(--card-bg);
+    border: 1px solid transparent;
+    border-radius: 9999px;
+    padding: 12px 16px 12px 48px;
+    color: var(--fg);
+    font-size: 15px;
+    outline: none;
+  }
+  .search-wrap input:focus { background: var(--bg); border-color: var(--accent); }
+  .search-wrap svg {
+    position: absolute; left: 16px; top: 50%; transform: translateY(-50%);
+    width: 20px; height: 20px; color: var(--muted);
+  }
+  .right-card {
+    background: var(--card-bg);
+    border-radius: 16px;
+    overflow: hidden;
+  }
+  .right-card h2 {
+    margin: 0; padding: 12px 16px;
+    font-size: 20px; font-weight: 800;
+  }
+  .trend {
+    padding: 12px 16px;
+    cursor: pointer;
+    transition: background-color .15s;
+  }
+  .trend:hover { background: var(--hover-overlay); }
+  .trend small { color: var(--muted); font-size: 13px; display: block; }
+  .trend strong { display: block; font-size: 15px; margin: 2px 0; }
+  .show-more {
+    padding: 14px 16px;
+    color: var(--accent);
+    cursor: pointer;
+    font-size: 15px;
+    border-radius: 0 0 16px 16px;
+    transition: background-color .15s;
+  }
+  .show-more:hover { background: var(--hover-overlay); }
+  .who-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 16px;
+    transition: background-color .15s;
+  }
+  .who-row:hover { background: var(--hover-overlay); }
+  .who-row img { width: 40px; height: 40px; border-radius: 9999px; object-fit: cover; cursor: pointer; flex-shrink: 0; }
+  .who-row .who-info { flex: 1; min-width: 0; cursor: pointer; }
+  .who-row .who-name {
+    font-weight: 700; font-size: 15px;
+    display: flex; align-items: center; gap: 4px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .who-row .who-handle {
+    color: var(--muted); font-size: 14px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .follow-btn {
+    background: var(--fg); color: var(--bg);
+    border: 0; border-radius: 9999px;
+    font-weight: 700; font-size: 14px;
+    padding: 6px 16px;
+    cursor: pointer;
+    transition: opacity .15s, background-color .15s, color .15s, border-color .15s;
+    flex-shrink: 0;
+  }
+  .follow-btn:hover { opacity: 0.9; }
+  .follow-btn.following {
+    background: transparent; color: var(--fg);
+    border: 1px solid var(--line);
+  }
+  .follow-btn.following:hover {
+    color: var(--accent-pink-text);
+    border-color: var(--accent-pink-hover);
+    background: var(--accent-pink-hover);
+  }
+  .footer-links {
+    padding: 16px;
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .footer-links .row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+  .footer-links a { color: var(--muted); }
+  .footer-links a:hover { text-decoration: underline; }
+  .header-action {
+    width: 34px; height: 34px;
+    border-radius: 9999px;
+    border: 0; background: transparent; color: var(--fg);
+    display: inline-flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    transition: background-color .15s;
+  }
+  .header-action:hover { background: var(--hover-overlay); }
+  .header-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 16px;
+  }
+  /* Sub-page: notifications, bookmarks, lists, etc. */
+  .page-header {
+    position: sticky; top: 0; z-index: 5;
+    background: var(--header-bg);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--line);
+    display: flex; align-items: center; gap: 24px;
+    padding: 0 16px;
+    height: 53px;
+  }
+  .page-back {
+    width: 34px; height: 34px;
+    border-radius: 9999px;
+    border: 0; background: transparent; color: var(--fg);
+    cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center;
+    transition: background-color .15s;
+  }
+  .page-back:hover { background: var(--hover-overlay); }
+  .page-back svg { width: 18px; height: 18px; }
+  .page-title { font-size: 20px; font-weight: 800; line-height: 1; }
+  .page-tabs { display: grid; grid-template-columns: 1fr 1fr; border-bottom: 1px solid var(--line); position: relative; }
+  .page-tabs::after {
+    content: '';
+    position: absolute; bottom: 0; left: calc(25% - 28px);
+    width: 56px; height: 4px;
+    background: var(--accent);
+    border-radius: 9999px;
+    transition: left .22s cubic-bezier(.2,.8,.2,1);
+  }
+  .page-tabs.second::after { left: calc(75% - 28px); }
+  .page-tab {
+    background: transparent; border: 0; color: var(--muted);
+    font-weight: 500; font-size: 15px;
+    height: 53px; cursor: pointer;
+    position: relative;
+    transition: background-color .15s, color .15s;
+  }
+  .page-tab:hover { background: var(--hover-overlay); }
+  .page-tab.active { color: var(--fg); font-weight: 700; }
+  .empty-state {
+    padding: 64px 32px;
+    max-width: 380px;
+    margin: 0 auto;
+  }
+  .empty-state h2 {
+    font-size: 31px; font-weight: 800; line-height: 1.2;
+    margin: 0 0 12px;
+    color: var(--fg);
+  }
+  .empty-state p {
+    font-size: 15px; line-height: 1.4;
+    color: var(--muted);
+    margin: 0;
+  }
+  .empty-state .cta {
+    margin-top: 28px;
+    background: var(--accent); color: #fff;
+    border: 0; border-radius: 9999px;
+    padding: 14px 28px;
+    font-weight: 700; font-size: 15px;
+    cursor: pointer;
+    transition: background-color .15s;
+  }
+  .empty-state .cta:hover { background: var(--accent-hover); }
+  /* Notification row */
+  .notif-row {
+    display: grid;
+    grid-template-columns: 40px 1fr;
+    gap: 16px;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--line);
+    transition: background-color .15s;
+    cursor: pointer;
+    position: relative;
+  }
+  .notif-row:hover { background: var(--hover-overlay); }
+  .notif-row.unread { background: rgba(29,155,240,0.05); }
+  .notif-row.fresh::after {
+    content: '';
+    position: absolute;
+    top: 18px; right: 16px;
+    width: 8px; height: 8px;
+    border-radius: 9999px;
+    background: var(--accent-green-text);
+    box-shadow: 0 0 0 4px var(--accent-green-hover);
+  }
+  .notif-icon {
+    width: 30px; height: 30px;
+    border-radius: 9999px;
+    display: inline-flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    margin-left: auto;
+  }
+  .notif-icon.like { color: var(--accent-pink-text); }
+  .notif-icon.like svg { fill: var(--accent-pink-text); }
+  .notif-icon.retweet { color: var(--accent-green-text); }
+  .notif-icon.retweet svg { fill: var(--accent-green-text); }
+  .notif-icon.reply, .notif-icon.follow, .notif-icon.mention { color: var(--accent); }
+  .notif-icon svg { width: 24px; height: 24px; }
+  .notif-body { min-width: 0; }
+  .notif-avatar {
+    width: 32px; height: 32px;
+    border-radius: 9999px;
+    object-fit: cover;
+    margin-bottom: 8px;
+  }
+  .notif-avatar-stack {
+    display: flex;
+    align-items: center;
+    margin-bottom: 8px;
+    min-height: 34px;
+  }
+  .notif-avatar-stack .notif-avatar {
+    margin-bottom: 0;
+    border: 2px solid var(--bg);
+  }
+  .notif-avatar-stack .notif-avatar + .notif-avatar { margin-left: -10px; }
+  .notif-text { font-size: 15px; line-height: 1.3; color: var(--fg); }
+  .notif-text strong { font-weight: 700; }
+  .notif-preview { color: var(--muted); margin-top: 6px; font-size: 14px; line-height: 1.35; }
+  .notif-time { color: var(--muted); font-size: 13px; margin-top: 4px; }
+  /* Premium upsell page */
+  .premium-page { padding: 24px 32px; }
+  .premium-page h2 { font-size: 31px; font-weight: 800; margin: 0 0 8px; color: var(--fg); }
+  .premium-page p { font-size: 15px; color: var(--muted); margin: 0 0 20px; line-height: 1.5; }
+  .premium-page .feature {
+    display: grid; grid-template-columns: 32px 1fr; gap: 12px;
+    padding: 12px 0;
+    border-top: 1px solid var(--line);
+  }
+  .premium-page .feature-title { font-weight: 700; }
+  .premium-page .feature-desc { color: var(--muted); font-size: 14px; margin-top: 2px; }
+  /* Mobile nav + FAB - visible only on narrow viewports */
+  .mobile-nav {
+    display: none;
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    height: 54px;
+    grid-template-columns: repeat(5, 1fr);
+    background: rgba(0,0,0,0.86);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-top: 1px solid var(--line);
+    z-index: 80;
+  }
+  .mobile-nav button {
+    border: 0;
+    background: transparent;
+    color: var(--fg);
+    cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center;
+    transition: background-color .15s;
+  }
+  .mobile-nav button:hover { background: var(--hover-overlay); }
+  .mobile-nav button.active { color: var(--accent); }
+  .mobile-nav svg { width: 24px; height: 24px; }
+  .fab {
+    display: none;
+    position: fixed;
+    right: 18px; bottom: 70px;
+    width: 56px; height: 56px;
+    border-radius: 9999px;
+    border: 0;
+    background: var(--accent);
+    color: #fff;
+    box-shadow: var(--shadow);
+    cursor: pointer;
+    z-index: 80;
+    align-items: center; justify-content: center;
+    transition: background-color .15s, transform .12s;
+  }
+  .fab:hover { background: var(--accent-hover); }
+  .fab:active { transform: scale(0.94); }
+  .fab svg { width: 24px; height: 24px; }
+  @media (max-width: 700px) {
+    .mobile-nav { display: grid; }
+    .fab { display: inline-flex; }
+    body { padding-bottom: 54px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+
+  /* LOADING + TOAST */
+  .feed-loading {
+    padding: 32px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-bottom: 1px solid var(--line);
+  }
+  .x-spinner {
+    width: 32px;
+    height: 32px;
+    border-radius: 9999px;
+    border: 3px solid var(--accent-blue-hover);
+    border-top-color: var(--accent);
+    animation: x-spin 0.9s linear infinite;
+  }
+  @keyframes x-spin {
+    to { transform: rotate(360deg); }
+  }
+  .feed-empty {
+    padding: 48px 24px;
+    text-align: center;
+    color: var(--muted);
+    border-bottom: 1px solid var(--line);
+  }
+  .feed-empty .feed-empty-emoji {
+    font-size: 48px;
+    margin-bottom: 12px;
+    filter: grayscale(0.3);
+  }
+  .feed-empty h3 { margin: 0 0 8px; color: var(--fg); font-size: 20px; font-weight: 800; }
+  .feed-empty p { margin: 0; font-size: 14px; }
+  .skeleton-post {
+    display: grid;
+    grid-template-columns: 48px 1fr;
+    gap: 12px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--line);
+  }
+  .skeleton-shape {
+    background: linear-gradient(110deg, var(--card-bg) 30%, rgba(255,255,255,0.04) 50%, var(--card-bg) 70%);
+    background-size: 200% 100%;
+    animation: img-skeleton 1.6s ease-in-out infinite;
+    border-radius: 8px;
+  }
+  .skeleton-avatar { width: 40px; height: 40px; border-radius: 9999px; }
+  .skeleton-line { height: 12px; margin: 6px 0; }
+  .skeleton-line.short { width: 35%; }
+  .skeleton-line.long  { width: 90%; }
+  .skeleton-line.medium { width: 70%; }
+  .local-only-tip {
+    font-size: 11px;
+    color: var(--muted);
+    margin-left: 4px;
+    opacity: 0.7;
+  }
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--accent);
+    color: #fff;
+    padding: 10px 16px;
+    border-radius: 9999px;
+    box-shadow: var(--shadow);
+    z-index: 1000;
+    font-weight: 500;
+    font-size: 14px;
+    animation: toast-in .25s ease-out;
+  }
+  @keyframes toast-in {
+    from { opacity: 0; transform: translate(-50%, 8px); }
+    to   { opacity: 1; transform: translate(-50%, 0); }
+  }
+
+  /* MODALS */
+  .modal-backdrop {
+    position: fixed; inset: 0;
+    background: rgba(91,112,131,0.4);
+    z-index: 100;
+    display: flex; align-items: flex-start; justify-content: center;
+    padding: 32px 16px;
+    overflow-y: auto;
+  }
+  .modal {
+    background: var(--bg);
+    color: var(--fg);
+    border-radius: 16px;
+    width: 100%;
+    max-width: 600px;
+    box-shadow: var(--shadow);
+    border: 1px solid var(--line);
+    overflow: hidden;
+    animation: modalIn .18s ease both;
+  }
+  @keyframes modalIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .modal-header {
+    display: flex; align-items: center; gap: 16px;
+    padding: 8px 16px;
+    position: sticky; top: 0;
+    background: var(--header-bg);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--line);
+  }
+  .modal-close {
+    width: 34px; height: 34px;
+    border-radius: 9999px;
+    border: 0; background: transparent; color: var(--fg);
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .modal-close:hover { background: var(--hover-overlay); }
+  .modal-title { font-weight: 700; font-size: 17px; }
+  .modal-body { padding: 0; }
+  .profile-banner {
+    height: 120px;
+    background: linear-gradient(135deg, var(--accent), #4ad);
+  }
+  .profile-info { padding: 12px 16px; }
+  .profile-info img.big-avatar {
+    width: 96px; height: 96px;
+    border-radius: 9999px;
+    object-fit: cover;
+    border: 4px solid var(--bg);
+    margin-top: -56px;
+    background: var(--bg);
+  }
+  .profile-name { margin-top: 8px; font-size: 20px; font-weight: 800; }
+  .profile-handle { color: var(--muted); }
+  .profile-meta { color: var(--muted); margin-top: 8px; display: flex; gap: 12px; flex-wrap: wrap; font-size: 14px; }
+  .profile-section-title { font-weight: 700; padding: 12px 16px; border-top: 1px solid var(--line); }
+
+  .gen-page-content { padding: 16px; }
+  .gen-page-content h3 { margin: 0 0 8px; font-size: 22px; font-weight: 800; }
+  .gen-page-content ul { padding-left: 20px; line-height: 1.5; }
+  .gen-page-content .spinner { color: var(--muted); padding: 16px 0; }
+
+  /* MOBILE */
+  @media (max-width: 1100px) {
+    .layout { grid-template-columns: 88px minmax(0, 600px) 350px; }
+    .nav-item .nav-label { display: none; }
+    .nav-item { padding: 12px; }
+    .post-btn { width: 50px; height: 50px; padding: 0; font-size: 0; position: relative; }
+    .post-btn::before { content: '+'; font-size: 28px; line-height: 1; }
+    .me-pill .me-text { display: none; }
+    .brand { margin-left: 0; }
+  }
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 72px minmax(0, 600px); max-width: 900px; }
+    .right { display: none; }
+  }
+  @media (max-width: 600px) {
+    .layout { grid-template-columns: 56px 1fr; }
+    .left { padding: 0 4px; }
+    .composer { padding: 8px 12px; grid-template-columns: 40px 1fr; gap: 8px; }
+    .composer textarea { font-size: 17px; }
+    .post { padding: 10px 12px; gap: 8px; }
+    .actions { max-width: 100%; }
+    .actions .action span:not(.icon-wrap) { font-size: 12px; }
+    .replies { padding: 0 12px 12px 60px; }
+    .modal-backdrop { padding: 0; align-items: flex-end; }
+    .modal { border-radius: 0; min-height: 100vh; max-width: 100%; animation: modalSlideUp .22s cubic-bezier(.2,.8,.2,1) both; }
+    @keyframes modalSlideUp {
+      from { transform: translateY(100%); }
+      to { transform: translateY(0); }
+    }
+  }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script type="module">
+import { h, render } from 'https://esm.sh/preact@10.22.0';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'https://esm.sh/preact@10.22.0/hooks';
+import { memo } from 'https://esm.sh/preact@10.22.0/compat';
+import htm from 'https://esm.sh/htm@3.1.1';
+
+const html = htm.bind(h);
+
+// --- Pollinations auth (optional but heavily recommended) ---
+// Get a free publishable key from https://enter.pollinations.ai (the pk_ tier is
+// safe to embed in client code; sk_ keys MUST stay server-side). Without a key,
+// the legacy public endpoints still respond but are queue-throttled and the new
+// gen.pollinations.ai endpoint will reject the request.
+// Removed - the sk_ key was wired in for image gen, but Pollinations free tier
+// (Spore) caps at ~10 flux images/hr with burst limits that 429 even authed
+// requests. Image generation now goes through LoremFlickr+OpenVerse (no auth).
+// Text still hits the legacy public endpoint anonymously; if you want to
+// re-enable the gen.pollinations.ai gateway as a fallback tier, paste a pk_
+// (NOT sk_) key here. Embedding sk_ in a public file leaks your hourly Pollen.
+const POLLINATIONS_TOKEN = '';
+
+// --- JSONBlob persistence ---
+// Create one with:
+//   curl -X POST -H "Content-Type: application/json" --data '{"posts":[],"likes":{},"comments":{},"profiles":{}}' https://jsonblob.com/api/jsonBlob
+// then paste the trailing id from the Location header here.
+const BLOB_ID = 'PASTE_ID_HERE';
+const BLOB_URL = `https://jsonblob.com/api/jsonBlob/${BLOB_ID}`;
+const BLOB_ENABLED = BLOB_ID && BLOB_ID !== 'PASTE_ID_HERE';
+const JSON_HEADERS = { 'Content-Type': 'application/json', 'Accept': 'application/json' };
+function pollinationsHeaders() {
+  // Bearer token for the new gen.pollinations.ai gateway and rate-limit-relaxed
+  // legacy access. Empty string short-circuits to anonymous (still works on the
+  // legacy endpoint, just throttled).
+  if (POLLINATIONS_TOKEN) return { ...JSON_HEADERS, 'Authorization': 'Bearer ' + POLLINATIONS_TOKEN };
+  return JSON_HEADERS;
+}
+const STORE_TIMEOUT_MS = 10000;
+
+// Public no-key Pollinations endpoints. The newer gen.pollinations.ai API is key-gated.
+const POLLINATIONS_TEXT_URL = 'https://text.pollinations.ai/openai';
+// Simpler GET endpoint that returns plain text. More tolerant of throttling
+// than the OpenAI-compat POST endpoint and works anonymously.
+const POLLINATIONS_TEXT_GET = 'https://text.pollinations.ai/';
+// Final fallback to the new gen.pollinations.ai gateway. Requires
+// POLLINATIONS_TOKEN to be set (the gateway rejects anonymous requests).
+const POLLINATIONS_TEXT_URL_FALLBACK = 'https://gen.pollinations.ai/v1/chat/completions';
+const POLLINATIONS_IMAGE_BASE = 'https://image.pollinations.ai/prompt';
+const POLLINATIONS_IMAGE_MODEL = 'flux';
+const TRANSPARENT_GIF = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==';
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+async function fetchWithTimeout(url, options = {}, ms = STORE_TIMEOUT_MS, label = 'fetch') {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } catch (e) {
+    if (e && e.name === 'AbortError') throw new Error('timeout: ' + label);
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+function uid() {
+  if (window.crypto && window.crypto.randomUUID) return window.crypto.randomUUID();
+  return 'id-' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+}
+function relTime(ts) {
+  const diff = Math.max(0, Date.now() - ts);
+  const s = Math.floor(diff / 1000);
+  if (s < 60) return s + 's';
+  const m = Math.floor(s / 60);
+  if (m < 60) return m + 'm';
+  const hr = Math.floor(m / 60);
+  if (hr < 24) return hr + 'h';
+  const d = Math.floor(hr / 24);
+  if (d < 7) return d + 'd';
+  return new Date(ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+function shortViews(n) {
+  if (n < 1000) return String(n);
+  if (n < 1_000_000) return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
+  return (n / 1_000_000).toFixed(1).replace(/\.0$/, '') + 'M';
+}
+function positiveInt(value, fallback) {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? Math.round(n) : fallback;
+}
+function seedValue(value) {
+  const n = Math.abs(Math.trunc(Number(value)));
+  return Number.isFinite(n) ? n : Math.floor(Math.random() * 100000);
+}
+function pollinationsImageUrl(prompt, options = {}) {
+  const cleanPrompt = String(prompt || '').trim() || 'dark abstract profile avatar';
+  const url = new URL(POLLINATIONS_IMAGE_BASE + '/' + encodeURIComponent(cleanPrompt));
+  url.searchParams.set('width', String(positiveInt(options.width, 512)));
+  url.searchParams.set('height', String(positiveInt(options.height, 512)));
+  url.searchParams.set('nologo', 'true');
+  url.searchParams.set('seed', String(seedValue(options.seed)));
+  if (options.model !== null) {
+    url.searchParams.set('model', options.model || POLLINATIONS_IMAGE_MODEL);
+  }
+  if (POLLINATIONS_TOKEN) {
+    // Per Pollinations docs the image endpoint accepts the key as the `key`
+    // query param (NOT `token`). Using the wrong param name silently falls
+    // through to anonymous and gets 429-throttled.
+    url.searchParams.set('key', POLLINATIONS_TOKEN);
+  }
+  return url.toString();
+}
+function pollinationsImageFallback(src) {
+  try {
+    const url = new URL(src, location.href);
+    if (url.hostname !== 'image.pollinations.ai') return null;
+    // Strategy: drop optional params that might be tripping the upstream model
+    // and let Pollinations pick its default. We try two distinct retries.
+    if (url.searchParams.has('model')) {
+      url.searchParams.delete('model');
+      return url.toString();
+    }
+    if (url.searchParams.has('seed')) {
+      // Vary seed to dodge a single bad-cache result.
+      url.searchParams.set('seed', String(Math.floor(Math.random() * 100000)));
+      return url.toString();
+    }
+    return null;
+  } catch (_) {
+    return null;
+  }
+}
+function onImageError(e) {
+  const img = e.currentTarget;
+  if (!img) return;
+  // If the element carries a fallback-name dataset attribute, draw an SVG
+  // initials placeholder instead of a blank pixel so the layout reads as
+  // "this is a profile" even when the avatar host is down.
+  const name = img.dataset && img.dataset.fallbackName;
+  img.src = name ? initialAvatarDataUrl(name) : TRANSPARENT_GIF;
+}
+// --- Keyword-based public image lookups ---
+// Pollinations stopped reliably serving images even with sk_ (Spore tier
+// hourly cap is hit fast and burst limits seem to ignore the key). LoremFlickr
+// is keyword-based, keyless, CORS-allowed, and survives bursts in testing.
+// OpenVerse is the fallback when a LoremFlickr URL 404s on a niche keyword.
+const STOPWORDS = new Set(['the','a','an','and','or','but','if','then','of','on','in','at','to','for','with','from','as','is','was','it','this','that','those','these','my','your','our','their','his','her','its','i','you','we','they','me','him','us','them','be','been','am','are','have','has','had','do','does','did','can','could','would','should','will','just','about','like','so','very']);
+function keywordsFromText(text, n = 2) {
+  if (!text) return [];
+  const words = String(text)
+    .toLowerCase()
+    .replace(/https?:\/\/\S+/g, ' ')
+    .replace(/[#@]\S+/g, ' ')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter(w => w.length >= 4 && !STOPWORDS.has(w));
+  return words.slice(0, n);
+}
+function loremFlickrUrl(text, w = 512, h = 288) {
+  const kws = keywordsFromText(text, 2);
+  const tag = kws.length ? kws.join(',') : 'abstract';
+  // The trailing query string is just to vary cache keys per call; LoremFlickr
+  // ignores unknown params and returns a fresh-ish photo for the tag.
+  return `https://loremflickr.com/${w}/${h}/${encodeURIComponent(tag)}?lock=${Math.abs(hashString(text)) % 99999}`;
+}
+async function openVerseLookup(text) {
+  const q = keywordsFromText(text, 3).join(' ') || 'abstract';
+  const url = `https://api.openverse.org/v1/images/?q=${encodeURIComponent(q)}&page_size=3`;
+  const res = await fetchWithTimeout(url, { headers: { 'Accept': 'application/json' } }, 8000, 'openverse');
+  if (!res.ok) throw new Error('openverse ' + res.status);
+  const data = await res.json();
+  const hit = (data && data.results && data.results[0]) || null;
+  if (!hit || !hit.url) throw new Error('openverse: no result');
+  return hit.url;
+}
+
+// --- Text request throttle ---
+// Pollinations legacy endpoint enforces "1 queued request per IP" and 429s
+// instantly when a second concurrent request arrives. We have several text
+// callers (initial-mount auto-load, scroll-down loadMore, periodic activity
+// notifications, AI replies to user posts) that fire in parallel and trip the
+// limit. Single-concurrency queue + 1.5s min gap serializes them.
+const __textQueue = [];
+let __textActive = 0;
+let __textLastStart = 0;
+const TEXT_MIN_GAP_MS = 1500;
+async function withTextSlot(fn) {
+  return new Promise((resolve, reject) => {
+    __textQueue.push({ fn, resolve, reject });
+    drainTextQueue();
+  });
+}
+function drainTextQueue() {
+  if (__textActive >= 1 || __textQueue.length === 0) return;
+  const sinceStart = Date.now() - __textLastStart;
+  if (sinceStart < TEXT_MIN_GAP_MS) {
+    setTimeout(drainTextQueue, TEXT_MIN_GAP_MS - sinceStart + 30);
+    return;
+  }
+  const job = __textQueue.shift();
+  __textActive++;
+  __textLastStart = Date.now();
+  Promise.resolve().then(job.fn).then(
+    v => { __textActive--; job.resolve(v); drainTextQueue(); },
+    e => { __textActive--; job.reject(e); drainTextQueue(); }
+  );
+}
+
+// --- Image-load throttle ---
+// Pollinations rate-limits image bursts even with an sk_ token (429). We
+// serialize loads to a single concurrent request with a min gap so a freshly
+// rendered batch doesn't blast 5 image fetches simultaneously.
+const __imgQueue = [];
+let __imgActive = 0;
+let __imgLastStart = 0;
+const IMG_MAX_CONCURRENT = 1;
+const IMG_MIN_GAP_MS = 2500;
+function enqueueImageLoad(imgEl, url) {
+  if (!imgEl || !url) return;
+  __imgQueue.push({ imgEl, url });
+  drainImgQueue();
+}
+function drainImgQueue() {
+  if (__imgActive >= IMG_MAX_CONCURRENT) return;
+  if (__imgQueue.length === 0) return;
+  const sinceStart = Date.now() - __imgLastStart;
+  if (sinceStart < IMG_MIN_GAP_MS) {
+    setTimeout(drainImgQueue, IMG_MIN_GAP_MS - sinceStart + 30);
+    return;
+  }
+  const job = __imgQueue.shift();
+  const { imgEl, url } = job;
+  if (!imgEl.isConnected) { drainImgQueue(); return; }
+  __imgActive++;
+  __imgLastStart = Date.now();
+  const cleanup = () => {
+    __imgActive--;
+    drainImgQueue();
+  };
+  imgEl.addEventListener('load', cleanup, { once: true });
+  imgEl.addEventListener('error', cleanup, { once: true });
+  imgEl.src = url;
+}
+
+function onGeneratedImageError(e) {
+  const img = e.currentTarget;
+  if (!img) return;
+  // Tier 1: LoremFlickr returned 404 for a niche tag - fall back to OpenVerse.
+  const tries = Number(img.dataset.tries || '0');
+  const text = img.dataset && img.dataset.imageText;
+  if (tries < 1 && text) {
+    img.dataset.tries = '1';
+    openVerseLookup(text)
+      .then(url => { img.src = url; })
+      .catch(err => {
+        console.warn('openverse fallback failed:', err.message);
+        img.src = TRANSPARENT_GIF;
+        const wrap = img.parentElement;
+        if (wrap) {
+          wrap.classList.add('loaded');
+          wrap.style.aspectRatio = 'auto';
+          wrap.style.minHeight = '0';
+        }
+      });
+    return;
+  }
+  console.warn('post image failed', img.dataset.originalSrc || img.src);
+  img.src = TRANSPARENT_GIF;
+  const wrap = img.parentElement;
+  if (wrap) {
+    wrap.classList.add('loaded');
+    wrap.style.aspectRatio = 'auto';
+    wrap.style.minHeight = '0';
+  }
+}
+function onGeneratedImageLoad(e) {
+  const img = e.currentTarget;
+  if (!img) return;
+  // Skip the 1x1 transparent gif and any cached data URL (already small enough).
+  if (img.naturalWidth <= 1 && img.naturalHeight <= 1) return;
+  const wrap = img.parentElement;
+  if (wrap) wrap.classList.add('loaded');
+  // Persist a downsampled JPEG so subsequent reloads come from localStorage
+  // instead of round-tripping Pollinations again. Skip if src is already a
+  // data: URL (came from cache).
+  const original = img.dataset && img.dataset.originalSrc;
+  if (original && !original.startsWith('data:')) {
+    compressAndCacheImage(img, original);
+  }
+}
+function showBodyToast(message, ms = 2000) {
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.textContent = message;
+  document.body.appendChild(t);
+  const timer = setTimeout(() => t.remove(), ms);
+  return () => {
+    clearTimeout(timer);
+    t.remove();
+  };
+}
+function isVerified(profile) {
+  if (!profile || !profile.id) return false;
+  return String(profile.id).startsWith('ai_');
+}
+
+// --- Initial-letter SVG avatar fallback ---
+// When Pollinations refuses to serve a portrait (free tier rate limit, 502, etc)
+// we fall back to a colored circle with 1-2 initials in white. Deterministic
+// from the name so the same persona keeps the same color across renders.
+function initialAvatarDataUrl(name) {
+  const safeName = String(name || '?').trim() || '?';
+  const parts = safeName.split(/\s+/).filter(Boolean);
+  const initials = (
+    parts.length >= 2
+      ? parts[0][0] + parts[1][0]
+      : safeName.slice(0, 2)
+  ).toUpperCase();
+  const hue = Math.abs(hashString(safeName)) % 360;
+  const bg = 'hsl(' + hue + ',55%,38%)';
+  const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">'
+    + '<rect width="100" height="100" rx="50" fill="' + bg + '"/>'
+    + '<text x="50" y="61" text-anchor="middle" font-family="system-ui,-apple-system,sans-serif" '
+    + 'font-size="42" font-weight="700" fill="#fff">' + initials + '</text>'
+    + '</svg>';
+  return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
+}
+
+// --- localStorage cache for generated images ---
+// Pollinations images are deterministic by URL but the actual fetch is slow
+// (10-30s) and unreliable. Once an image successfully loads, we draw it into
+// a canvas, compress to a small JPEG data URL, and cache by source URL so
+// reloads are instant and survive Pollinations downtime.
+const IMG_CACHE_KEY = 'xclone:imgcache:v1';
+const IMG_CACHE_MAX_ENTRIES = 80;
+const IMG_CACHE_MAX_DIM = 320;
+const IMG_CACHE_QUALITY = 0.55;
+const IMG_CACHE_MAX_BYTES = 40000;
+let __imgCache = (() => {
+  try { return JSON.parse(localStorage.getItem(IMG_CACHE_KEY) || '{}') || {}; }
+  catch (_) { return {}; }
+})();
+function persistImgCache() {
+  try {
+    const keys = Object.keys(__imgCache);
+    if (keys.length > IMG_CACHE_MAX_ENTRIES) {
+      const sorted = keys.sort((a, b) => (__imgCache[a].ts || 0) - (__imgCache[b].ts || 0));
+      for (let i = 0; i < keys.length - IMG_CACHE_MAX_ENTRIES; i++) delete __imgCache[sorted[i]];
+    }
+    localStorage.setItem(IMG_CACHE_KEY, JSON.stringify(__imgCache));
+  } catch (e) { /* quota exceeded - silent */ }
+}
+function cachedImageFor(url) {
+  const entry = __imgCache[url];
+  return entry ? entry.data : null;
+}
+function compressAndCacheImage(imgEl, url) {
+  if (!imgEl || !url || !imgEl.naturalWidth || imgEl.naturalWidth < 16) return;
+  if (__imgCache[url]) return;
+  try {
+    const w = imgEl.naturalWidth, h = imgEl.naturalHeight;
+    const scale = Math.min(1, IMG_CACHE_MAX_DIM / Math.max(w, h));
+    const dw = Math.max(1, Math.round(w * scale));
+    const dh = Math.max(1, Math.round(h * scale));
+    const canvas = document.createElement('canvas');
+    canvas.width = dw; canvas.height = dh;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(imgEl, 0, 0, dw, dh);
+    const dataUrl = canvas.toDataURL('image/jpeg', IMG_CACHE_QUALITY);
+    if (!dataUrl || dataUrl.length > IMG_CACHE_MAX_BYTES) return;
+    __imgCache[url] = { data: dataUrl, ts: Date.now() };
+    persistImgCache();
+  } catch (_) { /* CORS-tainted canvas - skip */ }
+}
+function verifiedTier(profile) {
+  if (!isVerified(profile)) return null;
+  return profile.verifiedTier === 'gold' ? 'gold' : 'blue';
+}
+const PREFERS_REDUCED_MOTION = typeof window !== 'undefined' && window.matchMedia
+  ? window.matchMedia('(prefers-reduced-motion: reduce)')
+  : null;
+function popIcon(e) {
+  if (PREFERS_REDUCED_MOTION && PREFERS_REDUCED_MOTION.matches) return;
+  const btn = e && e.currentTarget;
+  if (!btn) return;
+  const icon = btn.querySelector('.icon-wrap');
+  if (!icon || !icon.animate) return;
+  // The like button uses a more dramatic burst (collapse + overshoot) on toggle-on.
+  if (btn.classList.contains('like') && !btn.classList.contains('on')) {
+    icon.animate(
+      [
+        { transform: 'scale(1)', offset: 0 },
+        { transform: 'scale(0.1)', offset: 0.25 },
+        { transform: 'scale(1.4)', offset: 0.5 },
+        { transform: 'scale(0.95)', offset: 0.75 },
+        { transform: 'scale(1)', offset: 1 }
+      ],
+      { duration: 450, easing: 'cubic-bezier(.2,.8,.2,1)' }
+    );
+    return;
+  }
+  icon.animate(
+    [{ transform: 'scale(1)' }, { transform: 'scale(1.25)' }, { transform: 'scale(1)' }],
+    { duration: 240, easing: 'cubic-bezier(.2,.8,.2,1)' }
+  );
+}
+function safeLocalGet(key) {
+  try { return localStorage.getItem(key); } catch (_) { return null; }
+}
+function safeLocalSet(key, value) {
+  try { localStorage.setItem(key, value); } catch (_) {}
+}
+function sameArray(a, b) {
+  if (a === b) return true;
+  if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
+}
+function sameSet(a, b) {
+  // Order-insensitive equality for arrays-as-sets (e.g. likes[postId]).
+  if (a === b) return true;
+  if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
+  const aSet = new Set(a);
+  for (const v of b) if (!aSet.has(v)) return false;
+  return true;
+}
+
+// --- Identity ---
+const ADJECTIVES = ['Brave', 'Quiet', 'Witty', 'Curious', 'Lucky', 'Sleepy', 'Cosmic', 'Quantum', 'Velvet', 'Shy', 'Bold', 'Mellow', 'Spicy', 'Dapper', 'Glitchy', 'Stoic'];
+const ANIMALS = ['Otter', 'Ferret', 'Penguin', 'Octopus', 'Beagle', 'Lemur', 'Hedgehog', 'Capybara', 'Axolotl', 'Wombat', 'Heron', 'Quokka', 'Marten', 'Tapir'];
+function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+function randomDisplayName() {
+  return pick(ADJECTIVES) + ' ' + pick(ANIMALS);
+}
+function handleFromName(name) {
+  return name.replace(/\s+/g, '').toLowerCase();
+}
+function avatarUrl(seedName) {
+  const prompt = `portrait of ${seedName}, headshot avatar, neutral background, soft lighting`;
+  const seed = Math.abs(hashString(seedName)) % 100000;
+  return pollinationsImageUrl(prompt, { width: 256, height: 256, seed });
+}
+function hashString(s) {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) {
+    h = ((h << 5) - h) + s.charCodeAt(i);
+    h |= 0;
+  }
+  return h;
+}
+function ensureIdentity() {
+  let id = safeLocalGet('userId');
+  if (!id) { id = uid(); safeLocalSet('userId', id); }
+  let name = safeLocalGet('userName');
+  if (!name) { name = randomDisplayName(); safeLocalSet('userName', name); }
+  return { id, name, handle: handleFromName(name) };
+}
+
+// --- AI personas (5 fixed for the session) ---
+const PERSONA_HINTS = [
+  { gender: 'female', location: 'Lisbon, Portugal' },
+  { gender: 'male', location: 'Brooklyn, NY' },
+  { gender: 'nonbinary', location: 'Berlin, Germany' },
+  { gender: 'female', location: 'Tokyo, Japan' },
+  { gender: 'male', location: 'Nairobi, Kenya' },
+];
+function makePersonas() {
+  return PERSONA_HINTS.map(p => {
+    const name = randomDisplayName();
+    const id = 'ai_' + handleFromName(name) + '_' + Math.floor(Math.random() * 1000);
+    return {
+      id,
+      displayName: name,
+      handle: handleFromName(name),
+      gender: p.gender,
+      location: p.location,
+      avatarUrl: avatarUrl(name),
+      // ~25% of AI personas get the gold "premium / org" verified tier
+      verifiedTier: Math.random() < 0.25 ? 'gold' : 'blue'
+    };
+  });
+}
+
+// --- Pollinations text ---
+async function aiTextOnce(url, prompt, maxTokens, timeoutMs, label) {
+  const res = await fetchWithTimeout(url, {
+    method: 'POST',
+    headers: pollinationsHeaders(),
+    body: JSON.stringify({
+      model: 'openai',
+      messages: [{ role: 'user', content: prompt }],
+      max_tokens: maxTokens
+    })
+  }, timeoutMs, label);
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '');
+    throw new Error('pollinations ' + res.status + (detail ? ': ' + detail.slice(0, 160) : ''));
+  }
+  const data = await res.json();
+  const content = data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+  if (!content) throw new Error('pollinations: empty completion');
+  return content;
+}
+async function aiTextGetSimple(prompt, timeoutMs, label) {
+  // The plain-text GET endpoint at text.pollinations.ai/{prompt}. No JSON, no
+  // OpenAI shape - just a body of text. Tolerates throttling better than POST.
+  const url = POLLINATIONS_TEXT_GET + encodeURIComponent(prompt);
+  const res = await fetchWithTimeout(url, { method: 'GET' }, timeoutMs, label);
+  if (!res.ok) throw new Error('pollinations-get ' + res.status);
+  const text = await res.text();
+  if (!text || !text.trim()) throw new Error('pollinations-get: empty body');
+  return text.trim();
+}
+// Wraps a function with exponential-backoff retries on recoverable failures
+// (timeout / 429 / "empty completion"). Sleeps 2s before retry 1, 4s before
+// retry 2, 8s before retry 3. Non-recoverable errors propagate immediately.
+async function withRetry(fn, retries = 1, baseDelayMs = 2000) {
+  let lastErr;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await fn();
+    } catch (e) {
+      lastErr = e;
+      const recoverable = /timeout|429|empty completion|too many requests/i.test(String(e && e.message || ''));
+      if (!recoverable || attempt === retries) break;
+      const delay = baseDelayMs * Math.pow(2, attempt);
+      console.warn(`pollinations retry in ${delay}ms (attempt ${attempt + 1}/${retries}):`, e.message);
+      await new Promise(r => setTimeout(r, delay));
+    }
+  }
+  throw lastErr;
+}
+async function aiText(prompt, maxTokens = 400) {
+  // All text traffic flows through the single-slot queue so concurrent
+  // callers (auto-load, scroll, notifications, AI replies) don't collide
+  // and trip the per-IP "1 queued" limit on the legacy endpoint.
+  return withTextSlot(() => aiTextDirect(prompt, maxTokens));
+}
+async function aiTextDirect(prompt, maxTokens) {
+  // Each tier gets one retry with 2s backoff. With no token we skip the
+  // gateway tier entirely. Worst-case wall time on full failure is ~26s
+  // before falling through to the canned batch in generateBatch.
+  if (POLLINATIONS_TOKEN) {
+    try {
+      return await withRetry(
+        () => aiTextOnce(POLLINATIONS_TEXT_URL_FALLBACK, prompt, maxTokens, 8000, 'gateway'),
+        1, 2000
+      );
+    } catch (e) {
+      console.warn('gateway tier exhausted:', e.message);
+    }
+  }
+  try {
+    return await withRetry(
+      () => aiTextOnce(POLLINATIONS_TEXT_URL, prompt, maxTokens, 8000, 'legacy-post'),
+      1, 2000
+    );
+  } catch (e) {
+    console.warn('legacy POST tier exhausted:', e.message);
+  }
+  return await aiTextGetSimple(prompt, 6000, 'legacy-get');
+}
+function tryParseJSON(text) {
+  if (typeof text !== 'string') return null;
+  try { return JSON.parse(text); } catch (_) {}
+  const m = text.match(/\{[\s\S]*\}/);
+  if (m) {
+    try { return JSON.parse(m[0]); } catch (_) {}
+  }
+  return null;
+}
+
+// --- Fallback canned posts when AI fails ---
+const FALLBACK_TEXTS = [
+  'just realized my houseplant is more emotionally available than i am #botanybros',
+  'rate my morning routine: 1) snooze 2) panic 3) coffee 4) existential dread 5) commute',
+  'asked my cat for advice. she walked off. correct call honestly. [link:cat-wisdom]',
+  'monday energy: a fax machine that has seen things',
+  'every meeting could have been an email and every email could have been a glance',
+  'someone please explain why the printer fears me specifically',
+  'started a band called The Loading Spinners. our hits never finish #midi',
+  'my plant just told me to log off. respectfully, no.'
+];
+function fallbackBatch() {
+  const shuffled = FALLBACK_TEXTS.slice().sort(() => Math.random() - 0.5).slice(0, 5);
+  return shuffled.map(t => ({ text: t, image_prompt: null }));
+}
+
+// --- Generate AI batch with timeout + fallback ---
+async function generateBatch(hint) {
+  const prompt =
+    `Write 5 short funny tweet-style posts (<=200 chars each) loosely related to: ${hint || 'random daily life'}. ` +
+    `Sometimes include one #hashtag or one [link:topic] token. For exactly 1 of the 5 posts include an "image_prompt" field with a short vivid visual description (subject, style, mood). ` +
+    `Return strictly JSON: {"posts":[{"text":"...","image_prompt":"..."},...]}`;
+  try {
+    const text = await aiText(prompt, 500);
+    const parsed = tryParseJSON(text);
+    if (parsed && Array.isArray(parsed.posts) && parsed.posts.length) {
+      return parsed.posts.slice(0, 5).map(p => ({
+        text: typeof p.text === 'string' ? p.text : '',
+        image_prompt: typeof p.image_prompt === 'string' && p.image_prompt.trim() ? p.image_prompt.trim() : null
+      })).filter(p => p.text);
+    }
+    return fallbackBatch();
+  } catch (e) {
+    console.warn('generateBatch failed', e);
+    return fallbackBatch();
+  }
+}
+
+// --- Generated micro-page for hashtag/link ---
+async function generateMicroPage(slug) {
+  const prompt =
+    `Write a witty fake encyclopedia micro-page about "${slug}". 3 short bullets, each <=140 chars. ` +
+    `Return strictly JSON: {"title":"...","bullets":["...","...","..."]}`;
+  try {
+    const text = await aiText(prompt, 300);
+    const parsed = tryParseJSON(text);
+    if (parsed && Array.isArray(parsed.bullets) && parsed.bullets.length) {
+      return {
+        title: typeof parsed.title === 'string' ? parsed.title : slug,
+        bullets: parsed.bullets.slice(0, 3).map(String)
+      };
+    }
+  } catch (e) { console.warn('micro-page failed', e); }
+  return {
+    title: slug,
+    bullets: [
+      `${slug}: a topic so trending it forgot to be defined.`,
+      `Common usage: yelling about it on the timeline at 2am.`,
+      `Counterpoint: maybe touching grass would be the move.`
+    ]
+  };
+}
+
+// --- Storage layer (JSONBlob with graceful in-memory fallback) ---
+async function readStore() {
+  if (!BLOB_ENABLED) return null;
+  try {
+    const r = await fetchWithTimeout(BLOB_URL, { cache: 'no-store', headers: { 'Accept': 'application/json' } }, STORE_TIMEOUT_MS, 'readStore');
+    if (!r.ok) {
+      if (r.status >= 500) {
+        await sleep(800);
+        const r2 = await fetchWithTimeout(BLOB_URL, { cache: 'no-store', headers: { 'Accept': 'application/json' } }, STORE_TIMEOUT_MS, 'readStore-retry');
+        if (r2.ok) return await r2.json();
+      }
+      return null;
+    }
+    return await r.json();
+  } catch (e) {
+    console.warn('readStore failed', e);
+    return null;
+  }
+}
+async function writeStore(state) {
+  if (!BLOB_ENABLED) return false;
+  try {
+    const r = await fetchWithTimeout(BLOB_URL, {
+      method: 'PUT',
+      headers: JSON_HEADERS,
+      body: JSON.stringify(state)
+    }, STORE_TIMEOUT_MS, 'writeStore');
+    if (!r.ok && r.status >= 500) {
+      await sleep(800);
+      const r2 = await fetchWithTimeout(BLOB_URL, {
+        method: 'PUT',
+        headers: JSON_HEADERS,
+        body: JSON.stringify(state)
+      }, STORE_TIMEOUT_MS, 'writeStore-retry');
+      return r2.ok;
+    }
+    return r.ok;
+  } catch (e) {
+    console.warn('writeStore failed', e);
+    return false;
+  }
+}
+
+// --- SVG icons (real X paths, currentColor) ---
+const I = {
+  xLogo: html`<svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><g><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"></path></g></svg>`,
+  homeOutline: html`<svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><g><path d="M21.591 7.146L12.52 1.157c-.316-.21-.724-.21-1.04 0l-9.071 5.99c-.26.173-.409.456-.409.757v13.183c0 .502.418.913.929.913H9.14c.51 0 .929-.41.929-.913v-7.075h3.909v7.075c0 .502.417.913.928.913h6.165c.511 0 .929-.41.929-.913V7.904c0-.301-.158-.584-.408-.758zM20 20l-4.25.005v-7.075c0-.502-.417-.913-.928-.913H9.179c-.511 0-.929.41-.929.913V20H4V8.396l8-5.282 8 5.282z"></path></g></svg>`,
+  homeFilled: html`<svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><g><path d="M12.5 1.882c-.3-.197-.7-.197-1 0l-9.5 6.234V21.75c0 .69.56 1.25 1.25 1.25H8c.69 0 1.25-.56 1.25-1.25V15h5.5v6.75c0 .69.56 1.25 1.25 1.25h4.75c.69 0 1.25-.56 1.25-1.25V8.116l-9.5-6.234z"></path></g></svg>`,
+  explore: html`<svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><g><path d="M10.25 3.75c-3.59 0-6.5 2.91-6.5 6.5s2.91 6.5 6.5 6.5c1.795 0 3.419-.726 4.596-1.904 1.178-1.177 1.904-2.801 1.904-4.596 0-3.59-2.91-6.5-6.5-6.5zm-8.5 6.5c0-4.694 3.806-8.5 8.5-8.5s8.5 3.806 8.5 8.5c0 1.986-.682 3.815-1.824 5.262l4.781 4.781-1.414 1.414-4.781-4.781c-1.447 1.142-3.276 1.824-5.262 1.824-4.694 0-8.5-3.806-8.5-8.5z"></path></g></svg>`,
+  notifications: html`<svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><g><path d="M19.993 9.042C19.48 5.017 16.054 2 11.996 2s-7.49 3.021-7.999 7.051L2.866 18H7.1c.463 2.282 2.481 4 4.9 4s4.437-1.718 4.9-4h4.236l-1.143-8.958zM12 20c-1.306 0-2.417-.835-2.829-2h5.658c-.412 1.165-1.523 2-2.829 2zm-6.866-4l.847-6.698C6.364 6.272 8.941 4 11.996 4s5.627 2.268 6.013 5.295L18.864 16H5.134z"></path></g></svg>`,
+  messages: html`<svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><g><path d="M1.998 5.5c0-1.381 1.119-2.5 2.5-2.5h15c1.381 0 2.5 1.119 2.5 2.5v13c0 1.381-1.119 2.5-2.5 2.5h-15c-1.381 0-2.5-1.119-2.5-2.5v-13zm2.5-.5c-.276 0-.5.224-.5.5v2.764l8 3.638 8-3.636V5.5c0-.276-.224-.5-.5-.5h-15zm15.5 5.463l-8 3.636-8-3.638V18.5c0 .276.224.5.5.5h15c.276 0 .5-.224.5-.5v-8.037z"></path></g></svg>`,
+  profile: html`<svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><g><path d="M17.863 13.44c1.477 1.58 2.366 3.8 2.632 6.46l.11 1.1H3.395l.11-1.1c.266-2.66 1.155-4.88 2.632-6.46C7.627 11.85 9.648 11 12 11s4.373.85 5.863 2.44zM12 2C9.791 2 8 3.79 8 6s1.791 4 4 4 4-1.79 4-4-1.791-4-4-4z"></path></g></svg>`,
+  more: html`<svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><g><path d="M3.75 12c0-4.56 3.69-8.25 8.25-8.25s8.25 3.69 8.25 8.25-3.69 8.25-8.25 8.25S3.75 16.56 3.75 12zM12 1.75C6.34 1.75 1.75 6.34 1.75 12S6.34 22.25 12 22.25 22.25 17.66 22.25 12 17.66 1.75 12 1.75zm-4.75 11.5c.69 0 1.25-.56 1.25-1.25s-.56-1.25-1.25-1.25S6 11.31 6 12s.56 1.25 1.25 1.25zm9.5 0c.69 0 1.25-.56 1.25-1.25s-.56-1.25-1.25-1.25-1.25.56-1.25 1.25.56 1.25 1.25 1.25zM13.25 12c0 .69-.56 1.25-1.25 1.25s-1.25-.56-1.25-1.25.56-1.25 1.25-1.25 1.25.56 1.25 1.25z"></path></g></svg>`,
+  reply: html`<svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><g><path d="M1.751 10c0-4.42 3.584-8 8.005-8h4.366c4.49 0 8.129 3.64 8.129 8.13 0 2.96-1.607 5.68-4.196 7.11l-8.054 4.46v-3.69h-.067c-4.49.1-8.183-3.51-8.183-8.01zm8.005-6c-3.317 0-6.005 2.69-6.005 6 0 3.37 2.77 6.08 6.138 6.01l.351-.01h1.761v2.3l5.087-2.81c1.951-1.08 3.163-3.13 3.163-5.36 0-3.39-2.744-6.13-6.129-6.13H9.756z"></path></g></svg>`,
+  retweet: html`<svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><g><path d="M4.5 3.88l4.432 4.14-1.364 1.46L5.5 7.55V16c0 1.1.896 2 2 2H13v2H7.5c-2.209 0-4-1.79-4-4V7.55L1.432 9.48.068 8.02 4.5 3.88zM16.5 6H11V4h5.5c2.209 0 4 1.79 4 4v8.45l2.068-1.93 1.364 1.46-4.432 4.14-4.432-4.14 1.364-1.46 2.068 1.93V8c0-1.1-.896-2-2-2z"></path></g></svg>`,
+  quote: html`<svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><g><path d="M4 4.5C4 3.12 5.12 2 6.5 2h11C18.88 2 20 3.12 20 4.5v9c0 1.38-1.12 2.5-2.5 2.5h-4.74L8.2 20.2c-.63.58-1.65.13-1.65-.72V16H6.5C5.12 16 4 14.88 4 13.5v-9zM6.5 4c-.28 0-.5.22-.5.5v9c0 .28.22.5.5.5h2.05v2.71L11.98 14h5.52c.28 0 .5-.22.5-.5v-9c0-.28-.22-.5-.5-.5h-11zM8 7h8v1.5H8V7zm0 3h5.5v1.5H8V10z"></path></g></svg>`,
+  like: html`<svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><g><path d="M16.697 5.5c-1.222-.06-2.679.51-3.89 2.16l-.805 1.09-.806-1.09C9.984 6.01 8.526 5.44 7.304 5.5c-1.243.07-2.349.78-2.91 1.91-.552 1.12-.633 2.78.479 4.82 1.074 1.97 3.257 4.27 7.129 6.61 3.87-2.34 6.052-4.64 7.126-6.61 1.111-2.04 1.03-3.7.477-4.82-.561-1.13-1.666-1.84-2.908-1.91zm4.187 7.69c-1.351 2.48-4.001 5.12-8.379 7.67l-.503.3-.504-.3c-4.379-2.55-7.029-5.19-8.382-7.67-1.36-2.5-1.41-4.86-.514-6.67.887-1.79 2.647-2.91 4.601-3.01 1.651-.09 3.368.56 4.798 2.01 1.429-1.45 3.146-2.1 4.796-2.01 1.954.1 3.714 1.22 4.601 3.01.896 1.81.846 4.17-.514 6.67z"></path></g></svg>`,
+  likeFilled: html`<svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><g><path d="M20.884 13.19c-1.351 2.48-4.001 5.12-8.379 7.67l-.503.3-.504-.3c-4.379-2.55-7.029-5.19-8.382-7.67-1.36-2.5-1.41-4.86-.514-6.67.887-1.79 2.647-2.91 4.601-3.01 1.651-.09 3.368.56 4.798 2.01 1.429-1.45 3.146-2.1 4.796-2.01 1.954.1 3.714 1.22 4.601 3.01.896 1.81.846 4.17-.514 6.67z"></path></g></svg>`,
+  bookmark: html`<svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><g><path d="M4 4.5C4 3.12 5.119 2 6.5 2h11C18.881 2 20 3.12 20 4.5v18.44l-8-5.71-8 5.71V4.5zM6.5 4c-.276 0-.5.22-.5.5v14.56l6-4.29 6 4.29V4.5c0-.28-.224-.5-.5-.5h-11z"></path></g></svg>`,
+  bookmarkFilled: html`<svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><g><path d="M4 4.5C4 3.12 5.119 2 6.5 2h11C18.881 2 20 3.12 20 4.5v18.44l-8-5.71-8 5.71V4.5z"></path></g></svg>`,
+  share: html`<svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><g><path d="M12 2.59l5.7 5.7-1.41 1.42L13 6.41V16h-2V6.41l-3.3 3.3-1.41-1.42L12 2.59zM21 15l-.02 3.51c0 1.38-1.12 2.49-2.5 2.49H5.5C4.11 21 3 19.88 3 18.5V15h2v3.5c0 .28.22.5.5.5h12.98c.28 0 .5-.22.5-.5L19 15h2z"></path></g></svg>`,
+  search: html`<svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><g><path d="M10.25 3.75c-3.59 0-6.5 2.91-6.5 6.5s2.91 6.5 6.5 6.5c1.795 0 3.419-.726 4.596-1.904 1.178-1.177 1.904-2.801 1.904-4.596 0-3.59-2.91-6.5-6.5-6.5zm-8.5 6.5c0-4.694 3.806-8.5 8.5-8.5s8.5 3.806 8.5 8.5c0 1.986-.682 3.815-1.824 5.262l4.781 4.781-1.414 1.414-4.781-4.781c-1.447 1.142-3.276 1.824-5.262 1.824-4.694 0-8.5-3.806-8.5-8.5z"></path></g></svg>`,
+  close: html`<svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor" width="20" height="20"><g><path d="M10.59 12L4.54 5.96l1.42-1.42L12 10.59l6.04-6.05 1.42 1.42L13.41 12l6.05 6.04-1.42 1.42L12 13.41l-6.04 6.05-1.42-1.42L10.59 12z"></path></g></svg>`,
+  image: html`<svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor" width="20" height="20"><g><path d="M3 5.5C3 4.119 4.119 3 5.5 3h13C19.881 3 21 4.119 21 5.5v13c0 1.381-1.119 2.5-2.5 2.5h-13C4.119 21 3 19.881 3 18.5v-13zM5.5 5c-.276 0-.5.224-.5.5v9.086l3-3 3 3 5-5 3 3V5.5c0-.276-.224-.5-.5-.5h-13zM19 15.414l-3-3-5 5-3-3-3 3V18.5c0 .276.224.5.5.5h13c.276 0 .5-.224.5-.5v-3.086zM9.75 7C8.784 7 8 7.784 8 8.75s.784 1.75 1.75 1.75 1.75-.784 1.75-1.75S10.716 7 9.75 7z"></path></g></svg>`,
+  verified: html`<svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor" width="16" height="16"><g><path d="M20.396 11c-.018-.646-.215-1.275-.57-1.816-.354-.54-.852-.972-1.438-1.246.223-.607.27-1.264.14-1.897-.131-.634-.437-1.218-.882-1.687-.47-.445-1.053-.75-1.687-.882-.633-.13-1.29-.083-1.897.14-.273-.587-.704-1.086-1.245-1.44S11.647 1.62 11 1.604c-.646.017-1.273.213-1.813.568s-.969.854-1.24 1.44c-.608-.223-1.267-.272-1.902-.14-.635.13-1.22.436-1.69.882-.445.47-.749 1.055-.878 1.688-.13.633-.08 1.29.144 1.896-.587.274-1.087.705-1.443 1.245-.356.54-.555 1.17-.574 1.817.02.647.218 1.276.574 1.817.356.54.856.972 1.443 1.245-.224.606-.274 1.263-.144 1.896.13.634.433 1.218.877 1.688.47.443 1.054.747 1.687.878.633.132 1.29.084 1.897-.136.274.586.705 1.084 1.246 1.439.54.354 1.17.551 1.816.569.647-.016 1.276-.213 1.817-.567s.972-.854 1.245-1.44c.604.239 1.266.296 1.903.164.636-.132 1.22-.447 1.68-.907.46-.46.776-1.044.908-1.681s.075-1.299-.165-1.903c.586-.274 1.084-.705 1.439-1.246.354-.54.551-1.17.569-1.816zM9.662 14.85l-3.429-3.428 1.293-1.302 2.072 2.072 4.4-4.794 1.347 1.246z"></path></g></svg>`,
+  sparkles: html`<svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor" width="22" height="22"><g><path d="M16 4.5L17.5 8L21 9.5L17.5 11L16 14.5L14.5 11L11 9.5L14.5 8L16 4.5ZM7 10.5L8 13L10.5 14L8 15L7 17.5L6 15L3.5 14L6 13L7 10.5ZM16 16L17 18L19 19L17 20L16 22L15 20L13 19L15 18L16 16Z"></path></g></svg>`,
+  gif: html`<svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor" width="20" height="20"><g><path d="M3 5.5C3 4.119 4.12 3 5.5 3h13c1.381 0 2.5 1.119 2.5 2.5v13c0 1.381-1.119 2.5-2.5 2.5h-13C4.12 21 3 19.881 3 18.5v-13zM5.5 5c-.276 0-.5.224-.5.5v13c0 .276.224.5.5.5h13c.276 0 .5-.224.5-.5v-13c0-.276-.224-.5-.5-.5h-13zM6.752 9.158c.336-.495.99-.948 1.823-.948.61 0 1.097.18 1.46.428.353.247.55.55.65.749l.037.072-.91.453-.022-.043c-.03-.06-.13-.21-.314-.336-.182-.124-.452-.255-.876-.255-.487 0-.81.262-.99.526-.196.288-.288.652-.288.981 0 .328.092.692.287.98.18.265.504.527.99.527.487 0 .81-.262.99-.526.196-.288.288-.652.288-.98v-.025h-1v-1h2v1.025c0 .493-.135 1.066-.46 1.547-.337.495-.99.948-1.823.948s-1.49-.453-1.825-.948c-.323-.481-.46-1.055-.46-1.548 0-.493.137-1.067.46-1.548zM12.012 14h1v-6h-1v6zM14.985 14h1v-2.5h2v-1h-2V9h2.5V8h-3.5v6z"></path></g></svg>`,
+  poll: html`<svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor" width="20" height="20"><g><path d="M5 4.5h2v15H5v-15zm6 0h2v9h-2v-9zm8 5h-2v10h2v-10z"></path></g></svg>`,
+  emoji: html`<svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor" width="20" height="20"><g><path d="M12 22.75C6.072 22.75 1.25 17.928 1.25 12S6.072 1.25 12 1.25 22.75 6.072 22.75 12 17.928 22.75 12 22.75zm0-20C6.9 2.75 2.75 6.9 2.75 12S6.9 21.25 12 21.25s9.25-4.15 9.25-9.25S17.1 2.75 12 2.75zm0 17c-3.413 0-6.387-2.16-7.498-5.371l1.418-.49C6.802 16.34 9.235 18.25 12 18.25s5.198-1.91 6.08-4.111l1.418.49C18.387 17.84 15.413 20 12 20zM7.75 12c-.69 0-1.25-.56-1.25-1.25v-1.5c0-.69.56-1.25 1.25-1.25S9 8.56 9 9.25v1.5C9 11.44 8.44 12 7.75 12zm8.5 0c-.69 0-1.25-.56-1.25-1.25v-1.5c0-.69.56-1.25 1.25-1.25s1.25.56 1.25 1.25v1.5c0 .69-.56 1.25-1.25 1.25z"></path></g></svg>`,
+  pin: html`<svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor" width="20" height="20"><g><path d="M12 14.315c-2.088 0-3.787-1.698-3.787-3.786S9.913 6.74 12 6.74s3.787 1.7 3.787 3.787-1.7 3.785-3.787 3.785zm0-6.073c-1.26 0-2.287 1.026-2.287 2.287S10.74 12.814 12 12.814s2.287-1.025 2.287-2.286S13.26 8.24 12 8.24z"></path><path d="M20.692 10.69C20.692 5.9 16.792 2 12 2s-8.692 3.9-8.692 8.69c0 1.902.603 3.708 1.743 5.224l6.16 8.226c.184.246.474.392.78.392h.022c.315-.005.605-.164.78-.418l6.005-8.04c1.195-1.543 1.894-3.443 1.894-5.385zm-3.07 4.474l-5.215 6.987-5.382-7.18c-.957-1.275-1.465-2.79-1.465-4.382 0-3.96 3.225-7.183 7.187-7.183s7.187 3.223 7.187 7.183c0 1.624-.585 3.205-1.652 4.575z"></path></g></svg>`,
+  chartSimple: html`<svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor" width="18" height="18"><g><path d="M8.75 21V3h-1.5v18h1.5zm9.5-13V21h-1.5V8h1.5zm-4.5 4V21h-1.5V12h1.5zM4.25 16V21h-1.5v-5h1.5zM21 21v-1.5H3V21h18z"></path></g></svg>`,
+  lists: html`<svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><g><path d="M3 4.5C3 3.12 4.12 2 5.5 2h13C19.88 2 21 3.12 21 4.5v15c0 1.38-1.12 2.5-2.5 2.5h-13C4.12 22 3 20.88 3 19.5v-15zM5.5 4c-.28 0-.5.22-.5.5v15c0 .28.22.5.5.5h13c.28 0 .5-.22.5-.5v-15c0-.28-.22-.5-.5-.5h-13zM7 7h10v2H7V7zm0 4h10v2H7v-2zm0 4h7v2H7v-2z"></path></g></svg>`,
+  arrowBack: html`<svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><g><path d="M7.414 13l5.043 5.04-1.414 1.42L3.586 12l7.457-7.46 1.414 1.42L7.414 11H21v2H7.414z"></path></g></svg>`,
+  bell: html`<svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><g><path d="M19.993 9.042C19.48 5.017 16.054 2 11.996 2s-7.49 3.021-7.999 7.051L2.866 18H7.1c.463 2.282 2.481 4 4.9 4s4.437-1.718 4.9-4h4.236l-1.143-8.958zM12 20c-1.306 0-2.417-.835-2.829-2h5.658c-.412 1.165-1.523 2-2.829 2zm-6.866-4l.847-6.698C6.364 6.272 8.941 4 11.996 4s5.627 2.268 6.013 5.295L18.864 16H5.134z"></path></g></svg>`,
+  community: html`<svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><g><path d="M7.501 19.917L7.471 21H.472l.029-1.027c.184-6.618 3.736-8.977 7-8.977.963 0 1.95.212 2.87.672-.444.478-.851 1.03-1.212 1.656-.507-.204-1.054-.329-1.658-.329-2.767 0-4.57 2.223-4.938 6.004H7.56c-.023.302-.05.6-.059.917zm15.998.056L23.528 21H8.472l.029-1.027C8.685 13.354 12.237 11 15.5 11s6.815 2.354 6.999 8.973zM21.437 19c-.367-3.781-2.17-5.97-4.937-5.97s-4.57 2.189-4.938 5.97h9.875zM6.5 11c-1.933 0-3.5-1.567-3.5-3.5S4.567 4 6.5 4 10 5.567 10 7.5 8.433 11 6.5 11zm0-2c.827 0 1.5-.673 1.5-1.5S7.327 6 6.5 6 5 6.673 5 7.5 5.673 9 6.5 9zm9 0C13.567 9 12 7.433 12 5.5S13.567 2 15.5 2 19 3.567 19 5.5 17.433 9 15.5 9zm0-5c-.827 0-1.5.673-1.5 1.5S14.673 7 15.5 7 17 6.327 17 5.5 16.327 4 15.5 4z"></path></g></svg>`,
+  premium: html`<svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><g><path d="M9.094 3.095c.527-.815 1.388-1.345 2.347-1.345h1.118c.96 0 1.82.53 2.347 1.345l1.701 2.633c.04.061.105.105.18.122l3.027.654c.939.203 1.671.927 1.886 1.864l.252 1.097c.215.937-.142 1.911-.918 2.512l-2.494 1.93c-.063.05-.099.123-.099.202v3.108c0 .968-.557 1.853-1.434 2.272l-2.812 1.345c-.875.418-1.91.293-2.66-.32l-2.4-1.957c-.063-.05-.143-.06-.214-.025l-2.836 1.357c-.876.418-1.91.293-2.66-.32l-2.398-1.957c-.069-.057-.151-.057-.22 0l-2.398 1.957c-.75.612-1.785.738-2.66.32L1.99 17.5c-.876-.418-1.434-1.304-1.434-2.272v-3.108c0-.079-.036-.153-.099-.202L-.038 9.989c-.776-.601-1.133-1.575-.918-2.512l.252-1.097c.215-.937.948-1.661 1.886-1.864l3.027-.654c.075-.017.14-.061.18-.122l1.701-2.633c.527-.815 1.388-1.345 2.347-1.345h1.118c.034 0 .067.017.087.043z"></path></g></svg>`,
+};
+
+// --- Trends (fallback "What's happening" when feed has no hashtags yet) ---
+const FALLBACK_TRENDS = [
+  { topic: 'Technology', tag: '#WebGPU', count: '124K posts' },
+  { topic: 'Trending', tag: '#FridayFeels', count: '89K posts' },
+  { topic: 'Programming', tag: '#JavaScript', count: '212K posts' },
+  { topic: 'Music', tag: '#NowPlaying', count: '45K posts' },
+];
+// Derive up to 4 trending hashtags from recent feed text. Falls back to
+// FALLBACK_TRENDS when fewer than 2 hashtags have been seen.
+function deriveTrends(posts) {
+  if (!posts || !posts.length) return FALLBACK_TRENDS;
+  const counts = new Map();
+  for (const p of posts.slice(0, 50)) {
+    const txt = String(p.text || '');
+    const tags = txt.match(/#[\w\-]{2,30}/g);
+    if (!tags) continue;
+    for (const raw of tags) {
+      const tag = raw.toLowerCase();
+      counts.set(tag, (counts.get(tag) || 0) + 1);
+    }
+  }
+  if (counts.size < 2) return FALLBACK_TRENDS;
+  const sorted = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4);
+  // Synthesize a plausible-looking count.
+  return sorted.map(([tag, n], i) => ({
+    topic: i === 0 ? 'Trending now' : 'Trending',
+    tag,
+    count: (n * 1000 + Math.floor(Math.random() * 9000)) + ' posts'
+  }));
+}
+
+// --- SafeImg: <img> with a default error-to-transparent-gif behavior ---
+// Replaces the repeated `onError=${onImageError}` boilerplate sprinkled across
+// avatars and thumbnails. Use directly anywhere the source might 404.
+// Throttled post-image renderer. Mounts with a placeholder src (or cached
+// data URL if available), then enqueues the real Pollinations URL on the
+// shared image throttle so we don't burst-429 the endpoint.
+function PostImage({ url, text }) {
+  const ref = useRef(null);
+  const cached = cachedImageFor(url);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || cached) return;
+    enqueueImageLoad(el, url);
+  }, [url, cached]);
+  return h('div', { class: 'post-image' },
+    h('img', {
+      ref,
+      src: cached || TRANSPARENT_GIF,
+      'data-original-src': url,
+      'data-image-text': text || '',
+      alt: '',
+      loading: 'lazy',
+      decoding: 'async',
+      crossorigin: 'anonymous',
+      referrerpolicy: 'no-referrer',
+      onLoad: onGeneratedImageLoad,
+      onError: onGeneratedImageError
+    })
+  );
+}
+
+function SafeImg(props) {
+  const { onError, fallbackName, src, ...rest } = props || {};
+  // Optional name used by onImageError to build an SVG initials data URL when
+  // the upstream image fails (Pollinations rate-limit, 502, offline, etc).
+  const data = fallbackName
+    ? { ...(rest['data-fallback-name'] ? {} : {}), 'data-fallback-name': fallbackName }
+    : {};
+  const effectiveSrc = (src && cachedImageFor(src)) || src;
+  const handler = (e) => {
+    onImageError(e);
+    if (typeof onError === 'function') onError(e);
+  };
+  return h('img', { ...rest, ...data, src: effectiveSrc, onError: handler });
+}
+
+// --- App component ---
+function App() {
+  const me = useMemo(ensureIdentity, []);
+  const myAvatar = useMemo(() => avatarUrl(me.name), [me.name]);
+
+  const personasRef = useRef(null);
+  if (!personasRef.current) personasRef.current = makePersonas();
+  const personas = personasRef.current;
+
+  const [activeTab, setActiveTab] = useState('foryou');
+  const [composerText, setComposerText] = useState('');
+  const [posts, setPosts] = useState([]); // newest first
+  const [profiles, setProfiles] = useState(() => {
+    const map = {};
+    personas.forEach(p => { map[p.id] = p; });
+    map[me.id] = { id: me.id, displayName: me.name, handle: me.handle, gender: 'unknown', location: 'somewhere on Earth', avatarUrl: myAvatar };
+    return map;
+  });
+  const [likes, setLikes] = useState({});
+  const [comments, setComments] = useState({});
+  const [retweets, setRetweets] = useState({});
+  const [bookmarks, setBookmarks] = useState({});
+  const [openProfileId, setOpenProfileId] = useState(null);
+  const [openSlug, setOpenSlug] = useState(null);
+  const [genPageCache, setGenPageCache] = useState({});
+  const [feedLoading, setFeedLoading] = useState(false);
+  const [toast, setToast] = useState(null);
+  const [composeModalOpen, setComposeModalOpen] = useState(false);
+  const [activePage, setActivePage] = useState('home');  // home | notifications | bookmarks | lists | messages | communities | premium | more | explore
+  const [notifications, setNotifications] = useState([]);
+  const [freshNotifIds, setFreshNotifIds] = useState({});
+  const [bellPing, setBellPing] = useState(false);
+  const [pendingNewPosts, setPendingNewPosts] = useState([]);
+  const [focusedPostId, setFocusedPostId] = useState(null);
+  const [pullDistance, setPullDistance] = useState(0);
+  const [pullRefreshing, setPullRefreshing] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [contextMenu, setContextMenu] = useState(null);
+  const [composeQuote, setComposeQuote] = useState(null);
+  const [hoverCard, setHoverCard] = useState(null);
+  const unreadNotifs = useMemo(() => notifications.filter(n => !n.read).length, [notifications]);
+
+  const stateRef = useRef({ posts, profiles, likes, comments });
+  const genPageCacheRef = useRef(genPageCache);
+  const toastTimerRef = useRef(null);
+  const storeUnavailableToastedRef = useRef(false);
+  const persistSoonRef = useRef({ timer: null });
+  const activePageRef = useRef(activePage);
+  const pendingNewPostsRef = useRef(pendingNewPosts);
+  const visiblePostsRef = useRef([]);
+  const centerRef = useRef(null);
+  const bellPingTimerRef = useRef(null);
+  const freshNotifTimersRef = useRef({});
+  const hoverTimerRef = useRef(null);
+  const hoverCloseTimerRef = useRef(null);
+  useEffect(() => {
+    stateRef.current = { posts, profiles, likes, comments };
+  }, [posts, profiles, likes, comments]);
+  useEffect(() => { activePageRef.current = activePage; }, [activePage]);
+  useEffect(() => { pendingNewPostsRef.current = pendingNewPosts; }, [pendingNewPosts]);
+
+  // Toast + persistence helpers must be declared BEFORE anything that closes
+  // over them (notifications, AI reply scheduler, etc) - useCallback dep arrays
+  // are evaluated on every render and `const` bindings have a temporal dead zone.
+  const showToast = useCallback((msg) => {
+    setToast(msg);
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = setTimeout(() => {
+      toastTimerRef.current = null;
+      setToast(t => (t === msg ? null : t));
+    }, 2200);
+  }, []);
+
+  const persist = useCallback(async () => {
+    const snapshot = {
+      posts: stateRef.current.posts,
+      profiles: stateRef.current.profiles,
+      likes: stateRef.current.likes,
+      comments: stateRef.current.comments
+    };
+    if (!BLOB_ENABLED) return;
+    const ok = await writeStore(snapshot);
+    if (!ok && !storeUnavailableToastedRef.current) {
+      storeUnavailableToastedRef.current = true;
+      showToast('shared store down, your changes are local');
+    }
+  }, [showToast]);
+  const schedulePersist = useCallback(() => {
+    if (!BLOB_ENABLED) return;
+    if (persistSoonRef.current.timer) clearTimeout(persistSoonRef.current.timer);
+    persistSoonRef.current.timer = setTimeout(() => {
+      persistSoonRef.current.timer = null;
+      persist().catch(e => console.warn('persist failed', e));
+    }, 500);
+  }, [persist]);
+
+  // --- Notifications ---
+  const addNotification = useCallback((notif) => {
+    const id = notif.id || uid();
+    const item = { ...notif, id, ts: notif.ts || Date.now(), read: false };
+    setNotifications(prev => [item, ...prev].slice(0, 60));
+    if (activePageRef.current === 'home') {
+      setBellPing(true);
+      if (bellPingTimerRef.current) clearTimeout(bellPingTimerRef.current);
+      bellPingTimerRef.current = setTimeout(() => setBellPing(false), 900);
+      setFreshNotifIds(prev => ({ ...prev, [id]: true }));
+      if (freshNotifTimersRef.current[id]) clearTimeout(freshNotifTimersRef.current[id]);
+      freshNotifTimersRef.current[id] = setTimeout(() => {
+        setFreshNotifIds(prev => {
+          const next = { ...prev };
+          delete next[id];
+          return next;
+        });
+        delete freshNotifTimersRef.current[id];
+      }, 5500);
+    }
+  }, []);
+
+  // Schedule an AI persona to reply to a post within ~8-30s.
+  // Adds the reply BOTH as a comment under the post (visible inline)
+  // AND as a notification (visible in the bell inbox).
+  const scheduleAIReplyTo = useCallback((postId, postText) => {
+    const delay = 8000 + Math.random() * 22000;
+    setTimeout(async () => {
+      const personasLocal = personasRef.current || [];
+      if (!personasLocal.length) return;
+      const from = personasLocal[Math.floor(Math.random() * personasLocal.length)];
+      let replyText = '';
+      try {
+        const out = await withTimeout(aiText(
+          `You are "${from.displayName}" replying on a Twitter-like app. Write ONE short single-sentence reply (under 90 chars) to this post: "${postText}". Casual tweet tone, no quotes, no hashtag spam.`,
+          80
+        ), 12000, 'aiReply');
+        replyText = out.replace(/^["'\s]+|["'\s]+$/g, '').slice(0, 220);
+      } catch (e) {
+        const canned = ['totally agree.', 'this is a take.', 'huge if true.', 'screenshotting this.', 'finally someone said it.'];
+        replyText = canned[Math.floor(Math.random() * canned.length)];
+      }
+      const comment = { id: uid(), userId: from.id, text: replyText, ts: Date.now() };
+      setComments(prev => {
+        const arr = prev[postId] ? prev[postId].slice() : [];
+        arr.push(comment);
+        return { ...prev, [postId]: arr };
+      });
+      schedulePersist();
+      addNotification({ type: 'reply', fromProfileId: from.id, postId, text: replyText });
+    }, delay);
+  }, [addNotification, schedulePersist]);
+
+  // Periodic random "activity": like / retweet / follow / reply.
+  // Updates the actual post state (likes count) so it's not just a phantom
+  // notification - the user sees their like count tick up on their own posts.
+  useEffect(() => {
+    let timer;
+    const schedule = () => {
+      const delay = 75000 + Math.random() * 225000; // 1.25-5 minutes
+      timer = setTimeout(() => {
+        const personasLocal = personasRef.current || [];
+        if (!personasLocal.length) { schedule(); return; }
+        const from = personasLocal[Math.floor(Math.random() * personasLocal.length)];
+        const myPosts = stateRef.current.posts.filter(p => p.profileId === me.id);
+        const types = myPosts.length > 0 ? ['like', 'like', 'retweet', 'follow'] : ['follow'];
+        const type = types[Math.floor(Math.random() * types.length)];
+        const target = (type === 'follow') ? null : myPosts[Math.floor(Math.random() * myPosts.length)];
+        // For likes, actually mutate the like-set so the count on the post bumps.
+        if (type === 'like' && target) {
+          setLikes(prev => {
+            const cur = new Set(prev[target.id] || []);
+            if (cur.has(from.id)) return prev;
+            cur.add(from.id);
+            return { ...prev, [target.id]: Array.from(cur) };
+          });
+          schedulePersist();
+        }
+        addNotification({
+          type,
+          fromProfileId: from.id,
+          postId: target ? target.id : null,
+          text: target ? target.text : ''
+        });
+        schedule();
+      }, delay);
+    };
+    schedule();
+    return () => clearTimeout(timer);
+  }, [me.id, addNotification, schedulePersist]);
+
+  useEffect(() => {
+    genPageCacheRef.current = genPageCache;
+  }, [genPageCache]);
+  useEffect(() => () => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    if (persistSoonRef.current.timer) clearTimeout(persistSoonRef.current.timer);
+    if (bellPingTimerRef.current) clearTimeout(bellPingTimerRef.current);
+    if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+    if (hoverCloseTimerRef.current) clearTimeout(hoverCloseTimerRef.current);
+    Object.values(freshNotifTimersRef.current).forEach(timer => clearTimeout(timer));
+  }, []);
+
+  // showToast / persist / schedulePersist were hoisted above the notifications
+  // block to avoid a TDZ crash - see the comment near the new location.
+
+  // Track whether the last merge actually mutated state; used by the poll loop
+  // to back off when the remote is quiet.
+  const lastMergeChangedRef = useRef(false);
+
+  // Merge a remote store into local state (additive, won't drop local optimistic posts).
+  const mergeRemote = useCallback((remote, options = {}) => {
+    if (!remote || typeof remote !== 'object') return;
+    let anyChange = false;
+    const localPosts = stateRef.current.posts;
+    const localIds = new Set(localPosts.map(p => p.id));
+    for (const p of pendingNewPostsRef.current) localIds.add(p.id);
+    const remotePosts = Array.isArray(remote.posts) ? remote.posts : [];
+    let mergedPosts = localPosts.slice();
+    let postsChanged = false;
+    const deferredPosts = [];
+    const topTs = localPosts.length ? (localPosts[0].ts || 0) : 0;
+    for (const rp of remotePosts) {
+      if (rp && rp.id && !localIds.has(rp.id)) {
+        if (options.deferNewer && topTs && (rp.ts || 0) > topTs) {
+          deferredPosts.push(rp);
+        } else {
+          mergedPosts.push(rp);
+          postsChanged = true;
+        }
+        localIds.add(rp.id);
+      }
+    }
+    if (deferredPosts.length) {
+      anyChange = true;
+      setPendingNewPosts(prev => {
+        const seen = new Set(prev.map(p => p.id));
+        const next = prev.slice();
+        for (const p of deferredPosts) {
+          if (!seen.has(p.id)) {
+            next.push(p);
+            seen.add(p.id);
+          }
+        }
+        return next.sort((a, b) => (b.ts || 0) - (a.ts || 0)).slice(0, 50);
+      });
+    }
+    if (postsChanged) {
+      anyChange = true;
+      mergedPosts.sort((a, b) => (b.ts || 0) - (a.ts || 0));
+      setPosts(mergedPosts);
+    }
+
+    if (remote.profiles && typeof remote.profiles === 'object') {
+      setProfiles(prev => {
+        let changed = false;
+        const next = { ...prev };
+        for (const [pid, prof] of Object.entries(remote.profiles)) {
+          if (prof && !next[pid]) {
+            next[pid] = prof;
+            changed = true;
+          }
+        }
+        if (changed) anyChange = true;
+        return changed ? next : prev;
+      });
+    }
+    if (remote.likes && typeof remote.likes === 'object') {
+      setLikes(prev => {
+        let changed = false;
+        const next = { ...prev };
+        for (const [pid, arr] of Object.entries(remote.likes)) {
+          const local = next[pid] || [];
+          const mergedSet = new Set(local);
+          for (const userId of (Array.isArray(arr) ? arr : [])) mergedSet.add(userId);
+          const merged = Array.from(mergedSet);
+          // Set-aware compare so order shuffles from the remote don't trigger
+          // re-renders + needless persists.
+          if (!sameSet(local, merged)) {
+            next[pid] = merged;
+            changed = true;
+          }
+        }
+        if (changed) anyChange = true;
+        return changed ? next : prev;
+      });
+    }
+    if (remote.comments && typeof remote.comments === 'object') {
+      setComments(prev => {
+        let changed = false;
+        const next = { ...prev };
+        for (const [pid, arr] of Object.entries(remote.comments)) {
+          const local = next[pid] || [];
+          const seen = new Set(local.map(c => c.id));
+          const additions = (Array.isArray(arr) ? arr : []).filter(c => c && c.id && !seen.has(c.id));
+          if (additions.length) {
+            next[pid] = [...local, ...additions].sort((a, b) => (a.ts || 0) - (b.ts || 0));
+            changed = true;
+          }
+        }
+        if (changed) anyChange = true;
+        return changed ? next : prev;
+      });
+    }
+    lastMergeChangedRef.current = anyChange;
+  }, []);
+
+  // --- Initial seed and remote load ---
+  // Auto-fires an AI batch even when the remote already has a few posts, so a
+  // returning user gets fresh content without scrolling. (Spec: trigger after
+  // page load, not on scroll.)
+  useEffect(() => {
+    let cancelled = false;
+    let starterTimer = null;
+    let topUpTimer = null;
+    (async () => {
+      try {
+        const remote = await readStore();
+        if (cancelled) return;
+        if (remote) {
+          mergeRemote(remote);
+        }
+        // Empty -> generate immediately. Sparse (<4) -> generate on next tick.
+        starterTimer = setTimeout(() => {
+          if (cancelled) return;
+          const count = stateRef.current.posts.length;
+          if (count === 0) {
+            loadMore('hello world, fresh timeline').catch(() => {});
+          } else if (count < 4) {
+            loadMore().catch(() => {});
+          }
+        }, 50);
+        // After ~3s of read-only viewing on a populated feed, top up once
+        // anyway so the user always sees something new.
+        topUpTimer = setTimeout(() => {
+          if (cancelled) return;
+          if (stateRef.current.posts.length >= 4 && !loadingRef.current) {
+            loadMore().catch(() => {});
+          }
+        }, 3000);
+      } catch (e) {
+        console.warn('initial load failed', e);
+      }
+    })();
+    return () => {
+      cancelled = true;
+      if (starterTimer) clearTimeout(starterTimer);
+      if (topUpTimer) clearTimeout(topUpTimer);
+    };
+    // eslint-disable-next-line
+  }, []);
+
+  // --- Polling with adaptive backoff while visible ---
+  // 10s base, climbs to 30s after several quiet ticks, snaps back to 10s on
+  // any change. Pauses entirely when the tab is hidden.
+  useEffect(() => {
+    if (!BLOB_ENABLED) return;
+    let stopped = false;
+    let timer = null;
+    let quietTicks = 0;
+    const FAST_MS = 10000;
+    const SLOW_MS = 30000;
+    const tick = async () => {
+      if (stopped) return;
+      if (document.visibilityState === 'visible') {
+        const remote = await readStore();
+        if (remote) {
+          mergeRemote(remote, { deferNewer: true });
+          if (lastMergeChangedRef.current) quietTicks = 0;
+          else quietTicks++;
+        }
+      }
+      const delay = quietTicks >= 3 ? SLOW_MS : FAST_MS;
+      timer = setTimeout(tick, delay);
+    };
+    timer = setTimeout(tick, FAST_MS);
+    const onVis = () => {
+      if (document.visibilityState === 'visible') {
+        // Fire one quick poll on tab refocus, then resume cadence.
+        quietTicks = 0;
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(tick, 0);
+      }
+    };
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      stopped = true;
+      if (timer) clearTimeout(timer);
+      document.removeEventListener('visibilitychange', onVis);
+    };
+  }, [mergeRemote]);
+
+  // --- Keyboard shortcuts: 'n' opens compose, Cmd/Ctrl+K focuses search ---
+  useEffect(() => {
+    const onKey = (e) => {
+      // Cmd/Ctrl+K -> focus the right-sidebar search
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) {
+        e.preventDefault();
+        const search = document.querySelector('.search-wrap input');
+        if (search) { search.focus(); search.select && search.select(); }
+        return;
+      }
+      // 'n' -> open compose modal (skip when typing or with modifiers)
+      if (e.key !== 'n' && e.key !== 'N') return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const tag = (document.activeElement && document.activeElement.tagName) || '';
+      if (tag === 'TEXTAREA' || tag === 'INPUT') return;
+      e.preventDefault();
+      setComposeQuote(null);
+      setComposeModalOpen(true);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, []);
+
+  // --- URL routing on initial load and on popstate ---
+  useEffect(() => {
+    let scrollTimer = null;
+    const apply = () => {
+      const qs = new URLSearchParams(location.search);
+      const profileId = qs.get('profileId');
+      const page = qs.get('page');
+      const postId = qs.get('postId');
+      setOpenProfileId(profileId || null);
+      setOpenSlug(page || null);
+      if (postId) {
+        // try to scroll after a tick
+        if (scrollTimer) clearTimeout(scrollTimer);
+        scrollTimer = setTimeout(() => {
+          const el = document.getElementById('post-' + postId);
+          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 250);
+      }
+    };
+    apply();
+    window.addEventListener('popstate', apply);
+    return () => {
+      if (scrollTimer) clearTimeout(scrollTimer);
+      window.removeEventListener('popstate', apply);
+    };
+  }, []);
+
+  const navigate = useCallback((paramsObj) => {
+    const qs = new URLSearchParams(location.search);
+    for (const [k, v] of Object.entries(paramsObj)) {
+      if (v == null) qs.delete(k); else qs.set(k, v);
+    }
+    const next = location.pathname + (qs.toString() ? '?' + qs.toString() : '');
+    history.pushState({}, '', next);
+  }, []);
+
+  // --- Compose ---
+  const createPost = useCallback((rawText, quotedPost) => {
+    const text = (rawText || '').trim();
+    if (!text && !quotedPost) return false;
+    const replyHint = text || (quotedPost && quotedPost.text) || '';
+    const postId = uid();
+    const newPost = {
+      id: postId,
+      profileId: me.id,
+      text,
+      imageUrl: null,
+      quote: quotedPost ? {
+        id: quotedPost.id,
+        profileId: quotedPost.profileId,
+        text: quotedPost.text,
+        ts: quotedPost.ts
+      } : null,
+      ts: Date.now()
+    };
+    setPosts(prev => [newPost, ...prev]);
+    schedulePersist();
+    // Trigger an AI batch using the user's text as hint.
+    loadMore(replyHint).catch(() => {});
+    // Schedule an AI persona to "reply" within ~10-30s -> shows up as a notification.
+    scheduleAIReplyTo(postId, replyHint);
+    return true;
+  }, [me.id, schedulePersist, scheduleAIReplyTo]);
+  const onPost = useCallback(() => {
+    if (createPost(composerText)) setComposerText('');
+  }, [composerText, createPost]);
+
+  // --- Like ---
+  const toggleLike = useCallback((postId) => {
+    setLikes(prev => {
+      const cur = new Set(prev[postId] || []);
+      if (cur.has(me.id)) cur.delete(me.id); else cur.add(me.id);
+      return { ...prev, [postId]: Array.from(cur) };
+    });
+    schedulePersist();
+  }, [me.id, schedulePersist]);
+
+  // --- Reply ---
+  const addComment = useCallback((postId, text) => {
+    const t = (text || '').trim();
+    if (!t) return;
+    const c = { id: uid(), userId: me.id, text: t, ts: Date.now() };
+    setComments(prev => {
+      const arr = prev[postId] ? prev[postId].slice() : [];
+      arr.push(c);
+      return { ...prev, [postId]: arr };
+    });
+    // Schedule an AI persona to reply to the user's comment so the thread
+    // keeps moving instead of dying after the user replies.
+    scheduleAIReplyTo(postId, t);
+    schedulePersist();
+  }, [me.id, schedulePersist, scheduleAIReplyTo]);
+
+  // --- Retweet (client-only) ---
+  const toggleRetweet = useCallback((postId) => {
+    setRetweets(prev => ({ ...prev, [postId]: !prev[postId] }));
+  }, []);
+
+  // --- Bookmark (client-only) ---
+  const toggleBookmark = useCallback((postId) => {
+    setBookmarks(prev => ({ ...prev, [postId]: !prev[postId] }));
+  }, []);
+
+  // --- Share ---
+  const share = useCallback(async (postId) => {
+    const url = location.origin + location.pathname + '?postId=' + postId;
+    try {
+      await navigator.clipboard.writeText(url);
+      showToast('Link copied');
+    } catch (_) {
+      // fallback
+      const ta = document.createElement('textarea');
+      ta.value = url;
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); showToast('Link copied'); }
+      catch (_) { showToast('Copy failed: ' + url); }
+      document.body.removeChild(ta);
+    }
+  }, [showToast]);
+
+  const openQuoteComposer = useCallback((post) => {
+    setComposeQuote(post);
+    setComposeModalOpen(true);
+  }, []);
+  const closeComposeModal = useCallback(() => {
+    setComposeModalOpen(false);
+    setComposeQuote(null);
+  }, []);
+  const openContextMenu = useCallback((x, y, post) => {
+    const left = Math.max(8, Math.min(x, window.innerWidth - 210));
+    const top = Math.max(8, Math.min(y, window.innerHeight - 156));
+    setContextMenu({ x: left, y: top, post });
+  }, []);
+  const closeContextMenu = useCallback(() => setContextMenu(null), []);
+
+  // --- Profile modal ---
+  const openProfile = useCallback((profileId) => {
+    setOpenProfileId(profileId);
+    navigate({ profileId, page: null });
+  }, [navigate]);
+  const closeProfile = useCallback(() => {
+    setOpenProfileId(null);
+    navigate({ profileId: null });
+  }, [navigate]);
+
+  // --- Generated page modal ---
+  const openSlugModal = useCallback(async (slug) => {
+    const cleanSlug = String(slug || '').trim();
+    if (!cleanSlug) return;
+    setOpenSlug(cleanSlug);
+    navigate({ page: cleanSlug, profileId: null });
+    if (genPageCacheRef.current[cleanSlug]) return;
+    setGenPageCache(prev => ({ ...prev, [cleanSlug]: { loading: true } }));
+    try {
+      const page = await generateMicroPage(cleanSlug);
+      setGenPageCache(prev => ({ ...prev, [cleanSlug]: { loading: false, ...page } }));
+    } catch (e) {
+      setGenPageCache(prev => ({
+        ...prev,
+        [cleanSlug]: { loading: false, title: cleanSlug, bullets: [`Failed to generate, but ${cleanSlug} is still trending in our hearts.`] }
+      }));
+    }
+  }, [navigate]);
+  const closeSlugModal = useCallback(() => {
+    setOpenSlug(null);
+    navigate({ page: null });
+  }, [navigate]);
+
+  // --- Open profile by handle ---
+  const openHandle = useCallback((rawHandle) => {
+    const h = String(rawHandle || '').replace(/^@/, '').toLowerCase();
+    if (!h) return;
+    const found = Object.values(stateRef.current.profiles).find(p => p && p.handle && p.handle.toLowerCase() === h);
+    if (found) openProfile(found.id);
+    else openSlugModal('@' + h);
+  }, [openProfile, openSlugModal]);
+
+  const loadPendingNewPosts = useCallback(() => {
+    const queued = pendingNewPostsRef.current;
+    if (!queued.length) return;
+    setPosts(prev => {
+      const have = new Set(prev.map(p => p.id));
+      const additions = queued.filter(p => !have.has(p.id));
+      return [...additions, ...prev].sort((a, b) => (b.ts || 0) - (a.ts || 0));
+    });
+    setPendingNewPosts([]);
+    setFocusedPostId(queued[0] && queued[0].id ? queued[0].id : null);
+  }, []);
+
+  // --- Infinite scroll: AI batch ---
+  // mode: 'newer' (default) -> posts appear at top of feed (fresh timeline)
+  //       'older' -> posts appear below existing feed (scroll-down append)
+  const loadingRef = useRef(false);
+  const loadMore = useCallback(async (hint, mode = 'newer') => {
+    if (loadingRef.current) return;
+    loadingRef.current = true;
+    setFeedLoading(true);
+    try {
+      const recent = stateRef.current.posts.slice(0, 5).map(p => p.text).join(' | ');
+      const realHint = hint || recent || 'random observations';
+      const batch = await generateBatch(realHint);
+      const personasLocal = personasRef.current || [];
+      const oldestTs = stateRef.current.posts.length
+        ? stateRef.current.posts[stateRef.current.posts.length - 1].ts
+        : Date.now();
+      const newPosts = batch.map((b, idx) => {
+        const persona = personasLocal[Math.floor(Math.random() * personasLocal.length)];
+        // Attach a LoremFlickr image to ~70% of posts. Use the AI's
+        // image_prompt as keyword source if present; otherwise derive
+        // from the post body. LoremFlickr is keyless and rate-tolerant.
+        const imageText = b.image_prompt || b.text;
+        const wantImg = !!imageText && (b.image_prompt ? true : Math.random() < 0.7);
+        const imageUrl = wantImg ? loremFlickrUrl(imageText, 512, 288) : null;
+        const ts = mode === 'older'
+          ? oldestTs - (idx + 1) * 1000
+          : Date.now() - idx * 1000;
+        return {
+          id: uid(),
+          profileId: persona ? persona.id : me.id,
+          text: b.text,
+          imageUrl,
+          imageText,
+          ts
+        };
+      });
+      // ensure all referenced personas are in profiles map
+      setProfiles(prev => {
+        let changed = false;
+        const next = { ...prev };
+        for (const persona of personasLocal) {
+          if (!next[persona.id]) {
+            next[persona.id] = persona;
+            changed = true;
+          }
+        }
+        return changed ? next : prev;
+      });
+      setPosts(prev => {
+        const have = new Set(prev.map(p => p.id));
+        const additions = newPosts.filter(p => !have.has(p.id));
+        return [...additions, ...prev].sort((a, b) => (b.ts || 0) - (a.ts || 0));
+      });
+      schedulePersist();
+    } catch (e) {
+      console.warn('loadMore caught', e);
+      // hardcoded fallback to guarantee feed never gets stuck empty
+      const persona = (personasRef.current || [])[0] || { id: me.id };
+      setPosts(prev => [{
+        id: uid(),
+        profileId: persona.id,
+        text: 'the network is being shy. here is a placeholder thought: have you tried turning your monday off and on again?',
+        imageUrl: null,
+        ts: Date.now()
+      }, ...prev]);
+    } finally {
+      loadingRef.current = false;
+      setFeedLoading(false);
+    }
+  }, [me.id, schedulePersist]);
+
+  useEffect(() => {
+    const onScroll = () => {
+      if (loadingRef.current) return;
+      if (window.innerHeight + window.scrollY > document.body.offsetHeight - 800) {
+        loadMore('', 'older').catch(() => {});
+      }
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, [loadMore]);
+
+  const runPullRefresh = useCallback(async () => {
+    if (pullRefreshing) return;
+    setPullRefreshing(true);
+    setPullDistance(0);
+    try {
+      const remote = await readStore();
+      if (remote) {
+        mergeRemote(remote);
+        if (pendingNewPostsRef.current.length) loadPendingNewPosts();
+      } else {
+        await loadMore('', 'newer');
+      }
+    } finally {
+      setTimeout(() => setPullRefreshing(false), 350);
+    }
+  }, [pullRefreshing, mergeRemote, loadMore, loadPendingNewPosts]);
+
+  useEffect(() => {
+    const el = centerRef.current;
+    if (!el) return;
+    let startY = null;
+    let latest = 0;
+    const onStart = (e) => {
+      if (activePageRef.current !== 'home' || window.innerWidth > 700 || window.scrollY > 0 || pullRefreshing) return;
+      const t = e.touches && e.touches[0];
+      if (!t) return;
+      startY = t.clientY;
+      latest = 0;
+    };
+    const onMove = (e) => {
+      if (startY == null) return;
+      const t = e.touches && e.touches[0];
+      if (!t) return;
+      const dy = t.clientY - startY;
+      if (dy <= 0 || window.scrollY > 0) {
+        setPullDistance(0);
+        return;
+      }
+      latest = Math.min(92, dy * 0.62);
+      setPullDistance(latest);
+      if (dy > 8) e.preventDefault();
+    };
+    const onEnd = () => {
+      if (startY == null) return;
+      const shouldRefresh = latest >= 60;
+      startY = null;
+      latest = 0;
+      if (shouldRefresh) runPullRefresh();
+      else setPullDistance(0);
+    };
+    el.addEventListener('touchstart', onStart, { passive: true });
+    el.addEventListener('touchmove', onMove, { passive: false });
+    el.addEventListener('touchend', onEnd, { passive: true });
+    el.addEventListener('touchcancel', onEnd, { passive: true });
+    return () => {
+      el.removeEventListener('touchstart', onStart);
+      el.removeEventListener('touchmove', onMove);
+      el.removeEventListener('touchend', onEnd);
+      el.removeEventListener('touchcancel', onEnd);
+    };
+  }, [runPullRefresh, pullRefreshing]);
+
+  // --- Filter posts for tabs and search ---
+  // No follow graph in this toy, so "Following" is intentionally empty with a hint.
+  const visiblePosts = useMemo(() => {
+    if (activeTab === 'following') return [];
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return posts;
+    return posts.filter(p => {
+      const author = profiles[p.profileId] || {};
+      const hay = [
+        p.text || '',
+        author.displayName || '',
+        author.handle ? '@' + author.handle : ''
+      ].join(' ').toLowerCase();
+      return hay.includes(q);
+    });
+  }, [posts, activeTab, searchQuery, profiles]);
+  useEffect(() => {
+    visiblePostsRef.current = visiblePosts;
+    if (focusedPostId && !visiblePosts.some(p => p.id === focusedPostId)) {
+      setFocusedPostId(null);
+    }
+  }, [visiblePosts, focusedPostId]);
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key !== 'j' && e.key !== 'J' && e.key !== 'k' && e.key !== 'K') return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (activePageRef.current !== 'home' || composeModalOpen || openProfileId || openSlug) return;
+      const tag = (document.activeElement && document.activeElement.tagName) || '';
+      if (tag === 'TEXTAREA' || tag === 'INPUT' || tag === 'SELECT') return;
+      const ids = visiblePostsRef.current.map(p => p.id);
+      if (!ids.length) return;
+      e.preventDefault();
+      const dir = (e.key === 'j' || e.key === 'J') ? 1 : -1;
+      setFocusedPostId(prev => {
+        const idx = ids.indexOf(prev);
+        let nextIdx = idx < 0 ? 0 : idx + dir;
+        nextIdx = Math.max(0, Math.min(ids.length - 1, nextIdx));
+        return ids[nextIdx];
+      });
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [composeModalOpen, openProfileId, openSlug]);
+  useEffect(() => {
+    if (!focusedPostId) return;
+    const el = document.getElementById('post-' + focusedPostId);
+    if (!el) return;
+    try { el.focus({ preventScroll: true }); } catch (_) { el.focus(); }
+    el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }, [focusedPostId]);
+
+  // --- Profile object lookup ---
+  // Cache synthetic profiles per missing id so the avatar URL is stable across
+  // renders (otherwise every render seeds a new pollinations request and the
+  // image visibly reshuffles).
+  const unknownProfilesRef = useRef(new Map());
+  const profileFor = useCallback((id) => {
+    if (profiles[id]) return profiles[id];
+    const cache = unknownProfilesRef.current;
+    let synth = cache.get(id);
+    if (!synth) {
+      synth = {
+        id,
+        displayName: 'Unknown',
+        handle: 'unknown',
+        gender: 'unknown',
+        location: 'unknown',
+        avatarUrl: avatarUrl(id)
+      };
+      cache.set(id, synth);
+    }
+    return synth;
+  }, [profiles]);
+  const profilePosts = useMemo(() => {
+    if (!openProfileId) return [];
+    return posts.filter(p => p.profileId === openProfileId);
+  }, [openProfileId, posts]);
+  const trends = useMemo(() => deriveTrends(posts), [posts]);
+  const startProfileHover = useCallback((profile, e) => {
+    if (!profile || window.innerWidth < 700) return;
+    if (hoverCloseTimerRef.current) clearTimeout(hoverCloseTimerRef.current);
+    if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = Math.max(8, Math.min(rect.left, window.innerWidth - 308));
+    const y = Math.max(8, Math.min(rect.bottom + 8, window.innerHeight - 260));
+    hoverTimerRef.current = setTimeout(() => {
+      setHoverCard({ profileId: profile.id, x, y });
+    }, 400);
+  }, []);
+  const scheduleHoverClose = useCallback(() => {
+    if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+    if (hoverCloseTimerRef.current) clearTimeout(hoverCloseTimerRef.current);
+    hoverCloseTimerRef.current = setTimeout(() => setHoverCard(null), 140);
+  }, []);
+  const keepHoverCard = useCallback(() => {
+    if (hoverCloseTimerRef.current) clearTimeout(hoverCloseTimerRef.current);
+  }, []);
+
+  // --- Render ---
+  return html`
+    <div class="layout">
+      <${LeftSidebar}
+        me=${me}
+        myAvatar=${myAvatar}
+        activePage=${activePage}
+        unreadNotifs=${unreadNotifs}
+        bellPing=${bellPing}
+        onNavigate=${(slug) => {
+          setActivePage(slug);
+          if (slug === 'notifications') {
+            // Mark all read on entering Notifications tab.
+            setNotifications(prev => prev.map(n => n.read ? n : { ...n, read: true }));
+          }
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }}
+        onPostClick=${() => { setComposeQuote(null); setComposeModalOpen(true); }}
+        onProfile=${() => openProfile(me.id)}
+      />
+      <main class="center" ref=${centerRef}>
+        ${activePage === 'home' ? html`
+          <${Header} activeTab=${activeTab} setActiveTab=${setActiveTab} />
+          <${PullRefreshIndicator} distance=${pullDistance} refreshing=${pullRefreshing} />
+          <${Composer}
+            avatar=${myAvatar}
+            meName=${me.name}
+            value=${composerText}
+            onChange=${setComposerText}
+            onSubmit=${onPost}
+          />
+          <${Feed}
+            posts=${visiblePosts}
+            profileFor=${profileFor}
+            me=${me}
+            myAvatar=${myAvatar}
+            likes=${likes}
+            comments=${comments}
+            retweets=${retweets}
+            bookmarks=${bookmarks}
+            onLike=${toggleLike}
+            onReply=${addComment}
+            onRetweet=${toggleRetweet}
+            onQuote=${openQuoteComposer}
+            onBookmark=${toggleBookmark}
+            onShare=${share}
+            onOpenProfile=${openProfile}
+            onOpenSlug=${openSlugModal}
+            onOpenHandle=${openHandle}
+            onOpenContextMenu=${openContextMenu}
+            onProfileHoverStart=${startProfileHover}
+            onProfileHoverEnd=${scheduleHoverClose}
+            focusedPostId=${focusedPostId}
+            newPostCount=${pendingNewPosts.length}
+            onLoadNewPosts=${loadPendingNewPosts}
+            loading=${activeTab === 'following' ? false : feedLoading}
+            emptyHint=${activeTab === 'following' ? 'Follow graph not implemented in this toy. Switch to "For you" to see posts.' : (searchQuery.trim() ? `No visible posts match "${searchQuery.trim()}".` : null)}
+          />
+        ` : html`
+          <${SubPage}
+            page=${activePage}
+            me=${me}
+            myAvatar=${myAvatar}
+            personas=${personas}
+            posts=${posts}
+            profileFor=${profileFor}
+            notifications=${notifications}
+            freshNotifIds=${freshNotifIds}
+            bookmarks=${bookmarks}
+            likes=${likes}
+            comments=${comments}
+            retweets=${retweets}
+            trends=${trends}
+            onBack=${() => setActivePage('home')}
+            onLike=${toggleLike}
+            onReply=${addComment}
+            onRetweet=${toggleRetweet}
+            onQuote=${openQuoteComposer}
+            onBookmark=${toggleBookmark}
+            onShare=${share}
+            onOpenProfile=${openProfile}
+            onOpenSlug=${openSlugModal}
+            onOpenHandle=${openHandle}
+            onOpenContextMenu=${openContextMenu}
+            onProfileHoverStart=${startProfileHover}
+            onProfileHoverEnd=${scheduleHoverClose}
+          />
+        `}
+      </main>
+      <${RightSidebar} trends=${trends} personas=${personas} query=${searchQuery} onSearch=${setSearchQuery} onOpenProfile=${openProfile} onTrendClick=${(t) => openSlugModal(t.tag.replace(/^#/, ''))} />
+
+      ${openProfileId ? html`<${ProfileModal}
+        profile=${profileFor(openProfileId)}
+        posts=${profilePosts}
+        profileFor=${profileFor}
+        me=${me}
+        myAvatar=${myAvatar}
+        likes=${likes}
+        comments=${comments}
+        retweets=${retweets}
+        bookmarks=${bookmarks}
+        onLike=${toggleLike}
+        onReply=${addComment}
+        onRetweet=${toggleRetweet}
+        onQuote=${openQuoteComposer}
+        onBookmark=${toggleBookmark}
+        onShare=${share}
+        onOpenProfile=${openProfile}
+        onOpenSlug=${openSlugModal}
+        onOpenHandle=${openHandle}
+        onOpenContextMenu=${openContextMenu}
+        onProfileHoverStart=${startProfileHover}
+        onProfileHoverEnd=${scheduleHoverClose}
+        onClose=${closeProfile}
+      />` : null}
+
+      ${composeModalOpen ? html`<${ComposeModal}
+        avatar=${myAvatar}
+        meName=${me.name}
+        quotePost=${composeQuote}
+        quoteAuthor=${composeQuote ? profileFor(composeQuote.profileId) : null}
+        onSubmit=${(text, quote) => createPost(text, quote)}
+        onClose=${closeComposeModal}
+      />` : null}
+
+      ${openSlug ? html`<${GeneratedPageModal}
+        slug=${openSlug}
+        cached=${genPageCache[openSlug]}
+        onClose=${closeSlugModal}
+      />` : null}
+
+      ${contextMenu ? html`<${PostContextMenu}
+        menu=${contextMenu}
+        author=${profileFor(contextMenu.post.profileId)}
+        onCopy=${share}
+        onClose=${closeContextMenu}
+      />` : null}
+
+      ${hoverCard ? html`<${ProfileHoverCard}
+        profile=${profileFor(hoverCard.profileId)}
+        x=${hoverCard.x}
+        y=${hoverCard.y}
+        onMouseEnter=${keepHoverCard}
+        onMouseLeave=${scheduleHoverClose}
+        onOpen=${() => { setHoverCard(null); openProfile(hoverCard.profileId); }}
+      />` : null}
+
+      ${toast ? html`<div class="toast">${toast}</div>` : null}
+      <nav class="mobile-nav" aria-label="Mobile navigation">
+        <button class=${activePage === 'home' ? 'active' : ''} title="Home" aria-label="Home" onClick=${() => { setActivePage('home'); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>${activePage === 'home' ? I.homeFilled : I.homeOutline}</button>
+        <button class=${activePage === 'explore' ? 'active' : ''} title="Explore" aria-label="Explore" onClick=${() => setActivePage('explore')}>${I.explore}</button>
+        <button class=${(activePage === 'notifications' ? 'active' : '') + (bellPing ? ' bell-ping' : '')} title="Notifications" aria-label="Notifications" onClick=${() => { setActivePage('notifications'); setNotifications(prev => prev.map(n => n.read ? n : { ...n, read: true })); }} style="position:relative;">
+          ${I.bell}
+          ${unreadNotifs > 0 ? html`<span class="nav-badge" style="top:6px;left:auto;right:18px;">${unreadNotifs > 99 ? '99+' : unreadNotifs}</span>` : null}
+        </button>
+        <button class=${activePage === 'messages' ? 'active' : ''} title="Messages" aria-label="Messages" onClick=${() => setActivePage('messages')}>${I.messages}</button>
+        <button title="Profile" aria-label="Profile" onClick=${() => openProfile(me.id)}>${I.profile}</button>
+      </nav>
+      <button class="fab" title="New post (n)" aria-label="New post" onClick=${() => { setComposeQuote(null); setComposeModalOpen(true); }}>
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><g><path d="M14.06 9.02l.92.92L5.92 19H5v-.92l9.06-9.06zm3.6-6.02c-.25 0-.51.1-.7.29l-1.83 1.83 3.75 3.75 1.83-1.83c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.2-.2-.45-.29-.71-.29zm-3.6 3.19L3 17.25V21h3.75L17.81 9.94l-3.75-3.75z"></path></g></svg>
+      </button>
+    </div>
+  `;
+}
+
+// --- Left Sidebar ---
+function LeftSidebar({ me, myAvatar, onPostClick, onProfile, activePage, onNavigate, unreadNotifs, bellPing }) {
+  const navItems = [
+    { id: 'home', label: 'Home', icon: activePage === 'home' ? I.homeFilled : I.homeOutline },
+    { id: 'explore', label: 'Explore', icon: I.explore },
+    { id: 'notifications', label: 'Notifications', icon: I.bell, badge: unreadNotifs > 0 ? (unreadNotifs > 99 ? '99+' : String(unreadNotifs)) : null },
+    { id: 'messages', label: 'Messages', icon: I.messages },
+    { id: 'bookmarks', label: 'Bookmarks', icon: I.bookmark },
+    { id: 'lists', label: 'Lists', icon: I.lists },
+    { id: 'communities', label: 'Communities', icon: I.community },
+    { id: 'premium', label: 'Premium', icon: I.premium },
+    { id: 'profile', label: 'Profile', icon: I.profile },
+    { id: 'more', label: 'More', icon: I.more },
+  ];
+  return html`
+    <aside class="left">
+      <a class="brand" href="#" onClick=${(e) => { e.preventDefault(); window.scrollTo({ top: 0, behavior: 'smooth' }); }} aria-label="X home">
+        <span style="width:30px;height:30px;display:inline-flex;align-items:center;justify-content:center;color:var(--fg);">${I.xLogo}</span>
+      </a>
+      <nav class="nav">
+        ${navItems.map(item => html`
+          <button
+            class=${'nav-item' + (activePage === item.id ? ' active' : '') + (item.id === 'notifications' && bellPing ? ' bell-ping' : '')}
+            key=${item.id}
+            onClick=${(e) => {
+              e.preventDefault();
+              if (item.id === 'profile') { onNavigate('home'); onProfile(); return; }
+              if (item.id === 'home' && activePage === 'home') {
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+                return;
+              }
+              onNavigate(item.id);
+            }}>
+            <span style="display:inline-flex;align-items:center;justify-content:center;position:relative;">
+              ${item.icon}
+              ${item.badge ? html`<span class="nav-badge">${item.badge}</span>` : null}
+            </span>
+            <span class="nav-label">${item.label}</span>
+          </button>
+        `)}
+      </nav>
+      <button class="post-btn" onClick=${onPostClick}>Post</button>
+      <div class="left-bottom">
+        <button class="me-pill" onClick=${onProfile} title="Open my profile">
+          <${SafeImg} src=${myAvatar} fallbackName=${me.name} alt="me" />
+          <span class="me-text">
+            <strong>${me.name}</strong>
+            <span>@${me.handle}</span>
+          </span>
+        </button>
+      </div>
+    </aside>
+  `;
+}
+
+// Listen for nav placeholder toasts
+window.addEventListener('toy-toast', (e) => {
+  showBodyToast(e.detail);
+});
+
+// --- Header tabs ---
+function Header({ activeTab, setActiveTab }) {
+  return html`
+    <header class="header">
+      <div class="header-row">
+        <div class="header-title" style="padding: 16px 0;">Home</div>
+        <button class="header-action" title="Top posts" aria-label="Top posts" onClick=${() => showBodyToast('Top posts view is a toy stub', 1800)}>${I.sparkles}</button>
+      </div>
+      <div class=${'tabs' + (activeTab === 'following' ? ' following' : '')}>
+        <button class=${'tab' + (activeTab === 'foryou' ? ' active' : '')} onClick=${() => setActiveTab('foryou')}>For you</button>
+        <button class=${'tab' + (activeTab === 'following' ? ' active' : '')} onClick=${() => setActiveTab('following')}>Following</button>
+      </div>
+    </header>
+  `;
+}
+
+function PullRefreshIndicator({ distance, refreshing }) {
+  const show = refreshing || distance > 0;
+  const height = refreshing ? 60 : Math.round(distance);
+  return html`
+    <div class=${'pull-refresh' + (distance >= 60 || refreshing ? ' ready' : '')} style=${show ? `height:${height}px` : null} aria-hidden=${!show}>
+      ${refreshing ? html`<div class="x-spinner"></div>` : html`<span>${distance >= 60 ? 'Release to refresh' : 'Pull to refresh'}</span>`}
+    </div>
+  `;
+}
+
+// --- Composer ---
+const MAX_POST_CHARS = 280;
+const CHAR_COUNTER_RADIUS = 9;
+const CHAR_COUNTER_CIRC = 2 * Math.PI * CHAR_COUNTER_RADIUS;
+function charCounterClass(n) {
+  if (n > MAX_POST_CHARS) return 'char-counter over';
+  if (n >= MAX_POST_CHARS - 10) return 'char-counter danger';
+  if (n >= MAX_POST_CHARS - 30) return 'char-counter warn';
+  return 'char-counter';
+}
+function CharCounter({ count }) {
+  const remaining = MAX_POST_CHARS - count;
+  const pct = Math.min(Math.max(count / MAX_POST_CHARS, 0), 1);
+  const dashOffset = CHAR_COUNTER_CIRC * (1 - pct);
+  return html`
+    <span class=${charCounterClass(count)} title=${`${remaining} characters remaining`}>
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <circle class="track" cx="12" cy="12" r=${CHAR_COUNTER_RADIUS} fill="none" stroke-width="2"></circle>
+        <circle class="bar" cx="12" cy="12" r=${CHAR_COUNTER_RADIUS} fill="none" stroke-width="2" stroke-linecap="round" stroke-dasharray=${CHAR_COUNTER_CIRC} stroke-dashoffset=${dashOffset}></circle>
+      </svg>
+      ${remaining <= 30 ? html`<span class="char-counter-num">${remaining}</span>` : null}
+    </span>
+  `;
+}
+function Composer({ avatar, value, onChange, onSubmit, meName }) {
+  const taRef = useRef(null);
+  useEffect(() => {
+    const ta = taRef.current;
+    if (!ta) return;
+    ta.style.height = 'auto';
+    ta.style.height = Math.min(300, ta.scrollHeight) + 'px';
+  }, [value]);
+  const onKeyDown = (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+      e.preventDefault();
+      if (value.trim() && value.length <= MAX_POST_CHARS) onSubmit();
+    }
+  };
+  const over = value.length > MAX_POST_CHARS;
+  return html`
+    <div class="composer">
+      <${SafeImg} class="avatar" src=${avatar} fallbackName=${meName} alt="" />
+      <div class="composer-body">
+        <textarea
+          ref=${taRef}
+          placeholder="What is happening?!"
+          value=${value}
+          maxlength=${MAX_POST_CHARS + 50}
+          onInput=${(e) => onChange(e.currentTarget.value)}
+          onKeyDown=${onKeyDown}
+          rows="1"
+          aria-label="Compose post"
+        ></textarea>
+        <div class="composer-row">
+          <div class="composer-actions">
+            <button class="composer-icon-btn" title="Image (toy stub)" aria-label="Attach image" onClick=${() => showBodyToast('Image attach is a toy stub', 1800)}>${I.image}</button>
+            <button class="composer-icon-btn" title="GIF (toy stub)" aria-label="Add GIF" onClick=${() => showBodyToast('GIF picker would open here', 1800)}>${I.gif}</button>
+            <button class="composer-icon-btn" title="Poll (toy stub)" aria-label="Create poll" onClick=${() => showBodyToast('Poll composer would open here', 1800)}>${I.poll}</button>
+            <button class="composer-icon-btn" title="Emoji (toy stub)" aria-label="Insert emoji" onClick=${() => showBodyToast('Emoji picker would open here', 1800)}>${I.emoji}</button>
+            <button class="composer-icon-btn" title="Location (toy stub)" aria-label="Add location" onClick=${() => showBodyToast('Location tag would attach here', 1800)}>${I.pin}</button>
+          </div>
+          <div style="display: flex; align-items: center;">
+            <${CharCounter} count=${value.length} />
+            <button class="composer-post" disabled=${!value.trim() || over} onClick=${onSubmit} title="Cmd/Ctrl + Enter">Post</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// Stable empty refs so memo() inside PostRow doesn't see fresh `[]` per render.
+const EMPTY_ARR = Object.freeze([]);
+
+// --- Feed ---
+const Feed = memo(function Feed({ posts, profileFor, me, myAvatar, likes, comments, retweets, bookmarks, onLike, onReply, onRetweet, onQuote, onBookmark, onShare, onOpenProfile, onOpenSlug, onOpenHandle, onOpenContextMenu, onProfileHoverStart, onProfileHoverEnd, focusedPostId, newPostCount, onLoadNewPosts, loading, emptyHint }) {
+  const newPostsBanner = newPostCount ? html`
+    <button class="new-posts-banner" onClick=${onLoadNewPosts}>
+      ${newPostCount} new ${newPostCount === 1 ? 'post' : 'posts'} -- click to load
+    </button>
+  ` : null;
+  if (!posts.length) {
+    if (loading) {
+      // Skeleton stack while the very first batch is mid-flight.
+      return html`
+        <div>
+          ${newPostsBanner}
+          ${[0, 1, 2].map(i => html`
+            <div class="skeleton-post" key=${i}>
+              <div class="skeleton-shape skeleton-avatar"></div>
+              <div>
+                <div class="skeleton-shape skeleton-line short"></div>
+                <div class="skeleton-shape skeleton-line long"></div>
+                <div class="skeleton-shape skeleton-line medium"></div>
+              </div>
+            </div>
+          `)}
+        </div>
+      `;
+    }
+    return html`
+      <div>
+        ${newPostsBanner}
+        <div class="feed-empty">
+          <div class="feed-empty-emoji">${emptyHint ? '~' : '*'}</div>
+          <h3>${emptyHint ? 'Nothing here yet' : 'Quiet in here'}</h3>
+          <p>${emptyHint || 'Type a thought above and the AI will riff on it.'}</p>
+        </div>
+      </div>
+    `;
+  }
+  return html`
+    <div>
+      ${newPostsBanner}
+      ${posts.map((p, idx) => html`
+        <${PostRow}
+          key=${p.id}
+          post=${p}
+          author=${profileFor(p.profileId)}
+          me=${me}
+          myAvatar=${myAvatar}
+          likes=${likes[p.id] || EMPTY_ARR}
+          comments=${comments[p.id] || EMPTY_ARR}
+          profileFor=${profileFor}
+          retweeted=${!!retweets[p.id]}
+          bookmarked=${!!bookmarks[p.id]}
+          stagger=${idx}
+          focused=${focusedPostId === p.id}
+          onLike=${onLike}
+          onReply=${onReply}
+          onRetweet=${onRetweet}
+          onQuote=${onQuote}
+          onBookmark=${onBookmark}
+          onShare=${onShare}
+          onOpenProfile=${onOpenProfile}
+          onOpenSlug=${onOpenSlug}
+          onOpenHandle=${onOpenHandle}
+          onOpenContextMenu=${onOpenContextMenu}
+          onProfileHoverStart=${onProfileHoverStart}
+          onProfileHoverEnd=${onProfileHoverEnd}
+        />
+      `)}
+      ${loading ? html`<div class="feed-loading" role="status" aria-label="Loading more posts"><div class="x-spinner"></div></div>` : null}
+    </div>
+  `;
+});
+
+// --- PostRow ---
+// memoised so a polling tick that didn't touch this row's likes/comments
+// doesn't re-render the heavy DOM (image + token-parsed body + 5 actions).
+const PostRow = memo(function PostRow({ post, author, me, myAvatar, likes, comments, profileFor, retweeted, bookmarked, stagger, focused, onLike, onReply, onRetweet, onQuote, onBookmark, onShare, onOpenProfile, onOpenSlug, onOpenHandle, onOpenContextMenu, onProfileHoverStart, onProfileHoverEnd }) {
+  const [showReply, setShowReply] = useState(false);
+  const [replyText, setReplyText] = useState('');
+  const longPressTimerRef = useRef(null);
+  const liked = likes.includes(me.id);
+  const viewCount = useMemo(() => {
+    // deterministic-ish "views" derived from id
+    return Math.abs(hashString(post.id)) % 9000 + 100;
+  }, [post.id]);
+  const tokens = useMemo(() => parseTokens(post.text), [post.text]);
+
+  const onSubmitReply = () => {
+    const t = replyText.trim();
+    if (!t) return;
+    onReply(post.id, t);
+    setReplyText('');
+    setShowReply(false);
+  };
+
+  const stop = (e) => { e.stopPropagation(); };
+  const clearLongPress = () => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  };
+  useEffect(() => clearLongPress, []);
+  const openMenuAt = (x, y) => {
+    clearLongPress();
+    if (onOpenContextMenu) onOpenContextMenu(x, y, post);
+  };
+  const onPostContextMenu = (e) => {
+    e.preventDefault();
+    stop(e);
+    openMenuAt(e.clientX, e.clientY);
+  };
+  const onMoreClick = (e) => {
+    stop(e);
+    const rect = e.currentTarget.getBoundingClientRect();
+    openMenuAt(rect.left, rect.bottom + 4);
+  };
+  const onTouchStart = (e) => {
+    const t = e.touches && e.touches[0];
+    if (!t) return;
+    clearLongPress();
+    longPressTimerRef.current = setTimeout(() => openMenuAt(t.clientX, t.clientY), 560);
+  };
+
+  const staggerDelay = (typeof stagger === 'number' && stagger > 0)
+    ? Math.min(stagger, 5) * 35
+    : 0;
+  return html`
+    <article
+      id=${'post-' + post.id}
+      class=${'post' + (focused ? ' keyboard-focused' : '')}
+      style=${staggerDelay ? `animation-delay: ${staggerDelay}ms` : null}
+      tabIndex="-1"
+      onContextMenu=${onPostContextMenu}
+      onTouchStart=${onTouchStart}
+      onTouchMove=${clearLongPress}
+      onTouchEnd=${clearLongPress}
+      onTouchCancel=${clearLongPress}
+    >
+      <${SafeImg} class="avatar" src=${author.avatarUrl} alt=${author.displayName} fallbackName=${author.displayName}
+           onMouseEnter=${(e) => onProfileHoverStart && onProfileHoverStart(author, e)}
+           onMouseLeave=${onProfileHoverEnd}
+           onClick=${(e) => { stop(e); onOpenProfile(author.id); }} />
+      <div>
+        <div class="post-head">
+          <span class="name"
+            onMouseEnter=${(e) => onProfileHoverStart && onProfileHoverStart(author, e)}
+            onMouseLeave=${onProfileHoverEnd}
+            onClick=${(e) => { stop(e); onOpenProfile(author.id); }}>${author.displayName}</span>
+          ${isVerified(author) ? html`<span class=${'verified-badge ' + (verifiedTier(author) === 'gold' ? 'gold' : '')} aria-label="Verified">${I.verified}</span>` : null}
+          <span class="handle">@${author.handle}</span>
+          <span class="dot">·</span>
+          <span class="time" title=${new Date(post.ts).toLocaleString()}>${relTime(post.ts)}</span>
+          <button class="post-menu" title="More" aria-label="More actions" onClick=${onMoreClick}>${I.more}</button>
+        </div>
+        <div class="post-body">
+          ${tokens.map((tk, i) => renderToken(tk, i, { onOpenSlug, onOpenHandle }))}
+        </div>
+        ${post.quote ? html`<${QuoteBlock} quote=${post.quote} author=${profileFor(post.quote.profileId)} />` : null}
+        ${post.imageUrl ? html`<${PostImage} url=${post.imageUrl} text=${post.imageText || post.text} />` : null}
+        <div class="post-meta">${shortViews(viewCount)} Views</div>
+        <div class="actions">
+          <button class="action reply" onClick=${(e) => { stop(e); popIcon(e); setShowReply(s => !s); }} title="Reply">
+            <span class="icon-wrap">${I.reply}</span>
+            <span>${comments.length || ''}</span>
+          </button>
+          <button class=${'action retweet' + (retweeted ? ' on' : '')} onClick=${(e) => { stop(e); popIcon(e); onRetweet(post.id); }} title="Repost (local only)">
+            <span class="icon-wrap">${I.retweet}</span>
+            <span>${retweeted ? 1 : ''}</span>
+          </button>
+          <button class="action quote" onClick=${(e) => { stop(e); popIcon(e); onQuote(post); }} title="Quote">
+            <span class="icon-wrap">${I.quote}</span>
+          </button>
+          <button class=${'action like' + (liked ? ' on' : '')} onClick=${(e) => { stop(e); popIcon(e); onLike(post.id); }} title="Like">
+            <span class="icon-wrap">${liked ? I.likeFilled : I.like}</span>
+            <span>${likes.length || ''}</span>
+          </button>
+          <button class=${'action bookmark' + (bookmarked ? ' on' : '')} onClick=${(e) => { stop(e); popIcon(e); onBookmark(post.id); }} title="Bookmark (local only)">
+            <span class="icon-wrap">${bookmarked ? I.bookmarkFilled : I.bookmark}</span>
+          </button>
+          <button class="action share" onClick=${(e) => { stop(e); popIcon(e); onShare(post.id); }} title="Copy link">
+            <span class="icon-wrap">${I.share}</span>
+          </button>
+        </div>
+      </div>
+    </article>
+    ${(showReply || comments.length) ? html`
+      <div class="replies">
+        ${showReply ? html`
+          <div class="reply-composer">
+            <${SafeImg} src=${myAvatar} alt="" />
+            <input
+              placeholder="Post your reply"
+              value=${replyText}
+              onInput=${(e) => setReplyText(e.currentTarget.value)}
+              onKeyDown=${(e) => { if (e.key === 'Enter') onSubmitReply(); }}
+              autoFocus
+            />
+            <button disabled=${!replyText.trim()} onClick=${onSubmitReply}>Reply</button>
+          </div>
+        ` : null}
+        ${comments.map(c => {
+          const cAuthor = profileFor(c.userId);
+          return html`
+            <div class="comment" key=${c.id}>
+              <${SafeImg} src=${cAuthor.avatarUrl} alt="" fallbackName=${cAuthor.displayName} onClick=${() => onOpenProfile(cAuthor.id)} />
+              <div>
+                <div class="c-head">
+                  <strong>${cAuthor.displayName}</strong>
+                  <span>@${cAuthor.handle} · ${relTime(c.ts)}</span>
+                </div>
+                <div class="c-body">${c.text}</div>
+              </div>
+            </div>
+          `;
+        })}
+      </div>
+    ` : null}
+  `;
+});
+
+function QuoteBlock({ quote, author }) {
+  if (!quote) return null;
+  const safeAuthor = author || { displayName: 'Unknown', handle: 'unknown' };
+  return html`
+    <div class="quote-card">
+      <div class="quote-head">
+        <span class="quote-name">${safeAuthor.displayName}</span>
+        ${isVerified(safeAuthor) ? html`<span class=${'verified-badge ' + (verifiedTier(safeAuthor) === 'gold' ? 'gold' : '')}>${I.verified}</span>` : null}
+        <span class="quote-handle">@${safeAuthor.handle}</span>
+      </div>
+      <div class="quote-text">${quote.text}</div>
+    </div>
+  `;
+}
+
+function PostContextMenu({ menu, author, onCopy, onClose }) {
+  useEffect(() => {
+    const onDocClick = () => onClose();
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    const timer = setTimeout(() => document.addEventListener('click', onDocClick), 0);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener('click', onDocClick);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [onClose]);
+  const dismiss = (fn) => {
+    if (fn) fn();
+    onClose();
+  };
+  return html`
+    <div class="context-menu" style=${`left:${menu.x}px;top:${menu.y}px;`} onClick=${(e) => e.stopPropagation()} onContextMenu=${(e) => e.preventDefault()}>
+      <button onClick=${() => dismiss(() => onCopy(menu.post.id))}>Copy link</button>
+      <button onClick=${() => dismiss(() => showBodyToast(`Muted @${author.handle} locally`, 1800))}>Mute user</button>
+      <button onClick=${() => dismiss(() => showBodyToast('Not interested noted locally', 1800))}>Not interested</button>
+    </div>
+  `;
+}
+
+function ProfileHoverCard({ profile, x, y, onMouseEnter, onMouseLeave, onOpen }) {
+  const [following, setFollowing] = useState(false);
+  const followers = Math.abs(hashString(profile.id + 'followers')) % 90000 + 1200;
+  const followingCount = Math.abs(hashString(profile.id + 'following')) % 900 + 80;
+  const bio = `${profile.location || 'Timeline local'} based poster. Short thoughts, stray links and occasional image drops.`;
+  return html`
+    <div class="profile-hover-card" style=${`left:${x}px;top:${y}px;`} onMouseEnter=${onMouseEnter} onMouseLeave=${onMouseLeave}>
+      <div class="profile-hover-top">
+        <${SafeImg} src=${profile.avatarUrl} alt="" fallbackName=${profile.displayName} onClick=${onOpen} style="cursor:pointer;" />
+        <button class=${'follow-btn' + (following ? ' following' : '')} onClick=${() => setFollowing(f => !f)}>${following ? 'Following' : 'Follow'}</button>
+      </div>
+      <div class="profile-hover-name" onClick=${onOpen} style="cursor:pointer;">${profile.displayName}${isVerified(profile) ? html` <span class=${'verified-badge ' + (verifiedTier(profile) === 'gold' ? 'gold' : '')}>${I.verified}</span>` : null}</div>
+      <div class="profile-hover-handle">@${profile.handle}</div>
+      <div class="profile-hover-bio">${bio}</div>
+      <div class="profile-hover-stats">
+        <span><strong>${shortViews(followingCount)}</strong> Following</span>
+        <span><strong>${shortViews(followers)}</strong> Followers</span>
+      </div>
+    </div>
+  `;
+}
+
+// --- Token parsing for post body ---
+function parseTokens(text) {
+  if (!text) return [];
+  const out = [];
+  // Split keeping whitespace
+  const parts = text.split(/(\s+)/);
+  for (const part of parts) {
+    if (!part) continue;
+    if (/^\s+$/.test(part)) {
+      out.push({ type: 'text', value: part });
+      continue;
+    }
+    const linkMatch = part.match(/^\[link:([^\]]+)\](.*)$/);
+    if (linkMatch) {
+      out.push({ type: 'link', slug: linkMatch[1] });
+      if (linkMatch[2]) out.push({ type: 'text', value: linkMatch[2] });
+      continue;
+    }
+    if (/^https?:\/\//.test(part)) {
+      out.push({ type: 'url', value: part });
+      continue;
+    }
+    if (part.startsWith('#') && part.length > 1) {
+      const tagMatch = part.match(/^#([\w\-]+)(.*)$/);
+      if (tagMatch) {
+        out.push({ type: 'hashtag', value: tagMatch[1] });
+        if (tagMatch[2]) out.push({ type: 'text', value: tagMatch[2] });
+        continue;
+      }
+    }
+    if (part.startsWith('@') && part.length > 1) {
+      const m = part.match(/^@([\w\-]+)(.*)$/);
+      if (m) {
+        out.push({ type: 'mention', value: m[1] });
+        if (m[2]) out.push({ type: 'text', value: m[2] });
+        continue;
+      }
+    }
+    out.push({ type: 'text', value: part });
+  }
+  return out;
+}
+function renderToken(tk, i, { onOpenSlug, onOpenHandle }) {
+  if (tk.type === 'text') return tk.value;
+  if (tk.type === 'url') {
+    return html`<a key=${i} href=${tk.value} target="_blank" rel="noreferrer" onClick=${(e) => e.stopPropagation()}>${tk.value}</a>`;
+  }
+  if (tk.type === 'hashtag') {
+    return html`<span key=${i} class="tok-link" onClick=${(e) => { e.stopPropagation(); onOpenSlug(tk.value); }}>#${tk.value}</span>`;
+  }
+  if (tk.type === 'mention') {
+    return html`<span key=${i} class="tok-link" onClick=${(e) => { e.stopPropagation(); onOpenHandle(tk.value); }}>@${tk.value}</span>`;
+  }
+  if (tk.type === 'link') {
+    return html`<span key=${i} class="tok-link" onClick=${(e) => { e.stopPropagation(); onOpenSlug(tk.slug); }}>${tk.slug}</span>`;
+  }
+  return null;
+}
+
+// --- Right sidebar ---
+function RightSidebar({ trends, onTrendClick, personas, onOpenProfile, query, onSearch }) {
+  const q = query || '';
+  const items = trends && trends.length ? trends : FALLBACK_TRENDS;
+  const visibleTrends = items.slice(0, 4);
+  const whoSuggestions = (personas || []).slice(0, 3);
+  return html`
+    <aside class="right">
+      <div class="right-sticky">
+        <div class="search-wrap">
+          ${I.search}
+          <input
+            placeholder="Search"
+            value=${q}
+            onInput=${(e) => onSearch(e.currentTarget.value)}
+            onKeyDown=${(e) => {
+              if (e.key === 'Enter' && q.trim()) {
+                onTrendClick({ tag: '#' + q.trim().replace(/^#/, '') });
+              }
+            }}
+          />
+        </div>
+        <div class="right-card">
+          <h2>What's happening</h2>
+          ${visibleTrends.map((t, i) => html`
+            <div class="trend" key=${t.tag + i} onClick=${() => onTrendClick(t)}>
+              <small>${t.topic} · Trending</small>
+              <strong>${t.tag}</strong>
+              <small>${t.count}</small>
+            </div>
+          `)}
+          <div class="show-more" onClick=${() => showBodyToast('More trends would load here', 1800)}>Show more</div>
+        </div>
+        ${whoSuggestions.length ? html`
+          <div class="right-card" style="margin-top: 16px;">
+            <h2>Who to follow</h2>
+            ${whoSuggestions.map(p => html`<${WhoRow} key=${p.id} profile=${p} onOpen=${() => onOpenProfile(p.id)} />`)}
+            <div class="show-more" onClick=${() => showBodyToast('More suggestions would load here', 1800)}>Show more</div>
+          </div>
+        ` : null}
+        <div class="footer-links">
+          <div class="row">
+            <a href="#" onClick=${(e) => { e.preventDefault(); showBodyToast('Toy clone, no real terms', 1800); }}>Terms</a>
+            <a href="#" onClick=${(e) => { e.preventDefault(); showBodyToast('Toy clone, no real privacy policy', 1800); }}>Privacy</a>
+            <a href="#" onClick=${(e) => { e.preventDefault(); showBodyToast('Toy clone, no cookies stored', 1800); }}>Cookies</a>
+            <a href="#" onClick=${(e) => { e.preventDefault(); showBodyToast('Made for fun', 1800); }}>About</a>
+          </div>
+          <div>(c) ${new Date().getFullYear()} X-ish toy clone</div>
+        </div>
+      </div>
+    </aside>
+  `;
+}
+
+function WhoRow({ profile, onOpen }) {
+  const [following, setFollowing] = useState(false);
+  return html`
+    <div class="who-row">
+      <img src=${profile.avatarUrl} alt="" onClick=${onOpen} onError=${onImageError} />
+      <div class="who-info" onClick=${onOpen}>
+        <div class="who-name">
+          <span>${profile.displayName}</span>
+          ${isVerified(profile) ? html`<span class=${'verified-badge ' + (verifiedTier(profile) === 'gold' ? 'gold' : '')}>${I.verified}</span>` : null}
+        </div>
+        <div class="who-handle">@${profile.handle}</div>
+      </div>
+      <button
+        class=${'follow-btn' + (following ? ' following' : '')}
+        onMouseEnter=${(e) => { if (following) e.currentTarget.textContent = 'Unfollow'; }}
+        onMouseLeave=${(e) => { if (following) e.currentTarget.textContent = 'Following'; }}
+        onClick=${(e) => { e.stopPropagation(); setFollowing(f => !f); }}
+      >${following ? 'Following' : 'Follow'}</button>
+    </div>
+  `;
+}
+
+// --- Profile modal ---
+function ProfileModal({ profile, posts, profileFor, me, myAvatar, likes, comments, retweets, bookmarks, onLike, onReply, onRetweet, onQuote, onBookmark, onShare, onOpenProfile, onOpenSlug, onOpenHandle, onOpenContextMenu, onProfileHoverStart, onProfileHoverEnd, onClose }) {
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onClose]);
+  return html`
+    <div class="modal-backdrop" onClick=${(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div class="modal" role="dialog" aria-label="Profile">
+        <div class="modal-header">
+          <button class="modal-close" onClick=${onClose} aria-label="Close">${I.close}</button>
+          <div class="modal-title">${profile.displayName}</div>
+        </div>
+        <div class="modal-body">
+          <div class="profile-banner"></div>
+          <div class="profile-info">
+            <${SafeImg} class="big-avatar" src=${profile.avatarUrl} alt="" fallbackName=${profile.displayName} />
+            <div class="profile-name">${profile.displayName}${isVerified(profile) ? html` <span class=${'verified-badge ' + (verifiedTier(profile) === 'gold' ? 'gold' : '')} style="vertical-align: middle;">${I.verified}</span>` : null}</div>
+            <div class="profile-handle">@${profile.handle}</div>
+            <div class="profile-meta">
+              ${profile.gender && profile.gender !== 'unknown' ? html`<span>${profile.gender}</span><span>·</span>` : null}
+              <span>${profile.location || 'somewhere'}</span>
+            </div>
+          </div>
+          <div class="profile-section-title">Posts (${posts.length})</div>
+          ${posts.length ? posts.map(p => html`
+            <${PostRow}
+              key=${p.id}
+              post=${p}
+              author=${profile}
+              me=${me}
+              myAvatar=${myAvatar}
+              likes=${likes[p.id] || EMPTY_ARR}
+              comments=${comments[p.id] || EMPTY_ARR}
+              profileFor=${profileFor}
+              retweeted=${!!retweets[p.id]}
+              bookmarked=${!!bookmarks[p.id]}
+              onLike=${onLike}
+              onReply=${onReply}
+              onRetweet=${onRetweet}
+              onQuote=${onQuote}
+              onBookmark=${onBookmark}
+              onShare=${onShare}
+              onOpenProfile=${onOpenProfile}
+              onOpenSlug=${onOpenSlug}
+              onOpenHandle=${onOpenHandle}
+              onOpenContextMenu=${onOpenContextMenu}
+              onProfileHoverStart=${onProfileHoverStart}
+              onProfileHoverEnd=${onProfileHoverEnd}
+            />
+          `) : html`<div class="feed-loading">No posts from this user yet.</div>`}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// --- Sub-page dispatcher ---
+function PageHeader({ title, subtitle, onBack, children }) {
+  return html`
+    <header class="page-header">
+      <button class="page-back" aria-label="Back" title="Back" onClick=${onBack}>${I.arrowBack}</button>
+      <div>
+        <div class="page-title">${title}</div>
+        ${subtitle ? html`<div style="color:var(--muted);font-size:13px;line-height:1;margin-top:2px;">${subtitle}</div>` : null}
+      </div>
+      ${children}
+    </header>
+  `;
+}
+function EmptyState({ title, body, ctaLabel, onCta }) {
+  return html`
+    <div class="empty-state">
+      <h2>${title}</h2>
+      <p>${body}</p>
+      ${ctaLabel ? html`<button class="cta" onClick=${onCta}>${ctaLabel}</button>` : null}
+    </div>
+  `;
+}
+function groupNotifications(items) {
+  const out = [];
+  for (const n of items) {
+    if ((n.type === 'like' || n.type === 'retweet') && n.postId) {
+      const last = out[out.length - 1];
+      if (last && last.grouped && last.type === n.type && last.postId === n.postId) {
+        last.ids.push(n.id);
+        if (!last.fromProfileIds.includes(n.fromProfileId)) last.fromProfileIds.push(n.fromProfileId);
+        last.count = last.fromProfileIds.length;
+        last.read = last.read && n.read;
+        continue;
+      }
+      out.push({ ...n, grouped: true, ids: [n.id], fromProfileIds: [n.fromProfileId], count: 1, groupKey: n.type + ':' + n.postId + ':' + n.id });
+    } else {
+      out.push(n);
+    }
+  }
+  return out;
+}
+function NotificationRow({ notif, profileFor, onOpenProfile, fresh }) {
+  const profiles = notif.fromProfileIds ? notif.fromProfileIds.map(profileFor).filter(Boolean) : [profileFor(notif.fromProfileId)];
+  const fromProfile = profiles[0] || { id: 'unknown', displayName: 'Unknown', handle: 'unknown', avatarUrl: TRANSPARENT_GIF };
+  const groupedCount = notif.grouped ? Math.max(notif.count || profiles.length, 1) : 0;
+  const verb = notif.type === 'like' ? 'liked your post'
+    : notif.type === 'retweet' ? 'reposted your post'
+    : notif.type === 'reply' ? 'replied to your post'
+    : notif.type === 'follow' ? 'followed you'
+    : 'mentioned you';
+  const icon = notif.type === 'like' ? I.likeFilled
+    : notif.type === 'retweet' ? I.retweet
+    : notif.type === 'reply' ? I.reply
+    : notif.type === 'follow' ? I.profile
+    : I.bell;
+  const groupedVerb = notif.type === 'like' ? 'liked your post' : 'reposted your post';
+  return html`
+    <div class=${'notif-row' + (notif.read ? '' : ' unread') + (fresh ? ' fresh' : '')}>
+      <div class=${'notif-icon ' + notif.type}>${icon}</div>
+      <div class="notif-body">
+        ${profiles.length > 1 ? html`
+          <div class="notif-avatar-stack">
+            ${profiles.slice(0, 3).map(p => html`<${SafeImg} class="notif-avatar" key=${p.id} src=${p.avatarUrl} alt="" fallbackName=${p.displayName} onClick=${() => onOpenProfile(p.id)} style="cursor:pointer;" />`)}
+          </div>
+        ` : html`<${SafeImg} class="notif-avatar" src=${fromProfile.avatarUrl} alt="" fallbackName=${fromProfile.displayName} onClick=${() => onOpenProfile(fromProfile.id)} style="cursor:pointer;" />`}
+        <div class="notif-text">
+          ${groupedCount > 1
+            ? html`<strong>${groupedCount} people</strong> ${groupedVerb}`
+            : html`<strong>${fromProfile.displayName}</strong>${isVerified(fromProfile) ? html` <span class=${'verified-badge ' + (verifiedTier(fromProfile) === 'gold' ? 'gold' : '')}>${I.verified}</span>` : null} ${verb}`}
+        </div>
+        ${notif.text && notif.type === 'reply' ? html`<div class="notif-preview">${notif.text}</div>` : null}
+        ${notif.text && (notif.type === 'like' || notif.type === 'retweet') ? html`<div class="notif-preview">"${notif.text.slice(0, 120)}${notif.text.length > 120 ? '…' : ''}"</div>` : null}
+        <div class="notif-time">${relTime(notif.ts)}</div>
+      </div>
+    </div>
+  `;
+}
+function SubPage(props) {
+  const { page, onBack } = props;
+  if (page === 'notifications') return html`<${NotificationsPage} ...${props} />`;
+  if (page === 'bookmarks') return html`<${BookmarksPage} ...${props} />`;
+  if (page === 'lists') return html`<${ListsPage} ...${props} />`;
+  if (page === 'messages') return html`<${MessagesPage} ...${props} />`;
+  if (page === 'communities') return html`<${CommunitiesPage} ...${props} />`;
+  if (page === 'premium') return html`<${PremiumPage} ...${props} />`;
+  if (page === 'more') return html`<${MorePage} ...${props} />`;
+  if (page === 'explore') return html`<${ExplorePage} ...${props} />`;
+  return html`<${PageHeader} title="Page" onBack=${onBack} />`;
+}
+function NotificationsPage({ notifications, freshNotifIds, profileFor, onBack, onOpenProfile }) {
+  const [tab, setTab] = useState('all');
+  const filtered = useMemo(() => {
+    if (tab === 'mentions') return notifications.filter(n => n.type === 'reply' || n.type === 'mention');
+    return notifications;
+  }, [notifications, tab]);
+  const grouped = useMemo(() => groupNotifications(filtered), [filtered]);
+  return html`
+    <${PageHeader} title="Notifications" onBack=${onBack} />
+    <div class=${'page-tabs' + (tab === 'mentions' ? ' second' : '')}>
+      <button class=${'page-tab' + (tab === 'all' ? ' active' : '')} onClick=${() => setTab('all')}>All</button>
+      <button class=${'page-tab' + (tab === 'mentions' ? ' active' : '')} onClick=${() => setTab('mentions')}>Mentions</button>
+    </div>
+    ${grouped.length === 0
+      ? html`<${EmptyState} title="Nothing to see here yet" body="From likes to retweets, this is where it'll all happen." />`
+      : grouped.map(n => {
+        const fresh = n.ids ? n.ids.some(id => freshNotifIds && freshNotifIds[id]) : !!(freshNotifIds && freshNotifIds[n.id]);
+        return html`<${NotificationRow} key=${n.groupKey || n.id} notif=${n} profileFor=${profileFor} fresh=${fresh} onOpenProfile=${onOpenProfile} />`;
+      })
+    }
+  `;
+}
+function BookmarksPage(props) {
+  const { posts, bookmarks, profileFor, me, myAvatar, likes, comments, retweets, onLike, onReply, onRetweet, onQuote, onBookmark, onShare, onOpenProfile, onOpenSlug, onOpenHandle, onOpenContextMenu, onProfileHoverStart, onProfileHoverEnd, onBack } = props;
+  const bookmarkedPosts = useMemo(() => posts.filter(p => bookmarks[p.id]), [posts, bookmarks]);
+  return html`
+    <${PageHeader} title="Bookmarks" subtitle="@${me.handle}" onBack=${onBack} />
+    ${bookmarkedPosts.length === 0
+      ? html`<${EmptyState} title="Save posts for later" body="Bookmark posts to easily find them again in the future." />`
+      : bookmarkedPosts.map((p, idx) => html`
+        <${PostRow}
+          key=${p.id}
+          post=${p}
+          author=${profileFor(p.profileId)}
+          me=${me}
+          myAvatar=${myAvatar}
+          likes=${likes[p.id] || EMPTY_ARR}
+          comments=${comments[p.id] || EMPTY_ARR}
+          profileFor=${profileFor}
+          retweeted=${!!retweets[p.id]}
+          bookmarked=${true}
+          stagger=${idx}
+          onLike=${onLike}
+          onReply=${onReply}
+          onRetweet=${onRetweet}
+          onQuote=${onQuote}
+          onBookmark=${onBookmark}
+          onShare=${onShare}
+          onOpenProfile=${onOpenProfile}
+          onOpenSlug=${onOpenSlug}
+          onOpenHandle=${onOpenHandle}
+          onOpenContextMenu=${onOpenContextMenu}
+          onProfileHoverStart=${onProfileHoverStart}
+          onProfileHoverEnd=${onProfileHoverEnd}
+        />
+      `)
+    }
+  `;
+}
+function ListsPage({ onBack }) {
+  return html`
+    <${PageHeader} title="Lists" onBack=${onBack} />
+    <${EmptyState}
+      title="You haven't created or followed any Lists"
+      body="When you do, they'll show up here."
+      ctaLabel="Create a List"
+      onCta=${() => showBodyToast('Create-a-List flow is a toy stub', 1800)}
+    />
+  `;
+}
+function MessagesPage({ onBack }) {
+  return html`
+    <${PageHeader} title="Messages" onBack=${onBack} />
+    <${EmptyState}
+      title="Welcome to your inbox!"
+      body="Drop a line, share posts and more with private conversations between you and others."
+      ctaLabel="Write a message"
+      onCta=${() => showBodyToast('Direct messages are a toy stub', 1800)}
+    />
+  `;
+}
+function CommunitiesPage({ onBack }) {
+  return html`
+    <${PageHeader} title="Communities" onBack=${onBack} />
+    <${EmptyState}
+      title="Discover Communities"
+      body="The places to find your people, talk about what you love, and see what's happening."
+      ctaLabel="Find a Community"
+      onCta=${() => showBodyToast('Community discovery is a toy stub', 1800)}
+    />
+  `;
+}
+function PremiumPage({ onBack }) {
+  const features = [
+    { title: 'Verified checkmark', desc: 'Show off the blue check next to your name.' },
+    { title: 'Edit posts', desc: 'Made a typo? Fix it within 60 minutes.' },
+    { title: 'Longer posts', desc: 'Up to 25,000 characters per post.' },
+    { title: 'Analytics dashboard', desc: 'See engagement metrics on every post.' },
+    { title: 'Priority ranking', desc: 'Your replies surface higher in conversations.' }
+  ];
+  return html`
+    <${PageHeader} title="Premium" onBack=${onBack} />
+    <div class="premium-page">
+      <h2>Get Premium</h2>
+      <p>Unlock the full experience with extra tools, fewer ads, and more.</p>
+      ${features.map(f => html`
+        <div class="feature">
+          <div style="color: var(--accent); display: inline-flex; align-items: center; justify-content: center;">${I.verified}</div>
+          <div>
+            <div class="feature-title">${f.title}</div>
+            <div class="feature-desc">${f.desc}</div>
+          </div>
+        </div>
+      `)}
+      <button class="cta" style="margin-top: 24px;" onClick=${() => showBodyToast('Subscribe flow is a toy stub', 1800)}>Subscribe</button>
+    </div>
+  `;
+}
+function MorePage({ onBack }) {
+  const items = [
+    { label: 'Settings and privacy', toast: 'Settings is a toy stub' },
+    { label: 'Help Center', toast: 'Help Center is a toy stub' },
+    { label: 'Display', toast: 'Display preferences are a toy stub' },
+    { label: 'Keyboard shortcuts', toast: 'Press n to compose, Cmd/Ctrl+K to search' },
+    { label: 'About this toy', toast: 'Built as a single-HTML demo with Preact + htm + Pollinations' }
+  ];
+  return html`
+    <${PageHeader} title="More" onBack=${onBack} />
+    ${items.map(it => html`
+      <div class="trend" key=${it.label} onClick=${() => showBodyToast(it.toast, 2400)}>
+        <strong>${it.label}</strong>
+      </div>
+    `)}
+  `;
+}
+function ExplorePage({ trends, onOpenSlug, onBack }) {
+  return html`
+    <${PageHeader} title="Explore" onBack=${onBack} />
+    <div class="page-tabs">
+      <button class="page-tab active">Trending</button>
+      <button class="page-tab" onClick=${() => showBodyToast('News tab is a toy stub', 1800)}>News</button>
+    </div>
+    ${trends.map((t, i) => html`
+      <div class="trend" key=${t.tag + i} onClick=${() => onOpenSlug(t.tag.replace(/^#/, ''))}>
+        <small>${t.topic} · Trending</small>
+        <strong>${t.tag}</strong>
+        <small>${t.count}</small>
+      </div>
+    `)}
+  `;
+}
+
+// --- Compose modal ---
+function ComposeModal({ avatar, quotePost, quoteAuthor, onSubmit, onClose, meName }) {
+  const [text, setText] = useState('');
+  const taRef = useRef(null);
+  const over = text.length > MAX_POST_CHARS;
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === 'Escape') onClose();
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && (text.trim() || quotePost) && !over) {
+        e.preventDefault();
+        onSubmit(text, quotePost || null);
+        onClose();
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    if (taRef.current) taRef.current.focus();
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onClose, onSubmit, text, over, quotePost]);
+  const submit = () => {
+    if ((!text.trim() && !quotePost) || over) return;
+    onSubmit(text, quotePost || null);
+    onClose();
+  };
+  return html`
+    <div class="modal-backdrop" onClick=${(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div class="modal" role="dialog" aria-label="Compose post">
+        <div class="modal-header">
+          <button class="modal-close" onClick=${onClose} aria-label="Close">${I.close}</button>
+        </div>
+        <div class="modal-body">
+          <div class="composer" style="border-bottom: 0;">
+            <${SafeImg} class="avatar" src=${avatar} fallbackName=${meName} alt="" />
+            <div class="composer-body">
+              <textarea
+                ref=${taRef}
+                placeholder="What is happening?!"
+                value=${text}
+                maxlength=${MAX_POST_CHARS + 50}
+                onInput=${(e) => setText(e.currentTarget.value)}
+                rows="6"
+                style="min-height: 140px;"
+              ></textarea>
+              ${quotePost ? html`<${QuoteBlock} quote=${quotePost} author=${quoteAuthor} />` : null}
+              <div class="composer-row">
+                <div class="composer-actions">
+                  <button class="composer-icon-btn" title="Image (toy stub)" onClick=${() => showBodyToast('Image attach is a toy stub', 1800)}>${I.image}</button>
+                  <button class="composer-icon-btn" title="GIF (toy stub)" onClick=${() => showBodyToast('GIF picker would open here', 1800)}>${I.gif}</button>
+                  <button class="composer-icon-btn" title="Poll (toy stub)" onClick=${() => showBodyToast('Poll composer would open here', 1800)}>${I.poll}</button>
+                  <button class="composer-icon-btn" title="Emoji (toy stub)" onClick=${() => showBodyToast('Emoji picker would open here', 1800)}>${I.emoji}</button>
+                  <button class="composer-icon-btn" title="Location (toy stub)" onClick=${() => showBodyToast('Location tag would attach here', 1800)}>${I.pin}</button>
+                </div>
+                <div style="display: flex; align-items: center;">
+                  <${CharCounter} count=${text.length} />
+                  <button class="composer-post" disabled=${(!text.trim() && !quotePost) || over} onClick=${submit} title="Cmd/Ctrl + Enter">Post</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// --- Generated page modal ---
+function GeneratedPageModal({ slug, cached, onClose }) {
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onClose]);
+  const isLoading = !cached || cached.loading;
+  return html`
+    <div class="modal-backdrop" onClick=${(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div class="modal" role="dialog" aria-label="Topic page">
+        <div class="modal-header">
+          <button class="modal-close" onClick=${onClose} aria-label="Close">${I.close}</button>
+          <div class="modal-title">#${slug}</div>
+        </div>
+        <div class="modal-body">
+          <div class="gen-page-content">
+            ${isLoading ? html`<div class="spinner">Generating witty micro-page about "${slug}"…</div>` : html`
+              <h3>${cached.title || slug}</h3>
+              <ul>
+                ${(cached.bullets || []).map((b, i) => html`<li key=${i}>${b}</li>`)}
+              </ul>
+            `}
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+render(html`<${App} />`, document.getElementById('app'));
+</script>
+</body>
+</html>
