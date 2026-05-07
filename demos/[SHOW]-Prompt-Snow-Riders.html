@@ -191,11 +191,12 @@ const GRAVITY = 22;             // m/s^2 (tuned, not earth)
 const PUSH_FORCE = 14;          // forward kick on W
 const TURN_SPEED = 1.7;         // rad/s
 const MAX_SPEED = 80;           // hard cap m/s
-const SNOW_FRICTION = 0.992;    // tangent multiplier each step
-const TUCK_FRICTION = 0.998;    // less drag while tucking
-const BRAKE_FRICTION = 0.86;    // strong drag while braking
+const SNOW_FRICTION = 0.997;    // very low drag - momentum carries (LMSR feel)
+const TUCK_FRICTION = 0.9995;   // tuck barely slows you
+const BRAKE_FRICTION = 0.84;    // strong drag while braking
 const CARVE_LERP = 0.05;        // how strongly velocity rotates toward heading
 const RESPAWN_BELOW = -30;      // y threshold for falling-off failsafe
+const LAUNCH_VY = 1.2;          // vy threshold above which player leaves ground
 
 const NUM_CHECKPOINTS = 7;
 const NUM_TREES = 220;
@@ -757,7 +758,8 @@ class Skier {
 
   // Drive the rig from current player state. Pos is the FOOT position
   // (we offset internally so pelvis sits at +0.78m above foot).
-  step(dt, footPos, heading) {
+  // slopeTilt is the forward slope angle in radians (positive = descending).
+  step(dt, footPos, heading, slopeTilt = 0) {
     if (this.ragdoll) {
       this.ragdollTimer -= dt;
       // tumble whole body
@@ -793,10 +795,16 @@ class Skier {
 
     // Normal posed mode: position group at foot, rotate toward heading.
     // The rig is built facing local +Z, but player.heading=0 means moving
-    // toward world -Z. Add PI so skier faces the movement direction, not away.
+    // toward world -Z. Add PI so skier faces the movement direction.
+    // YXZ Euler order so we can yaw first, then pitch in body frame for
+    // matching the slope under the skier (lean forward when descending).
     this.group.position.copy(footPos);
     this.group.rotation.order = "YXZ";
-    this.group.rotation.set(0, heading + Math.PI, 0);
+    const targetTiltX = (slopeTilt || 0) * 0.55;
+    // Smoothly approach the target slope tilt instead of snapping
+    if (this._tiltX === undefined) this._tiltX = 0;
+    this._tiltX += (targetTiltX - this._tiltX) * 0.18;
+    this.group.rotation.set(this._tiltX, heading + Math.PI, 0);
     // Lerp each joint rotation toward state pose
     const target = POSES[this.state] || POSES.ski;
     const b = this.poseBlend;
@@ -990,26 +998,62 @@ function tickPlayer(dt) {
   player.pos.addScaledVector(player.vel, dt);
 
   // ---- Ground constraint ----
-  // Sample analytical height at current x,z. If we're below, snap up
-  // and project velocity onto the tangent plane. This is the entire
-  // physics-vs-terrain story; no orientation mismatch is possible
-  // because the visual mesh ALSO calls heightAt(x, z) for each vertex.
+  // Sample analytical height at current x,z. The same heightAt() function
+  // is sampled by the visual mesh, so orientation mismatch is impossible.
+  //
+  // Key: don't blindly snap to the surface every frame. If the player's
+  // velocity (after slope tangent projection) has notable upward
+  // component, let them leave the ground. This is what makes bumps
+  // launch you instead of tediously sticking.
   const groundY = heightAt(player.pos.x, player.pos.z);
   const surfaceY = groundY + PLAYER_RADIUS;
-  if (player.pos.y <= surfaceY + 0.01) {
-    // Snap up
+  const above = player.pos.y - surfaceY;
+
+  if (above < -0.05) {
+    // Deep penetration - hard snap up + grounded behavior
     player.pos.y = surfaceY;
-    // Surface normal
     _normal.copy(slopeNormalAt(player.pos.x, player.pos.z));
-    // Project velocity onto plane (remove inward component)
     const vDotN = player.vel.dot(_normal);
-    if (vDotN < 0) {
-      // landing impact: small bounce dampening
-      player.vel.addScaledVector(_normal, -vDotN * 1.0);
+    if (vDotN < 0) player.vel.addScaledVector(_normal, -vDotN * 0.95);
+    groundedSlide();
+    player.airborne = false;
+  } else if (above <= 0.04 && player.vel.y < LAUNCH_VY) {
+    // Resting / sliding on surface
+    player.pos.y = surfaceY;
+    _normal.copy(slopeNormalAt(player.pos.x, player.pos.z));
+    const vDotN = player.vel.dot(_normal);
+    if (vDotN < 0) player.vel.addScaledVector(_normal, -vDotN);
+    groundedSlide();
+
+    // Bump launch: if the slope curves AWAY (gets shallower) ahead of us,
+    // sample 1m forward and compare. If terrain drops/flattens, kick off.
+    const fx = -Math.sin(player.heading), fz = -Math.cos(player.heading);
+    const speed = Math.sqrt(player.vel.x * player.vel.x + player.vel.z * player.vel.z);
+    if (speed > 5) {
+      const hAhead = heightAt(player.pos.x + fx * 1.2, player.pos.z + fz * 1.2);
+      const drop = surfaceY - PLAYER_RADIUS - hAhead;
+      if (drop > 0.4 && player.vel.y > -1) {
+        // Terrain falls away - launch with retained horizontal speed + small lift
+        player.vel.y += Math.min(drop * speed * 0.18, 7);
+        player.pos.y += 0.05;
+        player.airborne = true;
+      } else {
+        player.airborne = false;
+      }
+    } else {
+      player.airborne = false;
     }
+  } else {
+    // Above surface - airborne; gravity already applied
+    player.airborne = true;
+    // Tiny air drag for stability
+    player.vel.x *= Math.pow(0.999, dt * 60);
+    player.vel.z *= Math.pow(0.999, dt * 60);
+  }
+
+  function groundedSlide() {
     // Tangent (horizontal-ish slide direction)
     _tangent.copy(player.vel).addScaledVector(_normal, -player.vel.dot(_normal));
-
     // Carving: lerp tangent direction toward heading (preserves speed)
     const horizSpeed = Math.sqrt(_tangent.x * _tangent.x + _tangent.z * _tangent.z);
     if (horizSpeed > 0.5) {
@@ -1018,20 +1062,12 @@ function tickPlayer(dt) {
       _tangent.x += (targetX - _tangent.x) * CARVE_LERP;
       _tangent.z += (targetZ - _tangent.z) * CARVE_LERP;
     }
-
     // Friction
     let f = SNOW_FRICTION;
     if (keys.brake) f = BRAKE_FRICTION;
     else if (keys.tuck) f = TUCK_FRICTION;
     _tangent.multiplyScalar(Math.pow(f, dt * 60));
-
-    // Reassemble velocity
     player.vel.copy(_tangent);
-    // We snapped to surface; gravity along normal becomes slide accel along slope
-    // (gravity already added; normal component just got removed)
-    player.airborne = false;
-  } else {
-    player.airborne = true;
   }
 
   // Speed cap
@@ -1104,10 +1140,17 @@ function tickPlayer(dt) {
     const targetLean = (keys.a ? 0.22 : 0) + (keys.d ? -0.22 : 0);
     player.skier.setLean(targetLean);
   }
+  // Compute slope tilt in the forward direction so the skier leans down/up
+  // matching the slope under their feet. Positive = pitching forward.
+  const fx2 = -Math.sin(player.heading), fz2 = -Math.cos(player.heading);
+  const hHere = heightAt(player.pos.x, player.pos.z);
+  const hAhead = heightAt(player.pos.x + fx2 * 1.2, player.pos.z + fz2 * 1.2);
+  const slopeTilt = Math.atan2(hHere - hAhead, 1.2); // + when descending forward
+
   // Foot position = pos minus ground half-radius
   const footPos = _tmp.copy(player.pos);
   footPos.y -= PLAYER_RADIUS;
-  player.skier.step(dt, footPos, player.heading);
+  player.skier.step(dt, footPos, player.heading, slopeTilt);
 }
 
 let crashTimer = 0;
