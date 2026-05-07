@@ -231,19 +231,27 @@ const myColor = COLORS[Math.abs(myId.charCodeAt(2) || 0) % COLORS.length];
 const noise2D = createNoise2D(() => 0.4242);
 
 function heightAt(x, z) {
-  // Radial cone: high at 0,0, drops to ~0 at edges
   const r = Math.sqrt(x * x + z * z);
+  // Radial bowl: peak at center, descending outward in a natural curve
   const radial = Math.max(0, PEAK_HEIGHT * (1 - r / (TERRAIN_RADIUS * 0.95)));
-  // Multi-octave noise for ridges + bumps
+  // Rim wall: past 0.78R the terrain curves back UP into snow walls. This
+  // is the natural playfield boundary - no decorative triangles needed.
+  const rimStart = TERRAIN_RADIUS * 0.78;
+  const rimT = Math.max(0, (r - rimStart) / (TERRAIN_RADIUS - rimStart));
+  const rim = Math.pow(rimT, 1.7) * 95;
+  // Multi-octave noise. The ridge term (1 - |noise|) creates sharp lines
+  // that read as eroded gullies / corroded rock features.
   let n = 0;
-  n += noise2D(x * 0.008, z * 0.008) * 18;
-  n += noise2D(x * 0.025, z * 0.025) * 6;
-  n += noise2D(x * 0.09, z * 0.09) * 1.4;
-  // Carve a deeper winding path along z so there's a clear runline
+  n += noise2D(x * 0.008, z * 0.008) * 16;                              // long swells
+  n += (1 - Math.abs(noise2D(x * 0.022, z * 0.022) * 2)) * 4.5 - 2.25;  // erosion ridges
+  n += noise2D(x * 0.06, z * 0.06) * 2.4;                               // medium bumps
+  n += noise2D(x * 0.18, z * 0.18) * 0.85;                              // fine grain
+  // Carved path - only carves inside the bowl, fades into the rim wall
   const pathX = Math.sin(z * 0.014) * 18 + Math.cos(z * 0.005) * 8;
   const pathDist = Math.abs(x - pathX);
-  const carve = Math.exp(-(pathDist * pathDist) / 100) * 6.5;
-  return radial + n - carve;
+  const pathFactor = 1 - Math.min(1, rimT * 1.8);
+  const carve = Math.exp(-(pathDist * pathDist) / 100) * 6.5 * pathFactor;
+  return radial + rim + n - carve;
 }
 
 function slopeNormalAt(x, z) {
@@ -359,22 +367,8 @@ const terrain = new THREE.Mesh(terrainGeo, terrainMat);
 terrain.receiveShadow = true;
 scene.add(terrain);
 
-// Far backdrop ring of distant peaks. Pushed out beyond visible range and
-// dark grey-blue so they fade into fog instead of looking like white prisms.
-{
-  const peakGroup = new THREE.Group();
-  const peakMat = new THREE.MeshStandardMaterial({ color: 0x6c829c, roughness: 1, flatShading: true });
-  for (let i = 0; i < 28; i++) {
-    const a = (i / 28) * Math.PI * 2 + Math.random() * 0.1;
-    const r = TERRAIN_RADIUS * 1.85;
-    const h = 80 + Math.random() * 50;
-    const peak = new THREE.Mesh(new THREE.ConeGeometry(35 + Math.random() * 25, h, 5), peakMat);
-    peak.position.set(Math.cos(a) * r, h / 2 - 30, Math.sin(a) * r);
-    peak.rotation.y = Math.random() * Math.PI;
-    peakGroup.add(peak);
-  }
-  scene.add(peakGroup);
-}
+// Backdrop peaks removed. The natural rim wall in heightAt forms the
+// playfield boundary now; no decorative triangles needed.
 
 // ============================================================
 // Trees + rocks (instanced)
