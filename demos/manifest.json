@@ -1,6 +1,11 @@
 {
   "demos": [
     {
+      "name": "[SHOW]-X-Toy-Clone",
+      "type": "file",
+      "filename": "[SHOW]-X-Toy-Clone.html"
+    },
+    {
       "name": "[SHOW]-LLM-Controlled-Snake",
       "type": "file",
       "filename": "[SHOW]-LLM-Controlled-Snake.html"
