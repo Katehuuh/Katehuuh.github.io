@@ -2,1393 +2,1277 @@
 <!-- prompt by _Neko (Katehuuh) on websim -->
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Snow Riders - Prompt Demo</title>
-  <style>
-    html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #0b1220; color: #fff; font-family: 'Segoe UI', Roboto, system-ui, sans-serif; }
-    canvas { display: block; }
-    .panel {
-      position: fixed; z-index: 10;
-      padding: 8px 12px;
-      color: #fff;
-      background: rgba(15, 23, 42, 0.55);
-      backdrop-filter: blur(8px);
-      -webkit-backdrop-filter: blur(8px);
-      border: 1px solid rgba(255,255,255,0.08);
-      border-radius: 10px;
-      font: 12px/1.4 monospace;
-      box-shadow: 0 6px 20px rgba(0,0,0,0.35);
-    }
-    #hud-tl { top: 12px; left: 12px; min-width: 180px; }
-    #hud-tr { top: 12px; right: 140px; min-width: 180px; }
-    #minimap-wrap { position: fixed; top: 56px; right: 12px; z-index: 10;
-      width: 158px; height: 158px;
-      padding: 4px;
-      background: rgba(15, 23, 42, 0.55);
-      backdrop-filter: blur(8px);
-      -webkit-backdrop-filter: blur(8px);
-      border: 1px solid rgba(255,255,255,0.08);
-      border-radius: 10px;
-      box-shadow: 0 6px 20px rgba(0,0,0,0.35);
-    }
-    #minimap { width: 150px; height: 150px; display: block; border-radius: 6px; background: #0a0f1a; }
-    #leaderboard { bottom: 12px; right: 12px; min-width: 200px; max-width: 240px; }
-    #leaderboard h3 { margin: 0 0 4px 0; font: 600 12px/1.2 sans-serif; color: #93c5fd; letter-spacing: 0.4px; }
-    #leaderboard ol { margin: 0; padding-left: 18px; }
-    #leaderboard li { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    #chat-wrap { position: fixed; bottom: 12px; left: 12px; z-index: 10;
-      width: 320px;
-      pointer-events: none;
-    }
-    #chat-msgs {
-      display: flex; flex-direction: column-reverse;
-      max-height: 180px; overflow: hidden;
-      transition: opacity 0.6s ease;
-    }
-    .chat-msg {
-      margin-top: 4px;
-      padding: 4px 8px;
-      background: rgba(15, 23, 42, 0.55);
-      backdrop-filter: blur(8px);
-      -webkit-backdrop-filter: blur(8px);
-      border: 1px solid rgba(255,255,255,0.08);
-      border-radius: 8px;
-      font: 12px/1.3 sans-serif;
-      max-width: 100%;
-      word-wrap: break-word;
-    }
-    .chat-msg .who { color: #93c5fd; font-weight: 600; margin-right: 4px; }
-    #chat-input {
-      pointer-events: auto;
-      margin-top: 6px;
-      width: 100%;
-      box-sizing: border-box;
-      padding: 6px 10px;
-      background: rgba(15, 23, 42, 0.85);
-      color: #fff;
-      border: 1px solid rgba(147, 197, 253, 0.5);
-      border-radius: 8px;
-      font: 12px/1.3 sans-serif;
-      outline: none;
-      display: none;
-    }
-    #chat-input.active { display: block; }
-    #help { position: fixed; bottom: 12px; left: 50%; transform: translateX(-50%); z-index: 10;
-      padding: 6px 12px;
-      background: rgba(15, 23, 42, 0.45);
-      backdrop-filter: blur(6px);
-      -webkit-backdrop-filter: blur(6px);
-      border: 1px solid rgba(255,255,255,0.06);
-      border-radius: 999px;
-      font: 11px/1.2 sans-serif;
-      color: #cbd5e1;
-      pointer-events: none;
-    }
-    #copy-prompt {
-      position: fixed; top: 12px; right: 12px; z-index: 11;
-      padding: 10px 14px;
-      color: #fff; background: rgba(29, 155, 240, 0.92);
-      border: 0; border-radius: 999px;
-      font: 600 12px/1.2 sans-serif;
-      cursor: pointer;
-      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
-      transition: background 0.15s, transform 0.1s;
-    }
-    #copy-prompt:hover { background: rgba(29, 155, 240, 1); }
-    #copy-prompt:active { transform: scale(0.96); }
-    #copy-prompt.copied { background: rgba(0, 186, 124, 0.95); }
-    #toast {
-      position: fixed; top: 56px; right: 12px; z-index: 12;
-      padding: 8px 14px;
-      color: #fff; background: rgba(0, 0, 0, 0.85);
-      border-radius: 6px;
-      font: 13px/1.2 sans-serif;
-      opacity: 0; pointer-events: none;
-      transition: opacity 0.2s ease, transform 0.2s ease;
-      transform: translateY(-8px);
-    }
-    #toast.show { opacity: 1; transform: translateY(0); }
-    #loading {
-      position: fixed; inset: 0; z-index: 20;
-      display: flex; align-items: center; justify-content: center;
-      flex-direction: column; gap: 14px;
-      padding: 24px; color: #fff; text-align: center;
-      background: radial-gradient(circle at center, rgba(20,30,50,0.96), rgba(0,0,5,0.98));
-      font: 15px/1.45 sans-serif; letter-spacing: 0.3px;
-      transition: opacity 0.2s ease;
-    }
-    #loading.hidden { opacity: 0; pointer-events: none; }
-    .spinner {
-      width: 36px; height: 36px;
-      border: 3px solid rgba(255,255,255,0.15);
-      border-top-color: #93c5fd;
-      border-radius: 50%;
-      animation: spin 0.9s linear infinite;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    #fatal {
-      position: fixed; inset: 0; z-index: 30;
-      display: none;
-      align-items: center; justify-content: center;
-      padding: 24px;
-      background: rgba(0,0,0,0.92);
-      color: #fff;
-      font: 14px/1.5 sans-serif;
-      text-align: center;
-    }
-    #fatal.show { display: flex; }
-    .row { display: flex; justify-content: space-between; gap: 10px; }
-    .label { color: #93c5fd; }
-    .pulse { color: #f59e0b; }
-    .me-name { color: #fbbf24; font-weight: 600; }
-  </style>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Snow Riders</title>
+<style>
+  html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #88a8c8; color: #fff; font-family: 'Segoe UI', Roboto, sans-serif; }
+  canvas { display: block; }
+
+  #hud-tl {
+    position: fixed; top: 14px; left: 14px; z-index: 10;
+    padding: 10px 14px;
+    background: rgba(0, 10, 30, 0.55);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 10px;
+    font: 600 14px/1.3 monospace;
+    backdrop-filter: blur(6px);
+    text-shadow: 0 1px 2px rgba(0,0,0,0.6);
+  }
+  #hud-tl .row { display: flex; justify-content: space-between; gap: 16px; }
+  #hud-tl .label { color: #9cd; font-size: 11px; letter-spacing: 1px; }
+  #hud-tl .val { font-variant-numeric: tabular-nums; }
+  #hud-tl .net { color: #8cd0a0; font-size: 11px; margin-top: 4px; }
+
+  #help {
+    position: fixed; bottom: 14px; left: 14px; z-index: 10;
+    padding: 9px 13px;
+    color: rgba(255,255,255,0.82);
+    background: rgba(0,10,30,0.55);
+    border-radius: 8px;
+    font: 12px/1.5 sans-serif;
+    pointer-events: none;
+    backdrop-filter: blur(4px);
+  }
+  #help b { color: #fff; font-weight: 600; }
+
+  #copy-prompt {
+    position: fixed; top: 14px; right: 14px; z-index: 11;
+    padding: 9px 14px;
+    color: #fff; background: rgba(29, 155, 240, 0.85);
+    border: 0; border-radius: 8px;
+    font: 600 13px/1.2 sans-serif;
+    cursor: pointer;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+    transition: background 0.15s, transform 0.1s;
+    backdrop-filter: blur(4px);
+  }
+  #copy-prompt:hover { background: rgba(29, 155, 240, 1); }
+  #copy-prompt:active { transform: scale(0.96); }
+  #copy-prompt.ok { background: rgba(0, 186, 124, 0.95); }
+
+  #toast {
+    position: fixed; top: 56px; right: 14px; z-index: 12;
+    padding: 7px 13px;
+    color: #fff; background: rgba(0, 0, 0, 0.85);
+    border-radius: 6px;
+    font: 13px/1.2 sans-serif;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    transform: translateY(-6px);
+  }
+  #toast.show { opacity: 1; transform: translateY(0); }
+
+  #lb {
+    position: fixed; top: 64px; right: 14px; z-index: 10;
+    width: 200px;
+    padding: 10px 12px;
+    background: rgba(0, 10, 30, 0.55);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 10px;
+    font: 12px/1.4 sans-serif;
+    backdrop-filter: blur(6px);
+  }
+  #lb .title { font-size: 11px; letter-spacing: 1px; color: #9cd; margin-bottom: 6px; }
+  #lb .row { display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; font-variant-numeric: tabular-nums; }
+  #lb .row.me { color: #ffe58a; }
+
+  #minimap {
+    position: fixed; bottom: 14px; right: 14px; z-index: 10;
+    width: 160px; height: 160px;
+    background: rgba(0, 10, 30, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 12px;
+    backdrop-filter: blur(4px);
+    overflow: hidden;
+  }
+
+  #chat {
+    position: fixed; bottom: 14px; left: 14px; z-index: 10;
+    width: 280px;
+    pointer-events: none;
+  }
+  #chat .messages {
+    margin-bottom: 6px;
+    font: 12px/1.4 sans-serif;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.6);
+  }
+  #chat .messages .m { padding: 2px 0; }
+  #chat .messages .m b { color: #9cd; font-weight: 600; margin-right: 6px; }
+  #chat .input {
+    display: none;
+    pointer-events: auto;
+    width: 100%;
+    padding: 7px 11px;
+    background: rgba(0, 10, 30, 0.7);
+    border: 1px solid #1d9bf0;
+    border-radius: 6px;
+    color: #fff;
+    font: 13px/1 sans-serif;
+    outline: none;
+  }
+  #chat.typing .input { display: block; }
+  #chat .messages.dim { opacity: 0.35; transition: opacity 0.5s; }
+
+  #banner {
+    position: fixed; top: 32%; left: 50%; z-index: 5;
+    transform: translate(-50%, -50%);
+    padding: 16px 32px;
+    background: rgba(0, 10, 30, 0.7);
+    border: 1px solid rgba(255, 220, 120, 0.4);
+    border-radius: 12px;
+    font: 700 28px/1 sans-serif;
+    color: #ffd060;
+    text-shadow: 0 0 18px rgba(255, 208, 96, 0.5);
+    letter-spacing: 1px;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.25s ease;
+    text-align: center;
+  }
+  #banner.show { opacity: 1; }
+  #banner small { display: block; font-size: 14px; color: #ffe5a0; margin-top: 6px; letter-spacing: 0.5px; font-weight: 400; }
+
+  #boot {
+    position: fixed; inset: 0; z-index: 50;
+    display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(180deg, #88a8c8 0%, #c8d6e8 100%);
+    color: #1c2a40;
+    font: 600 16px/1.4 sans-serif;
+    transition: opacity 0.3s;
+  }
+  #boot.gone { opacity: 0; pointer-events: none; }
+</style>
 </head>
 <body>
-  <div id="hud-tl" class="panel">
-    <div class="row"><span class="label">SPD</span><span id="hud-speed">0 km/h</span></div>
-    <div class="row"><span class="label">TIME</span><span id="hud-time">00:00.00</span></div>
-    <div class="row"><span class="label">GATE</span><span id="hud-gate">0 / 0</span></div>
-    <div class="row"><span class="label">YOU</span><span id="hud-name" class="me-name">...</span></div>
-  </div>
+<div id="boot">Initializing slope...</div>
+<div id="hud-tl">
+  <div class="row"><span class="label">SPEED</span><span class="val" id="speed">0 km/h</span></div>
+  <div class="row"><span class="label">TIME</span><span class="val" id="time">0:00.00</span></div>
+  <div class="row"><span class="label">CHECKPOINT</span><span class="val" id="cps">0 / 0</span></div>
+  <div class="net" id="net">solo</div>
+</div>
+<div id="help"><b>WASD</b> steer / push  |  <b>Space</b> brake  |  <b>Shift</b> tuck  |  <b>R</b> respawn  |  <b>T</b> chat</div>
+<div id="lb"><div class="title">LEADERBOARD</div><div id="lb-rows"></div></div>
+<canvas id="minimap" width="160" height="160"></canvas>
+<div id="chat">
+  <div class="messages dim" id="chat-msgs"></div>
+  <input class="input" id="chat-in" maxlength="120" placeholder="say something. enter to send. esc to cancel." />
+</div>
+<button id="copy-prompt" type="button">Copy prompt template</button>
+<div id="toast">Copied</div>
+<div id="banner"></div>
 
-  <div id="hud-tr" class="panel">
-    <div class="row"><span class="label">PEERS</span><span id="hud-peers">0</span></div>
-    <div class="row"><span class="label">BEST</span><span id="hud-best">--:--.--</span></div>
-    <div class="row"><span class="label">STATE</span><span id="hud-state">solo</span></div>
-  </div>
-
-  <div id="minimap-wrap"><canvas id="minimap" width="150" height="150"></canvas></div>
-
-  <div id="leaderboard" class="panel">
-    <h3>Leaderboard</h3>
-    <ol id="lb-list"><li class="pulse">waiting...</li></ol>
-  </div>
-
-  <div id="chat-wrap">
-    <div id="chat-msgs"></div>
-    <input id="chat-input" type="text" maxlength="160" placeholder="Say something, Enter to send, Esc to cancel" />
-  </div>
-
-  <div id="help">WASD / arrows: ride &nbsp;&middot;&nbsp; Space: brake &nbsp;&middot;&nbsp; Shift: tuck &nbsp;&middot;&nbsp; Mouse drag: orbit &nbsp;&middot;&nbsp; T: chat &nbsp;&middot;&nbsp; R: respawn</div>
-
-  <button id="copy-prompt" type="button">Copy prompt template</button>
-  <div id="toast">Copied!</div>
-
-  <div id="loading">
-    <div class="spinner"></div>
-    <div>Carving fresh powder...</div>
-  </div>
-
-  <div id="fatal"><div id="fatal-msg"></div></div>
-
-  <script type="module">
-  "use strict";
-
-  // --- Prompt template (verbatim) --------------------------------
-  const PROMPT_TEMPLATE = `Create a web-based skiing/snowboarding game inspired by Lonely Mountains: Snow Riders with: CORE FEATURES: - Low-poly, procedural diorama-style 3D mountain environments - Physics-based skiing/snowboarding with momentum and realistic turning - Multiple paths and hidden shortcuts on each mountain - Time trials and trick-based challenges - Character customization and equipment progression - Simple multiplayer racing (2-8 players) and ghost data competition TECHNICAL IMPLEMENTATION: - Three.js for 3D rendering with optimized low-poly models - Physics engine (Cannon.js/Ammo.js) for realistic movement and crashes - Responsive controls for both desktop and mobile - WebSockets for basic multiplayer functionality - Dynamic snow effects (trails, powder spray) and particle systems GAMEPLAY MECHANICS: - Momentum-based skiing with different snow types affecting handling - Jump and trick system with mid-air controls and scoring - Quick respawn after crashes to maintain flow - Checkpoint system with time trials and exploration goals - Unlockable equipment that affects handling characteristics VISUAL & AUDIO STYLE: ultra realistic shader almost like ray tracing - Satisfying snow sounds that vary by speed and terrain - Ambient mountain audio and minimalist background music CREATE A GAME THAT BALANCES: - Challenge with relaxation - Accessibility with skill-based mastery - Competitive racing with peaceful exploration - Minimalist visuals with engaging gameplay Focus first on core physics and feel, then expand with additional features as development progresses. Think step by step longer and harder-deeper.`;
-
-  // --- Copy prompt button ----------------------------------------
-  const copyBtn = document.getElementById("copy-prompt");
-  const toastEl = document.getElementById("toast");
-  let toastTimer = null;
-  function showToast(msg) {
-    toastEl.textContent = msg;
-    toastEl.classList.add("show");
-    clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => toastEl.classList.remove("show"), 1500);
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://esm.sh/three@0.161.0",
+    "simplex-noise": "https://esm.sh/simplex-noise@4.0.1",
+    "gun": "https://esm.sh/gun@0.2020.1240"
   }
-  copyBtn.addEventListener("click", async () => {
-    try {
-      await navigator.clipboard.writeText(PROMPT_TEMPLATE);
-      copyBtn.classList.add("copied");
-      copyBtn.textContent = "Copied";
-      showToast("Prompt copied to clipboard");
-      setTimeout(() => { copyBtn.classList.remove("copied"); copyBtn.textContent = "Copy prompt template"; }, 1500);
-    } catch (e) {
-      const ta = document.createElement("textarea");
-      ta.value = PROMPT_TEMPLATE;
-      ta.style.position = "fixed"; ta.style.opacity = "0";
-      document.body.appendChild(ta);
-      ta.select();
-      try { document.execCommand("copy"); showToast("Prompt copied to clipboard"); }
-      catch (_) { showToast("Copy failed - select manually"); }
-      document.body.removeChild(ta);
-    }
-  });
+}
+</script>
+<script type="module">
+"use strict";
 
-  // --- Fatal error helper ----------------------------------------
-  const fatalEl = document.getElementById("fatal");
-  const fatalMsg = document.getElementById("fatal-msg");
-  function fatal(msg) {
-    fatalMsg.innerHTML = msg;
-    fatalEl.classList.add("show");
-    document.getElementById("loading").classList.add("hidden");
+import * as THREE from "three";
+import { createNoise2D } from "simplex-noise";
+
+// ============================================================
+// Constants
+// ============================================================
+const TERRAIN_RADIUS = 220;     // half-extent of visible terrain in metres
+const TERRAIN_VERTS = 161;      // grid resolution (must be odd)
+const TERRAIN_STEP = (TERRAIN_RADIUS * 2) / (TERRAIN_VERTS - 1);
+
+const PEAK_HEIGHT = 110;        // metres at center
+const SPAWN_OFFSET_Z = 0;       // spawn at peak (0, peakY, 0)
+
+const GRAVITY = 22;             // m/s^2 (tuned, not earth)
+const PUSH_FORCE = 14;          // forward kick on W
+const TURN_SPEED = 1.7;         // rad/s
+const MAX_SPEED = 80;           // hard cap m/s
+const SNOW_FRICTION = 0.992;    // tangent multiplier each step
+const TUCK_FRICTION = 0.998;    // less drag while tucking
+const BRAKE_FRICTION = 0.86;    // strong drag while braking
+const CARVE_LERP = 0.05;        // how strongly velocity rotates toward heading
+const RESPAWN_BELOW = -30;      // y threshold for falling-off failsafe
+
+const NUM_CHECKPOINTS = 7;
+const NUM_TREES = 220;
+const NUM_ROCKS = 60;
+
+const PLAYER_RADIUS = 0.55;
+const TREE_RADIUS = 0.7;
+const ROCK_RADIUS = 0.9;
+
+// ============================================================
+// Identity (auto-assigned, persisted in localStorage)
+// ============================================================
+const ADJ = ["Crimson", "Indigo", "Solar", "Lunar", "Velvet", "Stoic", "Brave", "Quiet", "Cosmic", "Glass", "Iron", "Neon", "Frost", "Bright", "Hollow", "Nimble"];
+const NOUN = ["Falcon", "Comet", "Drifter", "Voyager", "Saber", "Pulsar", "Echo", "Vector", "Phantom", "Ranger", "Streak", "Kite", "Pilot", "Specter", "Glider"];
+function pickFrom(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+let myName = localStorage.getItem("snowriders.name");
+if (!myName) { myName = pickFrom(ADJ) + " " + pickFrom(NOUN); localStorage.setItem("snowriders.name", myName); }
+const myId = (() => {
+  let id = localStorage.getItem("snowriders.id");
+  if (!id) { id = "p_" + Math.random().toString(36).slice(2, 10); localStorage.setItem("snowriders.id", id); }
+  return id;
+})();
+const COLORS = [0xff5252, 0xffb152, 0xffe852, 0x70d050, 0x52d4ff, 0x6a8cff, 0xc060ff, 0xff60c0];
+const myColor = COLORS[Math.abs(myId.charCodeAt(2) || 0) % COLORS.length];
+
+// ============================================================
+// Procedural terrain (analytical heightAt - same function the
+// visual mesh samples AND the physics samples; can't get out of
+// sync because there's only one function)
+// ============================================================
+const noise2D = createNoise2D(() => 0.4242);
+
+function heightAt(x, z) {
+  // Radial cone: high at 0,0, drops to ~0 at edges
+  const r = Math.sqrt(x * x + z * z);
+  const radial = Math.max(0, PEAK_HEIGHT * (1 - r / (TERRAIN_RADIUS * 0.95)));
+  // Multi-octave noise for ridges + bumps
+  let n = 0;
+  n += noise2D(x * 0.008, z * 0.008) * 18;
+  n += noise2D(x * 0.025, z * 0.025) * 6;
+  n += noise2D(x * 0.09, z * 0.09) * 1.4;
+  // Carve a winding path along z so there's a clear runline
+  const pathX = Math.sin(z * 0.014) * 14 + Math.cos(z * 0.005) * 6;
+  const pathDist = Math.abs(x - pathX);
+  const carve = Math.exp(-(pathDist * pathDist) / 80) * 4;
+  return radial + n - carve;
+}
+
+function slopeNormalAt(x, z) {
+  const eps = 0.6;
+  const hL = heightAt(x - eps, z);
+  const hR = heightAt(x + eps, z);
+  const hD = heightAt(x, z - eps);
+  const hU = heightAt(x, z + eps);
+  const dx = (hR - hL) / (2 * eps);
+  const dz = (hU - hD) / (2 * eps);
+  return new THREE.Vector3(-dx, 1, -dz).normalize();
+}
+
+// ============================================================
+// Three.js scene
+// ============================================================
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xb8d0e8);
+scene.fog = new THREE.Fog(0xb8d0e8, 80, TERRAIN_RADIUS * 1.6);
+
+const camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.5, TERRAIN_RADIUS * 4);
+camera.position.set(0, 12, 12);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+document.body.appendChild(renderer.domElement);
+
+// Sky gradient (cheap, no asset)
+{
+  const sky = new THREE.Mesh(
+    new THREE.SphereGeometry(TERRAIN_RADIUS * 2.5, 24, 16),
+    new THREE.ShaderMaterial({
+      side: THREE.BackSide,
+      uniforms: {},
+      vertexShader: `varying vec3 vWorld; void main(){vWorld=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
+      fragmentShader: `varying vec3 vWorld;
+        void main(){
+          float h = normalize(vWorld).y;
+          vec3 top = vec3(0.55, 0.72, 0.92);
+          vec3 mid = vec3(0.83, 0.90, 0.97);
+          vec3 low = vec3(0.92, 0.86, 0.82);
+          vec3 c = mix(low, mid, smoothstep(-0.2, 0.3, h));
+          c = mix(c, top, smoothstep(0.3, 0.85, h));
+          gl_FragColor = vec4(c, 1.0);
+        }`
+    })
+  );
+  scene.add(sky);
+}
+
+// Lighting
+scene.add(new THREE.HemisphereLight(0xc8d6e8, 0x40504a, 0.55));
+const sun = new THREE.DirectionalLight(0xfff0d8, 1.4);
+sun.position.set(80, 140, 60);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+const SHADOW_R = 100;
+sun.shadow.camera.left = -SHADOW_R; sun.shadow.camera.right = SHADOW_R;
+sun.shadow.camera.top = SHADOW_R; sun.shadow.camera.bottom = -SHADOW_R;
+sun.shadow.camera.near = 1; sun.shadow.camera.far = 320;
+sun.shadow.bias = -0.0005;
+scene.add(sun);
+
+// ============================================================
+// Terrain mesh (sampled from the same heightAt function)
+// ============================================================
+const terrainGeo = new THREE.PlaneGeometry(TERRAIN_RADIUS * 2, TERRAIN_RADIUS * 2, TERRAIN_VERTS - 1, TERRAIN_VERTS - 1);
+terrainGeo.rotateX(-Math.PI / 2); // lay flat (Y up)
+{
+  const pos = terrainGeo.attributes.position;
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i), z = pos.getZ(i);
+    pos.setY(i, heightAt(x, z));
   }
+  pos.needsUpdate = true;
+  terrainGeo.computeVertexNormals();
+}
 
-  // --- Lib imports (try/catch each) ------------------------------
-  let THREE, CANNON, GUN, createNoise2D;
-  try {
-    THREE = await import("https://esm.sh/three@0.161.0");
-  } catch (e) {
-    console.error(e);
-    fatal("Failed to load Three.js. Check your internet connection.<br><br>" + (e.message || e));
-    throw e;
+// Snow material with subtle blue-ish shadow tint
+const terrainMat = new THREE.MeshStandardMaterial({
+  color: 0xf2f6ff,
+  roughness: 0.92,
+  metalness: 0.02,
+  flatShading: false
+});
+const terrain = new THREE.Mesh(terrainGeo, terrainMat);
+terrain.receiveShadow = true;
+scene.add(terrain);
+
+// Far backdrop ring of low-poly snowy peaks for horizon depth
+{
+  const peakGroup = new THREE.Group();
+  const peakMat = new THREE.MeshStandardMaterial({ color: 0xc8d8ec, roughness: 1, flatShading: true });
+  for (let i = 0; i < 36; i++) {
+    const a = (i / 36) * Math.PI * 2;
+    const r = TERRAIN_RADIUS * 1.3;
+    const h = 30 + Math.random() * 40;
+    const peak = new THREE.Mesh(new THREE.ConeGeometry(20 + Math.random() * 10, h, 5), peakMat);
+    peak.position.set(Math.cos(a) * r, h / 2 - 10, Math.sin(a) * r);
+    peak.rotation.y = Math.random() * Math.PI;
+    peakGroup.add(peak);
   }
-  try {
-    CANNON = await import("https://esm.sh/cannon-es@0.20.0");
-  } catch (e) {
-    console.error(e);
-    fatal("Failed to load cannon-es. Check your internet connection.<br><br>" + (e.message || e));
-    throw e;
-  }
-  try {
-    const sn = await import("https://esm.sh/simplex-noise@4.0.1");
-    createNoise2D = sn.createNoise2D;
-  } catch (e) {
-    console.error(e);
-    fatal("Failed to load simplex-noise.<br><br>" + (e.message || e));
-    throw e;
-  }
-  // Gun is optional. Solo fallback if it fails.
-  let gunOk = false, gun = null;
-  try {
-    const gunMod = await import("https://esm.sh/gun@0.2020.1240");
-    GUN = gunMod.default || gunMod;
-    if (typeof GUN === "function") {
-      gun = GUN({ peers: ["https://gun-manhattan.herokuapp.com/gun"], localStorage: false, radisk: false });
-      gunOk = true;
-    } else {
-      console.warn("Gun import shape unexpected, running solo.");
-    }
-  } catch (e) {
-    console.warn("Gun.js failed to load, running solo:", e);
-    gunOk = false;
-  }
+  scene.add(peakGroup);
+}
 
-  // --- Constants -------------------------------------------------
-  const TERRAIN_SIZE = 128;        // grid cells per side
-  const CELL = 4;                  // meters per cell
-  const HALF_W = TERRAIN_SIZE * CELL / 2;
-  const MAX_HEIGHT = 90;
-  const FIXED_DT = 1 / 120;
-  const ROOM = "snowriders-v1";
+// ============================================================
+// Trees + rocks (instanced)
+// ============================================================
+const trees = []; // {x, z}
+const rocks = []; // {x, z}
 
-  // --- Identity --------------------------------------------------
-  const ADJ = ["Frosty","Silent","Brave","Powder","Pine","Glacial","Sunny","Wild","Crisp","Alpine","Snowy","Quiet","Bold","Drift","Whisker"];
-  const NOUN = ["Yeti","Lynx","Marten","Falcon","Pika","Stag","Otter","Hare","Vixen","Badger","Owl","Wolf","Fox","Bear","Cat"];
-  function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
-  function randomColor() {
-    const palette = [0xef4444, 0xf59e0b, 0x10b981, 0x3b82f6, 0x8b5cf6, 0xec4899, 0xf97316, 0x06b6d4, 0xa3e635];
-    return palette[Math.floor(Math.random() * palette.length)];
-  }
-  let myName = localStorage.getItem("snowriders.name");
-  if (!myName) {
-    myName = pick(ADJ) + " " + pick(NOUN);
-    localStorage.setItem("snowriders.name", myName);
-  }
-  let myColorHex = parseInt(localStorage.getItem("snowriders.color") || "0", 10);
-  if (!myColorHex) {
-    myColorHex = randomColor();
-    localStorage.setItem("snowriders.color", String(myColorHex));
-  }
-  const myId = (() => {
-    let id = localStorage.getItem("snowriders.id");
-    if (!id) {
-      id = "p" + Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
-      localStorage.setItem("snowriders.id", id);
-    }
-    return id;
-  })();
-  document.getElementById("hud-name").textContent = myName;
-
-  // --- Three setup -----------------------------------------------
-  const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0xbcd9ee);
-  scene.fog = new THREE.Fog(0xbcd9ee, 80, 420);
-
-  const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 1500);
-  camera.position.set(0, 30, 30);
-
-  const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
-  renderer.setSize(innerWidth, innerHeight);
-  renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
-  renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-  renderer.outputColorSpace = THREE.SRGBColorSpace;
-  document.body.appendChild(renderer.domElement);
-
-  // Lights
-  const hemi = new THREE.HemisphereLight(0xeaf3ff, 0x4a5b75, 0.65);
-  scene.add(hemi);
-  const sun = new THREE.DirectionalLight(0xfff2d6, 1.15);
-  sun.position.set(-180, 240, 120);
-  sun.castShadow = true;
-  sun.shadow.mapSize.set(2048, 2048);
-  const sCam = sun.shadow.camera;
-  sCam.left = -250; sCam.right = 250; sCam.top = 250; sCam.bottom = -250;
-  sCam.near = 1; sCam.far = 700;
-  sun.shadow.bias = -0.0005;
-  scene.add(sun);
-
-  // --- Procedural terrain ----------------------------------------
-  const noise2D = createNoise2D(() => 0.42);
-  const noise2D_b = createNoise2D(() => 0.71);
-
-  // heights[i][j] where i is X axis index, j is the second axis index used by cannon Heightfield.
-  // The Heightfield body is rotated -PI/2 around X so its second axis maps to world -Z.
-  const heights = new Array(TERRAIN_SIZE + 1);
-  for (let i = 0; i <= TERRAIN_SIZE; i++) heights[i] = new Float32Array(TERRAIN_SIZE + 1);
-
-  function radialFalloff(nx, nz) {
-    // 0 at edges, 1 at center top of mountain
-    const d = Math.sqrt(nx * nx + nz * nz);
-    return Math.max(0, 1 - Math.pow(d, 1.6));
-  }
-  function ridge(x, z) {
-    // 3-octave fbm
-    let a = 0, amp = 1, freq = 1;
-    for (let o = 0; o < 4; o++) {
-      a += amp * noise2D(x * 0.012 * freq, z * 0.012 * freq);
-      amp *= 0.5; freq *= 2.0;
-    }
-    return a; // ~[-1.875, 1.875]
-  }
-  function bumpDetail(x, z) {
-    return 0.5 * noise2D_b(x * 0.07, z * 0.07) + 0.25 * noise2D_b(x * 0.18, z * 0.18);
-  }
-
-  // Build the heightmap. The mountain peak is biased toward +Z so the natural
-  // ski direction is -Z (player starts near the top, descends toward -Z).
-  const peakBiasZ = 0.35; // shift peak toward +Z
-  for (let i = 0; i <= TERRAIN_SIZE; i++) {
-    for (let j = 0; j <= TERRAIN_SIZE; j++) {
-      const u = i / TERRAIN_SIZE - 0.5; // [-0.5, 0.5]
-      const v = j / TERRAIN_SIZE - 0.5;
-      // Convert grid -> world. Grid X = i, second axis = j.
-      // After cannon rotation, heightfield's "j" axis becomes world -Z,
-      // so larger j = larger -Z = further away in -Z. We want the peak at
-      // small world Z (player descends toward +Z visually). Easier: just
-      // pick the math so that after rotation the peak is near world +Z.
-      const wx = u * 2; // [-1,1]
-      const wz = v * 2;
-      const fall = radialFalloff(wx, wz - peakBiasZ * 0.6);
-      const r = ridge(i, j);
-      const b = bumpDetail(i, j);
-      let h = fall * MAX_HEIGHT + (r + 0.4) * 6 * fall + b * 1.4;
-      // Carve a softer descent corridor along the visual slope
-      // (a slight valley along x=0)
-      const corridor = Math.exp(-Math.pow(wx * 4, 2)) * 4 * fall;
-      h -= corridor;
-      // Floor
-      if (h < 0) h = 0;
-      heights[i][j] = h;
-    }
-  }
-
-  // Visual mesh from same data
-  const terrainGeo = new THREE.PlaneGeometry(TERRAIN_SIZE * CELL, TERRAIN_SIZE * CELL, TERRAIN_SIZE, TERRAIN_SIZE);
-  // Plane is created in XY plane facing +Z. We will rotate to XZ plane.
-  // Vertex (i,j) of plane corresponds to grid (i,j).
-  {
-    const pos = terrainGeo.attributes.position;
-    for (let j = 0; j <= TERRAIN_SIZE; j++) {
-      for (let i = 0; i <= TERRAIN_SIZE; i++) {
-        const idx = j * (TERRAIN_SIZE + 1) + i;
-        // We want the visual mesh to match cannon's Heightfield orientation
-        // after its rotation. Cannon Heightfield(data[i][j]) places elements
-        // at local (i*element, j*element, data[i][j]). After body rotation
-        // -PI/2 about X, local +Z becomes world +Y, local +Y becomes world -Z.
-        // So world position of grid cell (i,j) is:
-        //   world.x = i*CELL - HALF_W
-        //   world.y = data[i][j]
-        //   world.z = -(j*CELL - HALF_W)
-        // For the plane, we set z (visual) to height and lay it via rotation.
-        // We'll rotate the plane the same way cannon's body is rotated
-        // (around X by -PI/2) so its built-in (x,y) become world (x,-z).
-        pos.setZ(idx, heights[i][j]);
-      }
-    }
-    terrainGeo.computeVertexNormals();
-  }
-  // Rotate terrain so it lies in XZ plane (matches heightfield rotation)
-  terrainGeo.rotateX(-Math.PI / 2);
-
-  // Snow material with subtle vertex tint (deeper = bluer)
-  const colors = new Float32Array((TERRAIN_SIZE + 1) * (TERRAIN_SIZE + 1) * 3);
-  {
-    const pos = terrainGeo.attributes.position;
-    for (let k = 0; k < pos.count; k++) {
-      const y = pos.getY(k);
-      // Higher = whiter, lower = slightly grey-blue
-      const t = Math.min(1, Math.max(0, y / MAX_HEIGHT));
-      const r = 0.93 + 0.05 * t;
-      const g = 0.95 + 0.04 * t;
-      const b = 0.97 + 0.03 * t;
-      colors[k * 3] = r; colors[k * 3 + 1] = g; colors[k * 3 + 2] = b;
-    }
-  }
-  terrainGeo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
-
-  const snowMat = new THREE.MeshStandardMaterial({
-    vertexColors: true,
-    roughness: 0.85,
-    metalness: 0.0,
-    flatShading: true
-  });
-  const terrainMesh = new THREE.Mesh(terrainGeo, snowMat);
-  terrainMesh.receiveShadow = true;
-  scene.add(terrainMesh);
-
-  // --- Sample world height (mirrors cannon's local lookup) -------
-  function sampleTerrainHeightAt(wx, wz) {
-    // Inverse of: world.x = i*CELL - HALF_W ; world.z = -(j*CELL - HALF_W)
-    const fi = (wx + HALF_W) / CELL;
-    const fj = (-wz + HALF_W) / CELL;
-    if (fi < 0 || fj < 0 || fi >= TERRAIN_SIZE || fj >= TERRAIN_SIZE) return 0;
-    const i0 = Math.floor(fi), j0 = Math.floor(fj);
-    const i1 = Math.min(i0 + 1, TERRAIN_SIZE);
-    const j1 = Math.min(j0 + 1, TERRAIN_SIZE);
-    const tx = fi - i0, tz = fj - j0;
-    const h00 = heights[i0][j0];
-    const h10 = heights[i1][j0];
-    const h01 = heights[i0][j1];
-    const h11 = heights[i1][j1];
-    const a = h00 * (1 - tx) + h10 * tx;
-    const b = h01 * (1 - tx) + h11 * tx;
-    return a * (1 - tz) + b * tz;
-  }
-
-  // --- Cannon physics --------------------------------------------
-  const world = new CANNON.World();
-  world.gravity.set(0, -22, 0);
-  world.broadphase = new CANNON.SAPBroadphase(world);
-  world.allowSleep = true;
-  world.fixedTimeStep = FIXED_DT;
-
-  const groundMat = new CANNON.Material("ground");
-  const playerMat = new CANNON.Material("player");
-  const treeMat = new CANNON.Material("tree");
-  world.addContactMaterial(new CANNON.ContactMaterial(groundMat, playerMat, {
-    friction: 0.06, restitution: 0.0
-  }));
-  world.addContactMaterial(new CANNON.ContactMaterial(treeMat, playerMat, {
-    friction: 0.4, restitution: 0.05
-  }));
-
-  // Heightfield: pass 2D array data[i][j].
-  const hfData = new Array(TERRAIN_SIZE + 1);
-  for (let i = 0; i <= TERRAIN_SIZE; i++) {
-    hfData[i] = new Array(TERRAIN_SIZE + 1);
-    for (let j = 0; j <= TERRAIN_SIZE; j++) hfData[i][j] = heights[i][j];
-  }
-  const hfShape = new CANNON.Heightfield(hfData, { elementSize: CELL });
-  const hfBody = new CANNON.Body({ mass: 0, material: groundMat });
-  hfBody.addShape(hfShape);
-  // Heightfield local origin sits at corner (i=0,j=0). Place corner at (-HALF_W, 0, +HALF_W)
-  // and rotate -PI/2 about X so the j axis maps to world -Z.
-  hfBody.position.set(-HALF_W, 0, HALF_W);
-  hfBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2);
-  world.addBody(hfBody);
-
-  // --- Trees and rocks (instanced) -------------------------------
-  const TREE_COUNT = 80;
-  const ROCK_COUNT = 30;
-  const treeBodies = [];
-  // Trunks (cylinders) + cones for foliage
-  const trunkGeo = new THREE.CylinderGeometry(0.25, 0.35, 1.8, 6);
-  const trunkMat = new THREE.MeshStandardMaterial({ color: 0x6b4a2b, roughness: 1.0, flatShading: true });
-  const foliageGeo = new THREE.ConeGeometry(1.6, 4.5, 7);
-  const foliageMat = new THREE.MeshStandardMaterial({ color: 0x2f6b3a, roughness: 0.95, flatShading: true });
-  const trunkInst = new THREE.InstancedMesh(trunkGeo, trunkMat, TREE_COUNT);
-  const folInst = new THREE.InstancedMesh(foliageGeo, foliageMat, TREE_COUNT);
-  trunkInst.castShadow = true; trunkInst.receiveShadow = true;
-  folInst.castShadow = true; folInst.receiveShadow = true;
-  scene.add(trunkInst); scene.add(folInst);
-
-  const rockGeo = new THREE.OctahedronGeometry(1.0, 0);
-  const rockMat = new THREE.MeshStandardMaterial({ color: 0x7a8794, roughness: 1.0, flatShading: true });
-  const rockInst = new THREE.InstancedMesh(rockGeo, rockMat, ROCK_COUNT);
-  rockInst.castShadow = true; rockInst.receiveShadow = true;
-  scene.add(rockInst);
-
-  // Use seeded picks (no Math.random in tick, but startup is fine).
-  const tmpMat = new THREE.Matrix4();
-  const tmpQ = new THREE.Quaternion();
-  const tmpV = new THREE.Vector3();
-
+function placeProps() {
+  const treeMat = new THREE.MeshStandardMaterial({ color: 0x2b5a35, roughness: 0.95, flatShading: true });
+  const trunkMat = new THREE.MeshStandardMaterial({ color: 0x4a3624, roughness: 0.95 });
+  const treeGeo = new THREE.ConeGeometry(1.4, 4.5, 6);
+  const trunkGeo = new THREE.CylinderGeometry(0.18, 0.28, 1.0, 6);
+  const treeMesh = new THREE.InstancedMesh(treeGeo, treeMat, NUM_TREES);
+  const trunkMesh = new THREE.InstancedMesh(trunkGeo, trunkMat, NUM_TREES);
+  treeMesh.castShadow = true; treeMesh.receiveShadow = true;
+  trunkMesh.castShadow = true;
+  const m = new THREE.Matrix4();
   let placed = 0, attempts = 0;
-  while (placed < TREE_COUNT && attempts < TREE_COUNT * 20) {
+  while (placed < NUM_TREES && attempts < NUM_TREES * 10) {
     attempts++;
-    const wx = (Math.random() - 0.5) * (TERRAIN_SIZE - 6) * CELL;
-    const wz = (Math.random() - 0.5) * (TERRAIN_SIZE - 6) * CELL;
-    const h = sampleTerrainHeightAt(wx, wz);
-    if (h < 4 || h > MAX_HEIGHT * 0.78) continue;
-    // Avoid central corridor for clearer ski line
-    if (Math.abs(wx) < 6 && Math.abs(wz) < 24 && Math.random() < 0.65) continue;
-    const scale = 0.9 + Math.random() * 0.7;
-    // Trunk
-    tmpV.set(wx, h + 0.9 * scale, wz);
-    tmpQ.identity();
-    tmpMat.compose(tmpV, tmpQ, new THREE.Vector3(scale, scale, scale));
-    trunkInst.setMatrixAt(placed, tmpMat);
-    // Foliage on top
-    tmpV.set(wx, h + 1.8 * scale + 2.2 * scale, wz);
-    tmpMat.compose(tmpV, tmpQ, new THREE.Vector3(scale, scale, scale));
-    folInst.setMatrixAt(placed, tmpMat);
+    const x = (Math.random() * 2 - 1) * TERRAIN_RADIUS * 0.85;
+    const z = (Math.random() * 2 - 1) * TERRAIN_RADIUS * 0.85;
+    // Avoid the runline (path)
+    const pathX = Math.sin(z * 0.014) * 14 + Math.cos(z * 0.005) * 6;
+    if (Math.abs(x - pathX) < 8) continue;
+    // Avoid steep slopes (they look bad with cones poking out sideways)
+    const n = slopeNormalAt(x, z);
+    if (n.y < 0.65) continue;
+    const y = heightAt(x, z);
+    if (y < 2) continue; // skip very low areas
 
-    // Cannon body (sphere) for collision at trunk base
-    const tb = new CANNON.Body({ mass: 0, material: treeMat });
-    tb.addShape(new CANNON.Sphere(0.7 * scale));
-    tb.position.set(wx, h + 1.0 * scale, wz);
-    world.addBody(tb);
-    treeBodies.push(tb);
-
+    const scale = 0.7 + Math.random() * 0.7;
+    m.makeTranslation(x, y + 2.25 * scale, z);
+    m.scale(new THREE.Vector3(scale, scale, scale));
+    treeMesh.setMatrixAt(placed, m);
+    m.makeTranslation(x, y + 0.5 * scale, z);
+    m.scale(new THREE.Vector3(scale, scale, scale));
+    trunkMesh.setMatrixAt(placed, m);
+    trees.push({ x, z });
     placed++;
   }
-  trunkInst.count = placed; folInst.count = placed;
-  trunkInst.instanceMatrix.needsUpdate = true;
-  folInst.instanceMatrix.needsUpdate = true;
+  treeMesh.instanceMatrix.needsUpdate = true;
+  trunkMesh.instanceMatrix.needsUpdate = true;
+  scene.add(treeMesh, trunkMesh);
 
+  const rockMat = new THREE.MeshStandardMaterial({ color: 0x6a6a72, roughness: 0.95, flatShading: true });
+  const rockGeo = new THREE.DodecahedronGeometry(0.9, 0);
+  const rockMesh = new THREE.InstancedMesh(rockGeo, rockMat, NUM_ROCKS);
+  rockMesh.castShadow = true; rockMesh.receiveShadow = true;
   let rPlaced = 0, rAttempts = 0;
-  while (rPlaced < ROCK_COUNT && rAttempts < ROCK_COUNT * 20) {
+  while (rPlaced < NUM_ROCKS && rAttempts < NUM_ROCKS * 10) {
     rAttempts++;
-    const wx = (Math.random() - 0.5) * (TERRAIN_SIZE - 6) * CELL;
-    const wz = (Math.random() - 0.5) * (TERRAIN_SIZE - 6) * CELL;
-    const h = sampleTerrainHeightAt(wx, wz);
-    if (h < 2 || h > MAX_HEIGHT * 0.95) continue;
+    const x = (Math.random() * 2 - 1) * TERRAIN_RADIUS * 0.7;
+    const z = (Math.random() * 2 - 1) * TERRAIN_RADIUS * 0.7;
+    const pathX = Math.sin(z * 0.014) * 14 + Math.cos(z * 0.005) * 6;
+    if (Math.abs(x - pathX) < 6) continue;
+    const y = heightAt(x, z);
     const scale = 0.6 + Math.random() * 1.2;
-    tmpV.set(wx, h + 0.5 * scale, wz);
-    tmpQ.setFromEuler(new THREE.Euler(Math.random() * 1.2, Math.random() * Math.PI * 2, Math.random() * 1.2));
-    tmpMat.compose(tmpV, tmpQ, new THREE.Vector3(scale, scale * 0.7, scale));
-    rockInst.setMatrixAt(rPlaced, tmpMat);
+    m.makeTranslation(x, y + 0.4 * scale, z);
+    const rot = new THREE.Matrix4().makeRotationY(Math.random() * Math.PI * 2);
+    m.multiply(rot);
+    m.scale(new THREE.Vector3(scale, scale, scale));
+    rockMesh.setMatrixAt(rPlaced, m);
+    rocks.push({ x, z, r: ROCK_RADIUS * scale });
     rPlaced++;
   }
-  rockInst.count = rPlaced;
-  rockInst.instanceMatrix.needsUpdate = true;
+  rockMesh.instanceMatrix.needsUpdate = true;
+  scene.add(rockMesh);
+}
+placeProps();
 
-  // --- Player ----------------------------------------------------
-  // Capsule physics body (approximated with a sphere) - keep upright.
-  const playerRadius = 0.7;
-  const playerBody = new CANNON.Body({
-    mass: 70,
-    material: playerMat,
-    fixedRotation: true,
-    linearDamping: 0.04,
-    angularDamping: 0.9
-  });
-  playerBody.addShape(new CANNON.Sphere(playerRadius));
-  // Spawn near top of mountain (peak biased by peakBiasZ)
-  const SPAWN_X = 0;
-  const SPAWN_Z = -HALF_W * 0.35; // toward peak-biased side
-  const spawnY = sampleTerrainHeightAt(SPAWN_X, SPAWN_Z) + 3;
-  playerBody.position.set(SPAWN_X, spawnY, SPAWN_Z);
-  playerBody.updateMassProperties();
-  world.addBody(playerBody);
-
-  // Visual skier (low-poly humanoid + skis)
-  const skierGroup = new THREE.Group();
-  scene.add(skierGroup);
-
-  const outfitColor = new THREE.Color(myColorHex);
-  const skinColor = new THREE.Color(0xf4d3b5);
-  const skiColor = new THREE.Color(0x101524);
-
-  function buildSkier(group, outfit) {
-    // body
-    const torso = new THREE.Mesh(
-      new THREE.BoxGeometry(0.7, 1.0, 0.45),
-      new THREE.MeshStandardMaterial({ color: outfit, roughness: 0.7, flatShading: true })
-    );
-    torso.position.y = 0.5;
-    torso.castShadow = true;
-    group.add(torso);
-    // head
-    const head = new THREE.Mesh(
-      new THREE.SphereGeometry(0.28, 8, 6),
-      new THREE.MeshStandardMaterial({ color: skinColor, roughness: 0.9, flatShading: true })
-    );
-    head.position.y = 1.25;
-    head.castShadow = true;
-    group.add(head);
-    // legs
-    const legGeo = new THREE.BoxGeometry(0.28, 0.7, 0.28);
-    const legMat = new THREE.MeshStandardMaterial({ color: 0x202736, roughness: 0.8, flatShading: true });
-    const lL = new THREE.Mesh(legGeo, legMat); lL.position.set(-0.18, -0.35, 0); lL.castShadow = true; group.add(lL);
-    const lR = new THREE.Mesh(legGeo, legMat); lR.position.set( 0.18, -0.35, 0); lR.castShadow = true; group.add(lR);
-    // arms
-    const armGeo = new THREE.BoxGeometry(0.22, 0.7, 0.22);
-    const armMat = new THREE.MeshStandardMaterial({ color: outfit, roughness: 0.7, flatShading: true });
-    const aL = new THREE.Mesh(armGeo, armMat); aL.position.set(-0.45, 0.55, 0); aL.castShadow = true; group.add(aL);
-    const aR = new THREE.Mesh(armGeo, armMat); aR.position.set( 0.45, 0.55, 0); aR.castShadow = true; group.add(aR);
-    // skis (two long boxes)
-    const skiGeo = new THREE.BoxGeometry(0.14, 0.06, 1.8);
-    const skiMat = new THREE.MeshStandardMaterial({ color: skiColor, roughness: 0.5, metalness: 0.2, flatShading: true });
-    const skiL = new THREE.Mesh(skiGeo, skiMat); skiL.position.set(-0.18, -0.74, 0.1); skiL.castShadow = true; group.add(skiL);
-    const skiR = new THREE.Mesh(skiGeo, skiMat); skiR.position.set( 0.18, -0.74, 0.1); skiR.castShadow = true; group.add(skiR);
-  }
-  buildSkier(skierGroup, outfitColor);
-
-  // --- Trail -----------------------------------------------------
-  const TRAIL_LEN = 60;
-  const trailPositions = new Float32Array(TRAIL_LEN * 3);
-  const trailGeo = new THREE.BufferGeometry();
-  trailGeo.setAttribute("position", new THREE.BufferAttribute(trailPositions, 3));
-  const trailMat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.55 });
-  const trailLine = new THREE.Line(trailGeo, trailMat);
-  scene.add(trailLine);
-  let trailHead = 0;
-  let trailLastT = 0;
-
-  // --- Powder spray (instanced billboards) -----------------------
-  const PARTICLES = 80;
-  const sprayGeo = new THREE.PlaneGeometry(0.5, 0.5);
-  const sprayMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9, depthWrite: false });
-  const sprayInst = new THREE.InstancedMesh(sprayGeo, sprayMat, PARTICLES);
-  sprayInst.frustumCulled = false;
-  scene.add(sprayInst);
-  const sprayState = []; // {pos, vel, life, max, scale}
-  for (let i = 0; i < PARTICLES; i++) sprayState.push({ pos: new THREE.Vector3(), vel: new THREE.Vector3(), life: 0, max: 0, scale: 0 });
-  let sprayIdx = 0;
-  const _hideMat = new THREE.Matrix4().makeScale(0, 0, 0);
-  for (let i = 0; i < PARTICLES; i++) sprayInst.setMatrixAt(i, _hideMat);
-  sprayInst.instanceMatrix.needsUpdate = true;
-
-  function emitSpray(x, y, z, dirX, dirZ, intensity) {
-    const count = Math.min(6, 2 + Math.floor(intensity * 4));
-    for (let k = 0; k < count; k++) {
-      const s = sprayState[sprayIdx];
-      sprayIdx = (sprayIdx + 1) % PARTICLES;
-      s.pos.set(x, y, z);
-      s.vel.set(
-        -dirX * (0.5 + Math.random() * 1.5) + (Math.random() - 0.5) * 1.6,
-        1.4 + Math.random() * 1.5,
-        -dirZ * (0.5 + Math.random() * 1.5) + (Math.random() - 0.5) * 1.6
-      );
-      s.life = 0;
-      s.max = 0.45 + Math.random() * 0.2;
-      s.scale = 0.6 + Math.random() * 0.6;
-    }
-  }
-
-  // --- Checkpoints -----------------------------------------------
-  const NUM_GATES = 7;
-  const gates = [];
-  // Lay gates from spawn (roughly z=-HALF_W*0.35) descending toward +Z.
-  // Find a roughly steepest-descent path by sampling.
-  function buildGates() {
-    let cx = SPAWN_X, cz = SPAWN_Z + 8;
-    for (let i = 0; i < NUM_GATES; i++) {
-      // Search forward in +Z for downhill direction
-      const stepZ = (HALF_W * 0.7) / NUM_GATES;
-      let bestDx = 0, bestH = sampleTerrainHeightAt(cx, cz + stepZ);
-      for (let k = -3; k <= 3; k++) {
-        const tx = cx + k * 6;
-        if (Math.abs(tx) > HALF_W * 0.45) continue;
-        const th = sampleTerrainHeightAt(tx, cz + stepZ);
-        if (th < bestH) { bestH = th; bestDx = k * 6; }
-      }
-      cx = Math.max(-HALF_W * 0.45, Math.min(HALF_W * 0.45, cx + bestDx * 0.5));
-      cz = cz + stepZ;
-      const h = sampleTerrainHeightAt(cx, cz);
-      gates.push({ x: cx, y: h + 1.5, z: cz, hit: false });
-    }
-  }
-  buildGates();
-
-  const gateGroup = new THREE.Group();
-  scene.add(gateGroup);
-  const gateMats = [];
-  for (let i = 0; i < gates.length; i++) {
-    const g = gates[i];
-    const ringGeo = new THREE.TorusGeometry(2.4, 0.18, 8, 24);
-    const m = new THREE.MeshStandardMaterial({ color: i === 0 ? 0xfde047 : 0x60a5fa, emissive: i === 0 ? 0x664400 : 0x102b55, roughness: 0.5, metalness: 0.2, transparent: true, opacity: 0.9 });
-    const ring = new THREE.Mesh(ringGeo, m);
-    ring.position.set(g.x, g.y, g.z);
+// ============================================================
+// Checkpoints (rings along the runline, descending)
+// ============================================================
+const checkpoints = [];
+{
+  const ringGeo = new THREE.TorusGeometry(4, 0.3, 8, 24);
+  for (let i = 0; i < NUM_CHECKPOINTS; i++) {
+    const t = (i + 1) / (NUM_CHECKPOINTS + 1);
+    const z = TERRAIN_RADIUS * 0.85 * (t * 2 - 1);
+    const x = Math.sin(z * 0.014) * 14 + Math.cos(z * 0.005) * 6;
+    const y = heightAt(x, z) + 4;
+    const ring = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ color: 0xffe060, transparent: true, opacity: 0.85 }));
+    ring.position.set(x, y, z);
     ring.rotation.x = Math.PI / 2;
-    ring.castShadow = false; ring.receiveShadow = false;
-    gateGroup.add(ring);
-    gateMats.push({ mat: m, mesh: ring });
+    scene.add(ring);
+    checkpoints.push({ mesh: ring, x, y, z, passed: false, idx: i });
   }
+}
 
-  // --- Camera orbit input ----------------------------------------
-  const camState = { yaw: 0, pitch: 0.45, dist: 14 };
-  let dragging = false; let lastX = 0, lastY = 0;
-  renderer.domElement.addEventListener("mousedown", (e) => { dragging = true; lastX = e.clientX; lastY = e.clientY; });
-  window.addEventListener("mouseup", () => { dragging = false; });
-  window.addEventListener("mousemove", (e) => {
-    if (!dragging) return;
-    camState.yaw -= (e.clientX - lastX) * 0.005;
-    camState.pitch = Math.max(0.05, Math.min(0.9, camState.pitch + (e.clientY - lastY) * 0.004));
-    lastX = e.clientX; lastY = e.clientY;
-  });
-  window.addEventListener("wheel", (e) => {
-    camState.dist = Math.max(8, Math.min(28, camState.dist + e.deltaY * 0.02));
-  }, { passive: true });
-
-  // --- Keyboard --------------------------------------------------
-  const keys = {};
-  let chatOpen = false;
-  const chatInput = document.getElementById("chat-input");
-  window.addEventListener("keydown", (e) => {
-    if (chatOpen) {
-      if (e.key === "Enter") { sendChat(chatInput.value.trim()); closeChat(); e.preventDefault(); }
-      else if (e.key === "Escape") { closeChat(); e.preventDefault(); }
-      return;
-    }
-    if (e.key === "t" || e.key === "T") { openChat(); e.preventDefault(); return; }
-    if (e.key === "r" || e.key === "R") { respawn(); e.preventDefault(); return; }
-    keys[e.key.toLowerCase()] = true;
-  });
-  window.addEventListener("keyup", (e) => { keys[e.key.toLowerCase()] = false; });
-  window.addEventListener("blur", () => { for (const k in keys) keys[k] = false; });
-
-  function openChat() {
-    chatOpen = true;
-    chatInput.classList.add("active");
-    chatInput.value = "";
-    setTimeout(() => chatInput.focus(), 0);
+// ============================================================
+// Player (skier) - custom physics, samples heightAt directly
+// ============================================================
+function makeSkierMesh(color) {
+  const g = new THREE.Group();
+  const bodyMat = new THREE.MeshStandardMaterial({ color, roughness: 0.6 });
+  const torso = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.7, 0.35), bodyMat);
+  torso.position.y = 1.05;
+  torso.castShadow = true; torso.receiveShadow = true;
+  g.add(torso);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.18, 8, 8), new THREE.MeshStandardMaterial({ color: 0xffd0a0, roughness: 0.7 }));
+  head.position.y = 1.55;
+  head.castShadow = true;
+  g.add(head);
+  // helmet
+  const helmet = new THREE.Mesh(new THREE.SphereGeometry(0.21, 8, 6, 0, Math.PI * 2, 0, Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x222 }));
+  helmet.position.y = 1.6;
+  helmet.castShadow = true;
+  g.add(helmet);
+  // arms
+  const armMat = new THREE.MeshStandardMaterial({ color, roughness: 0.6 });
+  for (const dx of [-0.36, 0.36]) {
+    const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.6, 6), armMat);
+    arm.rotation.z = dx > 0 ? -0.2 : 0.2;
+    arm.position.set(dx, 1.05, 0);
+    arm.castShadow = true;
+    g.add(arm);
   }
-  function closeChat() {
-    chatOpen = false;
-    chatInput.classList.remove("active");
-    chatInput.value = "";
-    renderer.domElement.focus();
+  // legs
+  for (const dx of [-0.13, 0.13]) {
+    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.6, 6), new THREE.MeshStandardMaterial({ color: 0x202028, roughness: 0.6 }));
+    leg.position.set(dx, 0.4, 0);
+    leg.castShadow = true;
+    g.add(leg);
   }
-
-  // --- Heading + steering ----------------------------------------
-  let headingAngle = 0; // radians, 0 = facing +Z
-  let crashed = false;
-  let crashTimer = 0;
-
-  // --- Web audio (wind + scrape) ---------------------------------
-  let audioCtx = null, windNode = null, windGain = null, scrapeGain = null;
-  function ensureAudio() {
-    if (audioCtx) return;
-    try {
-      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      // Wind: white noise -> lowpass -> gain
-      const bufSize = 2 * audioCtx.sampleRate;
-      const buf = audioCtx.createBuffer(1, bufSize, audioCtx.sampleRate);
-      const data = buf.getChannelData(0);
-      for (let i = 0; i < bufSize; i++) data[i] = Math.random() * 2 - 1;
-      windNode = audioCtx.createBufferSource();
-      windNode.buffer = buf;
-      windNode.loop = true;
-      const lp = audioCtx.createBiquadFilter();
-      lp.type = "lowpass";
-      lp.frequency.value = 600;
-      windGain = audioCtx.createGain();
-      windGain.gain.value = 0.0;
-      windNode.connect(lp).connect(windGain).connect(audioCtx.destination);
-      windNode.start();
-
-      // Scrape: separate noise -> bandpass
-      const scrapeNode = audioCtx.createBufferSource();
-      const buf2 = audioCtx.createBuffer(1, bufSize, audioCtx.sampleRate);
-      const d2 = buf2.getChannelData(0);
-      for (let i = 0; i < bufSize; i++) d2[i] = Math.random() * 2 - 1;
-      scrapeNode.buffer = buf2; scrapeNode.loop = true;
-      const bp = audioCtx.createBiquadFilter();
-      bp.type = "bandpass"; bp.frequency.value = 1800; bp.Q.value = 0.7;
-      scrapeGain = audioCtx.createGain();
-      scrapeGain.gain.value = 0.0;
-      scrapeNode.connect(bp).connect(scrapeGain).connect(audioCtx.destination);
-      scrapeNode.start();
-    } catch (e) {
-      console.warn("Audio init failed:", e);
-    }
+  // skis
+  for (const dx of [-0.18, 0.18]) {
+    const ski = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.05, 1.6), new THREE.MeshStandardMaterial({ color: 0x111, roughness: 0.4 }));
+    ski.position.set(dx, 0.07, 0);
+    ski.castShadow = true; ski.receiveShadow = true;
+    g.add(ski);
   }
-  // Resume on first user interaction
-  const resumeAudio = () => { ensureAudio(); if (audioCtx && audioCtx.state === "suspended") audioCtx.resume(); window.removeEventListener("pointerdown", resumeAudio); window.removeEventListener("keydown", resumeAudio); };
-  window.addEventListener("pointerdown", resumeAudio);
-  window.addEventListener("keydown", resumeAudio);
+  return g;
+}
 
-  // --- Run state -------------------------------------------------
-  let runActive = false;
-  let runStart = 0;
-  let runFinished = false;
-  let lastFinishTime = 0;
-  const bestKey = "snowriders.best";
-  const bestPathKey = "snowriders.bestpath";
-  let bestTime = parseFloat(localStorage.getItem(bestKey) || "0") || 0;
-  let bestPath = [];
-  try { bestPath = JSON.parse(localStorage.getItem(bestPathKey) || "[]"); } catch { bestPath = []; }
-  function fmtTime(s) {
-    if (!s || s <= 0) return "--:--.--";
-    const m = Math.floor(s / 60);
-    const sec = Math.floor(s % 60);
-    const ms = Math.floor((s - Math.floor(s)) * 100);
-    return `${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}.${String(ms).padStart(2, "0")}`;
+const player = {
+  mesh: makeSkierMesh(myColor),
+  pos: new THREE.Vector3(0, 0, 0),
+  vel: new THREE.Vector3(0, 0, 0),
+  heading: Math.PI, // face down the slope (toward +z initially)
+  airborne: false,
+  finished: false
+};
+scene.add(player.mesh);
+
+function findSpawn() {
+  // Spawn at peak, slightly off so we can ski toward checkpoints
+  const x = 0, z = -TERRAIN_RADIUS * 0.8;
+  player.pos.set(x, heightAt(x, z) + 1.5, z);
+  player.vel.set(0, 0, 0);
+  player.heading = 0; // face +z (toward 0,0)
+  player.airborne = false;
+  player.finished = false;
+  raceTime = 0; raceRunning = false;
+  for (const cp of checkpoints) cp.passed = false;
+  recordingSamples.length = 0;
+  recordingStartTime = -1;
+  updateCheckpointHud();
+}
+findSpawn();
+
+// ============================================================
+// Input
+// ============================================================
+const keys = { w: false, a: false, s: false, d: false, brake: false, tuck: false, jump: false };
+const chatBox = { typing: false };
+addEventListener("keydown", (e) => {
+  if (chatBox.typing) {
+    if (e.key === "Escape") closeChat(false);
+    if (e.key === "Enter") closeChat(true);
+    return;
   }
-  function setHudBest() { document.getElementById("hud-best").textContent = fmtTime(bestTime); }
-  setHudBest();
+  if (e.code === "KeyW" || e.code === "ArrowUp") keys.w = true;
+  else if (e.code === "KeyS" || e.code === "ArrowDown") keys.s = true;
+  else if (e.code === "KeyA" || e.code === "ArrowLeft") keys.a = true;
+  else if (e.code === "KeyD" || e.code === "ArrowRight") keys.d = true;
+  else if (e.code === "Space") { keys.brake = true; e.preventDefault(); }
+  else if (e.code === "ShiftLeft" || e.code === "ShiftRight") keys.tuck = true;
+  else if (e.code === "KeyR") findSpawn();
+  else if (e.code === "KeyT") openChat();
+});
+addEventListener("keyup", (e) => {
+  if (e.code === "KeyW" || e.code === "ArrowUp") keys.w = false;
+  else if (e.code === "KeyS" || e.code === "ArrowDown") keys.s = false;
+  else if (e.code === "KeyA" || e.code === "ArrowLeft") keys.a = false;
+  else if (e.code === "KeyD" || e.code === "ArrowRight") keys.d = false;
+  else if (e.code === "Space") keys.brake = false;
+  else if (e.code === "ShiftLeft" || e.code === "ShiftRight") keys.tuck = false;
+});
 
-  // Track current run path for ghost recording
-  let runPath = [];
-  let runPathLastT = 0;
+// ============================================================
+// Race / time / personal best
+// ============================================================
+let raceTime = 0;
+let raceRunning = false;
+let bestTime = parseFloat(localStorage.getItem("snowriders.best") || "0") || null;
+const recordingSamples = []; // {t, x, y, z, heading} every ~120ms during a run
+let recordingStartTime = -1;
+let bestRun = JSON.parse(localStorage.getItem("snowriders.bestRun") || "null"); // [{t,x,y,z,heading}]
 
-  function startRun() {
-    runActive = true;
-    runStart = performance.now() / 1000;
-    runFinished = false;
-    runPath = [];
-    runPathLastT = 0;
-    for (const g of gates) g.hit = false;
-    updateGateColors();
-  }
-  function finishRun() {
-    runActive = false;
-    runFinished = true;
-    const t = performance.now() / 1000 - runStart;
-    lastFinishTime = t;
-    if (!bestTime || t < bestTime) {
-      bestTime = t;
-      localStorage.setItem(bestKey, String(bestTime));
-      try { localStorage.setItem(bestPathKey, JSON.stringify(runPath)); } catch {}
-      bestPath = runPath.slice();
-      showToast("New personal best: " + fmtTime(t));
-    } else {
-      showToast("Run: " + fmtTime(t));
-    }
-    setHudBest();
-    // Push to leaderboard
-    if (gunOk && gun) {
-      try {
-        gun.get("snowriders").get(ROOM).get("leaderboard").set({
-          name: myName, time: t, ts: Date.now()
-        });
-      } catch (e) { console.warn("leaderboard push failed", e); }
-    } else {
-      // local-only leaderboard fallback
-      const local = JSON.parse(localStorage.getItem("snowriders.localLb") || "[]");
-      local.push({ name: myName, time: t, ts: Date.now() });
-      local.sort((a, b) => a.time - b.time);
-      localStorage.setItem("snowriders.localLb", JSON.stringify(local.slice(0, 10)));
-      renderLeaderboard(local);
-    }
-  }
+function saveBest(time) {
+  bestTime = time;
+  localStorage.setItem("snowriders.best", String(time));
+  bestRun = recordingSamples.slice();
+  localStorage.setItem("snowriders.bestRun", JSON.stringify(bestRun));
+}
 
-  function updateGateColors() {
-    let nextIdx = gates.findIndex(g => !g.hit);
-    if (nextIdx < 0) nextIdx = gates.length;
-    for (let i = 0; i < gates.length; i++) {
-      const g = gates[i];
-      const m = gateMats[i].mat;
-      if (g.hit) {
-        m.color.setHex(0x10b981); m.emissive.setHex(0x033728); m.opacity = 0.5;
-      } else if (i === nextIdx) {
-        m.color.setHex(0xfde047); m.emissive.setHex(0x664400); m.opacity = 0.95;
-      } else {
-        m.color.setHex(0x60a5fa); m.emissive.setHex(0x102b55); m.opacity = 0.85;
+function fmtTime(s) {
+  const min = Math.floor(s / 60);
+  const sec = s - min * 60;
+  return `${min}:${sec.toFixed(2).padStart(5, "0")}`;
+}
+
+function updateCheckpointHud() {
+  const passed = checkpoints.filter(c => c.passed).length;
+  document.getElementById("cps").textContent = `${passed} / ${NUM_CHECKPOINTS}`;
+}
+
+// ============================================================
+// Ghost (personal best replay)
+// ============================================================
+const ghost = {
+  mesh: null,
+  active: false
+};
+function spawnGhost() {
+  if (!bestRun || !bestRun.length) { ghost.active = false; return; }
+  if (!ghost.mesh) {
+    ghost.mesh = makeSkierMesh(0xa0a0c8);
+    ghost.mesh.traverse(o => {
+      if (o.isMesh) {
+        o.material = o.material.clone();
+        o.material.transparent = true;
+        o.material.opacity = 0.45;
+        o.castShadow = false;
       }
-    }
-  }
-  updateGateColors();
-
-  function respawn() {
-    const y = sampleTerrainHeightAt(SPAWN_X, SPAWN_Z) + 3;
-    playerBody.position.set(SPAWN_X, y, SPAWN_Z);
-    playerBody.velocity.set(0, 0, 0);
-    playerBody.angularVelocity.set(0, 0, 0);
-    headingAngle = 0;
-    crashed = false; crashTimer = 0;
-    runActive = false; runFinished = false;
-    for (const g of gates) g.hit = false;
-    updateGateColors();
-  }
-
-  // --- Ghost replay ----------------------------------------------
-  const ghostGroup = new THREE.Group();
-  scene.add(ghostGroup);
-  const ghostMat = new THREE.MeshStandardMaterial({ color: 0xffffff, transparent: true, opacity: 0.35, roughness: 0.4 });
-  buildGhost(ghostGroup);
-  function buildGhost(group) {
-    const torso = new THREE.Mesh(new THREE.BoxGeometry(0.7, 1.0, 0.45), ghostMat);
-    torso.position.y = 0.5; group.add(torso);
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.28, 8, 6), ghostMat);
-    head.position.y = 1.25; group.add(head);
-    const skiL = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.06, 1.8), ghostMat); skiL.position.set(-0.18, -0.74, 0.1); group.add(skiL);
-    const skiR = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.06, 1.8), ghostMat); skiR.position.set( 0.18, -0.74, 0.1); group.add(skiR);
-  }
-  let ghostStart = 0;
-  function updateGhost(now) {
-    if (!runActive || !bestPath || bestPath.length < 2) {
-      ghostGroup.visible = false;
-      return;
-    }
-    ghostGroup.visible = true;
-    const t = now / 1000 - runStart;
-    // Find frame
-    let i = 0;
-    while (i < bestPath.length - 1 && bestPath[i + 1].t <= t) i++;
-    if (i >= bestPath.length - 1) {
-      const f = bestPath[bestPath.length - 1];
-      ghostGroup.position.set(f.x, f.y, f.z);
-      ghostGroup.rotation.y = f.h;
-    } else {
-      const a = bestPath[i], b = bestPath[i + 1];
-      const tt = (t - a.t) / (b.t - a.t);
-      ghostGroup.position.set(
-        a.x + (b.x - a.x) * tt,
-        a.y + (b.y - a.y) * tt,
-        a.z + (b.z - a.z) * tt
-      );
-      ghostGroup.rotation.y = a.h + (b.h - a.h) * tt;
-    }
-  }
-
-  // --- Gun multiplayer -------------------------------------------
-  const peers = new Map(); // id -> {x,y,z,heading,speed,name,color, ts, mesh, target:{x,y,z,h}}
-  let lastPresence = 0;
-  let lbCache = new Map(); // key (id) -> {name, time, ts}
-
-  function renderLeaderboard(list) {
-    const ol = document.getElementById("lb-list");
-    ol.innerHTML = "";
-    list.slice(0, 5).forEach((row, i) => {
-      const li = document.createElement("li");
-      li.textContent = `${row.name || "anon"}  ${fmtTime(row.time)}`;
-      ol.appendChild(li);
     });
-    if (list.length === 0) {
-      const li = document.createElement("li"); li.textContent = "no times yet"; li.className = "pulse"; ol.appendChild(li);
+    scene.add(ghost.mesh);
+  }
+  ghost.active = true;
+}
+function tickGhost() {
+  if (!ghost.active || !bestRun || !bestRun.length) return;
+  if (!raceRunning) { ghost.mesh.visible = false; return; }
+  ghost.mesh.visible = true;
+  // find samples around raceTime
+  let i = 0;
+  while (i < bestRun.length - 1 && bestRun[i + 1].t < raceTime) i++;
+  const a = bestRun[i], b = bestRun[Math.min(i + 1, bestRun.length - 1)];
+  const span = Math.max(0.001, b.t - a.t);
+  const k = Math.min(1, Math.max(0, (raceTime - a.t) / span));
+  ghost.mesh.position.set(a.x + (b.x - a.x) * k, a.y + (b.y - a.y) * k, a.z + (b.z - a.z) * k);
+  ghost.mesh.rotation.y = a.heading + (b.heading - a.heading) * k;
+}
+spawnGhost();
+
+// ============================================================
+// Banner
+// ============================================================
+const bannerEl = document.getElementById("banner");
+let bannerTimer = null;
+function showBanner(html, ms = 1800) {
+  bannerEl.innerHTML = html;
+  bannerEl.classList.add("show");
+  clearTimeout(bannerTimer);
+  bannerTimer = setTimeout(() => bannerEl.classList.remove("show"), ms);
+}
+
+// ============================================================
+// Physics step
+// ============================================================
+const _tmp = new THREE.Vector3();
+const _normal = new THREE.Vector3();
+const _tangent = new THREE.Vector3();
+const _fwd = new THREE.Vector3();
+
+function tickPlayer(dt) {
+  if (player.finished) return;
+
+  // Steering
+  if (keys.a) player.heading += TURN_SPEED * dt;
+  if (keys.d) player.heading -= TURN_SPEED * dt;
+
+  // Heading vector in world (XZ)
+  _fwd.set(-Math.sin(player.heading), 0, -Math.cos(player.heading));
+
+  // Forward push (small kick on W)
+  if (keys.w) {
+    player.vel.addScaledVector(_fwd, PUSH_FORCE * dt);
+  }
+  // Light reverse on S only when slow (so it doesn't kill momentum mid-run)
+  if (keys.s) {
+    player.vel.addScaledVector(_fwd, -PUSH_FORCE * 0.3 * dt);
+  }
+
+  // Gravity
+  player.vel.y -= GRAVITY * dt;
+
+  // Integrate position
+  player.pos.addScaledVector(player.vel, dt);
+
+  // ---- Ground constraint ----
+  // Sample analytical height at current x,z. If we're below, snap up
+  // and project velocity onto the tangent plane. This is the entire
+  // physics-vs-terrain story; no orientation mismatch is possible
+  // because the visual mesh ALSO calls heightAt(x, z) for each vertex.
+  const groundY = heightAt(player.pos.x, player.pos.z);
+  const surfaceY = groundY + PLAYER_RADIUS;
+  if (player.pos.y <= surfaceY + 0.01) {
+    // Snap up
+    player.pos.y = surfaceY;
+    // Surface normal
+    _normal.copy(slopeNormalAt(player.pos.x, player.pos.z));
+    // Project velocity onto plane (remove inward component)
+    const vDotN = player.vel.dot(_normal);
+    if (vDotN < 0) {
+      // landing impact: small bounce dampening
+      player.vel.addScaledVector(_normal, -vDotN * 1.0);
+    }
+    // Tangent (horizontal-ish slide direction)
+    _tangent.copy(player.vel).addScaledVector(_normal, -player.vel.dot(_normal));
+
+    // Carving: lerp tangent direction toward heading (preserves speed)
+    const horizSpeed = Math.sqrt(_tangent.x * _tangent.x + _tangent.z * _tangent.z);
+    if (horizSpeed > 0.5) {
+      const targetX = -Math.sin(player.heading) * horizSpeed;
+      const targetZ = -Math.cos(player.heading) * horizSpeed;
+      _tangent.x += (targetX - _tangent.x) * CARVE_LERP;
+      _tangent.z += (targetZ - _tangent.z) * CARVE_LERP;
+    }
+
+    // Friction
+    let f = SNOW_FRICTION;
+    if (keys.brake) f = BRAKE_FRICTION;
+    else if (keys.tuck) f = TUCK_FRICTION;
+    _tangent.multiplyScalar(Math.pow(f, dt * 60));
+
+    // Reassemble velocity
+    player.vel.copy(_tangent);
+    // We snapped to surface; gravity along normal becomes slide accel along slope
+    // (gravity already added; normal component just got removed)
+    player.airborne = false;
+  } else {
+    player.airborne = true;
+  }
+
+  // Speed cap
+  if (player.vel.lengthSq() > MAX_SPEED * MAX_SPEED) player.vel.setLength(MAX_SPEED);
+
+  // ---- Tree collisions (push out + speed loss) ----
+  for (const t of trees) {
+    const dx = player.pos.x - t.x;
+    const dz = player.pos.z - t.z;
+    const d2 = dx * dx + dz * dz;
+    const r = PLAYER_RADIUS + TREE_RADIUS;
+    if (d2 < r * r && d2 > 0.0001) {
+      const d = Math.sqrt(d2);
+      const k = (r - d) / d;
+      player.pos.x += dx * k;
+      player.pos.z += dz * k;
+      // hard slow on impact
+      player.vel.multiplyScalar(0.35);
+      flashCrash();
+    }
+  }
+  for (const ro of rocks) {
+    const dx = player.pos.x - ro.x;
+    const dz = player.pos.z - ro.z;
+    const d2 = dx * dx + dz * dz;
+    const r = PLAYER_RADIUS + ro.r;
+    if (d2 < r * r && d2 > 0.0001) {
+      const d = Math.sqrt(d2);
+      const k = (r - d) / d;
+      player.pos.x += dx * k;
+      player.pos.z += dz * k;
+      player.vel.multiplyScalar(0.4);
+      flashCrash();
     }
   }
 
-  function setupGun() {
-    if (!gunOk || !gun) {
-      // local fallback render
-      const local = JSON.parse(localStorage.getItem("snowriders.localLb") || "[]");
-      renderLeaderboard(local);
-      document.getElementById("hud-state").textContent = "solo";
-      return;
+  // ---- Failsafes ----
+  if (player.pos.y < RESPAWN_BELOW || Math.abs(player.pos.x) > TERRAIN_RADIUS || Math.abs(player.pos.z) > TERRAIN_RADIUS) {
+    findSpawn();
+    showBanner("Out of bounds<small>respawned at peak</small>", 1500);
+  }
+
+  // Sync visual mesh
+  player.mesh.position.copy(player.pos);
+  // Visual mesh is at FEET (0,0); we add a half-radius below pos
+  player.mesh.position.y -= PLAYER_RADIUS;
+  player.mesh.rotation.y = player.heading;
+
+  // Slight forward tilt based on slope and movement
+  const tiltN = slopeNormalAt(player.pos.x, player.pos.z);
+  const slopeAngle = Math.atan2(Math.sqrt(tiltN.x * tiltN.x + tiltN.z * tiltN.z), tiltN.y);
+  player.mesh.rotation.x = -slopeAngle * 0.6;
+  // Lean into turns
+  const targetLean = (keys.a ? 0.25 : 0) + (keys.d ? -0.25 : 0);
+  player.mesh.rotation.z += (targetLean - player.mesh.rotation.z) * 0.15;
+}
+
+let crashTimer = 0;
+function flashCrash() { crashTimer = 0.25; }
+
+// ============================================================
+// Camera chase
+// ============================================================
+const camTarget = new THREE.Vector3();
+const camPosLerp = new THREE.Vector3();
+function tickCamera(dt) {
+  const back = new THREE.Vector3(Math.sin(player.heading), 0, Math.cos(player.heading));
+  const camPos = player.pos.clone()
+    .addScaledVector(back, 7)
+    .add(new THREE.Vector3(0, 4.5, 0));
+  camPosLerp.lerp(camPos, 0.12);
+  camera.position.copy(camPosLerp);
+  camTarget.lerp(player.pos, 0.2);
+  camera.lookAt(camTarget.x, camTarget.y + 1, camTarget.z);
+}
+
+// ============================================================
+// Snow trail (line behind player)
+// ============================================================
+const trailMax = 80;
+const trailGeo = new THREE.BufferGeometry();
+const trailPositions = new Float32Array(trailMax * 3);
+trailGeo.setAttribute("position", new THREE.BufferAttribute(trailPositions, 3));
+const trailMat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.6 });
+const trailLine = new THREE.Line(trailGeo, trailMat);
+scene.add(trailLine);
+let trailIdx = 0;
+let trailLastTime = 0;
+function tickTrail(now) {
+  if (now - trailLastTime < 0.04) return;
+  trailLastTime = now;
+  const idx = trailIdx % trailMax;
+  trailPositions[idx * 3] = player.pos.x;
+  trailPositions[idx * 3 + 1] = player.pos.y - PLAYER_RADIUS + 0.05;
+  trailPositions[idx * 3 + 2] = player.pos.z;
+  trailIdx++;
+  trailGeo.attributes.position.needsUpdate = true;
+  // limit drawcount until buffer fills
+  trailGeo.setDrawRange(0, Math.min(trailIdx, trailMax));
+}
+
+// ============================================================
+// Powder spray particles
+// ============================================================
+const sprayCount = 80;
+const sprayPos = new Float32Array(sprayCount * 3);
+const sprayVel = new Float32Array(sprayCount * 3);
+const sprayLife = new Float32Array(sprayCount);
+const sprayGeo = new THREE.BufferGeometry();
+sprayGeo.setAttribute("position", new THREE.BufferAttribute(sprayPos, 3));
+const sprayMat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.25, transparent: true, opacity: 0.8, depthWrite: false });
+const sprayPts = new THREE.Points(sprayGeo, sprayMat);
+scene.add(sprayPts);
+let sprayIdx = 0;
+function emitSpray() {
+  const i = sprayIdx % sprayCount;
+  sprayPos[i * 3] = player.pos.x + (Math.random() - 0.5) * 0.4;
+  sprayPos[i * 3 + 1] = player.pos.y - PLAYER_RADIUS + 0.05;
+  sprayPos[i * 3 + 2] = player.pos.z + (Math.random() - 0.5) * 0.4;
+  sprayVel[i * 3] = (Math.random() - 0.5) * 4;
+  sprayVel[i * 3 + 1] = 1 + Math.random() * 2;
+  sprayVel[i * 3 + 2] = (Math.random() - 0.5) * 4;
+  sprayLife[i] = 0.6;
+  sprayIdx++;
+}
+function tickSpray(dt) {
+  for (let i = 0; i < sprayCount; i++) {
+    if (sprayLife[i] > 0) {
+      sprayLife[i] -= dt;
+      sprayPos[i * 3] += sprayVel[i * 3] * dt;
+      sprayPos[i * 3 + 1] += (sprayVel[i * 3 + 1] - 5 * dt) * dt;
+      sprayPos[i * 3 + 2] += sprayVel[i * 3 + 2] * dt;
+      sprayVel[i * 3 + 1] -= 9 * dt;
+    } else {
+      // park dead particles below ground
+      sprayPos[i * 3 + 1] = -1000;
     }
-    document.getElementById("hud-state").textContent = "online";
+  }
+  sprayGeo.attributes.position.needsUpdate = true;
+}
+
+// ============================================================
+// Web Audio (procedural wind + scrape)
+// ============================================================
+let audio = null;
+function initAudio() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    // wind: low-passed white noise
+    const bufSize = 2 * ctx.sampleRate;
+    const buf = ctx.createBuffer(1, bufSize, ctx.sampleRate);
+    const out = buf.getChannelData(0);
+    for (let i = 0; i < bufSize; i++) out[i] = Math.random() * 2 - 1;
+    const wind = ctx.createBufferSource();
+    wind.buffer = buf; wind.loop = true;
+    const windFilter = ctx.createBiquadFilter();
+    windFilter.type = "lowpass"; windFilter.frequency.value = 600;
+    const windGain = ctx.createGain(); windGain.gain.value = 0;
+    wind.connect(windFilter).connect(windGain).connect(ctx.destination);
+    wind.start();
+
+    const scrape = ctx.createBufferSource();
+    scrape.buffer = buf; scrape.loop = true;
+    const scrapeFilter = ctx.createBiquadFilter();
+    scrapeFilter.type = "bandpass"; scrapeFilter.frequency.value = 2200; scrapeFilter.Q.value = 0.7;
+    const scrapeGain = ctx.createGain(); scrapeGain.gain.value = 0;
+    scrape.connect(scrapeFilter).connect(scrapeGain).connect(ctx.destination);
+    scrape.start();
+
+    audio = { ctx, windGain, scrapeGain };
+  } catch (_) { /* noop */ }
+}
+addEventListener("pointerdown", () => { if (!audio) initAudio(); }, { once: true });
+addEventListener("keydown", () => { if (!audio) initAudio(); }, { once: true });
+function tickAudio() {
+  if (!audio) return;
+  const speed = player.vel.length();
+  audio.windGain.gain.value = Math.min(0.15, speed * 0.004);
+  audio.scrapeGain.gain.value = player.airborne ? 0 : Math.min(0.18, Math.max(0, (speed - 4) * 0.008));
+}
+
+// ============================================================
+// Race + checkpoints + recording
+// ============================================================
+function tickRace(dt) {
+  if (player.finished) return;
+  // Start the timer the moment we leave the spawn
+  if (!raceRunning) {
+    if (player.vel.lengthSq() > 1) {
+      raceRunning = true;
+      recordingStartTime = performance.now() / 1000;
+      raceTime = 0;
+    }
+  } else {
+    raceTime += dt;
+  }
+
+  // Record sample every ~120ms while running
+  if (raceRunning && (recordingSamples.length === 0 || raceTime - recordingSamples[recordingSamples.length - 1].t > 0.12)) {
+    recordingSamples.push({ t: raceTime, x: player.pos.x, y: player.pos.y, z: player.pos.z, heading: player.heading });
+    if (recordingSamples.length > 2000) recordingSamples.shift();
+  }
+
+  // Checkpoint detection (each must be passed in order, but for a casual feel
+  // we only require touching them, not strict order)
+  for (let i = 0; i < checkpoints.length; i++) {
+    const cp = checkpoints[i];
+    if (cp.passed) continue;
+    const dx = player.pos.x - cp.x;
+    const dz = player.pos.z - cp.z;
+    const dy = player.pos.y - cp.y;
+    if (dx * dx + dz * dz < 25 && Math.abs(dy) < 8) {
+      cp.passed = true;
+      cp.mesh.material.color.set(0x60ff80);
+      updateCheckpointHud();
+      const remaining = checkpoints.filter(c => !c.passed).length;
+      if (remaining === 0) finishRun();
+    }
+  }
+
+  // Rotate ring meshes
+  for (const cp of checkpoints) cp.mesh.rotation.z += dt * 1.2;
+}
+
+function finishRun() {
+  player.finished = true;
+  raceRunning = false;
+  const finalTime = raceTime;
+  const isPb = !bestTime || finalTime < bestTime;
+  if (isPb) saveBest(finalTime);
+  showBanner(`Run finished<small>${fmtTime(finalTime)}${isPb ? " - new personal best!" : ""}</small>`, 4000);
+  // Push to gun leaderboard
+  if (gunOk) {
+    try {
+      gun.get("snowriders").get("lb").set({ name: myName, time: finalTime, ts: Date.now() });
+    } catch (_) {}
+  } else {
+    // local leaderboard fallback
+    const local = JSON.parse(localStorage.getItem("snowriders.locallb") || "[]");
+    local.push({ name: myName, time: finalTime, ts: Date.now() });
+    local.sort((a, b) => a.time - b.time);
+    localStorage.setItem("snowriders.locallb", JSON.stringify(local.slice(0, 20)));
+  }
+  // Auto-respawn after 3.5s
+  setTimeout(() => findSpawn(), 3500);
+}
+
+// ============================================================
+// Multiplayer: Gun.js (position sync, leaderboard, chat, minimap)
+// ============================================================
+let gun = null;
+let gunOk = false;
+const peers = new Map(); // id -> { mesh, last: {x,z,heading}, color, name }
+
+(async function setupGun() {
+  try {
+    const Gun = (await import("gun")).default;
+    gun = Gun(["https://gun-manhattan.herokuapp.com/gun", "https://peer.wallie.io/gun"]);
+    gunOk = true;
+    document.getElementById("net").textContent = "online";
+
+    // Subscribe to other players' presence
+    gun.get("snowriders").get("players").map().on((data, id) => {
+      if (!data || id === myId) return;
+      const stale = Date.now() - (data.ts || 0) > 12000;
+      if (stale) {
+        const p = peers.get(id);
+        if (p) { scene.remove(p.mesh); peers.delete(id); }
+        return;
+      }
+      let p = peers.get(id);
+      if (!p) {
+        const mesh = makeSkierMesh(data.color || 0xaaaaaa);
+        // name label
+        const cnv = document.createElement("canvas");
+        cnv.width = 256; cnv.height = 64;
+        const cctx = cnv.getContext("2d");
+        cctx.font = "bold 26px sans-serif";
+        cctx.textAlign = "center";
+        cctx.shadowColor = "rgba(0,0,0,0.85)";
+        cctx.shadowBlur = 6;
+        cctx.fillStyle = "#fff";
+        cctx.fillText(data.name || "Stranger", 128, 32);
+        const tex = new THREE.CanvasTexture(cnv);
+        const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false }));
+        sprite.scale.set(5, 1.25, 1);
+        sprite.position.y = 2.4;
+        mesh.add(sprite);
+        scene.add(mesh);
+        p = { mesh, last: { x: 0, z: 0, heading: 0 }, color: data.color, name: data.name };
+        peers.set(id, p);
+      }
+      p.last.x = data.x;
+      p.last.z = data.z;
+      p.last.heading = data.heading;
+      p.last.y = data.y;
+      p.name = data.name;
+    });
 
     // Subscribe to leaderboard
-    try {
-      gun.get("snowriders").get(ROOM).get("leaderboard").map().on((data, key) => {
-        if (!data) { lbCache.delete(key); return; }
-        if (typeof data.time !== "number") return;
-        lbCache.set(key, { name: String(data.name || "anon").slice(0, 24), time: data.time, ts: data.ts || 0 });
-        const arr = Array.from(lbCache.values()).filter(r => r.time > 0).sort((a, b) => a.time - b.time);
-        renderLeaderboard(arr);
-      });
-    } catch (e) { console.warn(e); }
+    gun.get("snowriders").get("lb").map().on((data, id) => {
+      if (!data) return;
+      lbCache.set(id, { name: data.name, time: data.time, ts: data.ts });
+      renderLeaderboard();
+    });
 
     // Subscribe to chat
-    try {
-      gun.get("snowriders").get(ROOM).get("chat").map().on((data, key) => {
-        if (!data || !data.msg) return;
-        addChatLine(String(data.name || "anon").slice(0, 24), String(data.msg).slice(0, 240), data.ts || 0);
-      });
-    } catch (e) { console.warn(e); }
+    gun.get("snowriders").get("chat").map().on((data, id) => {
+      if (!data || !data.msg) return;
+      if (chatSeen.has(id)) return;
+      chatSeen.add(id);
+      pushChatMessage(data.name || "?", data.msg, data.ts || 0);
+    });
 
-    // Subscribe to player presence
-    try {
-      gun.get("snowriders").get(ROOM).get("players").map().on((data, key) => {
-        if (!data || key === myId) return;
-        if (typeof data.x !== "number") return;
-        if (Date.now() - (data.ts || 0) > 8000) return; // stale
-        let p = peers.get(key);
-        if (!p) {
-          p = {
-            id: key, name: String(data.name || "rider").slice(0, 24), color: data.color | 0,
-            target: { x: data.x, y: data.y, z: data.z, h: data.heading || 0 },
-            current: { x: data.x, y: data.y, z: data.z, h: data.heading || 0 },
-            speed: data.speed || 0, ts: data.ts || 0, mesh: null
-          };
-          const g = new THREE.Group();
-          buildSkier(g, new THREE.Color(p.color || 0xffffff));
-          scene.add(g);
-          p.mesh = g;
-          peers.set(key, p);
-        } else {
-          p.target.x = data.x; p.target.y = data.y; p.target.z = data.z; p.target.h = data.heading || 0;
-          p.speed = data.speed || 0; p.ts = data.ts || 0;
-          p.name = String(data.name || p.name).slice(0, 24);
-          if (data.color) p.color = data.color | 0;
-        }
-      });
-    } catch (e) { console.warn(e); }
-  }
-  setupGun();
-
-  function pruneStalePeers() {
-    const now = Date.now();
-    for (const [id, p] of peers) {
-      if (now - p.ts > 9000) {
-        scene.remove(p.mesh);
-        peers.delete(id);
-      }
-    }
-    document.getElementById("hud-peers").textContent = String(peers.size);
-  }
-
-  // --- Chat ------------------------------------------------------
-  const chatBox = document.getElementById("chat-msgs");
-  const chatLines = []; // {name,msg,ts,el}
-  const seenChat = new Set();
-  let lastChatTs = 0;
-  function addChatLine(name, msg, ts) {
-    const key = `${name}|${msg}|${ts}`;
-    if (seenChat.has(key)) return;
-    seenChat.add(key);
-    const div = document.createElement("div");
-    div.className = "chat-msg";
-    const w = document.createElement("span"); w.className = "who"; w.textContent = name + ":";
-    const m = document.createElement("span"); m.textContent = " " + msg;
-    div.appendChild(w); div.appendChild(m);
-    chatBox.insertBefore(div, chatBox.firstChild);
-    chatLines.unshift({ name, msg, ts, el: div });
-    while (chatLines.length > 30) {
-      const old = chatLines.pop();
-      if (old.el && old.el.parentNode) old.el.parentNode.removeChild(old.el);
-    }
-    lastChatTs = performance.now();
-    chatBox.style.opacity = "1";
-  }
-  function sendChat(text) {
-    if (!text) return;
-    if (gunOk && gun) {
+    // Broadcast presence loop
+    setInterval(() => {
+      if (!gunOk) return;
       try {
-        gun.get("snowriders").get(ROOM).get("chat").set({
-          name: myName, msg: text, ts: Date.now()
-        });
-      } catch (e) {
-        console.warn(e);
-        addChatLine(myName, text, Date.now()); // local echo
-      }
-    } else {
-      addChatLine(myName, text, Date.now());
-    }
-  }
-
-  // --- Minimap ---------------------------------------------------
-  const mmCanvas = document.getElementById("minimap");
-  const mmCtx = mmCanvas.getContext("2d");
-  // Pre-render mountain heightmap as base
-  const mmBase = document.createElement("canvas");
-  mmBase.width = 150; mmBase.height = 150;
-  {
-    const ctx = mmBase.getContext("2d");
-    const img = ctx.createImageData(150, 150);
-    for (let py = 0; py < 150; py++) {
-      for (let px = 0; px < 150; px++) {
-        // map px/py to grid i,j
-        const i = Math.floor(px / 150 * TERRAIN_SIZE);
-        const j = Math.floor((1 - py / 150) * TERRAIN_SIZE); // flip so peak appears at top
-        const h = heights[i] && heights[i][j] != null ? heights[i][j] : 0;
-        const t = Math.max(0, Math.min(1, h / MAX_HEIGHT));
-        const o = (py * 150 + px) * 4;
-        img.data[o]   = 60 + t * 195;
-        img.data[o+1] = 80 + t * 175;
-        img.data[o+2] = 120 + t * 135;
-        img.data[o+3] = 255;
-      }
-    }
-    ctx.putImageData(img, 0, 0);
-    // Outline gates
-    ctx.strokeStyle = "rgba(255,255,255,0.7)";
-    ctx.lineWidth = 1;
-    for (let i = 0; i < gates.length; i++) {
-      const g = gates[i];
-      const px = ((g.x + HALF_W) / (TERRAIN_SIZE * CELL)) * 150;
-      const py = (1 - ((-g.z + HALF_W) / (TERRAIN_SIZE * CELL))) * 150;
-      ctx.beginPath();
-      ctx.arc(px, py, 2.5, 0, Math.PI * 2);
-      ctx.stroke();
-    }
-  }
-
-  function drawMinimap() {
-    mmCtx.drawImage(mmBase, 0, 0);
-    // peers
-    for (const [, p] of peers) {
-      const px = ((p.current.x + HALF_W) / (TERRAIN_SIZE * CELL)) * 150;
-      const py = (1 - ((-p.current.z + HALF_W) / (TERRAIN_SIZE * CELL))) * 150;
-      mmCtx.fillStyle = "#" + (p.color || 0xffffff).toString(16).padStart(6, "0");
-      mmCtx.beginPath(); mmCtx.arc(px, py, 2.5, 0, Math.PI * 2); mmCtx.fill();
-    }
-    // me
-    const px = ((playerBody.position.x + HALF_W) / (TERRAIN_SIZE * CELL)) * 150;
-    const py = (1 - ((-playerBody.position.z + HALF_W) / (TERRAIN_SIZE * CELL))) * 150;
-    mmCtx.fillStyle = "#fbbf24";
-    mmCtx.beginPath(); mmCtx.arc(px, py, 4, 0, Math.PI * 2); mmCtx.fill();
-    mmCtx.strokeStyle = "rgba(0,0,0,0.6)";
-    mmCtx.lineWidth = 1.5;
-    mmCtx.stroke();
-  }
-
-  // --- Resize ----------------------------------------------------
-  window.addEventListener("resize", () => {
-    camera.aspect = innerWidth / innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(innerWidth, innerHeight);
-  });
-
-  // --- Hide loading overlay --------------------------------------
-  const loadingEl = document.getElementById("loading");
-  setTimeout(() => loadingEl.classList.add("hidden"), 60);
-
-  // --- Main loop -------------------------------------------------
-  const clock = new THREE.Clock();
-  let lastNow = performance.now();
-  let lastTunnelCheck = 0;
-
-  function update(dt, now) {
-    if (crashed) {
-      crashTimer += dt;
-      if (crashTimer > 1.2) respawn();
-    }
-
-    // Inputs
-    const turn = (keys["a"] || keys["arrowleft"]) ? 1 : (keys["d"] || keys["arrowright"]) ? -1 : 0;
-    const forward = (keys["w"] || keys["arrowup"]);
-    const braking = keys[" "] || keys["space"];
-    const tucking = keys["shift"];
-
-    // Steering: rotate headingAngle, apply carving lerp on velocity
-    const turnRate = 1.8; // rad/s
-    if (turn !== 0 && !crashed) {
-      headingAngle += turn * turnRate * dt;
-      // Carving: lerp velocity toward forward direction with same magnitude
-      const v = playerBody.velocity;
-      const speedH = Math.hypot(v.x, v.z);
-      if (speedH > 0.5) {
-        const fwdX = Math.sin(headingAngle), fwdZ = Math.cos(headingAngle);
-        const targetX = fwdX * speedH, targetZ = fwdZ * speedH;
-        const k = 0.10;
-        v.x = v.x + (targetX - v.x) * k;
-        v.z = v.z + (targetZ - v.z) * k;
-      }
-    }
-
-    // Forward boost
-    if (forward && !crashed) {
-      const fwdX = Math.sin(headingAngle), fwdZ = Math.cos(headingAngle);
-      const F = 220; // newtons-ish (mass 70)
-      playerBody.applyForce(new CANNON.Vec3(fwdX * F, 0, fwdZ * F), playerBody.position);
-    }
-
-    // Brake
-    if (braking && !crashed) {
-      playerBody.velocity.x *= Math.pow(0.85, dt * 60);
-      playerBody.velocity.z *= Math.pow(0.85, dt * 60);
-    }
-
-    // Tuck = lower drag
-    playerBody.linearDamping = tucking ? 0.005 : 0.04;
-
-    // Step physics with substeps
-    world.step(FIXED_DT, dt, 8);
-
-    // Failsafe: tunneling check
-    lastTunnelCheck += dt;
-    if (lastTunnelCheck > 0.05) {
-      lastTunnelCheck = 0;
-      const px = playerBody.position.x, pz = playerBody.position.z;
-      const groundH = sampleTerrainHeightAt(px, pz);
-      if (playerBody.position.y < groundH - 4) {
-        playerBody.position.set(px, groundH + 2, pz);
-        playerBody.velocity.set(0, 0, 0);
-      }
-      // Out of bounds -> respawn
-      if (Math.abs(px) > HALF_W * 0.95 || Math.abs(pz) > HALF_W * 0.95 || playerBody.position.y < -50) {
-        respawn();
-      }
-    }
-
-    // Sync visual
-    skierGroup.position.copy(playerBody.position);
-    skierGroup.position.y -= playerRadius - 0.05;
-    skierGroup.rotation.y = headingAngle;
-    // Lean visual based on lateral velocity
-    const v = playerBody.velocity;
-    const localRight = { x: Math.cos(headingAngle), z: -Math.sin(headingAngle) };
-    const lat = v.x * localRight.x + v.z * localRight.z;
-    skierGroup.rotation.z = Math.max(-0.4, Math.min(0.4, -lat * 0.05));
-
-    // Camera follow (orbit around player)
-    const targetYaw = headingAngle + camState.yaw;
-    const cd = camState.dist;
-    const cy = Math.cos(camState.pitch) * cd;
-    const cyy = Math.sin(camState.pitch) * cd;
-    const cx = Math.sin(targetYaw) * cy;
-    const cz = Math.cos(targetYaw) * cy;
-    const desired = new THREE.Vector3(
-      playerBody.position.x - cx,
-      playerBody.position.y + cyy + 2,
-      playerBody.position.z - cz
-    );
-    camera.position.lerp(desired, 1 - Math.pow(0.001, dt));
-    camera.lookAt(playerBody.position.x, playerBody.position.y + 1, playerBody.position.z);
-
-    // Speed in km/h
-    const speed = Math.hypot(v.x, v.z);
-    document.getElementById("hud-speed").textContent = (speed * 3.6).toFixed(0) + " km/h";
-
-    // Auto-start run on first sustained motion
-    if (!runActive && !runFinished && speed > 4) {
-      startRun();
-    }
-    if (runActive) {
-      const t = now / 1000 - runStart;
-      document.getElementById("hud-time").textContent = fmtTime(t);
-      // Record path every ~80ms
-      if (t - runPathLastT > 0.08) {
-        runPathLastT = t;
-        runPath.push({ t, x: playerBody.position.x, y: playerBody.position.y - playerRadius + 0.05, z: playerBody.position.z, h: headingAngle });
-        if (runPath.length > 1500) runPath.shift();
-      }
-    }
-
-    // Gate detection (in order)
-    let nextIdx = gates.findIndex(g => !g.hit);
-    if (nextIdx >= 0) {
-      const g = gates[nextIdx];
-      const dx = playerBody.position.x - g.x;
-      const dz = playerBody.position.z - g.z;
-      const dy = playerBody.position.y - g.y;
-      if (dx * dx + dz * dz < 9 && Math.abs(dy) < 4) {
-        g.hit = true;
-        updateGateColors();
-        if (gates.every(gg => gg.hit)) {
-          finishRun();
-        }
-      }
-    }
-    document.getElementById("hud-gate").textContent = `${gates.filter(g => g.hit).length} / ${gates.length}`;
-
-    // Trail
-    if (now - trailLastT > 60 && speed > 1.5) {
-      trailLastT = now;
-      const wp = trailPositions;
-      const head = trailHead;
-      wp[head * 3] = playerBody.position.x;
-      wp[head * 3 + 1] = (sampleTerrainHeightAt(playerBody.position.x, playerBody.position.z) + 0.06);
-      wp[head * 3 + 2] = playerBody.position.z;
-      trailHead = (trailHead + 1) % TRAIL_LEN;
-      trailGeo.attributes.position.needsUpdate = true;
-    }
-
-    // Powder spray emission
-    if (!crashed && speed > 5 && (Math.abs(turn) > 0 || braking)) {
-      const groundH = sampleTerrainHeightAt(playerBody.position.x, playerBody.position.z);
-      const fwdX = Math.sin(headingAngle), fwdZ = Math.cos(headingAngle);
-      emitSpray(playerBody.position.x, groundH + 0.1, playerBody.position.z, fwdX, fwdZ, Math.min(1, speed / 18));
-    }
-
-    // Update particles
-    for (let i = 0; i < PARTICLES; i++) {
-      const s = sprayState[i];
-      if (s.life >= s.max) {
-        sprayInst.setMatrixAt(i, _hideMat);
-        continue;
-      }
-      s.life += dt;
-      s.pos.x += s.vel.x * dt;
-      s.pos.y += s.vel.y * dt;
-      s.pos.z += s.vel.z * dt;
-      s.vel.y -= 6 * dt; // gravity
-      const k = 1 - s.life / s.max;
-      const m = new THREE.Matrix4();
-      m.compose(s.pos, camera.quaternion, new THREE.Vector3(s.scale * (1 + (1 - k) * 0.6), s.scale * (1 + (1 - k) * 0.6), s.scale));
-      sprayInst.setMatrixAt(i, m);
-    }
-    sprayInst.instanceMatrix.needsUpdate = true;
-
-    // Audio modulation
-    if (audioCtx && windGain) {
-      const target = Math.min(0.15, speed * 0.005);
-      windGain.gain.value = windGain.gain.value + (target - windGain.gain.value) * 0.1;
-      const lp = windNode.context;
-      // (filter freq mod skipped for simplicity)
-    }
-    if (audioCtx && scrapeGain) {
-      // ground contact heuristic: y close to terrain
-      const groundH = sampleTerrainHeightAt(playerBody.position.x, playerBody.position.z);
-      const onGround = (playerBody.position.y - playerRadius - groundH) < 0.4;
-      const target = (onGround && speed > 5) ? Math.min(0.07, (speed - 5) * 0.004) : 0.0;
-      scrapeGain.gain.value = scrapeGain.gain.value + (target - scrapeGain.gain.value) * 0.15;
-    }
-
-    // Peer interpolation + rendering
-    for (const [, p] of peers) {
-      const k = 0.18;
-      p.current.x += (p.target.x - p.current.x) * k;
-      p.current.y += (p.target.y - p.current.y) * k;
-      p.current.z += (p.target.z - p.current.z) * k;
-      // angle lerp (shortest path)
-      let dh = p.target.h - p.current.h;
-      while (dh > Math.PI) dh -= Math.PI * 2;
-      while (dh < -Math.PI) dh += Math.PI * 2;
-      p.current.h += dh * k;
-      if (p.mesh) {
-        p.mesh.position.set(p.current.x, p.current.y - playerRadius + 0.05, p.current.z);
-        p.mesh.rotation.y = p.current.h;
-      }
-    }
-
-    // Send presence
-    if (gunOk && gun && now - lastPresence > 80) {
-      lastPresence = now;
-      try {
-        gun.get("snowriders").get(ROOM).get("players").get(myId).put({
-          x: playerBody.position.x,
-          y: playerBody.position.y,
-          z: playerBody.position.z,
-          heading: headingAngle,
-          speed,
+        gun.get("snowriders").get("players").get(myId).put({
           name: myName,
-          color: myColorHex,
+          color: myColor,
+          x: player.pos.x,
+          y: player.pos.y,
+          z: player.pos.z,
+          heading: player.heading,
           ts: Date.now()
         });
-      } catch (e) { /* ignore */ }
-    }
+      } catch (_) {}
+    }, 90);
+  } catch (e) {
+    console.warn("Gun unavailable, running solo:", e);
+    document.getElementById("net").textContent = "solo (gun.js failed to load)";
+    // still show the local leaderboard
+    const local = JSON.parse(localStorage.getItem("snowriders.locallb") || "[]");
+    for (const r of local) lbCache.set("local-" + r.ts, r);
+    renderLeaderboard();
+  }
+})();
 
-    // Prune + minimap + ghost + chat fade
-    if (Math.floor(now / 1000) !== Math.floor((now - dt * 1000) / 1000)) {
-      pruneStalePeers();
-    }
-    drawMinimap();
-    updateGhost(now);
-    if (performance.now() - lastChatTs > 10000) {
-      chatBox.style.opacity = "0.15";
-    }
+// HUD updates that depend on peers
+function tickPeers() {
+  document.getElementById("net").textContent = gunOk
+    ? (peers.size === 0 ? "online (alone)" : peers.size === 1 ? "1 peer online" : `${peers.size} peers online`)
+    : "solo";
+  // Smoothly move peer meshes toward last known position
+  for (const p of peers.values()) {
+    if (p.last.x === undefined) continue;
+    const target = new THREE.Vector3(p.last.x, (p.last.y ?? heightAt(p.last.x, p.last.z) + PLAYER_RADIUS) - PLAYER_RADIUS, p.last.z);
+    p.mesh.position.lerp(target, 0.18);
+    // smoothly rotate heading
+    let dh = p.last.heading - p.mesh.rotation.y;
+    while (dh > Math.PI) dh -= Math.PI * 2;
+    while (dh < -Math.PI) dh += Math.PI * 2;
+    p.mesh.rotation.y += dh * 0.18;
+  }
+}
 
-    // Crash detection: hit a tree fast
-    if (!crashed) {
-      for (const tb of treeBodies) {
-        const tdx = tb.position.x - playerBody.position.x;
-        const tdz = tb.position.z - playerBody.position.z;
-        const tdy = tb.position.y - playerBody.position.y;
-        const distSq = tdx * tdx + tdz * tdz + tdy * tdy;
-        if (distSq < 1.6 && speed > 8) {
-          crashed = true;
-          crashTimer = 0;
-          showToast("Crash! respawning...");
-          break;
-        }
+// ============================================================
+// Leaderboard render
+// ============================================================
+const lbCache = new Map();
+function renderLeaderboard() {
+  const arr = Array.from(lbCache.values()).filter(x => x && typeof x.time === "number");
+  arr.sort((a, b) => a.time - b.time);
+  const top = arr.slice(0, 6);
+  const me = bestTime ? { name: myName + " (you)", time: bestTime } : null;
+  const html = top.map((r, i) => {
+    const isMe = me && r.name === myName;
+    return `<div class="row${isMe ? " me" : ""}"><span>${i + 1}. ${escapeHtml(r.name).slice(0, 14)}</span><span>${fmtTime(r.time)}</span></div>`;
+  }).join("");
+  let extra = "";
+  if (me && !top.some(r => r.name === myName)) {
+    extra = `<div class="row me"><span>- ${escapeHtml(myName).slice(0, 14)} (you)</span><span>${fmtTime(bestTime)}</span></div>`;
+  }
+  document.getElementById("lb-rows").innerHTML = html + extra ||
+    `<div class="row" style="opacity:.55;">No times yet.</div>`;
+}
+function escapeHtml(s) { return String(s || "").replace(/[&<>'"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[c])); }
+renderLeaderboard();
+
+// ============================================================
+// Chat
+// ============================================================
+const chatMsgsEl = document.getElementById("chat-msgs");
+const chatInputEl = document.getElementById("chat-in");
+const chatWrap = document.getElementById("chat");
+const chatMessages = [];
+const chatSeen = new Set();
+let chatHideTimer = null;
+function pushChatMessage(name, msg, ts) {
+  chatMessages.push({ name, msg, ts });
+  if (chatMessages.length > 12) chatMessages.shift();
+  renderChat();
+  chatWrap.querySelector(".messages").classList.remove("dim");
+  clearTimeout(chatHideTimer);
+  chatHideTimer = setTimeout(() => chatWrap.querySelector(".messages").classList.add("dim"), 8000);
+}
+function renderChat() {
+  chatMsgsEl.innerHTML = chatMessages.map(m => `<div class="m"><b>${escapeHtml(m.name).slice(0, 18)}</b>${escapeHtml(m.msg)}</div>`).join("");
+}
+function openChat() {
+  chatBox.typing = true;
+  chatWrap.classList.add("typing");
+  chatInputEl.value = "";
+  chatInputEl.focus();
+}
+function closeChat(send) {
+  if (send) {
+    const v = chatInputEl.value.trim().slice(0, 120);
+    if (v) {
+      const ts = Date.now();
+      const cid = `${myId}_${ts}`;
+      if (gunOk) {
+        try { gun.get("snowriders").get("chat").get(cid).put({ name: myName, msg: v, ts }); } catch (_) {}
       }
+      pushChatMessage(myName, v, ts);
+      chatSeen.add(cid);
     }
   }
+  chatBox.typing = false;
+  chatWrap.classList.remove("typing");
+  chatInputEl.blur();
+}
 
-  function loop() {
-    const now = performance.now();
-    let dt = (now - lastNow) / 1000;
-    lastNow = now;
-    dt = Math.min(0.1, dt);
-    update(dt, now);
-    renderer.render(scene, camera);
-    requestAnimationFrame(loop);
+// ============================================================
+// Minimap
+// ============================================================
+const miniCanvas = document.getElementById("minimap");
+const miniCtx = miniCanvas.getContext("2d");
+function tickMinimap() {
+  const w = 160, h = 160;
+  miniCtx.clearRect(0, 0, w, h);
+  // scale: terrain spans -R..+R, draw to 0..160
+  const k = w / (TERRAIN_RADIUS * 2);
+  const cx = w / 2, cy = h / 2;
+  function toMini(x, z) { return [cx + x * k, cy + z * k]; }
+  // background
+  miniCtx.fillStyle = "rgba(255,255,255,0.06)";
+  miniCtx.fillRect(0, 0, w, h);
+  // path line
+  miniCtx.strokeStyle = "rgba(160,200,255,0.4)";
+  miniCtx.lineWidth = 1;
+  miniCtx.beginPath();
+  for (let i = 0; i <= 60; i++) {
+    const z = -TERRAIN_RADIUS + (i / 60) * TERRAIN_RADIUS * 2;
+    const x = Math.sin(z * 0.014) * 14 + Math.cos(z * 0.005) * 6;
+    const [mx, my] = toMini(x, z);
+    if (i === 0) miniCtx.moveTo(mx, my); else miniCtx.lineTo(mx, my);
   }
+  miniCtx.stroke();
+  // checkpoints
+  for (const cp of checkpoints) {
+    const [mx, my] = toMini(cp.x, cp.z);
+    miniCtx.fillStyle = cp.passed ? "rgba(120,255,140,0.9)" : "rgba(255,224,96,0.9)";
+    miniCtx.beginPath();
+    miniCtx.arc(mx, my, 2.2, 0, Math.PI * 2);
+    miniCtx.fill();
+  }
+  // peers
+  for (const p of peers.values()) {
+    if (p.last.x === undefined) continue;
+    const [mx, my] = toMini(p.last.x, p.last.z);
+    miniCtx.fillStyle = `#${(p.color || 0xaaaaaa).toString(16).padStart(6, "0")}`;
+    miniCtx.beginPath();
+    miniCtx.arc(mx, my, 2.5, 0, Math.PI * 2);
+    miniCtx.fill();
+  }
+  // me
+  const [mx, my] = toMini(player.pos.x, player.pos.z);
+  miniCtx.fillStyle = "#ffffff";
+  miniCtx.beginPath();
+  miniCtx.arc(mx, my, 3.5, 0, Math.PI * 2);
+  miniCtx.fill();
+  // my heading arrow
+  miniCtx.strokeStyle = "#ffffff";
+  miniCtx.lineWidth = 2;
+  miniCtx.beginPath();
+  miniCtx.moveTo(mx, my);
+  miniCtx.lineTo(mx + Math.sin(player.heading + Math.PI) * 8, my + Math.cos(player.heading + Math.PI) * 8);
+  miniCtx.stroke();
+}
+
+// ============================================================
+// HUD updates
+// ============================================================
+function tickHud() {
+  const speedKmh = (player.vel.length() * 3.6).toFixed(0);
+  document.getElementById("speed").textContent = `${speedKmh} km/h`;
+  document.getElementById("time").textContent = fmtTime(raceTime);
+}
+
+// ============================================================
+// Resize
+// ============================================================
+addEventListener("resize", () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+// ============================================================
+// Copy prompt button
+// ============================================================
+const PROMPT_TEMPLATE = `Create a web-based skiing/snowboarding game inspired by Lonely Mountains: Snow Riders with: CORE FEATURES: - Low-poly, procedural diorama-style 3D mountain environments - Physics-based skiing/snowboarding with momentum and realistic turning - Multiple paths and hidden shortcuts on each mountain - Time trials and trick-based challenges - Character customization and equipment progression - Simple multiplayer racing (2-8 players) and ghost data competition TECHNICAL IMPLEMENTATION: - Three.js for 3D rendering with optimized low-poly models - Physics engine (Cannon.js/Ammo.js) for realistic movement and crashes - Responsive controls for both desktop and mobile - WebSockets for basic multiplayer functionality - Dynamic snow effects (trails, powder spray) and particle systems GAMEPLAY MECHANICS: - Momentum-based skiing with different snow types affecting handling - Jump and trick system with mid-air controls and scoring - Quick respawn after crashes to maintain flow - Checkpoint system with time trials and exploration goals - Unlockable equipment that affects handling characteristics VISUAL & AUDIO STYLE: ultra realistic shader almost like ray tracing - Satisfying snow sounds that vary by speed and terrain - Ambient mountain audio and minimalist background music CREATE A GAME THAT BALANCES: - Challenge with relaxation - Accessibility with skill-based mastery - Competitive racing with peaceful exploration - Minimalist visuals with engaging gameplay Focus first on core physics and feel, then expand with additional features as development progresses. Think step by step longer and harder-deeper.`;
+
+const copyBtn = document.getElementById("copy-prompt");
+const toastEl = document.getElementById("toast");
+let toastTimer = null;
+function showToast(msg) {
+  toastEl.textContent = msg;
+  toastEl.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toastEl.classList.remove("show"), 1600);
+}
+copyBtn.addEventListener("click", async () => {
+  try {
+    await navigator.clipboard.writeText(PROMPT_TEMPLATE);
+    copyBtn.classList.add("ok");
+    copyBtn.textContent = "Copied";
+    showToast("Prompt copied to clipboard");
+    setTimeout(() => { copyBtn.classList.remove("ok"); copyBtn.textContent = "Copy prompt template"; }, 1600);
+  } catch (_) {
+    const ta = document.createElement("textarea");
+    ta.value = PROMPT_TEMPLATE;
+    ta.style.position = "fixed"; ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand("copy"); showToast("Prompt copied to clipboard"); }
+    catch (_e) { showToast("Copy failed - select manually"); }
+    document.body.removeChild(ta);
+  }
+});
+
+// ============================================================
+// Main loop
+// ============================================================
+const FIXED_DT = 1 / 120; // physics fixed-step
+let accumulator = 0;
+const clock = new THREE.Clock();
+let bootHidden = false;
+
+function loop() {
   requestAnimationFrame(loop);
+  const dt = Math.min(0.1, clock.getDelta());
+  accumulator += dt;
+  // Run physics in fixed steps (substeps avoid skip-through)
+  let steps = 0;
+  while (accumulator >= FIXED_DT && steps < 8) {
+    tickPlayer(FIXED_DT);
+    accumulator -= FIXED_DT;
+    steps++;
+  }
+  // capped catch-up: if we fell way behind, just drop the residual
+  if (accumulator > FIXED_DT * 8) accumulator = 0;
 
-  // expose for debugging
-  window.__snowriders = { world, playerBody, sampleTerrainHeightAt, gates, peers };
+  tickRace(dt);
+  tickGhost();
+  tickCamera(dt);
+  tickTrail(performance.now() / 1000);
+  // emit spray on ground when moving
+  if (!player.airborne && player.vel.length() > 6) {
+    if (Math.random() < 0.7) emitSpray();
+  }
+  tickSpray(dt);
+  tickAudio();
+  tickPeers();
+  tickHud();
+  tickMinimap();
 
-  </script>
+  if (!bootHidden) {
+    bootHidden = true;
+    setTimeout(() => document.getElementById("boot").classList.add("gone"), 200);
+  }
+
+  renderer.render(scene, camera);
+}
+loop();
+</script>
 </body>
 </html>
