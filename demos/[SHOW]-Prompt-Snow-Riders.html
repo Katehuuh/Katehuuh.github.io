@@ -326,27 +326,49 @@ terrainGeo.rotateX(-Math.PI / 2); // lay flat (Y up)
   terrainGeo.computeVertexNormals();
 }
 
-// Snow material with subtle blue-ish shadow tint
+// Snow material with subtle vertex-color noise so it's not perfectly uniform.
+// Three octaves of position-based noise tint each vertex slightly cooler/warmer.
+{
+  const colors = new Float32Array(terrainGeo.attributes.position.count * 3);
+  const pos = terrainGeo.attributes.position;
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i), z = pos.getZ(i);
+    // Tiny color variation: cool blue in shadow areas, warm white on tops
+    const n1 = noise2D(x * 0.04, z * 0.04) * 0.5 + 0.5; // 0..1
+    const n2 = noise2D(x * 0.18, z * 0.18) * 0.5 + 0.5;
+    const tint = n1 * 0.7 + n2 * 0.3;
+    // White base with a hint of blue on lower-tint vertices
+    const r = 0.92 + tint * 0.06;
+    const g = 0.93 + tint * 0.06;
+    const b = 0.96 + tint * 0.04;
+    colors[i * 3] = r;
+    colors[i * 3 + 1] = g;
+    colors[i * 3 + 2] = b;
+  }
+  terrainGeo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+}
 const terrainMat = new THREE.MeshStandardMaterial({
-  color: 0xf2f6ff,
-  roughness: 0.92,
-  metalness: 0.02,
+  color: 0xffffff,
+  vertexColors: true,
+  roughness: 0.93,
+  metalness: 0.03,
   flatShading: false
 });
 const terrain = new THREE.Mesh(terrainGeo, terrainMat);
 terrain.receiveShadow = true;
 scene.add(terrain);
 
-// Far backdrop ring of low-poly snowy peaks for horizon depth
+// Far backdrop ring of distant peaks. Pushed out beyond visible range and
+// dark grey-blue so they fade into fog instead of looking like white prisms.
 {
   const peakGroup = new THREE.Group();
-  const peakMat = new THREE.MeshStandardMaterial({ color: 0xc8d8ec, roughness: 1, flatShading: true });
-  for (let i = 0; i < 36; i++) {
-    const a = (i / 36) * Math.PI * 2;
-    const r = TERRAIN_RADIUS * 1.3;
-    const h = 30 + Math.random() * 40;
-    const peak = new THREE.Mesh(new THREE.ConeGeometry(20 + Math.random() * 10, h, 5), peakMat);
-    peak.position.set(Math.cos(a) * r, h / 2 - 10, Math.sin(a) * r);
+  const peakMat = new THREE.MeshStandardMaterial({ color: 0x6c829c, roughness: 1, flatShading: true });
+  for (let i = 0; i < 28; i++) {
+    const a = (i / 28) * Math.PI * 2 + Math.random() * 0.1;
+    const r = TERRAIN_RADIUS * 1.85;
+    const h = 80 + Math.random() * 50;
+    const peak = new THREE.Mesh(new THREE.ConeGeometry(35 + Math.random() * 25, h, 5), peakMat);
+    peak.position.set(Math.cos(a) * r, h / 2 - 30, Math.sin(a) * r);
     peak.rotation.y = Math.random() * Math.PI;
     peakGroup.add(peak);
   }
@@ -458,7 +480,7 @@ placeProps();
 // twinkling specks scattered on the visible snow surface.
 // ============================================================
 {
-  const SPARKLE_COUNT = 4000;
+  const SPARKLE_COUNT = 8500;
   const sparklePos = new Float32Array(SPARKLE_COUNT * 3);
   const sparklePhase = new Float32Array(SPARKLE_COUNT);
   for (let i = 0; i < SPARKLE_COUNT; i++) {
@@ -769,10 +791,12 @@ class Skier {
       return; // no pose blending while ragdolling
     }
 
-    // Normal posed mode: position group at foot, rotate toward heading
+    // Normal posed mode: position group at foot, rotate toward heading.
+    // The rig is built facing local +Z, but player.heading=0 means moving
+    // toward world -Z. Add PI so skier faces the movement direction, not away.
     this.group.position.copy(footPos);
-    // Quaternion lerp on heading for smooth turns
-    this.group.rotation.set(0, heading, 0);
+    this.group.rotation.order = "YXZ";
+    this.group.rotation.set(0, heading + Math.PI, 0);
     // Lerp each joint rotation toward state pose
     const target = POSES[this.state] || POSES.ski;
     const b = this.poseBlend;
@@ -1118,28 +1142,44 @@ function tickCamera(dt) {
 // ============================================================
 // Snow trail (line behind player)
 // ============================================================
-// Persistent ski tracks - dark depression line that stays carved into snow
-const trailMax = 240;
+// Persistent ski tracks: render each ski's contact point as a small
+// dark Points dot. Points (unlike Lines) have no segment to wrap weirdly,
+// so the cyclic buffer is safe and we get two parallel ski lines.
+const TRAIL_MAX = 600; // ~5 minutes of skiing at 0.05s per emit
 const trailGeo = new THREE.BufferGeometry();
-const trailPositions = new Float32Array(trailMax * 3);
+const trailPositions = new Float32Array(TRAIL_MAX * 3);
+for (let i = 0; i < TRAIL_MAX; i++) trailPositions[i * 3 + 1] = -1000; // park dead points below ground
 trailGeo.setAttribute("position", new THREE.BufferAttribute(trailPositions, 3));
-const trailMat = new THREE.LineBasicMaterial({ color: 0x6a82a4, transparent: true, opacity: 0.55, linewidth: 2 });
-const trailLine = new THREE.Line(trailGeo, trailMat);
-trailLine.renderOrder = 1;
-scene.add(trailLine);
+const trailMat = new THREE.PointsMaterial({
+  color: 0x4a5e7a,
+  size: 0.18,
+  sizeAttenuation: true,
+  transparent: true,
+  opacity: 0.55,
+  depthWrite: false
+});
+const trailPts = new THREE.Points(trailGeo, trailMat);
+trailPts.renderOrder = 2;
+scene.add(trailPts);
 let trailIdx = 0;
 let trailLastTime = 0;
 function tickTrail(now) {
-  if (now - trailLastTime < 0.04) return;
+  if (now - trailLastTime < 0.05) return;
   trailLastTime = now;
-  const idx = trailIdx % trailMax;
-  trailPositions[idx * 3] = player.pos.x;
-  trailPositions[idx * 3 + 1] = player.pos.y - PLAYER_RADIUS + 0.05;
-  trailPositions[idx * 3 + 2] = player.pos.z;
-  trailIdx++;
+  if (player.skier && player.skier.ragdoll) return;
+  // Two ski tracks: project sideways (perpendicular to heading) by SKI_OFFSET
+  const SKI_OFFSET = 0.18;
+  const rightX = Math.cos(player.heading);
+  const rightZ = -Math.sin(player.heading);
+  const baseY = heightAt(player.pos.x, player.pos.z) + 0.04;
+  for (const sign of [-1, 1]) {
+    const i = (trailIdx % TRAIL_MAX) * 3;
+    trailPositions[i] = player.pos.x + rightX * SKI_OFFSET * sign;
+    trailPositions[i + 1] = baseY;
+    trailPositions[i + 2] = player.pos.z + rightZ * SKI_OFFSET * sign;
+    trailIdx++;
+  }
   trailGeo.attributes.position.needsUpdate = true;
-  // limit drawcount until buffer fills
-  trailGeo.setDrawRange(0, Math.min(trailIdx, trailMax));
 }
 
 // ============================================================
