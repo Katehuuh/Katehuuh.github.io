@@ -1,6 +1,11 @@
 {
   "demos": [
     {
+      "name": "[SHOW]-Prompt-3D-Maze",
+      "type": "file",
+      "filename": "[SHOW]-Prompt-3D-Maze.html"
+    },
+    {
       "name": "[SHOW]-X-Toy-Clone",
       "type": "file",
       "filename": "[SHOW]-X-Toy-Clone.html"
