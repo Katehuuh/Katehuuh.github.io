@@ -1,6 +1,11 @@
 {
   "demos": [
     {
+      "name": "[SHOW]-Prompt-Snow-Riders",
+      "type": "file",
+      "filename": "[SHOW]-Prompt-Snow-Riders.html"
+    },
+    {
       "name": "[SHOW]-Prompt-Game-Jam",
       "type": "file",
       "filename": "[SHOW]-Prompt-Game-Jam.html"
