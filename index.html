@@ -1303,14 +1303,37 @@ const _likeObserver = ('IntersectionObserver' in window) ? new IntersectionObser
     _likeFetchQueue.push({
       slug: btn.dataset.slug,
       cb: (n) => {
-        if (n === null) { btn.style.display = 'none'; return; }
+        if (n === null) {
+          // Live fetch failed - keep whatever cached count is showing.
+          // Only hide the button if we never got a count from any source.
+          if (getCachedCount(btn.dataset.slug) === null) btn.style.display = 'none';
+          return;
+        }
         btn.querySelector('.count').textContent = n;
+        setCachedCount(btn.dataset.slug, n);
         notifyLikeCountLoaded(btn.dataset.slug, n);
       }
     });
     pumpLikeFetchQueue();
   }
 }, { rootMargin: '300px' }) : null;
+
+// Tiny localStorage cache so returning visitors get INSTANT counts on
+// page load (and Sort-by-Likes works in 0ms instead of waiting 14s for
+// the throttled queue to drain). The cache is always shown first, then
+// silently overwritten by whatever the live API returns. Stale data is
+// fine - like counts are eventual-consistency vanity numbers.
+function getCachedCount(slug) {
+  const v = localStorage.getItem(`like-count-${slug}`);
+  if (!v) return null;
+  const n = parseInt(v, 10);
+  return isFinite(n) ? n : null;
+}
+function setCachedCount(slug, n) {
+  if (typeof n === 'number' && isFinite(n)) {
+    localStorage.setItem(`like-count-${slug}`, String(n));
+  }
+}
 
 function makeLikeButton(slug) {
   const heart = `<svg class="heart" viewBox="0 0 24 24" aria-hidden="true">
@@ -1331,15 +1354,24 @@ function makeLikeButton(slug) {
     e.stopPropagation();
     handleLikeClick(btn);
   });
-  // Hand off the global-count fetch to the lazy/throttled observer.
-  // Browsers without IntersectionObserver fall back to the immediate
-  // (un-throttled) fetch - the only way they hit 429 is reload-spam.
+  // Show cached count immediately - returning visitors see real numbers
+  // before the network round-trip even starts. Also feeds the Sort map
+  // so Sort-by-Likes works without waiting for the queue to drain.
+  const cached = getCachedCount(slug);
+  if (cached !== null) {
+    btn.querySelector('.count').textContent = cached;
+    notifyLikeCountLoaded(slug, cached);
+  }
+  // Hand off the live fetch to the lazy/throttled observer for the
+  // background refresh. Browsers without IntersectionObserver fall back
+  // to the immediate (un-throttled) fetch.
   if (_likeObserver) {
     _likeObserver.observe(btn);
   } else {
     fetchLikeCount(slug).then(n => {
-      if (n === null) { btn.style.display = 'none'; return; }
+      if (n === null) { if (cached === null) btn.style.display = 'none'; return; }
       btn.querySelector('.count').textContent = n;
+      setCachedCount(slug, n);
       notifyLikeCountLoaded(slug, n);
     });
   }
@@ -1412,6 +1444,7 @@ async function handleLikeClick(btn) {
   }
   if (d && typeof d.count === 'number') {
     countEl.textContent = d.count;
+    setCachedCount(slug, d.count);
     notifyLikeCountLoaded(slug, d.count);
   } else {
     // Network really failed - revert optimistic UI so the user sees the
