@@ -80,11 +80,30 @@ a:hover { color: #ffb98d; }
 ::selection { background: var(--accent-soft); color: var(--accent); }
 
 .hero { text-align: center; margin-bottom: 2.4rem; }
+.avatar-wrap {
+  position: relative; display: inline-block;
+  margin: 0 auto .9rem;
+}
 .avatar {
   width: 110px; height: 110px; border-radius: 50%; display: block;
-  margin: 0 auto .9rem;
   box-shadow: 0 0 0 1px var(--line), 0 30px 60px -20px rgba(255, 107, 53, 0.18);
 }
+/* Visit counter sits at the bottom-right of the avatar like a status
+   bubble. No pill background, no border - just inline glyph + number,
+   subtle tint so it reads as ambient info, not a button. */
+.visits-badge {
+  position: absolute; bottom: 2px; right: -4px;
+  display: inline-flex; align-items: center; gap: .15rem;
+  padding: 2px 6px; border-radius: 999px;
+  font: 600 .8rem/1 ui-sans-serif, system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent); background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(4px);
+  pointer-events: none; user-select: none;
+  white-space: nowrap;
+}
+.visits-badge .emoji { font-size: .95rem; line-height: 1; }
+.visits-badge.hidden { display: none; }
 .icon-nav { display: inline-flex; gap: .25rem; justify-content: center; }
 /* Direct-child selectors only - descendant `.icon-nav a` would also match
    popover pills and force them to 48x48 circles. */
@@ -100,18 +119,6 @@ a:hover { color: #ffb98d; }
 }
 .icon-nav svg { display: block; }
 .icon-nav .emoji { font-size: 1.35rem; line-height: 1; display: inline-block; -webkit-text-fill-color: initial; }
-/* Visitor counter badge - sits inline with the social icons, smaller
-   text since it's a number rather than a navigation target. */
-.visits-badge {
-  display: inline-flex; align-items: center; gap: .35rem;
-  margin-left: .5rem; padding: .25rem .55rem;
-  border: 1px solid transparent; border-radius: 999px;
-  font: 600 .85rem/1 ui-sans-serif, system-ui, sans-serif;
-  color: var(--accent); background: var(--accent-soft, rgba(255,255,255,.04));
-  font-variant-numeric: tabular-nums;
-}
-.visits-badge .emoji { font-size: 1.1rem; line-height: 1; }
-.visits-badge.hidden { display: none; }
 
 /* Popover above icon, sibling of icon-link so item clicks don't fire icon's href.
    2-col grid with content-sized columns keeps rows visually balanced (no orphan
@@ -610,7 +617,16 @@ section h2 .alias-mark {
 <main>
 
   <header class="hero rise" data-d="1">
-    <img class="avatar" src="https://avatars.githubusercontent.com/u/133996730?v=4" alt="" loading="eager" width="120" height="120">
+    <span class="avatar-wrap">
+      <img class="avatar" src="https://avatars.githubusercontent.com/u/133996730?v=4" alt="" loading="eager" width="120" height="120">
+      <!-- Per-browser-per-day unique visitor counter (Abacus-backed),
+           displayed as a corner bubble on the avatar so it reads as
+           ambient info rather than a clickable badge. New browser →
+           /hit (creates+increments). Returning within 24h → /get only. -->
+      <span class="visits-badge" id="visits-badge" title="unique visitors (per browser per 24h)">
+        <span class="emoji" aria-hidden="true">👀</span><span id="visit-count">·</span>
+      </span>
+    </span>
     <nav class="icon-nav" aria-label="profiles">
       <a href="https://github.com/Katehuuh" aria-label="GitHub" title="GitHub">
         <svg viewBox="0 0 16 16" width="22" height="22" fill="currentColor" aria-hidden="true">
@@ -622,15 +638,6 @@ section h2 .alias-mark {
         <img src="https://websim.com/favicon.ico" alt="" width="22" height="22" loading="lazy" style="display:block;border-radius:4px;background:rgba(255,255,255,.04)">
       </a>
       <a href="demos/CatBench/" aria-label="CatBench" title="CatBench"><span class="emoji">🐱</span></a>
-      <!-- Per-browser-per-day unique visitor counter (Abacus-backed).
-           Repurposes the per-key-counter API for its actual sweet spot:
-           ONE counter, one read+write per visitor per 24h, gated by a
-           localStorage timestamp. New browser → /hit (creates+increments,
-           returns new total). Returning within 24h → /get (just reads).
-           No popup, no signup, no key, well within Abacus's rate limit. -->
-      <span class="visits-badge" id="visits-badge" title="unique visitors (per browser per 24h)">
-        <span class="emoji" aria-hidden="true">👀</span><span id="visit-count">·</span>
-      </span>
     </nav>
   </header>
 
@@ -1283,10 +1290,16 @@ function restoreNaturalOrder() {
 // Nostr is a comms protocol (not analytics), not on EasyPrivacy, public
 // relays are professionally operated (Damus, Nos.lol, nostr.band), and
 // kind:7 reactions are exactly the semantic we need (NIP-25).
+// Three professionally-run relays. Damus (Jack Dorsey-funded), Nos.lol
+// (community-run, very stable), Primal (commercial Nostr client team).
+// nostr.band was originally here but it's a search-index relay rather
+// than a write-optimized one and was timing out (probed: 5s timeout vs
+// 200 OK on the other three). We need *write* reliability for the click
+// path more than search/discovery features.
 const NOSTR_RELAYS = [
   'wss://relay.damus.io',
   'wss://nos.lol',
-  'wss://relay.nostr.band'
+  'wss://relay.primal.net'
 ];
 // Versioned namespace prefix - bump if the slug-hashing scheme ever
 // changes, so old reactions for a different scheme don't show up under
