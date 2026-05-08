@@ -1236,7 +1236,7 @@ function tickCamera(dt) {
 // Approach lifted from option 2 of the user's research:
 //   https://www.reddit.com/r/Unity3D/.../snow_deformation_shader/
 // ============================================================
-const TRAIL_RT_SIZE = 1024;
+const TRAIL_RT_SIZE = 2048;
 const trailRT = new THREE.WebGLRenderTarget(TRAIL_RT_SIZE, TRAIL_RT_SIZE, {
   minFilter: THREE.LinearFilter,
   magFilter: THREE.LinearFilter,
@@ -1254,65 +1254,114 @@ const trailRT = new THREE.WebGLRenderTarget(TRAIL_RT_SIZE, TRAIL_RT_SIZE, {
   renderer.setRenderTarget(prevTarget);
   renderer.setClearColor(prevColor, prevAlpha);
 }
-// Stamp scene: a tiny disk with a soft radial gradient drawn additively.
+// Stamp scene: a soft disk where the falloff is in the RGB channels (NOT
+// alpha). With CustomBlending + MaxEquation, every channel is processed
+// independently, so an alpha-falloff stamp would write R=255 across the
+// whole disc, giving you hard-edged blotches. Putting the falloff in RGB
+// means edge pixels write (0,0,0) and max(0, prev) leaves them untouched.
 const trailStampScene = new THREE.Scene();
 const trailStampCam   = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
-{
-  const stampSize = 64;
+function makeStampTexture() {
+  const stampSize = 96;
   const cnv = document.createElement("canvas");
   cnv.width = cnv.height = stampSize;
   const cctx = cnv.getContext("2d");
   const grad = cctx.createRadialGradient(stampSize / 2, stampSize / 2, 0, stampSize / 2, stampSize / 2, stampSize / 2);
-  grad.addColorStop(0.0, "rgba(255,255,255,1)");
-  grad.addColorStop(0.55, "rgba(255,255,255,0.45)");
-  grad.addColorStop(1.0, "rgba(255,255,255,0)");
+  grad.addColorStop(0.0, "rgb(255,255,255)");
+  grad.addColorStop(0.45, "rgb(170,170,170)");
+  grad.addColorStop(0.85, "rgb(40,40,40)");
+  grad.addColorStop(1.0, "rgb(0,0,0)");
   cctx.fillStyle = grad;
   cctx.fillRect(0, 0, stampSize, stampSize);
-  const stampTex = new THREE.CanvasTexture(cnv);
-  // CustomBlending + MaxEquation = "max(prev, stamp)" so re-skiing the
-  // same line doesn't saturate the depth mask to solid white in seconds.
-  // (Additive blending would; this is the standard Unity/UE pattern.)
-  const stampMat = new THREE.MeshBasicMaterial({
-    map: stampTex,
-    transparent: true,
-    blending: THREE.CustomBlending,
-    blendEquation: THREE.MaxEquation,
-    blendSrc: THREE.OneFactor,
-    blendDst: THREE.OneFactor,
-    depthTest: false,
-    depthWrite: false
-  });
-  // Stamp covers a ~2-meter disk in world space. Plane is in NDC [-1,1],
-  // so a meter is 1/TERRAIN_RADIUS in NDC units.
-  const stampDiameter = 2.0 / TERRAIN_RADIUS;
-  const stampGeo = new THREE.PlaneGeometry(stampDiameter, stampDiameter);
-  const stampMesh = new THREE.Mesh(stampGeo, stampMat);
-  trailStampScene.add(stampMesh);
-  trailStampScene.userData.stampMesh = stampMesh;
+  return new THREE.CanvasTexture(cnv);
 }
-let trailLastTime = 0;
+const trailStampMat = new THREE.MeshBasicMaterial({
+  map: makeStampTexture(),
+  transparent: false,
+  blending: THREE.CustomBlending,
+  blendEquation: THREE.MaxEquation,
+  blendSrc: THREE.OneFactor,
+  blendDst: THREE.OneFactor,
+  depthTest: false,
+  depthWrite: false
+});
+// Two narrow ski stamps (parallel lines) + one wide body stamp for
+// ragdoll. Each NDC unit is TERRAIN_RADIUS meters.
+const PER_M = 1 / TERRAIN_RADIUS;
+const skiStampGeo  = new THREE.PlaneGeometry(0.45 * PER_M, 0.45 * PER_M);
+const bodyStampGeo = new THREE.PlaneGeometry(2.0  * PER_M, 0.9  * PER_M);
+const skiStampL = new THREE.Mesh(skiStampGeo,  trailStampMat);
+const skiStampR = new THREE.Mesh(skiStampGeo,  trailStampMat);
+const bodyStamp = new THREE.Mesh(bodyStampGeo, trailStampMat);
+trailStampScene.add(skiStampL);
+trailStampScene.add(skiStampR);
+trailStampScene.add(bodyStamp);
+skiStampL.visible = skiStampR.visible = bodyStamp.visible = false;
+
+// Ski position from previous frame, so we can interpolate between prev <->
+// curr at 80 m/s without gaps (per-frame would still gap at 1.3 m/frame).
+const _prevSkiL = new THREE.Vector2();
+const _prevSkiR = new THREE.Vector2();
+let _prevSkiInit = false;
+
+function stampAt(mesh, u, v, rotationRad) {
+  if (Math.abs(u) > 0.999 || Math.abs(v) > 0.999) return;
+  mesh.position.set(u, v, 0);
+  mesh.rotation.z = rotationRad || 0;
+  mesh.visible = true;
+  renderer.render(trailStampScene, trailStampCam);
+  mesh.visible = false;
+}
+
 function tickTrail(now) {
-  if (now - trailLastTime < 0.04) return;
-  trailLastTime = now;
-  if (player.skier && player.skier.ragdoll) return;
-  if (player.airborne) return;
+  if (player.airborne) { _prevSkiInit = false; return; }
   const SKI_OFFSET = 0.18;
   const rightX = Math.cos(player.heading);
   const rightZ = -Math.sin(player.heading);
-  const stampMesh = trailStampScene.userData.stampMesh;
+
   const prevTarget = renderer.getRenderTarget();
   const prevAutoClear = renderer.autoClear;
-  renderer.autoClear = false; // accumulate, don't wipe the RT
+  renderer.autoClear = false;
   renderer.setRenderTarget(trailRT);
-  for (const sign of [-1, 1]) {
-    const wx = player.pos.x + rightX * SKI_OFFSET * sign;
-    const wz = player.pos.z + rightZ * SKI_OFFSET * sign;
-    const u = wx / TERRAIN_RADIUS;
-    const v = wz / TERRAIN_RADIUS;
-    if (Math.abs(u) > 0.999 || Math.abs(v) > 0.999) continue;
-    stampMesh.position.set(u, v, 0);
-    renderer.render(trailStampScene, trailStampCam);
+
+  if (player.skier && player.skier.ragdoll) {
+    // Ragdoll body imprint: wide oblong stamp aligned with heading at the
+    // ragdoll body's current XZ. No interpolation - body tumbles in place.
+    const u = player.pos.x / TERRAIN_RADIUS;
+    const v = player.pos.z / TERRAIN_RADIUS;
+    stampAt(bodyStamp, u, v, -player.heading);
+    _prevSkiInit = false;
+  } else {
+    const lwx = player.pos.x + rightX * SKI_OFFSET * -1;
+    const lwz = player.pos.z + rightZ * SKI_OFFSET * -1;
+    const rwx = player.pos.x + rightX * SKI_OFFSET *  1;
+    const rwz = player.pos.z + rightZ * SKI_OFFSET *  1;
+    const lu = lwx / TERRAIN_RADIUS, lv = lwz / TERRAIN_RADIUS;
+    const ru = rwx / TERRAIN_RADIUS, rv = rwz / TERRAIN_RADIUS;
+    if (!_prevSkiInit) {
+      _prevSkiL.set(lu, lv);
+      _prevSkiR.set(ru, rv);
+      _prevSkiInit = true;
+    }
+    // Interpolate from previous ski position to current. Step size is half
+    // the stamp's radius in NDC so we always overlap.
+    const stepNDC = (0.45 * 0.5) * PER_M;
+    const dl = Math.hypot(lu - _prevSkiL.x, lv - _prevSkiL.y);
+    const dr = Math.hypot(ru - _prevSkiR.x, rv - _prevSkiR.y);
+    const stepsL = Math.max(1, Math.min(40, Math.ceil(dl / stepNDC)));
+    const stepsR = Math.max(1, Math.min(40, Math.ceil(dr / stepNDC)));
+    for (let i = 1; i <= stepsL; i++) {
+      const t = i / stepsL;
+      stampAt(skiStampL, _prevSkiL.x + (lu - _prevSkiL.x) * t, _prevSkiL.y + (lv - _prevSkiL.y) * t, 0);
+    }
+    for (let i = 1; i <= stepsR; i++) {
+      const t = i / stepsR;
+      stampAt(skiStampR, _prevSkiR.x + (ru - _prevSkiR.x) * t, _prevSkiR.y + (rv - _prevSkiR.y) * t, 0);
+    }
+    _prevSkiL.set(lu, lv);
+    _prevSkiR.set(ru, rv);
   }
+
   renderer.autoClear = prevAutoClear;
   renderer.setRenderTarget(prevTarget);
 }
@@ -1323,7 +1372,7 @@ function tickTrail(now) {
 terrainMat.onBeforeCompile = (shader) => {
   shader.uniforms.uTrailMap = { value: trailRT.texture };
   shader.uniforms.uTerrainRadius = { value: TERRAIN_RADIUS };
-  shader.uniforms.uTrailDepth = { value: 0.22 };
+  shader.uniforms.uTrailDepth = { value: 0.55 };
   shader.uniforms.uTexelSize = { value: 1.0 / TRAIL_RT_SIZE };
   shader.vertexShader = shader.vertexShader
     .replace("#include <common>", `
@@ -1345,15 +1394,17 @@ transformed.y -= trail * uTrailDepth;
     .replace("#include <beginnormal_vertex>", `
 #include <beginnormal_vertex>
 {
-  // Sobel-style slope of the trail map - lets lighting respond to track
-  // depth without an actual geometry shader.
+  // Sobel-style slope of the trail map - lets lighting respond to the
+  // displacement so tracks read as 3D depressions, not just darker tint.
+  // The 8.0 factor exaggerates the physical slope; lighting then makes
+  // the side wall of each ski groove visibly catch shadow.
   vec2 uv = position.xz / (2.0 * uTerrainRadius) + 0.5;
   float dHx = texture2D(uTrailMap, uv + vec2(uTexelSize, 0.0)).r
             - texture2D(uTrailMap, uv - vec2(uTexelSize, 0.0)).r;
   float dHz = texture2D(uTrailMap, uv + vec2(0.0, uTexelSize)).r
             - texture2D(uTrailMap, uv - vec2(0.0, uTexelSize)).r;
-  vec3 trailNormal = normalize(vec3(-dHx * 6.0, 1.0, -dHz * 6.0));
-  objectNormal = normalize(mix(objectNormal, trailNormal, 0.35));
+  vec3 trailNormal = normalize(vec3(-dHx * 8.0, 1.0, -dHz * 8.0));
+  objectNormal = normalize(mix(objectNormal, trailNormal, 0.6));
 }
 `);
   shader.fragmentShader = shader.fragmentShader
@@ -1364,8 +1415,10 @@ varying float vTrailDepth;
 `)
     .replace("#include <dithering_fragment>", `
 {
-  float t = clamp(vTrailDepth * 1.6, 0.0, 0.85);
-  gl_FragColor.rgb *= mix(vec3(1.0), vec3(0.74, 0.82, 0.96), t);
+  // Subtle gray-ish darkening - the depression itself sells the depth via
+  // shading, no need to wash the snow blue.
+  float t = clamp(vTrailDepth * 1.2, 0.0, 0.55);
+  gl_FragColor.rgb *= mix(vec3(1.0), vec3(0.82, 0.85, 0.88), t);
 }
 #include <dithering_fragment>
 `);
