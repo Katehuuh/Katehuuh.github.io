@@ -1311,6 +1311,10 @@ async function likesApi(slug, action) {
       const j = await r.json();
       if (typeof j.value === 'number') return { count: j.value };
     }
+    // Abacus only creates a counter on first /hit. /get on a fresh slug
+    // returns 404 - that's "no one has liked this demo yet", not an
+    // error. Show 0 so the button stays usable.
+    if (r && r.status === 404 && action === 'get') return { count: 0 };
   } catch { /* network or CORS error */ }
   return null;
 }
