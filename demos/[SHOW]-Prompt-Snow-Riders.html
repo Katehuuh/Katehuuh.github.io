@@ -1608,7 +1608,7 @@ function finishRun() {
   // Push to gun leaderboard
   if (gunOk) {
     try {
-      gun.get("snowriders").get("lb").set({ name: myName, time: finalTime, ts: Date.now() });
+      gun.get(ROOM).get("lb").set({ name: myName, time: finalTime, ts: Date.now() });
     } catch (_) {}
   } else {
     // local leaderboard fallback
@@ -1627,6 +1627,14 @@ function finishRun() {
 let gun = null;
 let gunOk = false;
 const peers = new Map(); // id -> { mesh, last: {x,z,heading}, color, name }
+// Rolling room name: a fresh Gun namespace every 30 minutes. Public Gun
+// relays accumulate every record ever written on a given path, so a long-
+// lived path like "snowriders.players" gets DUMPED in full to every new
+// subscriber - that's where the "syncing 1K+ records a second" warning
+// comes from (Gun's local cache is already disabled). Bucketing the room
+// caps the relay's per-namespace history at ~30 min of activity. Two
+// players who join within the same bucket land in the same room.
+const ROOM = "snowriders_" + Math.floor(Date.now() / (30 * 60 * 1000));
 
 (async function setupGun() {
   try {
@@ -1651,7 +1659,7 @@ const peers = new Map(); // id -> { mesh, last: {x,z,heading}, color, name }
     document.getElementById("net").textContent = "online";
 
     // Subscribe to other players' presence
-    gun.get("snowriders").get("players").map().on((data, id) => {
+    gun.get(ROOM).get("players").map().on((data, id) => {
       if (!data || id === myId) return;
       const stale = Date.now() - (data.ts || 0) > 12000;
       if (stale) {
@@ -1704,14 +1712,14 @@ const peers = new Map(); // id -> { mesh, last: {x,z,heading}, color, name }
     });
 
     // Subscribe to leaderboard
-    gun.get("snowriders").get("lb").map().on((data, id) => {
+    gun.get(ROOM).get("lb").map().on((data, id) => {
       if (!data) return;
       lbCache.set(id, { name: data.name, time: data.time, ts: data.ts });
       renderLeaderboard();
     });
 
     // Subscribe to chat
-    gun.get("snowriders").get("chat").map().on((data, id) => {
+    gun.get(ROOM).get("chat").map().on((data, id) => {
       if (!data || !data.msg) return;
       if (chatSeen.has(id)) return;
       chatSeen.add(id);
@@ -1747,7 +1755,7 @@ const peers = new Map(); // id -> { mesh, last: {x,z,heading}, color, name }
         player.vel.z.toFixed(2) + "," +
         player.heading.toFixed(3);
       try {
-        gun.get("snowriders").get("players").get(myId).put({
+        gun.get(ROOM).get("players").get(myId).put({
           name: myName,
           color: myColor,
           s: s,
@@ -1850,7 +1858,7 @@ function closeChat(send) {
       const ts = Date.now();
       const cid = `${myId}_${ts}`;
       if (gunOk) {
-        try { gun.get("snowriders").get("chat").get(cid).put({ name: myName, msg: v, ts }); } catch (_) {}
+        try { gun.get(ROOM).get("chat").get(cid).put({ name: myName, msg: v, ts }); } catch (_) {}
       }
       pushChatMessage(myName, v, ts);
       chatSeen.add(cid);
