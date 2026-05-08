@@ -10,6 +10,12 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500&family=Geist+Mono:wght@400;500;600&family=Manrope:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%20100%20100%22%3E%3Ctext%20y%3D%2280%22%20font-size%3D%2280%22%3E%F0%9F%90%B1%3C/text%3E%3C/svg%3E">
+<!-- Legacy IE-style "shortcut icon" pointed at the same data URI - Chrome
+     and Firefox still fall back to GET /favicon.ico when only the modern
+     rel="icon" is present, which logs a 404 in the console because GitHub
+     Pages doesn't serve a real .ico file. This second link short-circuits
+     that default request. -->
+<link rel="shortcut icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%20100%20100%22%3E%3Ctext%20y%3D%2280%22%20font-size%3D%2280%22%3E%F0%9F%90%B1%3C/text%3E%3C/svg%3E">
 <style>
 /* Design tokens. Warm-tone dark mode, coral-orange primary, soft rose secondary.
    Fraunces (display), Manrope (body), Geist Mono (mono). */
@@ -1281,7 +1287,11 @@ async function pumpLikeFetchQueue() {
       const n = await fetchLikeCount(job.slug);
       job.cb(n);
     } catch { job.cb(null); }
-    await new Promise(r => setTimeout(r, 350));
+    // 500ms gap = 20 req/10s steady-state - leaves real headroom under
+    // Abacus's 30/10s/IP ceiling for the click path AND for recovery if
+    // an external burst (admin curl, batch /create, another tab) just
+    // consumed part of the same IP's budget.
+    await new Promise(r => setTimeout(r, 500));
   }
   _likeFetchPumping = false;
 }
@@ -1390,14 +1400,21 @@ async function handleLikeClick(btn) {
   }
 
   // First like: optimistic +1, fire global hit, reconcile on response.
+  // Retry once on null - if our IP just ate its rate budget on the
+  // background queue, a 1.5s pause gives the sliding window time to
+  // recover so the click doesn't get permanently lost to a transient 429.
   localStorage.setItem(`liked-${slug}`, '1');
   countEl.textContent = curSafe + 1;
-  const d = await likesApi(slug, 'hit');
+  let d = await likesApi(slug, 'hit');
+  if (!d) {
+    await new Promise(r => setTimeout(r, 1500));
+    d = await likesApi(slug, 'hit');
+  }
   if (d && typeof d.count === 'number') {
     countEl.textContent = d.count;
     notifyLikeCountLoaded(slug, d.count);
   } else {
-    // Network failed - revert optimistic UI so the user sees the
+    // Network really failed - revert optimistic UI so the user sees the
     // request didn't take.
     btn.classList.remove('liked');
     countEl.textContent = curSafe;
