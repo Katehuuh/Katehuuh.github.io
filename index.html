@@ -81,8 +81,12 @@ a:hover { color: #ffb98d; }
 
 .hero { text-align: center; margin-bottom: 2.4rem; }
 .avatar-wrap {
-  position: relative; display: inline-block;
-  margin: 0 auto .9rem;
+  /* Block + fit-content + auto margins so the wrapper sits centered on
+     its own line (mirroring how the bare <img> behaved before the wrap)
+     and shrinks to the avatar's size, which is what positions the
+     absolute-positioned badge against the avatar's edge. */
+  position: relative; display: block;
+  width: fit-content; margin: 0 auto .9rem;
 }
 .avatar {
   width: 110px; height: 110px; border-radius: 50%; display: block;
@@ -1290,16 +1294,21 @@ function restoreNaturalOrder() {
 // Nostr is a comms protocol (not analytics), not on EasyPrivacy, public
 // relays are professionally operated (Damus, Nos.lol, nostr.band), and
 // kind:7 reactions are exactly the semantic we need (NIP-25).
-// Three professionally-run relays. Damus (Jack Dorsey-funded), Nos.lol
-// (community-run, very stable), Primal (commercial Nostr client team).
-// nostr.band was originally here but it's a search-index relay rather
-// than a write-optimized one and was timing out (probed: 5s timeout vs
-// 200 OK on the other three). We need *write* reliability for the click
-// path more than search/discovery features.
+// Six relays - all probed healthy at deploy time. Three "tier 1"
+// professionally-run + three classic free public relays for extra
+// redundancy. Reads: Trystero subscribes to all 6 in parallel and
+// dedupes events by pubkey-set, so coverage is the union. Writes:
+// Promise.any across all 6 - we only need ONE to accept. Excluded:
+// nostr.band (search-index, timeouts), snort.social (down today),
+// nostr.wine (paid, anonymous writes rejected), nostr.fmt.wiz.biz
+// (connection-refused).
 const NOSTR_RELAYS = [
-  'wss://relay.damus.io',
-  'wss://nos.lol',
-  'wss://relay.primal.net'
+  'wss://relay.damus.io',          // Damus client team
+  'wss://nos.lol',                 // community, very stable
+  'wss://relay.primal.net',        // Primal client team
+  'wss://offchain.pub',            // community
+  'wss://nostr.mom',               // community
+  'wss://nostr-pub.wellorder.net'  // one of the OG public relays
 ];
 // Versioned namespace prefix - bump if the slug-hashing scheme ever
 // changes, so old reactions for a different scheme don't show up under
