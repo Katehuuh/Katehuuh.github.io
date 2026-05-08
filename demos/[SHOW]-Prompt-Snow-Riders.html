@@ -767,9 +767,13 @@ class Skier {
     this.group.position.copy(footPos);
     this.group.rotation.order = "YXZ";
     const targetTiltX = (slopeTilt   || 0) * 0.55;
-    // Lateral slope: lean downhill (negative roll when right is lower).
-    // Carving: lean into the turn (positive roll when steering left).
-    const targetTiltZ = -(lateralTilt || 0) * 0.55 + (carveLean || 0);
+    // After Y rotation by Math.PI, the rig's "right" parts (built on local
+    // +X) sit on world -X. Positive Z roll lifts local +X, which is screen
+    // LEFT once the rig is yawed - so positive Z roll tips the body to the
+    // RIGHT visually. carveLean = -0.28 for left-turn input gives the
+    // expected lean-into-turn, and lateralTilt > 0 (right-side downhill)
+    // wants positive Z roll to dip that side.
+    const targetTiltZ = (lateralTilt || 0) * 0.45 + (carveLean || 0);
     if (this._tiltX === undefined) this._tiltX = 0;
     if (this._tiltZ === undefined) this._tiltZ = 0;
     this._tiltX += (targetTiltX - this._tiltX) * 0.18;
@@ -785,22 +789,25 @@ class Skier {
       j.rotation.y += (r[1] - j.rotation.y) * b;
       j.rotation.z += (r[2] - j.rotation.z) * b;
     }
-    // Counter-rotate the ankle so the boot + ski stay flat regardless of
-    // hip + knee bend (this is the ankle dorsiflexion that real skiers do
-    // automatically). Without it, the ski tip dives into the snow whenever
-    // the knee flexes more than ~15deg.
+    // Counter-rotate the ankle so the boot + ski mostly stay flat to the
+    // slope (this is the ankle dorsiflexion that real skiers do
+    // automatically). 0.85 leaves a small natural tip-down angle, like LMSR
+    // screenshots - skis aren't glued perfectly horizontal, the front rides
+    // a bit lower into the snow.
+    const ANKLE_COMP = 0.85;
     const lLegX = this.pelvis.rotation.x + this.lHip.rotation.x + this.lKnee.rotation.x;
     const rLegX = this.pelvis.rotation.x + this.rHip.rotation.x + this.rKnee.rotation.x;
-    this.lFoot.rotation.x = -lLegX;
-    this.rFoot.rotation.x = -rLegX;
+    this.lFoot.rotation.x = -lLegX * ANKLE_COMP;
+    this.rFoot.rotation.x = -rLegX * ANKLE_COMP;
 
-    // IK floor snap: after pose update, the lower ski may sit above or below
-    // the requested footPos.y. Push the group up by whichever ski is lower
-    // so the bottom of that ski exactly meets the slope.
+    // IK floor snap: after pose update, find the lower ski's bottom edge
+    // and shift the group's y so it exactly meets the requested footPos.y.
+    // Account for the small residual ski angle so the heel (not the tip)
+    // is what kisses the snow - the tip then naturally sinks a few cm.
     this.group.updateMatrixWorld(true);
     const lFootW = this.lFoot.getWorldPosition(_skierTmp1).y;
     const rFootW = this.rFoot.getWorldPosition(_skierTmp2).y;
-    const skiBottomY = Math.min(lFootW, rFootW) - 0.09; // ski thickness/offset
+    const skiBottomY = Math.min(lFootW, rFootW) - 0.09;
     this.group.position.y += footPos.y - skiBottomY;
   }
 }
@@ -1124,21 +1131,59 @@ function tickPlayer(dt) {
     if (player.airborne) state = "air";
     else if (keys.tuck) state = "tuck";
     player.skier.setState(state);
-    // Lean into turns: A turns left and the body rolls left (positive Z).
-    carveLean = (keys.a ? 0.28 : 0) + (keys.d ? -0.28 : 0);
+    // A turns left, body should lean left. With YXZ + the rig's Math.PI yaw
+    // flip, that maps to NEGATIVE Z roll (see Skier.step comment).
+    carveLean = (keys.a ? -0.28 : 0) + (keys.d ? 0.28 : 0);
   }
   // Forward slope under the skier (positive = descending).
   const fx2 = -Math.sin(player.heading), fz2 = -Math.cos(player.heading);
   const hHere  = heightAt(player.pos.x,            player.pos.z);
   const hAhead = heightAt(player.pos.x + fx2 * 1.2, player.pos.z + fz2 * 1.2);
   const slopeTilt = Math.atan2(hHere - hAhead, 1.2);
-  // Lateral slope: sample 1m to the player's right and left (right vector
-  // for a heading where +Z=forward is (cos h, 0, -sin h)). Positive when the
-  // right side of the body sits over lower ground.
+  // Lateral slope: sample 1m to the player's right and left. Cap to ~20deg
+  // so the rim wall (which has a near-vertical lateral slope locally) can't
+  // roll the body so far that the head/poles intersect the wall.
   const rx = Math.cos(player.heading), rz = -Math.sin(player.heading);
   const hRight = heightAt(player.pos.x + rx * 1.0, player.pos.z + rz * 1.0);
   const hLeft  = heightAt(player.pos.x - rx * 1.0, player.pos.z - rz * 1.0);
-  const lateralTilt = Math.atan2(hLeft - hRight, 2.0);
+  let lateralTilt = Math.atan2(hLeft - hRight, 2.0);
+  lateralTilt = Math.max(-0.35, Math.min(0.35, lateralTilt));
+
+  // Peer collision: bump self away. Both clients run this symmetrically
+  // (the other player runs the same logic on their side and bounces too),
+  // so we never need to write to the peer's state. Heavier hits (higher
+  // closing speed) transfer more momentum to the bumper and slow self.
+  for (const p of peers.values()) {
+    if (p.last.x === undefined) continue;
+    const dx = player.pos.x - p.last.x;
+    const dz = player.pos.z - p.last.z;
+    const d2 = dx * dx + dz * dz;
+    const r = PLAYER_RADIUS * 2 + 0.2;
+    if (d2 < r * r && d2 > 0.0001) {
+      const d = Math.sqrt(d2);
+      const nx = dx / d, nz = dz / d;
+      // Resolve overlap (move me out fully - peer has done the same locally)
+      const overlap = (r - d);
+      player.pos.x += nx * overlap;
+      player.pos.z += nz * overlap;
+      // Closing speed along the contact normal (peer vel from gun broadcast)
+      const peerVx = p.last.vx || 0, peerVz = p.last.vz || 0;
+      const relVx = player.vel.x - peerVx;
+      const relVz = player.vel.z - peerVz;
+      const closing = relVx * nx + relVz * nz; // negative = approaching
+      if (closing < 0) {
+        // Slightly sub-elastic: the bumper gets pushed away with most of the
+        // closing speed, both lose some lateral momentum from the impact.
+        const j = -closing * 1.6;
+        player.vel.x += nx * j;
+        player.vel.z += nz * j;
+        // Conservation tax: harder hit costs you more forward speed
+        const speedLoss = Math.min(0.6, Math.abs(closing) * 0.04);
+        player.vel.multiplyScalar(1 - speedLoss);
+        flashCrash();
+      }
+    }
+  }
 
   // Foot position = pos minus ground half-radius
   const footPos = _tmp.copy(player.pos);
@@ -1178,45 +1223,155 @@ function tickCamera(dt) {
 // ============================================================
 // Snow trail (line behind player)
 // ============================================================
-// Persistent ski tracks: render each ski's contact point as a small
-// dark Points dot. Points (unlike Lines) have no segment to wrap weirdly,
-// so the cyclic buffer is safe and we get two parallel ski lines.
-const TRAIL_MAX = 600; // ~5 minutes of skiing at 0.05s per emit
-const trailGeo = new THREE.BufferGeometry();
-const trailPositions = new Float32Array(TRAIL_MAX * 3);
-for (let i = 0; i < TRAIL_MAX; i++) trailPositions[i * 3 + 1] = -1000; // park dead points below ground
-trailGeo.setAttribute("position", new THREE.BufferAttribute(trailPositions, 3));
-const trailMat = new THREE.PointsMaterial({
-  color: 0x4a5e7a,
-  size: 0.18,
-  sizeAttenuation: true,
-  transparent: true,
-  opacity: 0.55,
-  depthWrite: false
+// Persistent ski tracks via texture deformation (Unity-style depth mask).
+// Each frame the player's two ski contact points are stamped (additively)
+// into a 1024x1024 RG-channel render target that covers the full terrain
+// bounds. The terrain material's vertex shader then samples this map and
+// pushes its vertex y down (so tracks become real depressions in the
+// geometry), and the fragment shader tints the depressed snow slightly
+// blue + darker. Sobel-style sampling of the map's local slope nudges the
+// vertex normal so lighting reacts to the new depth without needing a
+// geometry shader (which WebGL2 doesn't have).
+//
+// Approach lifted from option 2 of the user's research:
+//   https://www.reddit.com/r/Unity3D/.../snow_deformation_shader/
+// ============================================================
+const TRAIL_RT_SIZE = 1024;
+const trailRT = new THREE.WebGLRenderTarget(TRAIL_RT_SIZE, TRAIL_RT_SIZE, {
+  minFilter: THREE.LinearFilter,
+  magFilter: THREE.LinearFilter,
+  format: THREE.RGBAFormat,
+  type: THREE.UnsignedByteType
 });
-const trailPts = new THREE.Points(trailGeo, trailMat);
-trailPts.renderOrder = 2;
-scene.add(trailPts);
-let trailIdx = 0;
+// Start the RT cleared to black (no tracks anywhere).
+{
+  const prevTarget = renderer.getRenderTarget();
+  const prevColor = renderer.getClearColor(new THREE.Color());
+  const prevAlpha = renderer.getClearAlpha();
+  renderer.setRenderTarget(trailRT);
+  renderer.setClearColor(0x000000, 1);
+  renderer.clear(true, true, true);
+  renderer.setRenderTarget(prevTarget);
+  renderer.setClearColor(prevColor, prevAlpha);
+}
+// Stamp scene: a tiny disk with a soft radial gradient drawn additively.
+const trailStampScene = new THREE.Scene();
+const trailStampCam   = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+{
+  const stampSize = 64;
+  const cnv = document.createElement("canvas");
+  cnv.width = cnv.height = stampSize;
+  const cctx = cnv.getContext("2d");
+  const grad = cctx.createRadialGradient(stampSize / 2, stampSize / 2, 0, stampSize / 2, stampSize / 2, stampSize / 2);
+  grad.addColorStop(0.0, "rgba(255,255,255,1)");
+  grad.addColorStop(0.55, "rgba(255,255,255,0.45)");
+  grad.addColorStop(1.0, "rgba(255,255,255,0)");
+  cctx.fillStyle = grad;
+  cctx.fillRect(0, 0, stampSize, stampSize);
+  const stampTex = new THREE.CanvasTexture(cnv);
+  // CustomBlending + MaxEquation = "max(prev, stamp)" so re-skiing the
+  // same line doesn't saturate the depth mask to solid white in seconds.
+  // (Additive blending would; this is the standard Unity/UE pattern.)
+  const stampMat = new THREE.MeshBasicMaterial({
+    map: stampTex,
+    transparent: true,
+    blending: THREE.CustomBlending,
+    blendEquation: THREE.MaxEquation,
+    blendSrc: THREE.OneFactor,
+    blendDst: THREE.OneFactor,
+    depthTest: false,
+    depthWrite: false
+  });
+  // Stamp covers a ~2-meter disk in world space. Plane is in NDC [-1,1],
+  // so a meter is 1/TERRAIN_RADIUS in NDC units.
+  const stampDiameter = 2.0 / TERRAIN_RADIUS;
+  const stampGeo = new THREE.PlaneGeometry(stampDiameter, stampDiameter);
+  const stampMesh = new THREE.Mesh(stampGeo, stampMat);
+  trailStampScene.add(stampMesh);
+  trailStampScene.userData.stampMesh = stampMesh;
+}
 let trailLastTime = 0;
 function tickTrail(now) {
-  if (now - trailLastTime < 0.05) return;
+  if (now - trailLastTime < 0.04) return;
   trailLastTime = now;
   if (player.skier && player.skier.ragdoll) return;
-  // Two ski tracks: project sideways (perpendicular to heading) by SKI_OFFSET
+  if (player.airborne) return;
   const SKI_OFFSET = 0.18;
   const rightX = Math.cos(player.heading);
   const rightZ = -Math.sin(player.heading);
-  const baseY = heightAt(player.pos.x, player.pos.z) + 0.04;
+  const stampMesh = trailStampScene.userData.stampMesh;
+  const prevTarget = renderer.getRenderTarget();
+  const prevAutoClear = renderer.autoClear;
+  renderer.autoClear = false; // accumulate, don't wipe the RT
+  renderer.setRenderTarget(trailRT);
   for (const sign of [-1, 1]) {
-    const i = (trailIdx % TRAIL_MAX) * 3;
-    trailPositions[i] = player.pos.x + rightX * SKI_OFFSET * sign;
-    trailPositions[i + 1] = baseY;
-    trailPositions[i + 2] = player.pos.z + rightZ * SKI_OFFSET * sign;
-    trailIdx++;
+    const wx = player.pos.x + rightX * SKI_OFFSET * sign;
+    const wz = player.pos.z + rightZ * SKI_OFFSET * sign;
+    const u = wx / TERRAIN_RADIUS;
+    const v = wz / TERRAIN_RADIUS;
+    if (Math.abs(u) > 0.999 || Math.abs(v) > 0.999) continue;
+    stampMesh.position.set(u, v, 0);
+    renderer.render(trailStampScene, trailStampCam);
   }
-  trailGeo.attributes.position.needsUpdate = true;
+  renderer.autoClear = prevAutoClear;
+  renderer.setRenderTarget(prevTarget);
 }
+
+// Patch the terrain material so its vertex shader samples trailRT and
+// presses each vertex down by the accumulated track depth, and its
+// fragment shader tints the depressed snow.
+terrainMat.onBeforeCompile = (shader) => {
+  shader.uniforms.uTrailMap = { value: trailRT.texture };
+  shader.uniforms.uTerrainRadius = { value: TERRAIN_RADIUS };
+  shader.uniforms.uTrailDepth = { value: 0.22 };
+  shader.uniforms.uTexelSize = { value: 1.0 / TRAIL_RT_SIZE };
+  shader.vertexShader = shader.vertexShader
+    .replace("#include <common>", `
+#include <common>
+varying vec2 vTrailUV;
+varying float vTrailDepth;
+uniform sampler2D uTrailMap;
+uniform float uTerrainRadius;
+uniform float uTrailDepth;
+uniform float uTexelSize;
+`)
+    .replace("#include <begin_vertex>", `
+#include <begin_vertex>
+vTrailUV = position.xz / (2.0 * uTerrainRadius) + 0.5;
+float trail = texture2D(uTrailMap, vTrailUV).r;
+vTrailDepth = trail;
+transformed.y -= trail * uTrailDepth;
+`)
+    .replace("#include <beginnormal_vertex>", `
+#include <beginnormal_vertex>
+{
+  // Sobel-style slope of the trail map - lets lighting respond to track
+  // depth without an actual geometry shader.
+  vec2 uv = position.xz / (2.0 * uTerrainRadius) + 0.5;
+  float dHx = texture2D(uTrailMap, uv + vec2(uTexelSize, 0.0)).r
+            - texture2D(uTrailMap, uv - vec2(uTexelSize, 0.0)).r;
+  float dHz = texture2D(uTrailMap, uv + vec2(0.0, uTexelSize)).r
+            - texture2D(uTrailMap, uv - vec2(0.0, uTexelSize)).r;
+  vec3 trailNormal = normalize(vec3(-dHx * 6.0, 1.0, -dHz * 6.0));
+  objectNormal = normalize(mix(objectNormal, trailNormal, 0.35));
+}
+`);
+  shader.fragmentShader = shader.fragmentShader
+    .replace("#include <common>", `
+#include <common>
+varying vec2 vTrailUV;
+varying float vTrailDepth;
+`)
+    .replace("#include <dithering_fragment>", `
+{
+  float t = clamp(vTrailDepth * 1.6, 0.0, 0.85);
+  gl_FragColor.rgb *= mix(vec3(1.0), vec3(0.74, 0.82, 0.96), t);
+}
+#include <dithering_fragment>
+`);
+  terrainMat.userData.shader = shader;
+};
+terrainMat.needsUpdate = true;
 
 // Powder spray removed for the same reason as the snow sparkle: point
 // particles cling visually to the rig. The ski tracks already mark the
@@ -1377,6 +1532,8 @@ const peers = new Map(); // id -> { mesh, last: {x,z,heading}, color, name }
       p.last.z = data.z;
       p.last.heading = data.heading;
       p.last.y = data.y;
+      p.last.vx = data.vx || 0;
+      p.last.vz = data.vz || 0;
       p.name = data.name;
     });
 
@@ -1405,6 +1562,8 @@ const peers = new Map(); // id -> { mesh, last: {x,z,heading}, color, name }
           x: player.pos.x,
           y: player.pos.y,
           z: player.pos.z,
+          vx: player.vel.x,
+          vz: player.vel.z,
           heading: player.heading,
           ts: Date.now()
         });
