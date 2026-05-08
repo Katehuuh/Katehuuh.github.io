@@ -470,46 +470,9 @@ function placeProps() {
 }
 placeProps();
 
-// ============================================================
-// Snow sparkle - the signature LMSR look. Thousands of tiny
-// twinkling specks scattered on the visible snow surface.
-// ============================================================
-{
-  const SPARKLE_COUNT = 8500;
-  const sparklePos = new Float32Array(SPARKLE_COUNT * 3);
-  const sparklePhase = new Float32Array(SPARKLE_COUNT);
-  for (let i = 0; i < SPARKLE_COUNT; i++) {
-    // sample uniformly in disk, reject points on path
-    let x, z, attempts = 0;
-    do {
-      x = (Math.random() * 2 - 1) * TERRAIN_RADIUS * 0.95;
-      z = (Math.random() * 2 - 1) * TERRAIN_RADIUS * 0.95;
-      attempts++;
-    } while (Math.sqrt(x * x + z * z) > TERRAIN_RADIUS * 0.95 && attempts < 4);
-    const y = heightAt(x, z);
-    const n = slopeNormalAt(x, z);
-    sparklePos[i * 3] = x;
-    sparklePos[i * 3 + 1] = y + 0.05 + Math.random() * 0.1;
-    sparklePos[i * 3 + 2] = z;
-    sparklePhase[i] = Math.random() * Math.PI * 2;
-    // Hide sparkles on steep dark slopes (where there's no snow)
-    if (n.y < 0.55) sparklePos[i * 3 + 1] = -1000;
-  }
-  const sparkGeo = new THREE.BufferGeometry();
-  sparkGeo.setAttribute("position", new THREE.BufferAttribute(sparklePos, 3));
-  const sparkMat = new THREE.PointsMaterial({
-    color: 0xffffff,
-    size: 0.12,
-    sizeAttenuation: true,
-    transparent: true,
-    opacity: 0.85,
-    depthWrite: false
-  });
-  const sparkles = new THREE.Points(sparkGeo, sparkMat);
-  scene.add(sparkles);
-  // Twinkle: modulate opacity over time. Done in main loop.
-  window.__sparkles = { points: sparkles, mat: sparkMat, phase: sparklePhase, count: SPARKLE_COUNT };
-}
+// Snow sparkle particles removed - they clung visually to the player's body
+// and head. Snow surface character will come from a fragment shader instead
+// (depth-driven glitter / sub-surface tint applied to the terrain material).
 
 // ============================================================
 // Checkpoints (rings along the runline, descending)
@@ -673,7 +636,9 @@ class Skier {
     addMesh(this.rElbow, new THREE.BoxGeometry(0.10, 0.10, 0.10), skinMat, 0, -0.30, 0);
     addMesh(this.rElbow, new THREE.CylinderGeometry(0.014, 0.014, 0.95, 6), poleMat, 0, -0.78, 0.05);
 
-    // Hips + legs (left)
+    // Hips + legs (left). Boot + ski live on a separate ankle/foot pivot
+    // (lFoot) so we can counter-rotate them in step() and keep the ski flat
+    // against the slope no matter how much the hip + knee bend.
     this.lHip = new THREE.Group();
     this.lHip.position.set(-0.13, -0.05, 0);
     this.pelvis.add(this.lHip);
@@ -682,8 +647,11 @@ class Skier {
     this.lKnee.position.set(0, -0.34, 0);
     this.lHip.add(this.lKnee);
     addMesh(this.lKnee, new THREE.BoxGeometry(0.12, 0.30, 0.13), pantsMat, 0, -0.15, 0);
-    addMesh(this.lKnee, new THREE.BoxGeometry(0.13, 0.10, 0.20), helmetMat, 0, -0.32, 0.04); // boot
-    addMesh(this.lKnee, new THREE.BoxGeometry(0.12, 0.04, 1.50), skiMat, 0, -0.39, 0.05);    // ski
+    this.lFoot = new THREE.Group();
+    this.lFoot.position.set(0, -0.32, 0);
+    this.lKnee.add(this.lFoot);
+    addMesh(this.lFoot, new THREE.BoxGeometry(0.13, 0.10, 0.20), helmetMat, 0, 0,    0.04); // boot
+    addMesh(this.lFoot, new THREE.BoxGeometry(0.12, 0.04, 1.50), skiMat,   0, -0.07, 0.05); // ski
     // Right leg (mirror)
     this.rHip = new THREE.Group();
     this.rHip.position.set(0.13, -0.05, 0);
@@ -693,8 +661,11 @@ class Skier {
     this.rKnee.position.set(0, -0.34, 0);
     this.rHip.add(this.rKnee);
     addMesh(this.rKnee, new THREE.BoxGeometry(0.12, 0.30, 0.13), pantsMat, 0, -0.15, 0);
-    addMesh(this.rKnee, new THREE.BoxGeometry(0.13, 0.10, 0.20), helmetMat, 0, -0.32, 0.04);
-    addMesh(this.rKnee, new THREE.BoxGeometry(0.12, 0.04, 1.50), skiMat, 0, -0.39, 0.05);
+    this.rFoot = new THREE.Group();
+    this.rFoot.position.set(0, -0.32, 0);
+    this.rKnee.add(this.rFoot);
+    addMesh(this.rFoot, new THREE.BoxGeometry(0.13, 0.10, 0.20), helmetMat, 0, 0,    0.04);
+    addMesh(this.rFoot, new THREE.BoxGeometry(0.12, 0.04, 1.50), skiMat,   0, -0.07, 0.05);
 
     // Snap to default ski pose so first frame doesn't show the t-pose
     this._joints = [this.pelvis, this.torso, this.head, this.lShoulder, this.rShoulder, this.lElbow, this.rElbow, this.lHip, this.rHip, this.lKnee, this.rKnee];
@@ -750,10 +721,11 @@ class Skier {
     }
   }
 
-  // Drive the rig from current player state. Pos is the FOOT position
-  // (we offset internally so pelvis sits at +0.78m above foot).
-  // slopeTilt is the forward slope angle in radians (positive = descending).
-  step(dt, footPos, heading, slopeTilt = 0) {
+  // Drive the rig from current player state. footPos is where the lowest ski
+  // edge should rest. slopeTilt = forward slope (positive = descending).
+  // lateralTilt = sideways slope (positive when the player's right is lower).
+  // carveLean = body roll input from steering (positive = lean left into A).
+  step(dt, footPos, heading, slopeTilt = 0, lateralTilt = 0, carveLean = 0) {
     if (this.ragdoll) {
       this.ragdollTimer -= dt;
       // tumble whole body
@@ -790,15 +762,19 @@ class Skier {
     // Normal posed mode: position group at foot, rotate toward heading.
     // The rig is built facing local +Z, but player.heading=0 means moving
     // toward world -Z. Add PI so skier faces the movement direction.
-    // YXZ Euler order so we can yaw first, then pitch in body frame for
-    // matching the slope under the skier (lean forward when descending).
+    // YXZ Euler order: yaw first, then pitch in body frame (forward slope),
+    // then roll in body frame (lateral slope + carving lean).
     this.group.position.copy(footPos);
     this.group.rotation.order = "YXZ";
-    const targetTiltX = (slopeTilt || 0) * 0.55;
-    // Smoothly approach the target slope tilt instead of snapping
+    const targetTiltX = (slopeTilt   || 0) * 0.55;
+    // Lateral slope: lean downhill (negative roll when right is lower).
+    // Carving: lean into the turn (positive roll when steering left).
+    const targetTiltZ = -(lateralTilt || 0) * 0.55 + (carveLean || 0);
     if (this._tiltX === undefined) this._tiltX = 0;
+    if (this._tiltZ === undefined) this._tiltZ = 0;
     this._tiltX += (targetTiltX - this._tiltX) * 0.18;
-    this.group.rotation.set(this._tiltX, heading + Math.PI, 0);
+    this._tiltZ += (targetTiltZ - this._tiltZ) * 0.18;
+    this.group.rotation.set(this._tiltX, heading + Math.PI, this._tiltZ);
     // Lerp each joint rotation toward state pose
     const target = POSES[this.state] || POSES.ski;
     const b = this.poseBlend;
@@ -809,10 +785,27 @@ class Skier {
       j.rotation.y += (r[1] - j.rotation.y) * b;
       j.rotation.z += (r[2] - j.rotation.z) * b;
     }
-    // Apply lean (turn body roll)
-    this.torso.rotation.z += (this.lean - this.torso.rotation.z) * 0.18;
+    // Counter-rotate the ankle so the boot + ski stay flat regardless of
+    // hip + knee bend (this is the ankle dorsiflexion that real skiers do
+    // automatically). Without it, the ski tip dives into the snow whenever
+    // the knee flexes more than ~15deg.
+    const lLegX = this.pelvis.rotation.x + this.lHip.rotation.x + this.lKnee.rotation.x;
+    const rLegX = this.pelvis.rotation.x + this.rHip.rotation.x + this.rKnee.rotation.x;
+    this.lFoot.rotation.x = -lLegX;
+    this.rFoot.rotation.x = -rLegX;
+
+    // IK floor snap: after pose update, the lower ski may sit above or below
+    // the requested footPos.y. Push the group up by whichever ski is lower
+    // so the bottom of that ski exactly meets the slope.
+    this.group.updateMatrixWorld(true);
+    const lFootW = this.lFoot.getWorldPosition(_skierTmp1).y;
+    const rFootW = this.rFoot.getWorldPosition(_skierTmp2).y;
+    const skiBottomY = Math.min(lFootW, rFootW) - 0.09; // ski thickness/offset
+    this.group.position.y += footPos.y - skiBottomY;
   }
 }
+const _skierTmp1 = /*@__PURE__*/ new THREE.Vector3();
+const _skierTmp2 = /*@__PURE__*/ new THREE.Vector3();
 
 // Backward-compat wrapper used by ghost / peer / leaderboard avatar code
 function makeSkierMesh(color) {
@@ -1123,6 +1116,7 @@ function tickPlayer(dt) {
 
   // Drive the rigged skier. Choose state from current input/airborne.
   // (Pose lerping happens inside skier.step.)
+  let carveLean = 0;
   if (player.skier.ragdoll) {
     // ragdoll runs itself; no pose drive
   } else {
@@ -1130,21 +1124,26 @@ function tickPlayer(dt) {
     if (player.airborne) state = "air";
     else if (keys.tuck) state = "tuck";
     player.skier.setState(state);
-    // Lean into turns (body roll)
-    const targetLean = (keys.a ? 0.22 : 0) + (keys.d ? -0.22 : 0);
-    player.skier.setLean(targetLean);
+    // Lean into turns: A turns left and the body rolls left (positive Z).
+    carveLean = (keys.a ? 0.28 : 0) + (keys.d ? -0.28 : 0);
   }
-  // Compute slope tilt in the forward direction so the skier leans down/up
-  // matching the slope under their feet. Positive = pitching forward.
+  // Forward slope under the skier (positive = descending).
   const fx2 = -Math.sin(player.heading), fz2 = -Math.cos(player.heading);
-  const hHere = heightAt(player.pos.x, player.pos.z);
+  const hHere  = heightAt(player.pos.x,            player.pos.z);
   const hAhead = heightAt(player.pos.x + fx2 * 1.2, player.pos.z + fz2 * 1.2);
-  const slopeTilt = Math.atan2(hHere - hAhead, 1.2); // + when descending forward
+  const slopeTilt = Math.atan2(hHere - hAhead, 1.2);
+  // Lateral slope: sample 1m to the player's right and left (right vector
+  // for a heading where +Z=forward is (cos h, 0, -sin h)). Positive when the
+  // right side of the body sits over lower ground.
+  const rx = Math.cos(player.heading), rz = -Math.sin(player.heading);
+  const hRight = heightAt(player.pos.x + rx * 1.0, player.pos.z + rz * 1.0);
+  const hLeft  = heightAt(player.pos.x - rx * 1.0, player.pos.z - rz * 1.0);
+  const lateralTilt = Math.atan2(hLeft - hRight, 2.0);
 
   // Foot position = pos minus ground half-radius
   const footPos = _tmp.copy(player.pos);
   footPos.y -= PLAYER_RADIUS;
-  player.skier.step(dt, footPos, player.heading, slopeTilt);
+  player.skier.step(dt, footPos, player.heading, slopeTilt, lateralTilt, carveLean);
 }
 
 let crashTimer = 0;
@@ -1219,45 +1218,9 @@ function tickTrail(now) {
   trailGeo.attributes.position.needsUpdate = true;
 }
 
-// ============================================================
-// Powder spray particles
-// ============================================================
-const sprayCount = 80;
-const sprayPos = new Float32Array(sprayCount * 3);
-const sprayVel = new Float32Array(sprayCount * 3);
-const sprayLife = new Float32Array(sprayCount);
-const sprayGeo = new THREE.BufferGeometry();
-sprayGeo.setAttribute("position", new THREE.BufferAttribute(sprayPos, 3));
-const sprayMat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.25, transparent: true, opacity: 0.8, depthWrite: false });
-const sprayPts = new THREE.Points(sprayGeo, sprayMat);
-scene.add(sprayPts);
-let sprayIdx = 0;
-function emitSpray() {
-  const i = sprayIdx % sprayCount;
-  sprayPos[i * 3] = player.pos.x + (Math.random() - 0.5) * 0.4;
-  sprayPos[i * 3 + 1] = player.pos.y - PLAYER_RADIUS + 0.05;
-  sprayPos[i * 3 + 2] = player.pos.z + (Math.random() - 0.5) * 0.4;
-  sprayVel[i * 3] = (Math.random() - 0.5) * 4;
-  sprayVel[i * 3 + 1] = 1 + Math.random() * 2;
-  sprayVel[i * 3 + 2] = (Math.random() - 0.5) * 4;
-  sprayLife[i] = 0.6;
-  sprayIdx++;
-}
-function tickSpray(dt) {
-  for (let i = 0; i < sprayCount; i++) {
-    if (sprayLife[i] > 0) {
-      sprayLife[i] -= dt;
-      sprayPos[i * 3] += sprayVel[i * 3] * dt;
-      sprayPos[i * 3 + 1] += (sprayVel[i * 3 + 1] - 5 * dt) * dt;
-      sprayPos[i * 3 + 2] += sprayVel[i * 3 + 2] * dt;
-      sprayVel[i * 3 + 1] -= 9 * dt;
-    } else {
-      // park dead particles below ground
-      sprayPos[i * 3 + 1] = -1000;
-    }
-  }
-  sprayGeo.attributes.position.needsUpdate = true;
-}
+// Powder spray removed for the same reason as the snow sparkle: point
+// particles cling visually to the rig. The ski tracks already mark the
+// player's path; depth/parallax snow effects belong in a shader.
 
 // ============================================================
 // Web Audio (procedural wind + scrape)
@@ -1677,22 +1640,10 @@ function loop() {
   tickGhost();
   tickCamera(dt);
   tickTrail(performance.now() / 1000);
-  // emit spray on ground when moving
-  if (!player.airborne && player.vel.length() > 6) {
-    if (Math.random() < 0.7) emitSpray();
-  }
-  tickSpray(dt);
   tickAudio();
   tickPeers();
   tickHud();
   tickMinimap();
-
-  // Twinkle the snow sparkle
-  if (window.__sparkles) {
-    const t = performance.now() * 0.001;
-    window.__sparkles.mat.opacity = 0.7 + Math.sin(t * 1.7) * 0.15;
-    window.__sparkles.mat.size = 0.10 + Math.sin(t * 3.3) * 0.03;
-  }
 
   if (!bootHidden) {
     bootHidden = true;
