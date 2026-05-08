@@ -10,27 +10,28 @@
   canvas { display: block; }
 
   #hud-tl {
-    position: fixed; top: 14px; left: 14px; z-index: 10;
-    padding: 10px 14px;
+    position: fixed; top: 18px; left: 18px; z-index: 10;
+    padding: 14px 20px;
     background: rgba(0, 10, 30, 0.55);
     border: 1px solid rgba(255, 255, 255, 0.15);
-    border-radius: 10px;
-    font: 600 14px/1.3 monospace;
+    border-radius: 12px;
+    font: 600 20px/1.3 monospace;
     backdrop-filter: blur(6px);
     text-shadow: 0 1px 2px rgba(0,0,0,0.6);
+    min-width: 220px;
   }
-  #hud-tl .row { display: flex; justify-content: space-between; gap: 16px; }
-  #hud-tl .label { color: #9cd; font-size: 11px; letter-spacing: 1px; }
+  #hud-tl .row { display: flex; justify-content: space-between; gap: 22px; }
+  #hud-tl .label { color: #9cd; font-size: 14px; letter-spacing: 1.4px; }
   #hud-tl .val { font-variant-numeric: tabular-nums; }
-  #hud-tl .net { color: #8cd0a0; font-size: 11px; margin-top: 4px; }
+  #hud-tl .net { color: #8cd0a0; font-size: 13px; margin-top: 6px; }
 
   #help {
-    position: fixed; bottom: 14px; left: 14px; z-index: 10;
-    padding: 9px 13px;
-    color: rgba(255,255,255,0.82);
+    position: fixed; bottom: 18px; left: 18px; z-index: 10;
+    padding: 12px 18px;
+    color: rgba(255,255,255,0.85);
     background: rgba(0,10,30,0.55);
-    border-radius: 8px;
-    font: 12px/1.5 sans-serif;
+    border-radius: 10px;
+    font: 15px/1.6 sans-serif;
     pointer-events: none;
     backdrop-filter: blur(4px);
   }
@@ -64,37 +65,37 @@
   #toast.show { opacity: 1; transform: translateY(0); }
 
   #lb {
-    position: fixed; top: 64px; right: 14px; z-index: 10;
-    width: 200px;
-    padding: 10px 12px;
+    position: fixed; top: 72px; right: 18px; z-index: 10;
+    width: 260px;
+    padding: 14px 16px;
     background: rgba(0, 10, 30, 0.55);
     border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 10px;
-    font: 12px/1.4 sans-serif;
+    border-radius: 12px;
+    font: 15px/1.5 sans-serif;
     backdrop-filter: blur(6px);
   }
-  #lb .title { font-size: 11px; letter-spacing: 1px; color: #9cd; margin-bottom: 6px; }
-  #lb .row { display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; font-variant-numeric: tabular-nums; }
+  #lb .title { font-size: 13px; letter-spacing: 1.4px; color: #9cd; margin-bottom: 8px; }
+  #lb .row { display: flex; justify-content: space-between; gap: 10px; padding: 3px 0; font-variant-numeric: tabular-nums; }
   #lb .row.me { color: #ffe58a; }
 
   #minimap {
-    position: fixed; bottom: 14px; right: 14px; z-index: 10;
-    width: 160px; height: 160px;
+    position: fixed; bottom: 18px; right: 18px; z-index: 10;
+    width: 240px; height: 240px;
     background: rgba(0, 10, 30, 0.6);
     border: 1px solid rgba(255, 255, 255, 0.18);
-    border-radius: 12px;
+    border-radius: 14px;
     backdrop-filter: blur(4px);
     overflow: hidden;
   }
 
   #chat {
-    position: fixed; bottom: 14px; left: 14px; z-index: 10;
-    width: 280px;
+    position: fixed; bottom: 70px; left: 18px; z-index: 10;
+    width: 360px;
     pointer-events: none;
   }
   #chat .messages {
-    margin-bottom: 6px;
-    font: 12px/1.4 sans-serif;
+    margin-bottom: 8px;
+    font: 15px/1.5 sans-serif;
     text-shadow: 0 1px 2px rgba(0,0,0,0.6);
   }
   #chat .messages .m { padding: 2px 0; }
@@ -153,7 +154,7 @@
 </div>
 <div id="help"><b>WASD</b> steer / push  |  <b>Space</b> brake  |  <b>Shift</b> tuck  |  <b>R</b> respawn  |  <b>T</b> chat</div>
 <div id="lb"><div class="title">LEADERBOARD</div><div id="lb-rows"></div></div>
-<canvas id="minimap" width="160" height="160"></canvas>
+<canvas id="minimap" width="240" height="240"></canvas>
 <div id="chat">
   <div class="messages dim" id="chat-msgs"></div>
   <input class="input" id="chat-in" maxlength="120" placeholder="say something. enter to send. esc to cancel." />
@@ -477,17 +478,37 @@ function placeProps() {
     scene.add(im);
   }
 
-  // Sharper, more angular rocks. Build a faceted shape from a stretched
-  // octahedron with random vertex jitter for variety. Use one InstancedMesh.
+  // Sharper, more angular rocks. Squash an octahedron vertically and jitter
+  // each vertex slightly. CRITICAL: OctahedronGeometry is non-indexed -
+  // every face has its OWN copies of its 3 corners, so the same world-space
+  // vertex appears multiple times in the position attribute. Random
+  // jittering each duplicate independently rips the faces apart at edges
+  // and exposes the inside (the user's "rock with holes" screenshot). Hash
+  // the ORIGINAL position so duplicate vertices receive IDENTICAL offsets
+  // and the rock stays watertight.
   const rockBase = new THREE.OctahedronGeometry(0.9, 0);
-  // Squash vertically + randomize each vertex slightly
   {
     const p = rockBase.attributes.position;
+    function hashJitter(x, y, z, salt) {
+      const k = (Math.round(x * 1000) * 73856093)
+              ^ (Math.round(y * 1000) * 19349663)
+              ^ (Math.round(z * 1000) * 83492791)
+              ^ (salt * 4271);
+      let s = k >>> 0;
+      s = (s + 0x6D2B79F5) >>> 0;
+      let t = s;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296 - 0.5;
+    }
     for (let i = 0; i < p.count; i++) {
-      const y = p.getY(i);
-      p.setY(i, y * 0.55 + (worldRand() - 0.5) * 0.15);
-      p.setX(i, p.getX(i) + (worldRand() - 0.5) * 0.2);
-      p.setZ(i, p.getZ(i) + (worldRand() - 0.5) * 0.2);
+      const ox = p.getX(i), oy = p.getY(i), oz = p.getZ(i);
+      const jx = hashJitter(ox, oy, oz, 1) * 0.20;
+      const jy = hashJitter(ox, oy, oz, 2) * 0.15;
+      const jz = hashJitter(ox, oy, oz, 3) * 0.20;
+      p.setX(i, ox + jx);
+      p.setY(i, oy * 0.55 + jy);
+      p.setZ(i, oz + jz);
     }
     p.needsUpdate = true;
     rockBase.computeVertexNormals();
@@ -827,8 +848,29 @@ class Skier {
       this.ragdollVel.y -= 18 * dt;
       this.ragdollVel.multiplyScalar(0.992);
       this.ragdollPos.addScaledVector(this.ragdollVel, dt);
-      // ground snap (the foot of the body group)
-      const gy = heightAt(this.ragdollPos.x, this.ragdollPos.z) + 0.05;
+      // Volume collider: sample ground at body center + ski tip + ski tail
+      // + side flanks. Clamp to the HIGHEST sample so no part of the body
+      // (front of skis, back of skis, head, torso) ever pokes through the
+      // terrain. Without this, a single-point ground check at body center
+      // lets the ski tips dip below ground when the body is on a slope or
+      // tumbling sideways.
+      const cosH = Math.cos(this.group.rotation.y);
+      const sinH = Math.sin(this.group.rotation.y);
+      const samples = [
+        [0,        0],          // body center
+        [ sinH,    cosH],       // forward 1m (ski tip)
+        [-sinH,   -cosH],       // back 1m (ski tail)
+        [ cosH,   -sinH],       // right 0.4m
+        [-cosH,    sinH]        // left 0.4m
+      ];
+      let maxH = -Infinity;
+      for (let i = 0; i < samples.length; i++) {
+        const wx = this.ragdollPos.x + samples[i][0] * (i === 0 ? 0 : i < 3 ? 0.9 : 0.4);
+        const wz = this.ragdollPos.z + samples[i][1] * (i === 0 ? 0 : i < 3 ? 0.9 : 0.4);
+        const h = heightAt(wx, wz);
+        if (h > maxH) maxH = h;
+      }
+      const gy = maxH + 0.25;
       if (this.ragdollPos.y < gy) {
         this.ragdollPos.y = gy;
         this.ragdollVel.y = Math.max(this.ragdollVel.y, -this.ragdollVel.y * 0.35);
@@ -1314,6 +1356,12 @@ function tickCamera(dt) {
   camPosLerp.lerp(camPos, 0.12);
   camera.position.copy(camPosLerp);
 
+  // Keep the camera at least 1.5m above the local terrain so it doesn't
+  // dive into the mountain when the player is going over a steep ridge or
+  // bouncing through a ragdoll.
+  const camGroundY = heightAt(camera.position.x, camera.position.z) + 1.5;
+  if (camera.position.y < camGroundY) camera.position.y = camGroundY;
+
   // Look-ahead target: player.pos + velocity * lookahead, clamped
   const lookAhead = new THREE.Vector3(player.vel.x, 0, player.vel.z).multiplyScalar(0.35);
   if (lookAhead.length() > 12) lookAhead.setLength(12);
@@ -1387,15 +1435,13 @@ const trailStampMat = new THREE.MeshBasicMaterial({
   depthTest: false,
   depthWrite: false
 });
-// Two ski stamps (parallel lines) + one wide body stamp for ragdoll. Each
-// NDC unit is TERRAIN_RADIUS meters. Ski stamp is intentionally wider
-// than a real ski blade (~1m) so it covers more than 1 texel of the trail
-// RT and more than ~1 vertex of the terrain mesh - tighter than that and
-// the displacement either lands between vertices (invisible) or hits a
-// single vertex hard (the "black stars" bug).
+// Two narrow ski stamps + one body stamp for ragdoll. Tracks are now
+// COSMETIC (color tint, ~zero displacement) so we no longer need to
+// oversize them to clear vertex-spacing artifacts - they can be the
+// realistic ~0.4m blade width and read as precise lines, not bumps.
 const PER_M = 1 / TERRAIN_RADIUS;
-const skiStampGeo  = new THREE.PlaneGeometry(1.0 * PER_M, 1.0 * PER_M);
-const bodyStampGeo = new THREE.PlaneGeometry(2.4 * PER_M, 1.1 * PER_M);
+const skiStampGeo  = new THREE.PlaneGeometry(0.4 * PER_M, 0.4 * PER_M);
+const bodyStampGeo = new THREE.PlaneGeometry(2.0 * PER_M, 0.9 * PER_M);
 const skiStampL = new THREE.Mesh(skiStampGeo,  trailStampMat);
 const skiStampR = new THREE.Mesh(skiStampGeo,  trailStampMat);
 const bodyStamp = new THREE.Mesh(bodyStampGeo, trailStampMat);
@@ -1451,7 +1497,7 @@ function tickTrail(now) {
     }
     // Interpolate from previous ski position to current. Step size is half
     // the stamp's radius in NDC so we always overlap.
-    const stepNDC = (1.0 * 0.5) * PER_M;
+    const stepNDC = (0.4 * 0.5) * PER_M;
     const dl = Math.hypot(lu - _prevSkiL.x, lv - _prevSkiL.y);
     const dr = Math.hypot(ru - _prevSkiR.x, rv - _prevSkiR.y);
     const stepsL = Math.max(1, Math.min(40, Math.ceil(dl / stepNDC)));
@@ -1521,12 +1567,17 @@ const trailVertNormal = `
 terrainMat.onBeforeCompile = (shader) => {
   shader.uniforms.uTrailMap      = { value: trailRT.texture };
   shader.uniforms.uTerrainRadius = { value: TERRAIN_RADIUS };
-  shader.uniforms.uTrailDepth    = { value: 0.45 };
+  // Almost-flat displacement (4cm) - the user wants PRECISE COSMETIC
+  // LINES behind the skis, not deep mining-hole craters. The track is
+  // sold by the FRAGMENT TINT now; the tiny y push just gives the line
+  // edges a subtle catch in the lighting.
+  shader.uniforms.uTrailDepth    = { value: 0.04 };
   shader.uniforms.uTexelSize     = { value: 1.0 / TRAIL_RT_SIZE };
   shader.vertexShader = shader.vertexShader
-    .replace("#include <common>",            trailVertCommon)
-    .replace("#include <begin_vertex>",      trailVertBegin)
-    .replace("#include <beginnormal_vertex>", trailVertNormal);
+    .replace("#include <common>",       trailVertCommon)
+    .replace("#include <begin_vertex>", trailVertBegin);
+    // No normal-recalc - with displacement this tiny the slope is
+    // sub-millimeter and lighting stays correct from the base normal.
   shader.fragmentShader = shader.fragmentShader
     .replace("#include <common>", `
 #include <common>
@@ -1551,12 +1602,13 @@ float hash21(vec2 p) {
   float h1 = hash21(vWorldXYZ.xz * 2.6);
   float h2 = hash21(vWorldXYZ.xz * 7.3 + 13.7);
   float sparkle = smoothstep(0.985, 0.998, h1) + smoothstep(0.992, 0.999, h2) * 0.6;
-  sparkle *= (1.0 - clamp(vTrailDepth * 2.0, 0.0, 1.0));   // less in tracks
+  sparkle *= (1.0 - clamp(vTrailDepth * 4.0, 0.0, 1.0));   // less in tracks
   gl_FragColor.rgb += vec3(sparkle) * 0.55;
 
-  // Track depression tint - subtle blue-gray, not heavy.
-  float t = clamp(vTrailDepth * 1.3, 0.0, 0.6);
-  gl_FragColor.rgb *= mix(vec3(1.0), vec3(0.78, 0.83, 0.92), t);
+  // Ski track tint: subtle, neutral darker line. Just enough contrast to
+  // read as packed-snow trace, no blue, no big bump.
+  float t = clamp(vTrailDepth * 1.2, 0.0, 0.55);
+  gl_FragColor.rgb *= mix(vec3(1.0), vec3(0.83, 0.85, 0.88), t);
 }
 #include <dithering_fragment>
 `);
@@ -1570,7 +1622,7 @@ const trailDepthMat = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADept
 trailDepthMat.onBeforeCompile = (shader) => {
   shader.uniforms.uTrailMap      = { value: trailRT.texture };
   shader.uniforms.uTerrainRadius = { value: TERRAIN_RADIUS };
-  shader.uniforms.uTrailDepth    = { value: 0.45 };
+  shader.uniforms.uTrailDepth    = { value: 0.04 };
   shader.uniforms.uTexelSize     = { value: 1.0 / TRAIL_RT_SIZE };
   shader.vertexShader = shader.vertexShader
     .replace("#include <common>",       trailVertCommon)
@@ -1935,7 +1987,7 @@ function closeChat(send) {
 const miniCanvas = document.getElementById("minimap");
 const miniCtx = miniCanvas.getContext("2d");
 function tickMinimap() {
-  const w = 160, h = 160;
+  const w = 240, h = 240;
   miniCtx.clearRect(0, 0, w, h);
   // scale: terrain spans -R..+R, draw to 0..160
   const k = w / (TERRAIN_RADIUS * 2);
