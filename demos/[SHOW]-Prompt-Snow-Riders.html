@@ -1791,7 +1791,12 @@ function makePeerMesh(color, name) {
 
   // ---------- Real-time channel: Trystero ----------
   try {
-    const { joinRoom } = await import("https://esm.sh/trystero@0.21.5/torrent");
+    // Trystero's torrent backend uses BitTorrent WSS trackers for signaling.
+    // As of 2026 the public WSS-tracker ecosystem has collapsed -
+    // tracker.btorrent.xyz and tracker.webtorrent.dev (the only remaining
+    // defaults) are intermittently unreachable. Nostr backend ships ~16
+    // default relays with active uptime monitoring + same Trystero API.
+    const { joinRoom } = await import("https://esm.sh/trystero@0.21.5/nostr");
     trysteroRoom = joinRoom({ appId: "snow-riders" }, ROOM);
     const [sendPoseFn, getPose] = trysteroRoom.makeAction("pose");
     const [sendChatFn, getChat] = trysteroRoom.makeAction("chat");
