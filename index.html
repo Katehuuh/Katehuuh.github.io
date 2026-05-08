@@ -1294,21 +1294,29 @@ function restoreNaturalOrder() {
 // Nostr is a comms protocol (not analytics), not on EasyPrivacy, public
 // relays are professionally operated (Damus, Nos.lol, nostr.band), and
 // kind:7 reactions are exactly the semantic we need (NIP-25).
-// Six relays - all probed healthy at deploy time. Three "tier 1"
-// professionally-run + three classic free public relays for extra
-// redundancy. Reads: Trystero subscribes to all 6 in parallel and
-// dedupes events by pubkey-set, so coverage is the union. Writes:
-// Promise.any across all 6 - we only need ONE to accept. Excluded:
-// nostr.band (search-index, timeouts), snort.social (down today),
-// nostr.wine (paid, anonymous writes rejected), nostr.fmt.wiz.biz
-// (connection-refused).
+// Six relays curated for genuine diversity (not just six relays). Each
+// dimension matters for resilience:
+//   * 6 distinct operator pubkeys (verified via NIP-11)
+//   * 2 software stacks (5x strfry, 1x nostr-rs-relay) so a CVE in one
+//     stack doesn't take out everything
+//   * 3 regions (US, JP, CH) so a single-region cloud outage isn't fatal
+//   * 4 funding models (OpenSats grant, individual sysadmins, community,
+//     homelab) so a VC startup pivot doesn't sunset half the list
+//
+// Audited / dropped from earlier list:
+//   * nostr.mom DROPPED - it shares the operator pubkey c5fadeb5d9...
+//     with nos.lol (same person, same datacenter, would die together).
+//   * relay.primal.net DROPPED - VC-funded US/strfry duplicate of damus.
+//   * nostr.band, snort.social - down at probe time.
+//   * nostr.wine - paid, anonymous writes rejected.
+//   * einundzwanzig.space - "restricted_writes":true in NIP-11.
 const NOSTR_RELAYS = [
-  'wss://relay.damus.io',          // Damus client team
-  'wss://nos.lol',                 // community, very stable
-  'wss://relay.primal.net',        // Primal client team
-  'wss://offchain.pub',            // community
-  'wss://nostr.mom',               // community
-  'wss://nostr-pub.wellorder.net'  // one of the OG public relays
+  'wss://relay.damus.io',          // Will Casarin, US, strfry,         OpenSats LTS grant
+  'wss://nos.lol',                 // community pubkey c5fa..., US, strfry,    individual
+  'wss://nostr-pub.wellorder.net', // Greg Heartsfield, US, nostr-rs-relay,    individual (only non-strfry)
+  'wss://offchain.pub',            // Jim/Jimstr, US, strfry,           individual
+  'wss://yabu.me',                 // JP community, Japan, strfry,      community
+  'wss://nostr.21crypto.ch'        // kriegalex homelab, Switzerland, strfry, individual
 ];
 // Versioned namespace prefix - bump if the slug-hashing scheme ever
 // changes, so old reactions for a different scheme don't show up under
