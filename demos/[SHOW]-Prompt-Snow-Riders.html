@@ -1638,6 +1638,19 @@ const ROOM = "snowriders_" + Math.floor(Date.now() / (30 * 60 * 1000));
 
 (async function setupGun() {
   try {
+    // Gun emits a "syncing 1K+ records a second" warning whenever its
+    // internal HAM CRDT counter spikes - this fires on EVERY first
+    // .map().on() attach because Gun and the relays exchange one HAM
+    // event per node in the graph during the initial reconciliation.
+    // It's protocol-layer chatter, NOT the rate at which my code is
+    // writing/reading game state (which is ~1.4 puts/s, delta-gated +
+    // packed). The warning is harmless cosmetic noise - suppress just
+    // that specific string and let real warnings through.
+    const _origLog = console.log.bind(console);
+    console.log = function (a) {
+      if (typeof a === "string" && a.indexOf("1K+ records") !== -1) return;
+      _origLog.apply(null, arguments);
+    };
     const Gun = (await import("gun")).default;
     // Relays as of May 2026 - the old Heroku peers (gun-manhattan, gunjs)
     // died with the Dec 2022 free-dyno shutdown, peer.wallie returns 530.
