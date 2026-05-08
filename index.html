@@ -1261,6 +1261,47 @@ function slugifyForLikes(name) {
     .replace(/^-+|-+$/g, '') || 'untitled';
 }
 
+// Lazy/throttled count loader. Abacus rate-limits at 30 req/10s/IP, and
+// rendering ~28 demo cards on the homepage instantly busts that budget if
+// every card fires its own /get on page load. Two compounding fixes:
+//   1) IntersectionObserver - only enqueue a fetch once the card is in
+//      (or near) the viewport. Above-the-fold cards load first, the rest
+//      load as the user scrolls.
+//   2) Single-slot queue with a 350ms gap (~3 req/s steady) so even a
+//      "scroll the entire page in 1 second" interaction stays well under
+//      the 30/10s ceiling.
+const _likeFetchQueue = [];
+let _likeFetchPumping = false;
+async function pumpLikeFetchQueue() {
+  if (_likeFetchPumping) return;
+  _likeFetchPumping = true;
+  while (_likeFetchQueue.length) {
+    const job = _likeFetchQueue.shift();
+    try {
+      const n = await fetchLikeCount(job.slug);
+      job.cb(n);
+    } catch { job.cb(null); }
+    await new Promise(r => setTimeout(r, 350));
+  }
+  _likeFetchPumping = false;
+}
+const _likeObserver = ('IntersectionObserver' in window) ? new IntersectionObserver((entries, obs) => {
+  for (const entry of entries) {
+    if (!entry.isIntersecting) continue;
+    obs.unobserve(entry.target);
+    const btn = entry.target;
+    _likeFetchQueue.push({
+      slug: btn.dataset.slug,
+      cb: (n) => {
+        if (n === null) { btn.style.display = 'none'; return; }
+        btn.querySelector('.count').textContent = n;
+        notifyLikeCountLoaded(btn.dataset.slug, n);
+      }
+    });
+    pumpLikeFetchQueue();
+  }
+}, { rootMargin: '300px' }) : null;
+
 function makeLikeButton(slug) {
   const heart = `<svg class="heart" viewBox="0 0 24 24" aria-hidden="true">
     <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
@@ -1280,14 +1321,18 @@ function makeLikeButton(slug) {
     e.stopPropagation();
     handleLikeClick(btn);
   });
-  // Background fetch of the global count. If Abacus is unreachable
-  // (network error / adblocker / their server down), hide the button -
-  // better than showing a non-functional heart.
-  fetchLikeCount(slug).then(n => {
-    if (n === null) { btn.style.display = 'none'; return; }
-    btn.querySelector('.count').textContent = n;
-    notifyLikeCountLoaded(slug, n);
-  });
+  // Hand off the global-count fetch to the lazy/throttled observer.
+  // Browsers without IntersectionObserver fall back to the immediate
+  // (un-throttled) fetch - the only way they hit 429 is reload-spam.
+  if (_likeObserver) {
+    _likeObserver.observe(btn);
+  } else {
+    fetchLikeCount(slug).then(n => {
+      if (n === null) { btn.style.display = 'none'; return; }
+      btn.querySelector('.count').textContent = n;
+      notifyLikeCountLoaded(slug, n);
+    });
+  }
   return btn;
 }
 
