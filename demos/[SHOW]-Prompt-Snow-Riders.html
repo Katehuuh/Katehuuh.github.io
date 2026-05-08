@@ -303,8 +303,12 @@ function slopeNormalAt(x, z) {
 // Three.js scene
 // ============================================================
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0xb8d0e8);
-scene.fog = new THREE.Fog(0xc4d5e8, 60, TERRAIN_RADIUS * 1.4);
+// Atmospheric fog tinted slightly warm at the bottom and cool higher up.
+// Distance roll-off carries the LMSR feel: nearby is crisp, far peaks
+// fade into a milky lavender haze. Fog kicks in earlier so the multi-
+// peak terrain reads as DEEP rather than flat.
+scene.background = new THREE.Color(0xc7d8eb);
+scene.fog = new THREE.Fog(0xd9deea, 50, TERRAIN_RADIUS * 1.55);
 
 const camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.5, TERRAIN_RADIUS * 4);
 camera.position.set(0, 12, 12);
@@ -318,7 +322,9 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.05;
 document.body.appendChild(renderer.domElement);
 
-// Sky gradient (cheap, no asset)
+// Sky gradient: warm cream at horizon, soft blue zenith. The bright
+// horizon band is what gives LMSR-style backdrops their atmospheric pop
+// as far peaks bleed into it.
 {
   const sky = new THREE.Mesh(
     new THREE.SphereGeometry(TERRAIN_RADIUS * 2.5, 24, 16),
@@ -329,11 +335,12 @@ document.body.appendChild(renderer.domElement);
       fragmentShader: `varying vec3 vWorld;
         void main(){
           float h = normalize(vWorld).y;
-          vec3 top = vec3(0.55, 0.72, 0.92);
-          vec3 mid = vec3(0.83, 0.90, 0.97);
-          vec3 low = vec3(0.92, 0.86, 0.82);
-          vec3 c = mix(low, mid, smoothstep(-0.2, 0.3, h));
-          c = mix(c, top, smoothstep(0.3, 0.85, h));
+          // bottom = warm cream, mid = soft white-blue, top = cool clear blue
+          vec3 low = vec3(0.98, 0.94, 0.88);
+          vec3 mid = vec3(0.86, 0.92, 0.98);
+          vec3 top = vec3(0.42, 0.62, 0.86);
+          vec3 c = mix(low, mid, smoothstep(-0.15, 0.22, h));
+          c = mix(c, top, smoothstep(0.22, 0.85, h));
           gl_FragColor = vec4(c, 1.0);
         }`
     })
@@ -341,17 +348,20 @@ document.body.appendChild(renderer.domElement);
   scene.add(sky);
 }
 
-// Lighting - low warm sun for long dramatic shadows like LMSR
-scene.add(new THREE.HemisphereLight(0xc8d6e8, 0x404858, 0.45));
-const sun = new THREE.DirectionalLight(0xffe4b8, 1.6);
-sun.position.set(60, 70, 40);
+// Lighting tuned for LMSR-style midday: bright warm sun from one side
+// throwing long blue-tinted shadows. Hemisphere light is the BLUE bounce
+// from the sky (skydome scattering), kept moderate so shadows stay deep.
+scene.add(new THREE.HemisphereLight(0xb8d2f0, 0x3a4a6a, 0.55));
+const sun = new THREE.DirectionalLight(0xfff0d4, 2.4);
+sun.position.set(120, 110, 60);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
-const SHADOW_R = 100;
+const SHADOW_R = 130;
 sun.shadow.camera.left = -SHADOW_R; sun.shadow.camera.right = SHADOW_R;
 sun.shadow.camera.top = SHADOW_R; sun.shadow.camera.bottom = -SHADOW_R;
-sun.shadow.camera.near = 1; sun.shadow.camera.far = 320;
-sun.shadow.bias = -0.0005;
+sun.shadow.camera.near = 1; sun.shadow.camera.far = 380;
+sun.shadow.bias = -0.0004;
+sun.shadow.normalBias = 0.04;
 scene.add(sun);
 
 // ============================================================
@@ -391,10 +401,11 @@ terrainGeo.rotateX(-Math.PI / 2); // lay flat (Y up)
   terrainGeo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
 }
 const terrainMat = new THREE.MeshStandardMaterial({
-  color: 0xffffff,
+  color: 0xf5f8fc,        // not pure white - very slight cool tint so
+                          // the procedural sparkle highlights pop against it
   vertexColors: true,
-  roughness: 0.93,
-  metalness: 0.03,
+  roughness: 0.78,
+  metalness: 0.0,
   flatShading: false
 });
 const terrain = new THREE.Mesh(terrainGeo, terrainMat);
@@ -1462,40 +1473,36 @@ function tickTrail(now) {
 }
 
 // Patch the terrain material so its vertex shader samples trailRT and
-// presses each vertex down by the accumulated track depth, and its
-// fragment shader tints the depressed snow.
-terrainMat.onBeforeCompile = (shader) => {
-  shader.uniforms.uTrailMap = { value: trailRT.texture };
-  shader.uniforms.uTerrainRadius = { value: TERRAIN_RADIUS };
-  shader.uniforms.uTrailDepth = { value: 0.55 };
-  shader.uniforms.uTexelSize = { value: 1.0 / TRAIL_RT_SIZE };
-  shader.vertexShader = shader.vertexShader
-    .replace("#include <common>", `
+// presses each vertex down. The fragment shader also adds the LMSR-style
+// procedural sparkle (a per-pixel hash producing sparse bright dots) and
+// tints the depressed snow blue-gray.
+//
+// CRITICAL: we ALSO patch a customDepthMaterial with the same vertex
+// displacement. Without it, the shadow map records the un-deformed
+// surface, and every depressed vertex falls below its own shadow plane
+// and renders pitch black ("black stars" bug). Self-shadow on the
+// deformed terrain has to be computed AGAINST the deformed terrain.
+const trailVertCommon = `
 #include <common>
 varying vec2 vTrailUV;
 varying float vTrailDepth;
+varying vec3 vWorldXYZ;
 uniform sampler2D uTrailMap;
 uniform float uTerrainRadius;
 uniform float uTrailDepth;
 uniform float uTexelSize;
-`)
-    .replace("#include <begin_vertex>", `
+`;
+const trailVertBegin = `
 #include <begin_vertex>
 vTrailUV = position.xz / (2.0 * uTerrainRadius) + 0.5;
 float trail = texture2D(uTrailMap, vTrailUV).r;
 vTrailDepth = trail;
 transformed.y -= trail * uTrailDepth;
-`)
-    .replace("#include <beginnormal_vertex>", `
+vWorldXYZ = (modelMatrix * vec4(transformed, 1.0)).xyz;
+`;
+const trailVertNormal = `
 #include <beginnormal_vertex>
 {
-  // Sobel-style slope of the trail map. The kernel sample distance is
-  // deliberately WIDER than 1 texel - sampling adjacent texels picks up
-  // the stamp's hard edge gradient and produces near-horizontal normals
-  // that read as black stars in the lit scene. Sampling 4 texels apart
-  // averages over the high-frequency stamp shape and gives a slope that
-  // matches the real geometric depression. Components are clamped so the
-  // perturbed normal can never tip more than ~22deg from vertical.
   vec2 uv = position.xz / (2.0 * uTerrainRadius) + 0.5;
   float ts = uTexelSize * 4.0;
   float dHx = texture2D(uTrailMap, uv + vec2(ts, 0.0)).r
@@ -1503,31 +1510,73 @@ transformed.y -= trail * uTrailDepth;
   float dHz = texture2D(uTrailMap, uv + vec2(0.0, ts)).r
             - texture2D(uTrailMap, uv - vec2(0.0, ts)).r;
   vec3 trailNormal = normalize(vec3(
-    clamp(-dHx * 3.0, -0.4, 0.4),
+    clamp(-dHx * 3.0, -0.5, 0.5),
     1.0,
-    clamp(-dHz * 3.0, -0.4, 0.4)
+    clamp(-dHz * 3.0, -0.5, 0.5)
   ));
-  objectNormal = normalize(mix(objectNormal, trailNormal, 0.4));
+  objectNormal = normalize(mix(objectNormal, trailNormal, 0.45));
 }
-`);
+`;
+
+terrainMat.onBeforeCompile = (shader) => {
+  shader.uniforms.uTrailMap      = { value: trailRT.texture };
+  shader.uniforms.uTerrainRadius = { value: TERRAIN_RADIUS };
+  shader.uniforms.uTrailDepth    = { value: 0.45 };
+  shader.uniforms.uTexelSize     = { value: 1.0 / TRAIL_RT_SIZE };
+  shader.vertexShader = shader.vertexShader
+    .replace("#include <common>",            trailVertCommon)
+    .replace("#include <begin_vertex>",      trailVertBegin)
+    .replace("#include <beginnormal_vertex>", trailVertNormal);
   shader.fragmentShader = shader.fragmentShader
     .replace("#include <common>", `
 #include <common>
 varying vec2 vTrailUV;
 varying float vTrailDepth;
+varying vec3 vWorldXYZ;
+// 2D hash for procedural sparkle - very white, very small, very sparse,
+// scattered uniformly across world XZ so it stays put as the camera moves.
+float hash21(vec2 p) {
+  p = fract(p * vec2(123.34, 456.21));
+  p += dot(p, p + 45.32);
+  return fract(p.x * p.y);
+}
 `)
     .replace("#include <dithering_fragment>", `
 {
-  // Subtle gray-ish darkening - the depression itself sells the depth via
-  // shading, no need to wash the snow blue.
-  float t = clamp(vTrailDepth * 1.2, 0.0, 0.55);
-  gl_FragColor.rgb *= mix(vec3(1.0), vec3(0.82, 0.85, 0.88), t);
+  // Procedural snow sparkle. Two scales of hash give "salt thrown on snow"
+  // density without ever floating in front of the character (it's PART of
+  // the surface fragment, not a particle). Sparkles only show on bright
+  // top-facing snow that isn't deformed by tracks - depressed areas read
+  // as packed/wet snow and lose the sparkle.
+  float h1 = hash21(vWorldXYZ.xz * 2.6);
+  float h2 = hash21(vWorldXYZ.xz * 7.3 + 13.7);
+  float sparkle = smoothstep(0.985, 0.998, h1) + smoothstep(0.992, 0.999, h2) * 0.6;
+  sparkle *= (1.0 - clamp(vTrailDepth * 2.0, 0.0, 1.0));   // less in tracks
+  gl_FragColor.rgb += vec3(sparkle) * 0.55;
+
+  // Track depression tint - subtle blue-gray, not heavy.
+  float t = clamp(vTrailDepth * 1.3, 0.0, 0.6);
+  gl_FragColor.rgb *= mix(vec3(1.0), vec3(0.78, 0.83, 0.92), t);
 }
 #include <dithering_fragment>
 `);
   terrainMat.userData.shader = shader;
 };
 terrainMat.needsUpdate = true;
+
+// Custom depth material so shadow-mapping renders the SAME deformed
+// surface (otherwise: black-stars self-shadow bug).
+const trailDepthMat = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking });
+trailDepthMat.onBeforeCompile = (shader) => {
+  shader.uniforms.uTrailMap      = { value: trailRT.texture };
+  shader.uniforms.uTerrainRadius = { value: TERRAIN_RADIUS };
+  shader.uniforms.uTrailDepth    = { value: 0.45 };
+  shader.uniforms.uTexelSize     = { value: 1.0 / TRAIL_RT_SIZE };
+  shader.vertexShader = shader.vertexShader
+    .replace("#include <common>",       trailVertCommon)
+    .replace("#include <begin_vertex>", trailVertBegin);
+};
+terrain.customDepthMaterial = trailDepthMat;
 
 // Powder spray removed for the same reason as the snow sparkle: point
 // particles cling visually to the rig. The ski tracks already mark the
