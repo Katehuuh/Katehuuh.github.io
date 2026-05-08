@@ -227,6 +227,24 @@ const myColor = COLORS[Math.abs(myId.charCodeAt(2) || 0) % COLORS.length];
 // visual mesh samples AND the physics samples; can't get out of
 // sync because there's only one function)
 // ============================================================
+// World generation PRNG (mulberry32). Math.random() is non-deterministic
+// per session, so two clients would generate different tree/rock/spawn
+// layouts and effectively be in different worlds even after multiplayer
+// is wired up. A fixed seed gives every client the IDENTICAL terrain +
+// trees + rocks + summit + checkpoint path. Personal randomness (player
+// id, name pick, ragdoll wobble, audio noise) keeps using Math.random.
+function makeWorldRand(seed) {
+  let s = seed >>> 0;
+  return function () {
+    s = (s + 0x6D2B79F5) >>> 0;
+    let t = s;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+const worldRand = makeWorldRand(0xCAFEC0DE);
+
 const noise2D = createNoise2D(() => 0.4242);
 
 // One BIG main mountain plus several smaller satellite peaks. Hand-tuned
@@ -423,8 +441,8 @@ function placeProps() {
   let placed = 0, attempts = 0;
   while (placed < NUM_TREES && attempts < NUM_TREES * 10) {
     attempts++;
-    const x = (Math.random() * 2 - 1) * TERRAIN_RADIUS * 0.85;
-    const z = (Math.random() * 2 - 1) * TERRAIN_RADIUS * 0.85;
+    const x = (worldRand() * 2 - 1) * TERRAIN_RADIUS * 0.85;
+    const z = (worldRand() * 2 - 1) * TERRAIN_RADIUS * 0.85;
     // Avoid the runline (path) - need wider clearance now that path is wider
     const pathX = Math.sin(z * 0.014) * 18 + Math.cos(z * 0.005) * 8;
     if (Math.abs(x - pathX) < 10) continue;
@@ -433,7 +451,7 @@ function placeProps() {
     if (n.y < 0.62) continue;
     const y = heightAt(x, z);
     if (y < 2) continue;
-    const scale = 0.7 + Math.random() * 0.8;
+    const scale = 0.7 + worldRand() * 0.8;
     // Trunk centered at y + 0.8 * scale
     place(trunkMesh, x, y + 0.8 * scale, z, scale);
     // Tier 1 (bottom of foliage), Tier 2 above, Tier 3 top
@@ -456,9 +474,9 @@ function placeProps() {
     const p = rockBase.attributes.position;
     for (let i = 0; i < p.count; i++) {
       const y = p.getY(i);
-      p.setY(i, y * 0.55 + (Math.random() - 0.5) * 0.15);
-      p.setX(i, p.getX(i) + (Math.random() - 0.5) * 0.2);
-      p.setZ(i, p.getZ(i) + (Math.random() - 0.5) * 0.2);
+      p.setY(i, y * 0.55 + (worldRand() - 0.5) * 0.15);
+      p.setX(i, p.getX(i) + (worldRand() - 0.5) * 0.2);
+      p.setZ(i, p.getZ(i) + (worldRand() - 0.5) * 0.2);
     }
     p.needsUpdate = true;
     rockBase.computeVertexNormals();
@@ -469,14 +487,14 @@ function placeProps() {
   let rPlaced = 0, rAttempts = 0;
   while (rPlaced < NUM_ROCKS && rAttempts < NUM_ROCKS * 10) {
     rAttempts++;
-    const x = (Math.random() * 2 - 1) * TERRAIN_RADIUS * 0.7;
-    const z = (Math.random() * 2 - 1) * TERRAIN_RADIUS * 0.7;
+    const x = (worldRand() * 2 - 1) * TERRAIN_RADIUS * 0.7;
+    const z = (worldRand() * 2 - 1) * TERRAIN_RADIUS * 0.7;
     const pathX = Math.sin(z * 0.014) * 18 + Math.cos(z * 0.005) * 8;
     if (Math.abs(x - pathX) < 8) continue;
     const y = heightAt(x, z);
-    const scale = 0.7 + Math.random() * 1.6;
-    const rot = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.random() * Math.PI * 2);
-    m.compose(new THREE.Vector3(x, y + 0.3 * scale, z), rot, new THREE.Vector3(scale, scale * (0.7 + Math.random() * 0.5), scale));
+    const scale = 0.7 + worldRand() * 1.6;
+    const rot = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), worldRand() * Math.PI * 2);
+    m.compose(new THREE.Vector3(x, y + 0.3 * scale, z), rot, new THREE.Vector3(scale, scale * (0.7 + worldRand() * 0.5), scale));
     rockMesh.setMatrixAt(rPlaced, m);
     rocks.push({ x, z, r: ROCK_RADIUS * scale });
     rPlaced++;
@@ -504,8 +522,8 @@ const highestPoint = { x: 0, z: 0, h: -Infinity };
     if (h > highestPoint.h) { highestPoint.x = p.x; highestPoint.z = p.z; highestPoint.h = h; }
   }
   for (let i = 0; i < 800; i++) {
-    const ang = Math.random() * Math.PI * 2;
-    const r = Math.random() * TERRAIN_RADIUS * 0.55;
+    const ang = worldRand() * Math.PI * 2;
+    const r = worldRand() * TERRAIN_RADIUS * 0.55;
     const x = Math.cos(ang) * r, z = Math.sin(ang) * r;
     const h = heightAt(x, z);
     if (h > highestPoint.h) { highestPoint.x = x; highestPoint.z = z; highestPoint.h = h; }
@@ -1605,10 +1623,10 @@ function finishRun() {
   const isPb = !bestTime || finalTime < bestTime;
   if (isPb) saveBest(finalTime);
   showBanner(`Run finished<small>${fmtTime(finalTime)}${isPb ? " - new personal best!" : ""}</small>`, 4000);
-  // Push to gun leaderboard
+  // Push to gun leaderboard (stable path, persists across days)
   if (gunOk) {
     try {
-      gun.get(ROOM).get("lb").set({ name: myName, time: finalTime, ts: Date.now() });
+      gun.get("snowriders_lb").set({ name: myName, time: finalTime, ts: Date.now() });
     } catch (_) {}
   } else {
     // local leaderboard fallback
@@ -1622,43 +1640,118 @@ function finishRun() {
 }
 
 // ============================================================
-// Multiplayer: Gun.js (position sync, leaderboard, chat, minimap)
+// Multiplayer architecture:
+//   * Trystero (WebRTC P2P over BitTorrent trackers) carries everything
+//     real-time: presence + pose at 10 Hz, chat. No relay round-trip,
+//     no CRDT overhead - packets go directly client-to-client at
+//     ~30 ms latency.
+//   * Gun.js carries persistent leaderboard only - a couple of writes
+//     per finished race + a one-shot read on connect. That volume is
+//     well below Gun's HAM threshold so the "1K+ records" warning
+//     stops triggering, and we still get globally-visible PB times.
 // ============================================================
 let gun = null;
 let gunOk = false;
-const peers = new Map(); // id -> { mesh, last: {x,z,heading}, color, name }
-// Rolling room name: a fresh Gun namespace every 30 minutes. Public Gun
-// relays accumulate every record ever written on a given path, so a long-
-// lived path like "snowriders.players" gets DUMPED in full to every new
-// subscriber - that's where the "syncing 1K+ records a second" warning
-// comes from (Gun's local cache is already disabled). Bucketing the room
-// caps the relay's per-namespace history at ~30 min of activity. Two
-// players who join within the same bucket land in the same room.
-const ROOM = "snowriders_" + Math.floor(Date.now() / (30 * 60 * 1000));
+let trysteroOk = false;
+let trysteroRoom = null;
+let sendPose = null;
+let sendChat = null;
+const peers = new Map(); // peerId -> { mesh, last, color, name }
+const ROOM = "snowriders_main"; // single shared world for everyone online
 
-(async function setupGun() {
+function makePeerMesh(color, name) {
+  const mesh = makeSkierMesh(color || 0xaaaaaa);
+  const cnv = document.createElement("canvas");
+  cnv.width = 256; cnv.height = 64;
+  const cctx = cnv.getContext("2d");
+  cctx.font = "bold 26px sans-serif";
+  cctx.textAlign = "center";
+  cctx.shadowColor = "rgba(0,0,0,0.85)";
+  cctx.shadowBlur = 6;
+  cctx.fillStyle = "#fff";
+  cctx.fillText(name || "Stranger", 128, 32);
+  const tex = new THREE.CanvasTexture(cnv);
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false }));
+  sprite.scale.set(5, 1.25, 1);
+  sprite.position.y = 2.4;
+  mesh.add(sprite);
+  scene.add(mesh);
+  return mesh;
+}
+
+(async function setupNet() {
+  // Suppress only Gun's "1K+ records" warning - if it fires later from a
+  // burst of leaderboard writes, the message is still cosmetic noise.
+  const _origLog = console.log.bind(console);
+  console.log = function (a) {
+    if (typeof a === "string" && a.indexOf("1K+ records") !== -1) return;
+    _origLog.apply(null, arguments);
+  };
+
+  // ---------- Real-time channel: Trystero ----------
   try {
-    // Gun emits a "syncing 1K+ records a second" warning whenever its
-    // internal HAM CRDT counter spikes - this fires on EVERY first
-    // .map().on() attach because Gun and the relays exchange one HAM
-    // event per node in the graph during the initial reconciliation.
-    // It's protocol-layer chatter, NOT the rate at which my code is
-    // writing/reading game state (which is ~1.4 puts/s, delta-gated +
-    // packed). The warning is harmless cosmetic noise - suppress just
-    // that specific string and let real warnings through.
-    const _origLog = console.log.bind(console);
-    console.log = function (a) {
-      if (typeof a === "string" && a.indexOf("1K+ records") !== -1) return;
-      _origLog.apply(null, arguments);
-    };
+    const { joinRoom } = await import("https://esm.sh/trystero@0.21.5/torrent");
+    trysteroRoom = joinRoom({ appId: "snow-riders" }, ROOM);
+    const [sendPoseFn, getPose] = trysteroRoom.makeAction("pose");
+    const [sendChatFn, getChat] = trysteroRoom.makeAction("chat");
+    sendPose = sendPoseFn;
+    sendChat = sendChatFn;
+
+    trysteroRoom.onPeerLeave((peerId) => {
+      const p = peers.get(peerId);
+      if (p) { scene.remove(p.mesh); peers.delete(peerId); }
+    });
+
+    getPose((data, peerId) => {
+      if (!data) return;
+      let p = peers.get(peerId);
+      if (!p) {
+        const mesh = makePeerMesh(data.c, data.n);
+        p = { mesh, last: {}, color: data.c, name: data.n };
+        peers.set(peerId, p);
+      } else if (p.name !== data.n) {
+        // name changed - just update the label texture next time we see them
+        p.name = data.n;
+      }
+      p.last.x       = data.x;
+      p.last.y       = data.y;
+      p.last.z       = data.z;
+      p.last.vx      = data.vx || 0;
+      p.last.vz      = data.vz || 0;
+      p.last.heading = data.h;
+      p.last.ts      = Date.now();
+    });
+
+    getChat((data) => {
+      if (!data || !data.msg) return;
+      pushChatMessage(data.name || "?", data.msg, data.ts || Date.now());
+    });
+
+    trysteroOk = true;
+    document.getElementById("net").textContent = "online";
+
+    // 10 Hz pose broadcast. WebRTC handles this volume trivially - each
+    // packet is ~80 bytes and goes directly to all peers, no relay.
+    setInterval(() => {
+      if (!trysteroOk || !sendPose) return;
+      sendPose({
+        n:  myName,
+        c:  myColor,
+        x:  player.pos.x,
+        y:  player.pos.y,
+        z:  player.pos.z,
+        vx: player.vel.x,
+        vz: player.vel.z,
+        h:  player.heading
+      });
+    }, 100);
+  } catch (e) {
+    console.warn("Trystero unavailable, running solo for presence:", e);
+  }
+
+  // ---------- Persistence channel: Gun (leaderboard only) ----------
+  try {
     const Gun = (await import("gun")).default;
-    // Relays as of May 2026 - the old Heroku peers (gun-manhattan, gunjs)
-    // died with the Dec 2022 free-dyno shutdown, peer.wallie returns 530.
-    // These three are from the canonical amark/gun wiki "volunteer.dht"
-    // list and were verified responsive when this demo was built. Pass
-    // localStorage:false + radisk:false so Gun doesn't replay its disk
-    // cache on every subscriber attach (that's where the "syncing 1K+
-    // records a second" warning was actually coming from).
     gun = Gun({
       peers: [
         "https://relay.peer.ooo/gun",
@@ -1669,117 +1762,19 @@ const ROOM = "snowriders_" + Math.floor(Date.now() / (30 * 60 * 1000));
       radisk: false
     });
     gunOk = true;
-    document.getElementById("net").textContent = "online";
+    if (!trysteroOk) document.getElementById("net").textContent = "leaderboard only";
 
-    // Subscribe to other players' presence
-    gun.get(ROOM).get("players").map().on((data, id) => {
-      if (!data || id === myId) return;
-      const stale = Date.now() - (data.ts || 0) > 12000;
-      if (stale) {
-        const p = peers.get(id);
-        if (p) { scene.remove(p.mesh); peers.delete(id); }
-        return;
-      }
-      let p = peers.get(id);
-      if (!p) {
-        const mesh = makeSkierMesh(data.color || 0xaaaaaa);
-        // name label
-        const cnv = document.createElement("canvas");
-        cnv.width = 256; cnv.height = 64;
-        const cctx = cnv.getContext("2d");
-        cctx.font = "bold 26px sans-serif";
-        cctx.textAlign = "center";
-        cctx.shadowColor = "rgba(0,0,0,0.85)";
-        cctx.shadowBlur = 6;
-        cctx.fillStyle = "#fff";
-        cctx.fillText(data.name || "Stranger", 128, 32);
-        const tex = new THREE.CanvasTexture(cnv);
-        const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false }));
-        sprite.scale.set(5, 1.25, 1);
-        sprite.position.y = 2.4;
-        mesh.add(sprite);
-        scene.add(mesh);
-        p = { mesh, last: { x: 0, z: 0, heading: 0 }, color: data.color, name: data.name };
-        peers.set(id, p);
-      }
-      // Packed state string: "x,y,z,vx,vz,heading". Falling back to the
-      // old per-property layout for peers running the previous build.
-      if (typeof data.s === "string") {
-        const parts = data.s.split(",");
-        p.last.x       = parseFloat(parts[0]);
-        p.last.y       = parseFloat(parts[1]);
-        p.last.z       = parseFloat(parts[2]);
-        p.last.vx      = parseFloat(parts[3]) || 0;
-        p.last.vz      = parseFloat(parts[4]) || 0;
-        p.last.heading = parseFloat(parts[5]) || 0;
-      } else {
-        p.last.x = data.x;
-        p.last.z = data.z;
-        p.last.heading = data.heading;
-        p.last.y = data.y;
-        p.last.vx = data.vx || 0;
-        p.last.vz = data.vz || 0;
-      }
-      p.last.ts = Date.now();
-      p.name = data.name;
-    });
-
-    // Subscribe to leaderboard
-    gun.get(ROOM).get("lb").map().on((data, id) => {
-      if (!data) return;
+    // The leaderboard path stays stable (no rolling room) so PB times
+    // persist across days. Volume is tiny: one .set() per race finish
+    // and an .on() that fires once per existing record on connect.
+    gun.get("snowriders_lb").map().on((data, id) => {
+      if (!data || typeof data.time !== "number") return;
       lbCache.set(id, { name: data.name, time: data.time, ts: data.ts });
       renderLeaderboard();
     });
-
-    // Subscribe to chat
-    gun.get(ROOM).get("chat").map().on((data, id) => {
-      if (!data || !data.msg) return;
-      if (chatSeen.has(id)) return;
-      chatSeen.add(id);
-      pushChatMessage(data.name || "?", data.msg, data.ts || 0);
-    });
-
-    // Broadcast presence loop. Delta-gated so we only push when state has
-    // meaningfully changed - avoids the "syncing 1K+ records a second"
-    // Gun warning. A heartbeat every 700ms keeps stale-eviction working
-    // even when the player sits still.
-    let _lastSent = { x: 1e9, z: 1e9, heading: 1e9, ts: 0 };
-    setInterval(() => {
-      if (!gunOk) return;
-      const now = Date.now();
-      const dx = player.pos.x - _lastSent.x;
-      const dz = player.pos.z - _lastSent.z;
-      let dh = player.heading - _lastSent.heading;
-      while (dh > Math.PI) dh -= Math.PI * 2;
-      while (dh < -Math.PI) dh += Math.PI * 2;
-      const moved = (dx * dx + dz * dz) > 0.09; // > 0.3 m
-      const turned = Math.abs(dh) > 0.04;       // > ~2.3deg
-      const heartbeat = (now - _lastSent.ts) > 700;
-      if (!moved && !turned && !heartbeat) return;
-      _lastSent = { x: player.pos.x, z: player.pos.z, heading: player.heading, ts: now };
-      // Pack pose into ONE string property. Gun's CRDT creates a graph
-      // node per property write, so 6 numeric properties per put() means
-      // 6 records / 6 sync events. Packing collapses that to 1.
-      const s =
-        player.pos.x.toFixed(2) + "," +
-        player.pos.y.toFixed(2) + "," +
-        player.pos.z.toFixed(2) + "," +
-        player.vel.x.toFixed(2) + "," +
-        player.vel.z.toFixed(2) + "," +
-        player.heading.toFixed(3);
-      try {
-        gun.get(ROOM).get("players").get(myId).put({
-          name: myName,
-          color: myColor,
-          s: s,
-          ts: now
-        });
-      } catch (_) {}
-    }, 90);
   } catch (e) {
-    console.warn("Gun unavailable, running solo:", e);
-    document.getElementById("net").textContent = "solo (gun.js failed to load)";
-    // still show the local leaderboard
+    console.warn("Gun unavailable, leaderboard is local only:", e);
+    if (!trysteroOk) document.getElementById("net").textContent = "solo";
     const local = JSON.parse(localStorage.getItem("snowriders.locallb") || "[]");
     for (const r of local) lbCache.set("local-" + r.ts, r);
     renderLeaderboard();
@@ -1792,9 +1787,12 @@ const ROOM = "snowriders_" + Math.floor(Date.now() / (30 * 60 * 1000));
 // 600ms so a dropped/stale peer doesn't keep flying off into the distance.
 const _peerTarget = new THREE.Vector3();
 function tickPeers() {
-  document.getElementById("net").textContent = gunOk
-    ? (peers.size === 0 ? "online (alone)" : peers.size === 1 ? "1 peer online" : `${peers.size} peers online`)
-    : "solo";
+  const netLabel = !trysteroOk
+    ? (gunOk ? "leaderboard only" : "solo")
+    : peers.size === 0 ? "online (alone)"
+    : peers.size === 1 ? "1 peer online"
+    : `${peers.size} peers online`;
+  document.getElementById("net").textContent = netLabel;
   const now = Date.now();
   for (const p of peers.values()) {
     if (p.last.x === undefined) continue;
@@ -1869,12 +1867,12 @@ function closeChat(send) {
     const v = chatInputEl.value.trim().slice(0, 120);
     if (v) {
       const ts = Date.now();
-      const cid = `${myId}_${ts}`;
-      if (gunOk) {
-        try { gun.get(ROOM).get("chat").get(cid).put({ name: myName, msg: v, ts }); } catch (_) {}
+      // Broadcast over Trystero (real-time WebRTC) to all peers in the
+      // room. No persistence - chat is ephemeral by design.
+      if (trysteroOk && sendChat) {
+        try { sendChat({ name: myName, msg: v, ts }); } catch (_) {}
       }
       pushChatMessage(myName, v, ts);
-      chatSeen.add(cid);
     }
   }
   chatBox.typing = false;
