@@ -1358,11 +1358,15 @@ const trailStampMat = new THREE.MeshBasicMaterial({
   depthTest: false,
   depthWrite: false
 });
-// Two narrow ski stamps (parallel lines) + one wide body stamp for
-// ragdoll. Each NDC unit is TERRAIN_RADIUS meters.
+// Two ski stamps (parallel lines) + one wide body stamp for ragdoll. Each
+// NDC unit is TERRAIN_RADIUS meters. Ski stamp is intentionally wider
+// than a real ski blade (~1m) so it covers more than 1 texel of the trail
+// RT and more than ~1 vertex of the terrain mesh - tighter than that and
+// the displacement either lands between vertices (invisible) or hits a
+// single vertex hard (the "black stars" bug).
 const PER_M = 1 / TERRAIN_RADIUS;
-const skiStampGeo  = new THREE.PlaneGeometry(0.45 * PER_M, 0.45 * PER_M);
-const bodyStampGeo = new THREE.PlaneGeometry(2.0  * PER_M, 0.9  * PER_M);
+const skiStampGeo  = new THREE.PlaneGeometry(1.0 * PER_M, 1.0 * PER_M);
+const bodyStampGeo = new THREE.PlaneGeometry(2.4 * PER_M, 1.1 * PER_M);
 const skiStampL = new THREE.Mesh(skiStampGeo,  trailStampMat);
 const skiStampR = new THREE.Mesh(skiStampGeo,  trailStampMat);
 const bodyStamp = new THREE.Mesh(bodyStampGeo, trailStampMat);
@@ -1418,7 +1422,7 @@ function tickTrail(now) {
     }
     // Interpolate from previous ski position to current. Step size is half
     // the stamp's radius in NDC so we always overlap.
-    const stepNDC = (0.45 * 0.5) * PER_M;
+    const stepNDC = (1.0 * 0.5) * PER_M;
     const dl = Math.hypot(lu - _prevSkiL.x, lv - _prevSkiL.y);
     const dr = Math.hypot(ru - _prevSkiR.x, rv - _prevSkiR.y);
     const stepsL = Math.max(1, Math.min(40, Math.ceil(dl / stepNDC)));
@@ -1467,17 +1471,25 @@ transformed.y -= trail * uTrailDepth;
     .replace("#include <beginnormal_vertex>", `
 #include <beginnormal_vertex>
 {
-  // Sobel-style slope of the trail map - lets lighting respond to the
-  // displacement so tracks read as 3D depressions, not just darker tint.
-  // The 8.0 factor exaggerates the physical slope; lighting then makes
-  // the side wall of each ski groove visibly catch shadow.
+  // Sobel-style slope of the trail map. The kernel sample distance is
+  // deliberately WIDER than 1 texel - sampling adjacent texels picks up
+  // the stamp's hard edge gradient and produces near-horizontal normals
+  // that read as black stars in the lit scene. Sampling 4 texels apart
+  // averages over the high-frequency stamp shape and gives a slope that
+  // matches the real geometric depression. Components are clamped so the
+  // perturbed normal can never tip more than ~22deg from vertical.
   vec2 uv = position.xz / (2.0 * uTerrainRadius) + 0.5;
-  float dHx = texture2D(uTrailMap, uv + vec2(uTexelSize, 0.0)).r
-            - texture2D(uTrailMap, uv - vec2(uTexelSize, 0.0)).r;
-  float dHz = texture2D(uTrailMap, uv + vec2(0.0, uTexelSize)).r
-            - texture2D(uTrailMap, uv - vec2(0.0, uTexelSize)).r;
-  vec3 trailNormal = normalize(vec3(-dHx * 8.0, 1.0, -dHz * 8.0));
-  objectNormal = normalize(mix(objectNormal, trailNormal, 0.6));
+  float ts = uTexelSize * 4.0;
+  float dHx = texture2D(uTrailMap, uv + vec2(ts, 0.0)).r
+            - texture2D(uTrailMap, uv - vec2(ts, 0.0)).r;
+  float dHz = texture2D(uTrailMap, uv + vec2(0.0, ts)).r
+            - texture2D(uTrailMap, uv - vec2(0.0, ts)).r;
+  vec3 trailNormal = normalize(vec3(
+    clamp(-dHx * 3.0, -0.4, 0.4),
+    1.0,
+    clamp(-dHz * 3.0, -0.4, 0.4)
+  ));
+  objectNormal = normalize(mix(objectNormal, trailNormal, 0.4));
 }
 `);
   shader.fragmentShader = shader.fragmentShader
@@ -1660,6 +1672,7 @@ const peers = new Map(); // id -> { mesh, last: {x,z,heading}, color, name }
       p.last.y = data.y;
       p.last.vx = data.vx || 0;
       p.last.vz = data.vz || 0;
+      p.last.ts = Date.now();
       p.name = data.name;
     });
 
@@ -1678,9 +1691,24 @@ const peers = new Map(); // id -> { mesh, last: {x,z,heading}, color, name }
       pushChatMessage(data.name || "?", data.msg, data.ts || 0);
     });
 
-    // Broadcast presence loop
+    // Broadcast presence loop. Delta-gated so we only push when state has
+    // meaningfully changed - avoids the "syncing 1K+ records a second"
+    // Gun warning. A heartbeat every 700ms keeps stale-eviction working
+    // even when the player sits still.
+    let _lastSent = { x: 1e9, z: 1e9, heading: 1e9, ts: 0 };
     setInterval(() => {
       if (!gunOk) return;
+      const now = Date.now();
+      const dx = player.pos.x - _lastSent.x;
+      const dz = player.pos.z - _lastSent.z;
+      let dh = player.heading - _lastSent.heading;
+      while (dh > Math.PI) dh -= Math.PI * 2;
+      while (dh < -Math.PI) dh += Math.PI * 2;
+      const moved = (dx * dx + dz * dz) > 0.09; // > 0.3 m
+      const turned = Math.abs(dh) > 0.04;       // > ~2.3deg
+      const heartbeat = (now - _lastSent.ts) > 700;
+      if (!moved && !turned && !heartbeat) return;
+      _lastSent = { x: player.pos.x, z: player.pos.z, heading: player.heading, ts: now };
       try {
         gun.get("snowriders").get("players").get(myId).put({
           name: myName,
@@ -1691,7 +1719,7 @@ const peers = new Map(); // id -> { mesh, last: {x,z,heading}, color, name }
           vx: player.vel.x,
           vz: player.vel.z,
           heading: player.heading,
-          ts: Date.now()
+          ts: now
         });
       } catch (_) {}
     }, 90);
@@ -1705,21 +1733,32 @@ const peers = new Map(); // id -> { mesh, last: {x,z,heading}, color, name }
   }
 })();
 
-// HUD updates that depend on peers
+// HUD updates that depend on peers + dead-reckoning prediction. Each peer
+// only broadcasts on meaningful change, so between updates we extrapolate
+// position using the peer's last known velocity. Cap the extrapolation at
+// 600ms so a dropped/stale peer doesn't keep flying off into the distance.
+const _peerTarget = new THREE.Vector3();
 function tickPeers() {
   document.getElementById("net").textContent = gunOk
     ? (peers.size === 0 ? "online (alone)" : peers.size === 1 ? "1 peer online" : `${peers.size} peers online`)
     : "solo";
-  // Smoothly move peer meshes toward last known position
+  const now = Date.now();
   for (const p of peers.values()) {
     if (p.last.x === undefined) continue;
-    const target = new THREE.Vector3(p.last.x, (p.last.y ?? heightAt(p.last.x, p.last.z) + PLAYER_RADIUS) - PLAYER_RADIUS, p.last.z);
-    p.mesh.position.lerp(target, 0.18);
-    // smoothly rotate heading
+    const elapsed = Math.min(0.6, ((now - (p.last.ts || now)) / 1000));
+    const px = p.last.x + (p.last.vx || 0) * elapsed;
+    const pz = p.last.z + (p.last.vz || 0) * elapsed;
+    // Use the predicted XZ to query terrain height (the y broadcast is
+    // ~stale; ground-clamping to current terrain is more reliable).
+    const py = heightAt(px, pz) + 0.05;
+    _peerTarget.set(px, py, pz);
+    // Larger lerp factor since we're already extrapolating - this smooths
+    // jitter without lagging behind the prediction.
+    p.mesh.position.lerp(_peerTarget, 0.32);
     let dh = p.last.heading - p.mesh.rotation.y;
     while (dh > Math.PI) dh -= Math.PI * 2;
     while (dh < -Math.PI) dh += Math.PI * 2;
-    p.mesh.rotation.y += dh * 0.18;
+    p.mesh.rotation.y += dh * 0.22;
   }
 }
 
