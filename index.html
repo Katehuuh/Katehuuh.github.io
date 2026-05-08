@@ -589,14 +589,6 @@ section h2 .alias-mark {
   </defs>
 </svg>
 
-<!-- Puter SDK is loaded eagerly (async, doesn't block render). The like
-     buttons route their counter API calls through `puter.net.fetch()` so
-     the actual outbound HTTP request hits puter.com - not the underlying
-     counterapi.dev URL - which means uBlock + EasyPrivacy + similar filter
-     lists that flag counterapi.dev as a tracker never fire on these calls.
-     Direct fetch is kept as a last-resort fallback if puter itself fails. -->
-<script src="https://js.puter.com/v2/" async></script>
-
 <main>
 
   <header class="hero rise" data-d="1">
@@ -1251,8 +1243,18 @@ function restoreNaturalOrder() {
 // browsers can like multiple times, which is acceptable for a portfolio.
 // (IP-hashing was considered but adds complexity and false-positives on
 //  shared NATs without much real benefit. Easy to add later.)
-const LIKES_NS = 'katehuuh-likes';
-const LIKES_API = 'https://api.counterapi.dev/v1';
+// Abacus (https://abacus.jasoncameron.dev) - anonymous atomic +1 counter
+// with explicit CORS, namespace support, 30 req/10s/IP rate limit.
+// NOT in EasyPrivacy as of May 2026 (counterapi.dev IS, which is why
+// adblock users were seeing broken counters and we had Puter as a CORS-
+// shim hack to hide the request URL from filter lists).
+//
+// Trade-off: Abacus has no anonymous decrement, so un-liking is now a
+// purely local visual toggle (heart un-fills, but the global count
+// stays at the +1 the user contributed). Same model as YouTube anon
+// likes - good enough for a vanity counter.
+const LIKES_NS  = 'katehuuh-likes';
+const LIKES_API = 'https://abacus.jasoncameron.dev';
 
 function slugifyForLikes(name) {
   return String(name || '').toLowerCase().replace(/[^a-z0-9]+/g, '-')
@@ -1278,9 +1280,9 @@ function makeLikeButton(slug) {
     e.stopPropagation();
     handleLikeClick(btn);
   });
-  // Background fetch of the global count. If the API is fully unreachable
-  // (adblocker + puter both blocked), hide the button - better than showing
-  // a non-functional heart.
+  // Background fetch of the global count. If Abacus is unreachable
+  // (network error / adblocker / their server down), hide the button -
+  // better than showing a non-functional heart.
   fetchLikeCount(slug).then(n => {
     if (n === null) { btn.style.display = 'none'; return; }
     btn.querySelector('.count').textContent = n;
@@ -1289,42 +1291,8 @@ function makeLikeButton(slug) {
   return btn;
 }
 
-// Wait for the puter SDK to finish loading (added to <head> as async).
-// Bumped to 5s - earlier 1.5s timed out on slower connections before the
-// SDK was ready, causing every call to fall through to direct fetch.
-function puterReady(timeoutMs = 5000) {
-  if (window.puter && window.puter.net && window.puter.net.fetch) return Promise.resolve(true);
-  return new Promise((resolve) => {
-    const t0 = Date.now();
-    const tick = () => {
-      if (window.puter && window.puter.net && window.puter.net.fetch) return resolve(true);
-      if (Date.now() - t0 >= timeoutMs) return resolve(false);
-      setTimeout(tick, 60);
-    };
-    tick();
-  });
-}
-
-// Single "puter is ready and warm" promise that ALL likesApi callers
-// await. First call triggers SDK wait + opening the WebSocket via a
-// throwaway fetch (with retries because the very first puter.net.fetch
-// can fail with "Still in CONNECTING state"). Subsequent callers reuse
-// the resolved promise - no parallel WS-open races. nvd-chat doesn't
-// hit this because it makes one call after a user gesture, by which
-// time the WS is already up; the home page fires many in parallel on
-// page load, so we need to gate them.
-// Silence puter SDK's internal "WebSocket Still in CONNECTING state" noise.
-// The SDK fires-and-forgets some queued operations that reject when the
-// underlying socket wasn't ready; our retries handle the real failure path,
-// so these residual rejections are pure log spam.
-window.addEventListener('unhandledrejection', (e) => {
-  const msg = String((e && e.reason && (e.reason.message || e.reason)) || '');
-  if (/Still in CONNECTING state/i.test(msg)) e.preventDefault();
-});
-
-// Race a promise against a timeout - every network call is timeboxed
-// because puter's WS can hang indefinitely on transient relay issues,
-// which would otherwise leave every like button stuck on "·" forever.
+// Race a promise against a timeout so a stalled fetch can't leave the
+// like button hanging on the "·" placeholder forever.
 function withTimeout(p, ms, label) {
   return Promise.race([
     p,
@@ -1332,79 +1300,24 @@ function withTimeout(p, ms, label) {
   ]);
 }
 
-// Skip the long warm-up retry storm if a previous session failed, but always
-// do ONE quick probe per page load to detect recovery - otherwise users stay
-// stuck in fallback mode forever after a transient puter.cafe outage.
-const PUTER_BROKEN_KEY = 'puter-broken-until';
-function puterRecentlyBroken() {
-  const until = parseInt(localStorage.getItem(PUTER_BROKEN_KEY) || '0', 10);
-  return Date.now() < until;
-}
-function markPuterBroken() {
-  localStorage.setItem(PUTER_BROKEN_KEY, String(Date.now() + 60 * 60_000));
-}
-function clearPuterBroken() { localStorage.removeItem(PUTER_BROKEN_KEY); }
-
-let puterReadyPromise = null;
-async function ensurePuterReady() {
-  if (puterReadyPromise) return puterReadyPromise;
-  puterReadyPromise = (async () => {
-    if (!(await puterReady())) { markPuterBroken(); return false; }
-    // Single fast probe - quick recovery check after a previous failure.
-    try {
-      const r = await withTimeout(puter.net.fetch('https://api.github.com/'), 3500, 'puter probe');
-      if (r && r.ok) { clearPuterBroken(); return true; }
-    } catch { /* fall through */ }
-    // Probe failed. If recently flagged, skip the heavy retry storm.
-    if (puterRecentlyBroken()) return false;
-    for (let i = 0; i < 3; i++) {
-      try {
-        const r = await withTimeout(puter.net.fetch('https://api.github.com/'), 4000, 'puter warmup');
-        if (r && r.ok) { clearPuterBroken(); return true; }
-      } catch { /* retry */ }
-      await new Promise(r => setTimeout(r, 250 + i * 200));
-    }
-    markPuterBroken();
-    return false;
-  })();
-  return puterReadyPromise;
-}
-
-// Returns the JSON, or null if all transports failed. Puter-first to
-// bypass adblock filters on counterapi.dev - the actual outbound request
-// goes to puter.com / puter.cafe (the relay) which isn't on standard
-// filter lists. 400 "record not found" means the counter has zero hits
-// yet - treat as { count: 0 } so fresh slugs show 0 instead of hiding.
-// Each transport gets its own timeout so neither can hang forever.
-async function likesApi(path) {
-  const url = `${LIKES_API}/${LIKES_NS}/${path}`;
-  const parse = async (r) => {
-    if (r && r.ok) return await r.json();
-    if (r && r.status === 400) {
-      try {
-        const j = await r.json();
-        if (j && /record not found/i.test(j.message || '')) return { count: 0 };
-      } catch { /* not json */ }
-    }
-    return undefined;
-  };
-  if (await ensurePuterReady()) {
-    try {
-      const out = await parse(await withTimeout(puter.net.fetch(url), 7000, 'puter likes'));
-      if (out !== undefined) return out;
-    } catch { /* fall through */ }
-  }
+// Talk to Abacus directly. action is "get" (read) or "hit" (atomic +1).
+// Abacus answers {"value": N} on success - we normalize to {count: N}
+// so callers don't care which backend is wired up.
+async function likesApi(slug, action) {
+  const url = `${LIKES_API}/${action}/${LIKES_NS}/${slug}`;
   try {
-    const out = await parse(await withTimeout(fetch(url), 4000, 'direct likes'));
-    if (out !== undefined) return out;
-  } catch { /* both failed */ }
+    const r = await withTimeout(fetch(url), 5000, `likes ${action}`);
+    if (r && r.ok) {
+      const j = await r.json();
+      if (typeof j.value === 'number') return { count: j.value };
+    }
+  } catch { /* network or CORS error */ }
   return null;
 }
 
 async function fetchLikeCount(slug) {
-  const d = await likesApi(`${slug}/`);
-  if (!d) return null;
-  return d.count || 0;
+  const d = await likesApi(slug, 'get');
+  return d ? d.count : null;
 }
 
 async function handleLikeClick(btn) {
@@ -1415,26 +1328,31 @@ async function handleLikeClick(btn) {
   const countEl = btn.querySelector('.count');
   const cur = parseInt(countEl.textContent, 10);
   const curSafe = isFinite(cur) ? cur : 0;
-  // Optimistic UI
+
   btn.classList.toggle('liked', !wasLiked);
-  countEl.textContent = wasLiked ? Math.max(0, curSafe - 1) : curSafe + 1;
-  if (wasLiked) localStorage.removeItem(`liked-${slug}`);
-  else localStorage.setItem(`liked-${slug}`, '1');
-  const op = wasLiked ? 'down' : 'up';
-  const d = await likesApi(`${slug}/${op}`);
+
+  // Un-like is local-only: Abacus has no anonymous decrement, and once
+  // a browser has contributed +1 we can't reliably take it back. The
+  // heart un-fills, count stays, the +1 in localStorage was the receipt.
+  if (wasLiked) {
+    localStorage.removeItem(`liked-${slug}`);
+    btn.dataset.busy = '0';
+    return;
+  }
+
+  // First like: optimistic +1, fire global hit, reconcile on response.
+  localStorage.setItem(`liked-${slug}`, '1');
+  countEl.textContent = curSafe + 1;
+  const d = await likesApi(slug, 'hit');
   if (d && typeof d.count === 'number') {
     countEl.textContent = d.count;
     notifyLikeCountLoaded(slug, d.count);
-  } else if (d === null) {
-    // Both transports blocked - revert optimistic UI
-    btn.classList.toggle('liked', wasLiked);
-    countEl.textContent = curSafe;
-    if (wasLiked) localStorage.setItem(`liked-${slug}`, '1');
-    else localStorage.removeItem(`liked-${slug}`);
   } else {
-    // Optimistic value is what we have; reflect it in the sort map.
-    const n = parseInt(countEl.textContent, 10);
-    if (isFinite(n)) notifyLikeCountLoaded(slug, n);
+    // Network failed - revert optimistic UI so the user sees the
+    // request didn't take.
+    btn.classList.remove('liked');
+    countEl.textContent = curSafe;
+    localStorage.removeItem(`liked-${slug}`);
   }
   btn.dataset.busy = '0';
 }
