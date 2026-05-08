@@ -1631,7 +1631,22 @@ const peers = new Map(); // id -> { mesh, last: {x,z,heading}, color, name }
 (async function setupGun() {
   try {
     const Gun = (await import("gun")).default;
-    gun = Gun(["https://gun-manhattan.herokuapp.com/gun", "https://peer.wallie.io/gun"]);
+    // Relays as of May 2026 - the old Heroku peers (gun-manhattan, gunjs)
+    // died with the Dec 2022 free-dyno shutdown, peer.wallie returns 530.
+    // These three are from the canonical amark/gun wiki "volunteer.dht"
+    // list and were verified responsive when this demo was built. Pass
+    // localStorage:false + radisk:false so Gun doesn't replay its disk
+    // cache on every subscriber attach (that's where the "syncing 1K+
+    // records a second" warning was actually coming from).
+    gun = Gun({
+      peers: [
+        "https://relay.peer.ooo/gun",
+        "https://gun.defucc.me/gun",
+        "https://gun.o8.is/gun"
+      ],
+      localStorage: false,
+      radisk: false
+    });
     gunOk = true;
     document.getElementById("net").textContent = "online";
 
@@ -1666,12 +1681,24 @@ const peers = new Map(); // id -> { mesh, last: {x,z,heading}, color, name }
         p = { mesh, last: { x: 0, z: 0, heading: 0 }, color: data.color, name: data.name };
         peers.set(id, p);
       }
-      p.last.x = data.x;
-      p.last.z = data.z;
-      p.last.heading = data.heading;
-      p.last.y = data.y;
-      p.last.vx = data.vx || 0;
-      p.last.vz = data.vz || 0;
+      // Packed state string: "x,y,z,vx,vz,heading". Falling back to the
+      // old per-property layout for peers running the previous build.
+      if (typeof data.s === "string") {
+        const parts = data.s.split(",");
+        p.last.x       = parseFloat(parts[0]);
+        p.last.y       = parseFloat(parts[1]);
+        p.last.z       = parseFloat(parts[2]);
+        p.last.vx      = parseFloat(parts[3]) || 0;
+        p.last.vz      = parseFloat(parts[4]) || 0;
+        p.last.heading = parseFloat(parts[5]) || 0;
+      } else {
+        p.last.x = data.x;
+        p.last.z = data.z;
+        p.last.heading = data.heading;
+        p.last.y = data.y;
+        p.last.vx = data.vx || 0;
+        p.last.vz = data.vz || 0;
+      }
       p.last.ts = Date.now();
       p.name = data.name;
     });
@@ -1709,16 +1736,21 @@ const peers = new Map(); // id -> { mesh, last: {x,z,heading}, color, name }
       const heartbeat = (now - _lastSent.ts) > 700;
       if (!moved && !turned && !heartbeat) return;
       _lastSent = { x: player.pos.x, z: player.pos.z, heading: player.heading, ts: now };
+      // Pack pose into ONE string property. Gun's CRDT creates a graph
+      // node per property write, so 6 numeric properties per put() means
+      // 6 records / 6 sync events. Packing collapses that to 1.
+      const s =
+        player.pos.x.toFixed(2) + "," +
+        player.pos.y.toFixed(2) + "," +
+        player.pos.z.toFixed(2) + "," +
+        player.vel.x.toFixed(2) + "," +
+        player.vel.z.toFixed(2) + "," +
+        player.heading.toFixed(3);
       try {
         gun.get("snowriders").get("players").get(myId).put({
           name: myName,
           color: myColor,
-          x: player.pos.x,
-          y: player.pos.y,
-          z: player.pos.z,
-          vx: player.vel.x,
-          vz: player.vel.z,
-          heading: player.heading,
+          s: s,
           ts: now
         });
       } catch (_) {}
