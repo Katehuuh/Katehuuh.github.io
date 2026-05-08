@@ -100,6 +100,18 @@ a:hover { color: #ffb98d; }
 }
 .icon-nav svg { display: block; }
 .icon-nav .emoji { font-size: 1.35rem; line-height: 1; display: inline-block; -webkit-text-fill-color: initial; }
+/* Visitor counter badge - sits inline with the social icons, smaller
+   text since it's a number rather than a navigation target. */
+.visits-badge {
+  display: inline-flex; align-items: center; gap: .35rem;
+  margin-left: .5rem; padding: .25rem .55rem;
+  border: 1px solid transparent; border-radius: 999px;
+  font: 600 .85rem/1 ui-sans-serif, system-ui, sans-serif;
+  color: var(--accent); background: var(--accent-soft, rgba(255,255,255,.04));
+  font-variant-numeric: tabular-nums;
+}
+.visits-badge .emoji { font-size: 1.1rem; line-height: 1; }
+.visits-badge.hidden { display: none; }
 
 /* Popover above icon, sibling of icon-link so item clicks don't fire icon's href.
    2-col grid with content-sized columns keeps rows visually balanced (no orphan
@@ -610,6 +622,15 @@ section h2 .alias-mark {
         <img src="https://websim.com/favicon.ico" alt="" width="22" height="22" loading="lazy" style="display:block;border-radius:4px;background:rgba(255,255,255,.04)">
       </a>
       <a href="demos/CatBench/" aria-label="CatBench" title="CatBench"><span class="emoji">🐱</span></a>
+      <!-- Per-browser-per-day unique visitor counter (Abacus-backed).
+           Repurposes the per-key-counter API for its actual sweet spot:
+           ONE counter, one read+write per visitor per 24h, gated by a
+           localStorage timestamp. New browser → /hit (creates+increments,
+           returns new total). Returning within 24h → /get (just reads).
+           No popup, no signup, no key, well within Abacus's rate limit. -->
+      <span class="visits-badge" id="visits-badge" title="unique visitors (per browser per 24h)">
+        <span class="emoji" aria-hidden="true">👀</span><span id="visit-count">·</span>
+      </span>
     </nav>
   </header>
 
@@ -1243,96 +1264,116 @@ function restoreNaturalOrder() {
   for (const c of originalCardOrder) root.appendChild(c);
 }
 
-// ─── Likes (anonymous, no signup) ────────────────────────────────────
-// Counter-only via counterapi.dev (free, no key, /up + /down both work).
-// Per-browser identity via localStorage - same person on different
-// browsers can like multiple times, which is acceptable for a portfolio.
-// (IP-hashing was considered but adds complexity and false-positives on
-//  shared NATs without much real benefit. Easy to add later.)
-// Abacus (https://abacus.jasoncameron.dev) - anonymous atomic +1 counter
-// with explicit CORS, namespace support, 30 req/10s/IP rate limit.
-// NOT in EasyPrivacy as of May 2026 (counterapi.dev IS, which is why
-// adblock users were seeing broken counters and we had Puter as a CORS-
-// shim hack to hide the request URL from filter lists).
+// ─── Likes via Nostr (anonymous, no popup, no signup, no API key) ────
+// Each "like" is a kind:7 reaction event signed by an ephemeral keypair
+// the page generates and stashes in localStorage on first visit (zero UI,
+// like an analytics cookie). One WebSocket subscription with a multi-#e
+// tag filter returns ALL ~28 reactions across ALL relays in a single
+// read - no per-card request burst, no rate limits, no need to throttle
+// or cache. Counts are unique-pubkey cardinality per slug (Grow-only Set
+// semantics), so concurrent likes from different visitors all count
+// correctly and re-clicks from the same browser dedupe naturally.
 //
-// Trade-off: Abacus has no anonymous decrement, so un-liking is now a
-// purely local visual toggle (heart un-fills, but the global count
-// stays at the +1 the user contributed). Same model as YouTube anon
-// likes - good enough for a vanity counter.
-const LIKES_NS  = 'katehuuh-likes';
-const LIKES_API = 'https://abacus.jasoncameron.dev';
+// Why Nostr over alternatives:
+//   * counterapi.dev → on EasyPrivacy (blocked by ~25-30% of visitors)
+//   * counterapi.com → marketing site only, /api endpoint returns 502
+//   * Abacus → 30/10s/IP rate limit kills 28-card burst reads
+//   * Gun.js → public relays flaky, last-write-wins on scalar counters
+//   * Cloudflare/Upstash/Firebase → require dev signup
+// Nostr is a comms protocol (not analytics), not on EasyPrivacy, public
+// relays are professionally operated (Damus, Nos.lol, nostr.band), and
+// kind:7 reactions are exactly the semantic we need (NIP-25).
+const NOSTR_RELAYS = [
+  'wss://relay.damus.io',
+  'wss://nos.lol',
+  'wss://relay.nostr.band'
+];
+// Versioned namespace prefix - bump if the slug-hashing scheme ever
+// changes, so old reactions for a different scheme don't show up under
+// new event IDs.
+const NOSTR_NS_PREFIX = 'katehuuh-likes-v1:';
 
 function slugifyForLikes(name) {
   return String(name || '').toLowerCase().replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '') || 'untitled';
 }
 
-// Lazy/throttled count loader. Abacus rate-limits at 30 req/10s/IP, and
-// rendering ~28 demo cards on the homepage instantly busts that budget if
-// every card fires its own /get on page load. Two compounding fixes:
-//   1) IntersectionObserver - only enqueue a fetch once the card is in
-//      (or near) the viewport. Above-the-fold cards load first, the rest
-//      load as the user scrolls.
-//   2) Single-slot queue with a 350ms gap (~3 req/s steady) so even a
-//      "scroll the entire page in 1 second" interaction stays well under
-//      the 30/10s ceiling.
-const _likeFetchQueue = [];
-let _likeFetchPumping = false;
-async function pumpLikeFetchQueue() {
-  if (_likeFetchPumping) return;
-  _likeFetchPumping = true;
-  while (_likeFetchQueue.length) {
-    const job = _likeFetchQueue.shift();
-    try {
-      const n = await fetchLikeCount(job.slug);
-      job.cb(n);
-    } catch { job.cb(null); }
-    // 500ms gap = 20 req/10s steady-state - leaves real headroom under
-    // Abacus's 30/10s/IP ceiling for the click path AND for recovery if
-    // an external burst (admin curl, batch /create, another tab) just
-    // consumed part of the same IP's budget.
-    await new Promise(r => setTimeout(r, 500));
-  }
-  _likeFetchPumping = false;
-}
-const _likeObserver = ('IntersectionObserver' in window) ? new IntersectionObserver((entries, obs) => {
-  for (const entry of entries) {
-    if (!entry.isIntersecting) continue;
-    obs.unobserve(entry.target);
-    const btn = entry.target;
-    _likeFetchQueue.push({
-      slug: btn.dataset.slug,
-      cb: (n) => {
-        if (n === null) {
-          // Live fetch failed - keep whatever cached count is showing.
-          // Only hide the button if we never got a count from any source.
-          if (getCachedCount(btn.dataset.slug) === null) btn.style.display = 'none';
-          return;
-        }
-        btn.querySelector('.count').textContent = n;
-        setCachedCount(btn.dataset.slug, n);
-        notifyLikeCountLoaded(btn.dataset.slug, n);
-      }
-    });
-    pumpLikeFetchQueue();
-  }
-}, { rootMargin: '300px' }) : null;
+// Page-scope state. Map<slug, 64-char hex event id> + reverse lookup +
+// Set of reactor pubkeys per slug + DOM button reference per slug.
+const _slugToEventId = new Map();
+const _eventIdToSlug = new Map();
+const _reactionsBySlug = new Map();
+const _likeButtons = new Map();
+let _nostrReady = null;        // Promise resolving to {sk, pk, finalize, pool}
+let _nostrInitScheduled = false;
 
-// Tiny localStorage cache so returning visitors get INSTANT counts on
-// page load (and Sort-by-Likes works in 0ms instead of waiting 14s for
-// the throttled queue to drain). The cache is always shown first, then
-// silently overwritten by whatever the live API returns. Stale data is
-// fine - like counts are eventual-consistency vanity numbers.
-function getCachedCount(slug) {
-  const v = localStorage.getItem(`like-count-${slug}`);
-  if (!v) return null;
-  const n = parseInt(v, 10);
-  return isFinite(n) ? n : null;
+// SHA-256(NS_PREFIX + slug) → 64-char hex - the "fake event id" we react
+// to. Nostr relays don't validate that the e-tag points to a real event,
+// so we can use synthetic IDs and filter by them in one subscription.
+async function hashSlug(slug) {
+  const data = new TextEncoder().encode(NOSTR_NS_PREFIX + slug);
+  const buf = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(buf))
+    .map(b => b.toString(16).padStart(2, '0')).join('');
 }
-function setCachedCount(slug, n) {
-  if (typeof n === 'number' && isFinite(n)) {
-    localStorage.setItem(`like-count-${slug}`, String(n));
-  }
+
+function renderLikeCount(slug, n) {
+  const btn = _likeButtons.get(slug);
+  if (btn) btn.querySelector('.count').textContent = n;
+  notifyLikeCountLoaded(slug, n);
+}
+
+// Resolves to the connected Nostr toolkit + opens THE single read
+// subscription covering every slug we know about. Idempotent: only the
+// first call does work; subsequent calls await the same promise.
+function ensureNostrReady() {
+  if (_nostrReady) return _nostrReady;
+  _nostrReady = (async () => {
+    const nostr = await import('https://esm.sh/nostr-tools@2.7.2');
+    // Ephemeral keypair, like a tracking cookie - generated silently,
+    // stored in localStorage, no popup, no extension required.
+    let skHex = localStorage.getItem('nostr-likes-sk-v1');
+    if (!skHex) {
+      const sk = nostr.generateSecretKey();
+      skHex = Array.from(sk).map(b => b.toString(16).padStart(2, '0')).join('');
+      localStorage.setItem('nostr-likes-sk-v1', skHex);
+    }
+    const sk = new Uint8Array(skHex.match(/.{2}/g).map(h => parseInt(h, 16)));
+    const pk = nostr.getPublicKey(sk);
+    const pool = new nostr.SimplePool();
+    // Single subscription, all event IDs at once - the relay matches
+    // every reaction across every demo and streams them back in one
+    // continuous response. Sub stays open for live updates.
+    const eventIds = Array.from(_slugToEventId.values());
+    if (eventIds.length > 0) {
+      pool.subscribeMany(NOSTR_RELAYS, [{
+        kinds: [7],
+        '#e': eventIds
+      }], {
+        onevent(event) {
+          const eTag = event.tags.find(t => t[0] === 'e');
+          if (!eTag) return;
+          const slug = _eventIdToSlug.get(eTag[1]);
+          if (!slug) return;
+          let set = _reactionsBySlug.get(slug);
+          if (!set) { set = new Set(); _reactionsBySlug.set(slug, set); }
+          const before = set.size;
+          set.add(event.pubkey);
+          if (set.size !== before) renderLikeCount(slug, set.size);
+        }
+      });
+    }
+    return { sk, pk, finalize: nostr.finalizeEvent, pool };
+  })();
+  return _nostrReady;
+}
+
+// Schedule init for after all sync render work finishes (so the single
+// subscription is opened with ALL slugs registered, not one-at-a-time).
+function scheduleNostrInit() {
+  if (_nostrInitScheduled) return;
+  _nostrInitScheduled = true;
+  queueMicrotask(() => { ensureNostrReady(); });
 }
 
 function makeLikeButton(slug) {
@@ -1347,68 +1388,21 @@ function makeLikeButton(slug) {
   });
   btn.innerHTML = heart + '<span class="count">·</span>';
   btn.dataset.slug = slug;
-  // Optimistic local state from previous visits
   if (localStorage.getItem(`liked-${slug}`) === '1') btn.classList.add('liked');
   btn.addEventListener('click', (e) => {
     e.preventDefault();
     e.stopPropagation();
     handleLikeClick(btn);
   });
-  // Show cached count immediately - returning visitors see real numbers
-  // before the network round-trip even starts. Also feeds the Sort map
-  // so Sort-by-Likes works without waiting for the queue to drain.
-  const cached = getCachedCount(slug);
-  if (cached !== null) {
-    btn.querySelector('.count').textContent = cached;
-    notifyLikeCountLoaded(slug, cached);
-  }
-  // Hand off the live fetch to the lazy/throttled observer for the
-  // background refresh. Browsers without IntersectionObserver fall back
-  // to the immediate (un-throttled) fetch.
-  if (_likeObserver) {
-    _likeObserver.observe(btn);
-  } else {
-    fetchLikeCount(slug).then(n => {
-      if (n === null) { if (cached === null) btn.style.display = 'none'; return; }
-      btn.querySelector('.count').textContent = n;
-      setCachedCount(slug, n);
-      notifyLikeCountLoaded(slug, n);
-    });
-  }
+  _likeButtons.set(slug, btn);
+  // Register the slug → eventId mapping. Once all buttons are made the
+  // queueMicrotask above kicks off the single subscription covering them.
+  hashSlug(slug).then(eventId => {
+    _slugToEventId.set(slug, eventId);
+    _eventIdToSlug.set(eventId, slug);
+    scheduleNostrInit();
+  });
   return btn;
-}
-
-// Race a promise against a timeout so a stalled fetch can't leave the
-// like button hanging on the "·" placeholder forever.
-function withTimeout(p, ms, label) {
-  return Promise.race([
-    p,
-    new Promise((_, rej) => setTimeout(() => rej(new Error(`${label} timeout ${ms}ms`)), ms)),
-  ]);
-}
-
-// Talk to Abacus directly. action is "get" (read) or "hit" (atomic +1).
-// Abacus answers {"value": N} on success - we normalize to {count: N}
-// so callers don't care which backend is wired up.
-async function likesApi(slug, action) {
-  const url = `${LIKES_API}/${action}/${LIKES_NS}/${slug}`;
-  try {
-    const r = await withTimeout(fetch(url), 5000, `likes ${action}`);
-    if (r && r.ok) {
-      const j = await r.json();
-      if (typeof j.value === 'number') return { count: j.value };
-    }
-    // Abacus only creates a counter on first /hit. /get on a fresh slug
-    // returns 404 - that's "no one has liked this demo yet", not an
-    // error. Show 0 so the button stays usable.
-    if (r && r.status === 404 && action === 'get') return { count: 0 };
-  } catch { /* network or CORS error */ }
-  return null;
-}
-
-async function fetchLikeCount(slug) {
-  const d = await likesApi(slug, 'get');
-  return d ? d.count : null;
 }
 
 async function handleLikeClick(btn) {
@@ -1416,45 +1410,86 @@ async function handleLikeClick(btn) {
   if (!slug || btn.dataset.busy === '1') return;
   btn.dataset.busy = '1';
   const wasLiked = btn.classList.contains('liked');
-  const countEl = btn.querySelector('.count');
-  const cur = parseInt(countEl.textContent, 10);
-  const curSafe = isFinite(cur) ? cur : 0;
-
   btn.classList.toggle('liked', !wasLiked);
 
-  // Un-like is local-only: Abacus has no anonymous decrement, and once
-  // a browser has contributed +1 we can't reliably take it back. The
-  // heart un-fills, count stays, the +1 in localStorage was the receipt.
+  // Un-like = local visual only. Nostr DOES support deletion via kind:5
+  // events but we don't bother for vanity likes - a click toggles the
+  // heart fill on this browser, the +1 you contributed stays in the
+  // global count (same model as anon YouTube likes).
   if (wasLiked) {
     localStorage.removeItem(`liked-${slug}`);
     btn.dataset.busy = '0';
     return;
   }
-
-  // First like: optimistic +1, fire global hit, reconcile on response.
-  // Retry once on null - if our IP just ate its rate budget on the
-  // background queue, a 1.5s pause gives the sliding window time to
-  // recover so the click doesn't get permanently lost to a transient 429.
   localStorage.setItem(`liked-${slug}`, '1');
-  countEl.textContent = curSafe + 1;
-  let d = await likesApi(slug, 'hit');
-  if (!d) {
-    await new Promise(r => setTimeout(r, 1500));
-    d = await likesApi(slug, 'hit');
-  }
-  if (d && typeof d.count === 'number') {
-    countEl.textContent = d.count;
-    setCachedCount(slug, d.count);
-    notifyLikeCountLoaded(slug, d.count);
-  } else {
-    // Network really failed - revert optimistic UI so the user sees the
-    // request didn't take.
+
+  const { sk, pk, finalize, pool } = await ensureNostrReady();
+  const eventId = _slugToEventId.get(slug) || await hashSlug(slug);
+  const reactionEvent = finalize({
+    kind: 7,
+    created_at: Math.floor(Date.now() / 1000),
+    tags: [['e', eventId], ['p', pk]],
+    content: '+'
+  }, sk);
+
+  // Optimistic: add our own pubkey to the local set immediately. The
+  // subscription callback would do this anyway when it receives our own
+  // event back from the relay, but doing it here avoids a 100ms wait.
+  let set = _reactionsBySlug.get(slug);
+  if (!set) { set = new Set(); _reactionsBySlug.set(slug, set); }
+  set.add(pk);
+  renderLikeCount(slug, set.size);
+
+  // Publish to all relays in parallel. As long as ONE accepts, the
+  // reaction is durable (and propagates to other relays via gossip).
+  try {
+    await Promise.any(pool.publish(NOSTR_RELAYS, reactionEvent));
+  } catch {
+    // All relays rejected. Revert.
+    set.delete(pk);
+    renderLikeCount(slug, set.size);
     btn.classList.remove('liked');
-    countEl.textContent = curSafe;
     localStorage.removeItem(`liked-${slug}`);
   }
   btn.dataset.busy = '0';
 }
+
+// ─── Unique visitor counter (per browser per 24h) ────────────────────
+// Repurposes Abacus exactly as it was designed: ONE counter for the
+// whole site, one /hit per browser per day. localStorage holds the
+// timestamp of the last hit; if it's older than 24h, this load counts
+// as a "new visit" and we /hit (create+increment, returns new total).
+// Otherwise we /get (just read the current total) so the badge still
+// shows accurate numbers for returning visitors without inflating them.
+(async function loadVisitorCount() {
+  const el = document.getElementById('visit-count');
+  const badge = document.getElementById('visits-badge');
+  if (!el || !badge) return;
+  const ONE_DAY = 24 * 60 * 60 * 1000;
+  const last = parseInt(localStorage.getItem('katehuuh-visit-ts') || '0', 10);
+  const isNewVisit = (Date.now() - last) > ONE_DAY;
+  const url = isNewVisit
+    ? 'https://abacus.jasoncameron.dev/hit/katehuuh-visits/total'
+    : 'https://abacus.jasoncameron.dev/get/katehuuh-visits/total';
+  try {
+    const r = await fetch(url);
+    if (r.ok) {
+      const j = await r.json();
+      if (typeof j.value === 'number') {
+        el.textContent = j.value.toLocaleString();
+        if (isNewVisit) localStorage.setItem('katehuuh-visit-ts', String(Date.now()));
+        return;
+      }
+    }
+    if (r.status === 404 && !isNewVisit) {
+      // No one has /hit ever - shouldn't happen after first deploy but
+      // tolerate it by showing 0 instead of hiding the badge.
+      el.textContent = '0';
+      return;
+    }
+  } catch { /* network blocked / offline */ }
+  badge.classList.add('hidden');
+})();
 
 </script>
 </body>
