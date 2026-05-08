@@ -1207,7 +1207,7 @@ function projectCard(p) {
     : el('div', { class: 'thumb placeholder' }, 'building');
   const titleRow = el('div', { class: 'title-row' }, [
     el('h3', null, p.name),
-    makeLikeButton(slug),
+    makeLikeButton(slug, p.url),
   ]);
   const meta = el('div', { class: 'card-meta' }, [
     p.repo ? el('a', { href: p.repo, title: 'source' }, 'src') : null,
@@ -1276,14 +1276,24 @@ function restoreNaturalOrder() {
 }
 
 // ─── Likes via Nostr (anonymous, no popup, no signup, no API key) ────
-// Each "like" is a kind:7 reaction event signed by an ephemeral keypair
-// the page generates and stashes in localStorage on first visit (zero UI,
-// like an analytics cookie). One WebSocket subscription with a multi-#e
-// tag filter returns ALL ~28 reactions across ALL relays in a single
-// read - no per-card request burst, no rate limits, no need to throttle
-// or cache. Counts are unique-pubkey cardinality per slug (Grow-only Set
-// semantics), so concurrent likes from different visitors all count
-// correctly and re-clicks from the same browser dedupe naturally.
+// Each "like" is a kind:17 NIP-73 external-content reaction event signed
+// by an ephemeral keypair the page generates and stashes in localStorage
+// on first visit (zero UI, like an analytics cookie). One WebSocket
+// subscription per relay with a single #i tag filter returns ALL ~28
+// reactions across all demos - no per-card request burst, no rate
+// limits, no throttle, no cache. Counts are unique-pubkey cardinality
+// per demo URL (Grow-only Set semantics), so concurrent likes from
+// different visitors all count correctly.
+//
+// Event shape per NIP-25 + NIP-73:
+//   kind: 17
+//   tags: [["k", "web"], ["i", "<canonical demo URL>"]]
+//   content: "+"
+// This is the standards-compliant form for "reaction to external
+// content." Earlier code used kind:7 with a synthetic SHA-256 of the
+// slug as a fake event id - that worked but was a private convention
+// invisible to other Nostr tooling. kind:17/#i means any future Nostr
+// reader sees these reactions as real reactions to the demo's URL.
 //
 // Why Nostr over alternatives:
 //   * counterapi.dev → on EasyPrivacy (blocked by ~25-30% of visitors)
@@ -1292,8 +1302,8 @@ function restoreNaturalOrder() {
 //   * Gun.js → public relays flaky, last-write-wins on scalar counters
 //   * Cloudflare/Upstash/Firebase → require dev signup
 // Nostr is a comms protocol (not analytics), not on EasyPrivacy, public
-// relays are professionally operated (Damus, Nos.lol, nostr.band), and
-// kind:7 reactions are exactly the semantic we need (NIP-25).
+// relays are professionally operated, and NIP-73 reactions are exactly
+// the semantic we need.
 // Six relays curated for genuine diversity (not just six relays). Each
 // dimension matters for resilience:
 //   * 6 distinct operator pubkeys (verified via NIP-11)
@@ -1318,34 +1328,34 @@ const NOSTR_RELAYS = [
   'wss://yabu.me',                 // JP community, Japan, strfry,      community
   'wss://nostr.21crypto.ch'        // kriegalex homelab, Switzerland, strfry, individual
 ];
-// Versioned namespace prefix - bump if the slug-hashing scheme ever
-// changes, so old reactions for a different scheme don't show up under
-// new event IDs.
-const NOSTR_NS_PREFIX = 'katehuuh-likes-v1:';
-
 function slugifyForLikes(name) {
   return String(name || '').toLowerCase().replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '') || 'untitled';
 }
 
-// Page-scope state. Map<slug, 64-char hex event id> + reverse lookup +
-// Set of reactor pubkeys per slug + DOM button reference per slug.
-const _slugToEventId = new Map();
-const _eventIdToSlug = new Map();
-const _reactionsBySlug = new Map();
-const _likeButtons = new Map();
-let _nostrReady = null;        // Promise resolving to {sk, pk, finalize, pool}
-let _nostrInitScheduled = false;
-
-// SHA-256(NS_PREFIX + slug) → 64-char hex - the "fake event id" we react
-// to. Nostr relays don't validate that the e-tag points to a real event,
-// so we can use synthetic IDs and filter by them in one subscription.
-async function hashSlug(slug) {
-  const data = new TextEncoder().encode(NOSTR_NS_PREFIX + slug);
-  const buf = await crypto.subtle.digest('SHA-256', data);
-  return Array.from(new Uint8Array(buf))
-    .map(b => b.toString(16).padStart(2, '0')).join('');
+// Build the canonical URL used as the NIP-73 `i` tag value. Strips query
+// strings (cache-busters like ?cb=abc, tracking params) and fragments so
+// the same demo always hashes to the same identifier regardless of how
+// the link was shared. Resolves relative paths against location.origin
+// since p.url in data.json may be "demos/foo.html".
+function canonicalDemoUrl(url) {
+  if (!url) return null;
+  try {
+    const u = new URL(url, location.origin);
+    u.search = '';
+    u.hash = '';
+    return u.toString();
+  } catch { return null; }
 }
+
+// Page-scope state. URL is the NIP-73 `i` tag - one canonical URL per
+// demo, used both as the filter value on read and as the tag on write.
+const _slugToUrl = new Map();
+const _urlToSlug = new Map();
+const _reactionsBySlug = new Map();   // slug → Set of reactor pubkeys
+const _likeButtons = new Map();       // slug → DOM button
+let _nostrReady = null;               // Promise resolving to {sk, pk, finalize, pool}
+let _nostrInitScheduled = false;
 
 function renderLikeCount(slug, n) {
   const btn = _likeButtons.get(slug);
@@ -1371,19 +1381,20 @@ function ensureNostrReady() {
     const sk = new Uint8Array(skHex.match(/.{2}/g).map(h => parseInt(h, 16)));
     const pk = nostr.getPublicKey(sk);
     const pool = new nostr.SimplePool();
-    // Single subscription, all event IDs at once - the relay matches
-    // every reaction across every demo and streams them back in one
-    // continuous response. Sub stays open for live updates.
-    const eventIds = Array.from(_slugToEventId.values());
-    if (eventIds.length > 0) {
+    // Single subscription, all canonical URLs at once - each relay
+    // matches every kind:17 reaction whose #i tag is one of our demo
+    // URLs and streams them back in one continuous response. Sub stays
+    // open for live updates.
+    const urls = Array.from(_slugToUrl.values());
+    if (urls.length > 0) {
       pool.subscribeMany(NOSTR_RELAYS, [{
-        kinds: [7],
-        '#e': eventIds
+        kinds: [17],
+        '#i': urls
       }], {
         onevent(event) {
-          const eTag = event.tags.find(t => t[0] === 'e');
-          if (!eTag) return;
-          const slug = _eventIdToSlug.get(eTag[1]);
+          const iTag = event.tags.find(t => t[0] === 'i');
+          if (!iTag) return;
+          const slug = _urlToSlug.get(iTag[1]);
           if (!slug) return;
           let set = _reactionsBySlug.get(slug);
           if (!set) { set = new Set(); _reactionsBySlug.set(slug, set); }
@@ -1406,7 +1417,7 @@ function scheduleNostrInit() {
   queueMicrotask(() => { ensureNostrReady(); });
 }
 
-function makeLikeButton(slug) {
+function makeLikeButton(slug, demoUrl) {
   const heart = `<svg class="heart" viewBox="0 0 24 24" aria-hidden="true">
     <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
   </svg>`;
@@ -1425,13 +1436,15 @@ function makeLikeButton(slug) {
     handleLikeClick(btn);
   });
   _likeButtons.set(slug, btn);
-  // Register the slug → eventId mapping. Once all buttons are made the
-  // queueMicrotask above kicks off the single subscription covering them.
-  hashSlug(slug).then(eventId => {
-    _slugToEventId.set(slug, eventId);
-    _eventIdToSlug.set(eventId, slug);
+  // Register the slug → canonical URL mapping. Once all buttons are made
+  // the queueMicrotask kick-off opens the single subscription covering
+  // every URL at once.
+  const url = canonicalDemoUrl(demoUrl);
+  if (url) {
+    _slugToUrl.set(slug, url);
+    _urlToSlug.set(url, slug);
     scheduleNostrInit();
-  });
+  }
   return btn;
 }
 
@@ -1454,11 +1467,12 @@ async function handleLikeClick(btn) {
   localStorage.setItem(`liked-${slug}`, '1');
 
   const { sk, pk, finalize, pool } = await ensureNostrReady();
-  const eventId = _slugToEventId.get(slug) || await hashSlug(slug);
+  const url = _slugToUrl.get(slug);
+  if (!url) { btn.dataset.busy = '0'; return; }
   const reactionEvent = finalize({
-    kind: 7,
+    kind: 17,
     created_at: Math.floor(Date.now() / 1000),
-    tags: [['e', eventId], ['p', pk]],
+    tags: [['k', 'web'], ['i', url]],
     content: '+'
   }, sk);
 
