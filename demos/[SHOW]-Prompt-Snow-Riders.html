@@ -184,7 +184,6 @@ const TERRAIN_RADIUS = 220;     // half-extent of visible terrain in metres
 const TERRAIN_VERTS = 161;      // grid resolution (must be odd)
 const TERRAIN_STEP = (TERRAIN_RADIUS * 2) / (TERRAIN_VERTS - 1);
 
-const PEAK_HEIGHT = 110;        // metres at center
 const SPAWN_OFFSET_Z = 0;       // spawn at peak (0, peakY, 0)
 
 const GRAVITY = 22;             // m/s^2 (tuned, not earth)
@@ -230,28 +229,45 @@ const myColor = COLORS[Math.abs(myId.charCodeAt(2) || 0) % COLORS.length];
 // ============================================================
 const noise2D = createNoise2D(() => 0.4242);
 
+// One BIG main mountain plus several smaller satellite peaks. Hand-tuned
+// positions/sizes so the layout is stable across reloads (and so the
+// generated checkpoint path always has a sensible run between peaks).
+const MOUNTAIN_PEAKS = [
+  { x:   10, z:  -25, h: 105, s: 78 }, // main peak (slightly off-center)
+  { x:  -95, z:  -15, h:  60, s: 44 },
+  { x:   90, z:   25, h:  52, s: 40 },
+  { x:  -35, z:   95, h:  68, s: 48 },
+  { x:  100, z:  -90, h:  56, s: 42 },
+  { x: -125, z:   65, h:  44, s: 36 },
+  { x:   55, z:  130, h:  46, s: 38 },
+  { x:  -55, z: -120, h:  50, s: 40 }
+];
+
 function heightAt(x, z) {
   const r = Math.sqrt(x * x + z * z);
-  // Radial bowl: peak at center, descending outward in a natural curve
-  const radial = Math.max(0, PEAK_HEIGHT * (1 - r / (TERRAIN_RADIUS * 0.95)));
-  // Rim wall: past 0.78R the terrain curves back UP into snow walls. This
-  // is the natural playfield boundary - no decorative triangles needed.
-  const rimStart = TERRAIN_RADIUS * 0.78;
+  // Mild radial floor: keeps the playable interior elevated above the
+  // outer-edge sea level so peaks read as RELATIVE high points, not
+  // isolated bumps in a flat plain.
+  const radial = Math.max(0, 30 * (1 - r / (TERRAIN_RADIUS * 0.95)));
+  // Sum of Gaussian peaks - this is what gives "BIG mountain + smaller
+  // mountains of varying size" instead of one cone.
+  let peaks = 0;
+  for (let i = 0; i < MOUNTAIN_PEAKS.length; i++) {
+    const p = MOUNTAIN_PEAKS[i];
+    const dx = x - p.x, dz = z - p.z;
+    peaks += p.h * Math.exp(-(dx * dx + dz * dz) / (p.s * p.s * 2));
+  }
+  // Rim wall: outer boundary so we can't ski off the world.
+  const rimStart = TERRAIN_RADIUS * 0.82;
   const rimT = Math.max(0, (r - rimStart) / (TERRAIN_RADIUS - rimStart));
   const rim = Math.pow(rimT, 1.7) * 95;
-  // Multi-octave noise. The ridge term (1 - |noise|) creates sharp lines
-  // that read as eroded gullies / corroded rock features.
+  // Erosion noise (kept; the ridge term still gives nice "weathered" detail).
   let n = 0;
-  n += noise2D(x * 0.008, z * 0.008) * 16;                              // long swells
-  n += (1 - Math.abs(noise2D(x * 0.022, z * 0.022) * 2)) * 4.5 - 2.25;  // erosion ridges
-  n += noise2D(x * 0.06, z * 0.06) * 2.4;                               // medium bumps
-  n += noise2D(x * 0.18, z * 0.18) * 0.85;                              // fine grain
-  // Carved path - only carves inside the bowl, fades into the rim wall
-  const pathX = Math.sin(z * 0.014) * 18 + Math.cos(z * 0.005) * 8;
-  const pathDist = Math.abs(x - pathX);
-  const pathFactor = 1 - Math.min(1, rimT * 1.8);
-  const carve = Math.exp(-(pathDist * pathDist) / 100) * 6.5 * pathFactor;
-  return radial + rim + n - carve;
+  n += noise2D(x * 0.008, z * 0.008) * 12;
+  n += (1 - Math.abs(noise2D(x * 0.022, z * 0.022) * 2)) * 3.5 - 1.75;
+  n += noise2D(x * 0.06, z * 0.06) * 2.0;
+  n += noise2D(x * 0.18, z * 0.18) * 0.75;
+  return radial + peaks + rim + n;
 }
 
 function slopeNormalAt(x, z) {
@@ -477,19 +493,69 @@ placeProps();
 // ============================================================
 // Checkpoints (rings along the runline, descending)
 // ============================================================
+// Locate the global high point of the terrain. We sample inside the
+// playable disc (away from rim wall) and keep the best.
+const highestPoint = { x: 0, z: 0, h: -Infinity };
+{
+  // First seed with the configured peak summits, then refine via random
+  // sampling so we account for additive overlap + erosion noise.
+  for (const p of MOUNTAIN_PEAKS) {
+    const h = heightAt(p.x, p.z);
+    if (h > highestPoint.h) { highestPoint.x = p.x; highestPoint.z = p.z; highestPoint.h = h; }
+  }
+  for (let i = 0; i < 800; i++) {
+    const ang = Math.random() * Math.PI * 2;
+    const r = Math.random() * TERRAIN_RADIUS * 0.55;
+    const x = Math.cos(ang) * r, z = Math.sin(ang) * r;
+    const h = heightAt(x, z);
+    if (h > highestPoint.h) { highestPoint.x = x; highestPoint.z = z; highestPoint.h = h; }
+  }
+}
+
+// Checkpoints walk the terrain DOWNHILL from the highest point. Each step
+// follows the negative gradient (steepest descent), with alternating
+// sideways jitter so the path slaloms left-right between the satellite
+// peaks instead of running in a straight line.
 const checkpoints = [];
 {
   const ringGeo = new THREE.TorusGeometry(4, 0.3, 8, 24);
+  let cx = highestPoint.x, cz = highestPoint.z;
+  let lastH = highestPoint.h;
+  // First checkpoint is a bit downhill from the summit, then alternate
+  // sideways for the slalom feel.
   for (let i = 0; i < NUM_CHECKPOINTS; i++) {
-    const t = (i + 1) / (NUM_CHECKPOINTS + 1);
-    const z = TERRAIN_RADIUS * 0.85 * (t * 2 - 1);
-    const x = Math.sin(z * 0.014) * 14 + Math.cos(z * 0.005) * 6;
-    const y = heightAt(x, z) + 4;
+    const eps = 1.5;
+    const gx = (heightAt(cx + eps, cz) - heightAt(cx - eps, cz)) / (2 * eps);
+    const gz = (heightAt(cx, cz + eps) - heightAt(cx, cz - eps)) / (2 * eps);
+    let dirX = -gx, dirZ = -gz;
+    let len = Math.hypot(dirX, dirZ);
+    if (len < 0.0001) { dirX = 0; dirZ = 1; len = 1; }
+    dirX /= len; dirZ /= len;
+    // Sideways perpendicular, alternating so we slalom left/right
+    const side = (i % 2 === 0) ? 1 : -1;
+    const perpX = -dirZ * side, perpZ = dirX * side;
+    const stepLen = 32 + (i === 0 ? 8 : 4);
+    let nx = cx + dirX * stepLen + perpX * stepLen * 0.45;
+    let nz = cz + dirZ * stepLen + perpZ * stepLen * 0.45;
+    // Don't escape the rim wall
+    if (Math.hypot(nx, nz) > TERRAIN_RADIUS * 0.85) break;
+    // Reject any non-descending step (the gradient should already prevent
+    // this, but the slalom jitter can briefly climb a satellite peak)
+    let ny = heightAt(nx, nz);
+    if (ny > lastH) {
+      // try without the jitter
+      nx = cx + dirX * stepLen;
+      nz = cz + dirZ * stepLen;
+      ny = heightAt(nx, nz);
+      if (ny > lastH) break;
+    }
+    cx = nx; cz = nz; lastH = ny;
+    const cy = ny + 4;
     const ring = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ color: 0xffe060, transparent: true, opacity: 0.85 }));
-    ring.position.set(x, y, z);
+    ring.position.set(cx, cy, cz);
     ring.rotation.x = Math.PI / 2;
     scene.add(ring);
-    checkpoints.push({ mesh: ring, x, y, z, passed: false, idx: i });
+    checkpoints.push({ mesh: ring, x: cx, y: cy, z: cz, passed: false, idx: i });
   }
 }
 
@@ -840,11 +906,18 @@ const recordingSamples = []; // {t, x, y, z, heading} every ~120ms during a run
 let recordingStartTime = -1;
 
 function findSpawn() {
-  // Spawn at peak, slightly off so we can ski toward checkpoints
-  const x = 0, z = -TERRAIN_RADIUS * 0.8;
-  player.pos.set(x, heightAt(x, z) + 1.5, z);
+  // Spawn on the actual highest summit so the run is purely downhill.
+  player.pos.set(highestPoint.x, highestPoint.h + 2.5, highestPoint.z);
   player.vel.set(0, 0, 0);
-  player.heading = 0; // face +z (toward 0,0)
+  // Face the first checkpoint. _fwd = (-sin h, 0, -cos h), so the heading
+  // that points toward (dx, dz) is atan2(-dx, -dz).
+  if (checkpoints.length > 0) {
+    const dx = checkpoints[0].x - highestPoint.x;
+    const dz = checkpoints[0].z - highestPoint.z;
+    player.heading = Math.atan2(-dx, -dz);
+  } else {
+    player.heading = 0;
+  }
   player.airborne = false;
   player.finished = false;
   raceTime = 0; raceRunning = false;
