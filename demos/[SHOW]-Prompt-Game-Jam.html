@@ -346,7 +346,7 @@
   const nameLabel = makeNameLabel(myName);
   ship.add(nameLabel);
   ship.position.set((TRACK_INNER + TRACK_OUTER) / 2, 0, 4); // just past start line
-  ship.rotation.y = -Math.PI / 2;
+  ship.rotation.y = 0; // face +Z (tangent to track, counterclockwise)
   scene.add(ship);
 
   const player = {
