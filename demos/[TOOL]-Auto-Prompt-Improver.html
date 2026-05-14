@@ -129,8 +129,14 @@ PROMPTS['self-improve'] = `You are an expert prompt engineer. Given a task descr
 
 <task>
 Instruction: [INSTRUCTION]
-Context: [INPUT — optional, delete this line if none]
-Expected output: [GROUND TRUTH — the ideal answer you want a prompt to produce]
+Context:
+"""
+[INPUT — optional, delete this line if none]
+"""
+Expected output:
+"""
+[GROUND TRUTH — the ideal answer you want a prompt to produce]
+"""
 </task>
 
 Follow this self-improvement methodology. Each round you generate a prompt, test it, evaluate, and iterate. Continue until the prompt reliably produces output matching the expected result.
