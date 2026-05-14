@@ -20,8 +20,17 @@ h1 { font-size: 1.8rem; font-weight: 700; margin-bottom: 0.4rem; }
 .card-tag { font-size: 0.75rem; padding: 2px 8px; border-radius: 99px; background: rgba(88,166,255,0.15); color: var(--accent); }
 .card-arrow { color: var(--muted); transition: transform 0.2s; font-size: 1.2rem; }
 .card.open .card-arrow { transform: rotate(90deg); }
-.card-body { display: none; padding: 0 1.25rem 1.25rem; }
-.card.open .card-body { display: block; }
+/* Collapsed: show a fade-preview of the first ~5 lines */
+.card-body { padding: 0 1.25rem 1.25rem; }
+.card:not(.open) .card-body { max-height: 6.5em; overflow: hidden; position: relative; pointer-events: none; }
+.card:not(.open) .card-body::after {
+  content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 5em;
+  background: linear-gradient(to bottom, transparent, var(--surface) 90%);
+  pointer-events: none;
+}
+.card.open .card-body { max-height: none; overflow: visible; pointer-events: auto; }
+.card:not(.open) .card-body .copy-btn,
+.card:not(.open) .card-body .note { display: none; }
 
 .prompt-box { background: #0d1117; border: 1px solid var(--border); border-radius: 8px; padding: 1rem; font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace; font-size: 0.82rem; line-height: 1.6; white-space: pre-wrap; word-break: break-word; color: #c9d1d9; max-height: 60vh; overflow-y: auto; position: relative; }
 .prompt-box .placeholder { color: #f0883e; font-weight: 600; }
@@ -39,10 +48,10 @@ h1 { font-size: 1.8rem; font-weight: 700; margin-bottom: 0.4rem; }
 <div class="container">
   <h1>Prompt Gallery</h1>
 
-  <div class="card open" id="card-self-improve">
+  <div class="card" id="card-self-improve">
     <div class="card-header" onclick="toggleCard('card-self-improve')">
       <div>
-        <div class="card-title">Self-Improving Prompt Engineer</div>
+        <div class="card-title">🔄 Self-Improving Prompt Engineer</div>
         <div style="color:var(--muted);font-size:0.8rem;margin-top:2px;">Iterative self-testing loop that refines a prompt until it reliably produces the expected output. Replace the <code style="color:#f0883e;">[BRACKETED]</code> placeholders with your content.</div>
       </div>
       <span class="card-tag">COT + XML</span>
