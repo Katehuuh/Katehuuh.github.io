@@ -1,6 +1,11 @@
 {
   "demos": [
     {
+      "name": "[SHOW]-LLM-Dungeon-Generator",
+      "type": "file",
+      "filename": "[SHOW]-LLM-Dungeon-Generator.html"
+    },
+    {
       "name": "[TOOL]-HF-Color-Picker",
       "type": "file",
       "filename": "[TOOL]-HF-Color-Picker.html"
