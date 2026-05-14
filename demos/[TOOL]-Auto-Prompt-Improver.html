@@ -14,8 +14,10 @@ h1 { font-size: 1.8rem; font-weight: 700; margin-bottom: 0.4rem; }
 .subtitle { color: var(--muted); font-size: 0.95rem; margin-bottom: 2rem; line-height: 1.5; }
 
 .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; margin-bottom: 1.5rem; overflow: hidden; }
-.card-header { display: flex; justify-content: space-between; align-items: center; padding: 1rem 1.25rem; cursor: pointer; user-select: none; }
+.card-header { display: flex; justify-content: space-between; align-items: center; padding: 1rem 1.25rem; cursor: pointer; user-select: none; gap: 12px; }
 .card-header:hover { background: rgba(255,255,255,0.02); }
+/* When collapsed, the whole card-body area is also clickable to expand */
+.card:not(.open) .card-body { cursor: pointer; }
 .card-title { font-weight: 600; font-size: 1.1rem; }
 .card-tag { font-size: 0.75rem; padding: 2px 8px; border-radius: 99px; background: rgba(88,166,255,0.15); color: var(--accent); }
 .card-arrow { color: var(--muted); transition: transform 0.2s; font-size: 1.2rem; }
@@ -57,13 +59,64 @@ h1 { font-size: 1.8rem; font-weight: 700; margin-bottom: 0.4rem; }
       <span class="card-tag">COT + XML</span>
       <span class="card-arrow">&#9654;</span>
     </div>
-    <div class="card-body">
+    <div class="card-body" onclick="if(!this.parentElement.classList.contains('open'))toggleCard('card-self-improve')">
       <div class="prompt-box" id="prompt-self-improve"></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:0.75rem;">
-        <button class="copy-btn" onclick="copyPrompt('self-improve')">Copy template</button>
-        <button class="copy-btn" style="background:#8b5cf6;" onclick="copyExample('self-improve')">Copy filled example</button>
+        <button class="copy-btn" onclick="event.stopPropagation();copyPrompt('self-improve')">Copy template</button>
+        <button class="copy-btn" style="background:#8b5cf6;" onclick="event.stopPropagation();copyExample('self-improve')">Copy filled example</button>
       </div>
       <p class="note">Works in a single chat. The model generates a prompt, answers it without looking at the expected output, evaluates the gap, and iterates. If it has access to subagents or tool-use, it can delegate step 2 for a more honest evaluation.</p>
+    </div>
+  </div>
+
+  <div class="card" id="card-racenn">
+    <div class="card-header" onclick="toggleCard('card-racenn')">
+      <div>
+        <div class="card-title">⚡ RaceNN CodeEval</div>
+        <div style="color:var(--muted);font-size:0.8rem;margin-top:2px;">Frontier model benchmark prompt for code generation evaluation.</div>
+      </div>
+      <span class="card-tag">⚡</span>
+      <span class="card-arrow">&#9654;</span>
+    </div>
+    <div class="card-body" onclick="if(!this.parentElement.classList.contains('open'))toggleCard('card-racenn')">
+      <div class="prompt-box" id="prompt-racenn"></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:0.75rem;">
+        <button class="copy-btn" onclick="event.stopPropagation();copyPrompt('racenn')">Copy prompt</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" id="card-spaceship">
+    <div class="card-header" onclick="toggleCard('card-spaceship')">
+      <div>
+        <div class="card-title">⚡ Spaceship Prompt</div>
+        <div style="color:var(--muted);font-size:0.8rem;margin-top:2px;">Frontier model benchmark for creative + technical generation.</div>
+      </div>
+      <span class="card-tag">⚡</span>
+      <span class="card-arrow">&#9654;</span>
+    </div>
+    <div class="card-body" onclick="if(!this.parentElement.classList.contains('open'))toggleCard('card-spaceship')">
+      <div class="prompt-box" id="prompt-spaceship"></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:0.75rem;">
+        <button class="copy-btn" onclick="event.stopPropagation();copyPrompt('spaceship')">Copy prompt</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" id="card-humanoid">
+    <div class="card-header" onclick="toggleCard('card-humanoid')">
+      <div>
+        <div class="card-title">⚡ Humanoid 3D</div>
+        <div style="color:var(--muted);font-size:0.8rem;margin-top:2px;">Frontier model benchmark for complex 3D rigged character generation.</div>
+      </div>
+      <span class="card-tag">⚡</span>
+      <span class="card-arrow">&#9654;</span>
+    </div>
+    <div class="card-body" onclick="if(!this.parentElement.classList.contains('open'))toggleCard('card-humanoid')">
+      <div class="prompt-box" id="prompt-humanoid"></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:0.75rem;">
+        <button class="copy-btn" onclick="event.stopPropagation();copyPrompt('humanoid')">Copy prompt</button>
+      </div>
     </div>
   </div>
 
@@ -130,6 +183,18 @@ EXAMPLES['self-improve'] = PROMPTS['self-improve']
   .replace('[INSTRUCTION]', _EX_INSTRUCTION)
   .replace('[INPUT — optional, delete this line if none]', _EX_INPUT)
   .replace('[GROUND TRUTH — the ideal answer you want a prompt to produce]', _EX_OUTPUT);
+
+PROMPTS['racenn'] = `[🟢 Easy] RaceNN CodeEval
+
+Coming soon — paste the RaceNN_CodeEval.txt prompt here.`;
+
+PROMPTS['spaceship'] = `[🟡 Medium] Spaceship Prompt
+
+Coming soon — paste the Spaceship prompt here.`;
+
+PROMPTS['humanoid'] = `[🔴 Hard] Humanoid 3D
+
+Coming soon — paste the Humanoid 3D prompt here.`;
 
 function escapeHtml(s) {
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
