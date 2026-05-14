@@ -372,12 +372,12 @@
             lines.push('Cells: clear frame separation; no text, labels, or frame numbers inside sprite cells.');
             lines.push('');
             lines.push('Canvas: ' + s.imageW + ' x ' + s.imageH + ' px.');
-            lines.push('Grid: ' + rows + ' rows x ' + cols + ' columns; each cell ' + s.spriteWidth + ' x ' + s.rowHeight + ' px.');
+            lines.push('Grid: ' + allRows.length + ' rows x ' + cols + ' columns; each cell ' + s.spriteWidth + ' x ' + s.rowHeight + ' px.');
             lines.push('Background: solid uniform ' + bg + '; no gradient or noise.');
             if (s.labelWidth > 0) lines.push('Left label column: ' + s.labelWidth + ' px wide; keep row labels outside sprite cells.');
             lines.push('');
             lines.push('Rows:');
-            for (let i = 0; i < rows; i++) lines.push('Row ' + (i + 1) + ': ' + (allRows[i] || 'ROW ' + (i + 1)));
+            for (let i = 0; i < allRows.length; i++) lines.push('Row ' + (i + 1) + ': ' + allRows[i]);
             return lines.join('\n');
           };
 
