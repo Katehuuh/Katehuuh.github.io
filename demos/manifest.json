@@ -1,6 +1,11 @@
 {
   "demos": [
     {
+      "name": "[TOOL]-Auto-Prompt-Improver",
+      "type": "file",
+      "filename": "[TOOL]-Auto-Prompt-Improver.html"
+    },
+    {
       "name": "[SHOW]-LLM-Dungeon-Generator",
       "type": "file",
       "filename": "[SHOW]-LLM-Dungeon-Generator.html"
