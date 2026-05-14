@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LLM Dungeon Generator</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { height: 100%; background: #0a0a0a; color: #e0e0e0; overflow: hidden; font-family: -apple-system, system-ui, sans-serif; }
+canvas { display: block; image-rendering: pixelated; }
+#boot { position: fixed; inset: 0; z-index: 50; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #0a0a0a; gap: 14px; transition: opacity 0.4s; }
+#boot.done { opacity: 0; pointer-events: none; }
+#boot h1 { font-size: 1.8rem; }
+#boot .sub { color: #888; font-size: 0.9rem; text-align: center; max-width: 420px; line-height: 1.5; }
+#boot .bar-wrap { width: 300px; height: 6px; background: #222; border-radius: 3px; overflow: hidden; }
+#boot .bar { height: 100%; background: #9cdcfe; width: 0%; transition: width 0.3s; }
+#hud { position: fixed; top: 12px; left: 12px; z-index: 10; font-size: 14px; pointer-events: none; text-shadow: 1px 1px 3px rgba(0,0,0,0.8); }
+#hud .key-status { margin-top: 4px; }
+#generating { position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%); z-index: 20; background: rgba(0,0,0,0.8); padding: 16px 28px; border-radius: 10px; border: 1px solid #333; font-size: 1.1rem; display: none; }
+#generating.show { display: block; }
+#win { position: fixed; inset: 0; z-index: 30; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(0,0,0,0.7); display: none; }
+#win.show { display: flex; }
+#win h1 { font-size: 3rem; color: #ffd700; text-shadow: 0 0 20px #ffd700; margin-bottom: 16px; }
+#win button { padding: 12px 28px; font-size: 1.1rem; background: #333; color: #fff; border: 1px solid #555; border-radius: 8px; cursor: pointer; }
+#win button:hover { background: #444; }
+</style>
+</head>
+<body>
+<div id="boot">
+  <h1>LLM Dungeon Generator</h1>
+  <div class="sub">Loading Qwen3.5-2B via WebGPU. First visit downloads ~1.5 GB (cached after).</div>
+  <div class="bar-wrap"><div class="bar" id="bar"></div></div>
+  <div class="sub" id="boot-msg">Initializing...</div>
+</div>
+<div id="hud">
+  <div id="room-label">Dungeon</div>
+  <div class="key-status">Key: <span id="key-icon">--</span></div>
+</div>
+<div id="generating" class=""><span id="gen-text">Generating dungeon...</span></div>
+<div id="win"><h1>You Win!</h1><button id="replay">Generate New Dungeon</button></div>
+<canvas id="c"></canvas>
+
+<script type="module">
+import * as webllm from "https://esm.run/@mlc-ai/web-llm";
+
+const TILE = 28;
+const PLAYER_SPEED = 160;
+const FRICTION = 0.88;
+
+const COLORS = {
+  '#': '#1a1a30', '.': '#2a2a3e', ',': '#1e1e2e',
+  'S': '#2a3a2a', 'K': '#ffd700', 'E': '#e040fb',
+};
+
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+function resize() { canvas.width = innerWidth; canvas.height = innerHeight; }
+resize(); addEventListener('resize', resize);
+
+let engine = null;
+let dungeon = null;
+let player = null;
+let hasKey = false;
+let cam = { x: 0, y: 0 };
+const keys = {};
+addEventListener('keydown', e => { keys[e.code] = true; e.preventDefault(); });
+addEventListener('keyup', e => { keys[e.code] = false; });
+
+async function initEngine() {
+  engine = await webllm.CreateMLCEngine("Qwen3.5-2B-q4f16_1-MLC", {
+    initProgressCallback: (r) => {
+      document.getElementById('bar').style.width = Math.round((r.progress || 0) * 100) + '%';
+      document.getElementById('boot-msg').textContent = r.text || 'Loading...';
+    },
+  });
+  document.getElementById('boot').classList.add('done');
+}
+
+function fallbackDungeon() {
+  return [
+    "############################",
+    "#S.....#,,,,#..............#",
+    "#......#,,,,#..............#",
+    "#......#,,,,#.....###.....#",
+    "#..###.#,,,,#.....#K#.....#",
+    "#......#,,,,,.....###.....#",
+    "#......#,,,,#..............#",
+    "####,###,,,,####,##########",
+    "#,,,,,,,,,,,,,,,,,,,,,,,,,,#",
+    "#,,,,,,,,,,,,,,,,,,,,,,,,,,#",
+    "####,###,,,,####,##########",
+    "#......#,,,,#..............#",
+    "#......#,,,,,.......####...#",
+    "#......#,,,,#.......#E.#...#",
+    "#......#,,,,#.......####...#",
+    "#S.....#,,,,#..............#",
+    "############################",
+  ];
+}
+
+async function generateDungeon() {
+  const genEl = document.getElementById('generating');
+  const genText = document.getElementById('gen-text');
+  genEl.classList.add('show');
+  genText.textContent = 'Asking LLM to generate dungeon...';
+
+  const prompt = `Generate an ASCII dungeon map. Use these characters:
+# = wall, . = room floor, , = corridor floor
+S = player start (exactly one), K = key (exactly one), E = exit (exactly one)
+Rules:
+- Map is 28 columns wide, 17 rows tall
+- Surround entire map with # walls
+- Create 3-5 rooms connected by corridors (,)
+- Rooms are open areas of . characters
+- S goes in one room, K in another, E in a third
+- Ensure a walkable path from S to K to E through corridors
+Output ONLY the 17 lines of 28 characters each. No explanation.`;
+
+  try {
+    const result = await engine.chat.completions.create({
+      messages: [
+        { role: 'system', content: 'You output ASCII dungeon maps. Output ONLY the grid, nothing else.' },
+        { role: 'user', content: prompt }
+      ],
+      max_tokens: 600,
+      temperature: 1.0,
+      top_p: 0.95,
+    });
+    let text = result?.choices?.[0]?.message?.content || '';
+    if (text.includes('</think>')) text = text.split('</think>').pop();
+    text = text.trim();
+    const lines = text.split('\n').map(l => l.trim()).filter(l => l.length >= 10);
+
+    if (lines.length >= 10 && validateMap(lines)) {
+      genEl.classList.remove('show');
+      return lines;
+    }
+  } catch (e) {
+    console.warn('LLM generation failed:', e);
+  }
+
+  genText.textContent = 'LLM output invalid, using fallback...';
+  await new Promise(r => setTimeout(r, 800));
+  genEl.classList.remove('show');
+  return fallbackDungeon();
+}
+
+function validateMap(lines) {
+  const flat = lines.join('');
+  return flat.includes('S') && flat.includes('K') && flat.includes('E');
+}
+
+function startGame(layout) {
+  dungeon = layout;
+  hasKey = false;
+  document.getElementById('key-icon').textContent = '--';
+  document.getElementById('win').classList.remove('show');
+
+  let sx = 1, sy = 1;
+  for (let y = 0; y < dungeon.length; y++) {
+    const x = dungeon[y].indexOf('S');
+    if (x !== -1) { sx = x; sy = y; break; }
+  }
+  player = { x: sx * TILE + TILE / 2, y: sy * TILE + TILE / 2, vx: 0, vy: 0 };
+  cam.x = player.x - canvas.width / 2;
+  cam.y = player.y - canvas.height / 2;
+}
+
+function tileAt(px, py) {
+  const tx = Math.floor(px / TILE), ty = Math.floor(py / TILE);
+  if (ty < 0 || ty >= dungeon.length) return '#';
+  const row = dungeon[ty];
+  if (tx < 0 || tx >= row.length) return '#';
+  return row[tx];
+}
+
+function isSolid(px, py) { return tileAt(px, py) === '#'; }
+
+function tick(dt) {
+  if (!player || !dungeon) return;
+  let dx = 0, dy = 0;
+  if (keys['ArrowLeft'] || keys['KeyA']) dx = -1;
+  if (keys['ArrowRight'] || keys['KeyD']) dx = 1;
+  if (keys['ArrowUp'] || keys['KeyW']) dy = -1;
+  if (keys['ArrowDown'] || keys['KeyS']) dy = 1;
+  const mag = Math.sqrt(dx * dx + dy * dy);
+  if (mag > 0) { dx /= mag; dy /= mag; }
+
+  player.vx += dx * PLAYER_SPEED * dt;
+  player.vy += dy * PLAYER_SPEED * dt;
+  player.vx *= FRICTION;
+  player.vy *= FRICTION;
+
+  const r = 8;
+  let nx = player.x + player.vx * dt;
+  if (isSolid(nx - r, player.y) || isSolid(nx + r, player.y)) nx = player.x;
+  let ny = player.y + player.vy * dt;
+  if (isSolid(player.x, ny - r) || isSolid(player.x, ny + r)) ny = player.y;
+  player.x = nx;
+  player.y = ny;
+
+  const tile = tileAt(player.x, player.y);
+  if (tile === 'K' && !hasKey) {
+    hasKey = true;
+    document.getElementById('key-icon').textContent = 'YES';
+    const ty = Math.floor(player.y / TILE), tx = Math.floor(player.x / TILE);
+    dungeon[ty] = dungeon[ty].substring(0, tx) + '.' + dungeon[ty].substring(tx + 1);
+  }
+  if (tile === 'E' && hasKey) {
+    document.getElementById('win').classList.add('show');
+  }
+
+  cam.x += (player.x - canvas.width / 2 - cam.x) * 0.08;
+  cam.y += (player.y - canvas.height / 2 - cam.y) * 0.08;
+}
+
+function draw() {
+  ctx.fillStyle = '#0a0a0a';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  if (!dungeon || !player) return;
+
+  const mapH = dungeon.length;
+  const mapW = dungeon[0]?.length || 0;
+  const sy = Math.max(0, Math.floor(cam.y / TILE));
+  const ey = Math.min(mapH, Math.ceil((cam.y + canvas.height) / TILE) + 1);
+  const sxc = Math.max(0, Math.floor(cam.x / TILE));
+  const exc = Math.min(mapW, Math.ceil((cam.x + canvas.width) / TILE) + 1);
+
+  for (let y = sy; y < ey; y++) {
+    for (let x = sxc; x < exc; x++) {
+      const ch = dungeon[y][x];
+      const px = x * TILE - cam.x, py = y * TILE - cam.y;
+      ctx.fillStyle = COLORS[ch] || COLORS['.'];
+      ctx.fillRect(px, py, TILE, TILE);
+
+      if (ch === 'K' || ch === 'E' || ch === 'S') {
+        ctx.fillStyle = COLORS['.'];
+        ctx.fillRect(px, py, TILE, TILE);
+        const pulse = Math.sin(Date.now() * 0.004) * 3;
+        ctx.fillStyle = COLORS[ch];
+        ctx.beginPath();
+        ctx.arc(px + TILE / 2, py + TILE / 2, TILE / 3 + pulse, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+  }
+
+  // Player
+  const ppx = player.x - cam.x, ppy = player.y - cam.y;
+  ctx.fillStyle = 'rgba(0,0,0,0.3)';
+  ctx.beginPath();
+  ctx.ellipse(ppx, ppy + 5, 10, 6, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#00ff88';
+  ctx.beginPath();
+  ctx.arc(ppx, ppy, 10, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+}
+
+let lastT = 0;
+function loop(t) {
+  const dt = Math.min((t - (lastT || t)) / 1000, 0.05);
+  lastT = t;
+  tick(dt);
+  draw();
+  requestAnimationFrame(loop);
+}
+
+document.getElementById('replay').addEventListener('click', async () => {
+  document.getElementById('win').classList.remove('show');
+  const layout = await generateDungeon();
+  startGame(layout);
+});
+
+initEngine().then(async () => {
+  const layout = await generateDungeon();
+  startGame(layout);
+  requestAnimationFrame(loop);
+}).catch(e => {
+  document.getElementById('boot-msg').textContent = 'WebGPU not available: ' + e.message;
+});
+</script>
+</body>
+</html>
