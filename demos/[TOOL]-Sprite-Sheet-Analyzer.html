@@ -616,16 +616,17 @@
                 const bgR = parseInt(hex.substr(0, 2), 16) || 0;
                 const bgG = parseInt(hex.substr(2, 2), 16) || 0;
                 const bgB = parseInt(hex.substr(4, 2), 16) || 0;
-                // Step 1: per-pixel exact-match bg mask. The background
-                // is one solid uniform color, so only pixels that match
-                // the picked hex EXACTLY get flagged. Anti-aliased edge
-                // pixels (blended with the character) naturally survive.
+                // Step 1: near-exact bg mask. AI generators never produce
+                // a perfectly uniform background at the pixel level
+                // (JPEG artifacts, dithering, color-space rounding), so
+                // ±3 per channel catches the real bg while being too
+                // tight to match character colors that merely look similar.
                 const isBg = new Uint8Array(W * H);
                 for (let y = 0; y < H; y++) {
                   for (let x = 0; x < W; x++) {
                     const i = (y * W + x) * 4;
                     if (data[i + 3] < 64) { isBg[y * W + x] = 1; continue; }
-                    if (data[i] === bgR && data[i + 1] === bgG && data[i + 2] === bgB) isBg[y * W + x] = 1;
+                    if (Math.abs(data[i] - bgR) <= 3 && Math.abs(data[i + 1] - bgG) <= 3 && Math.abs(data[i + 2] - bgB) <= 3) isBg[y * W + x] = 1;
                   }
                 }
 
