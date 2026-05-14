@@ -264,7 +264,11 @@
               };
 
               const animate = (timestamp) => {
-                const dt = prevTimestamp.current ? timestamp - prevTimestamp.current : 0;
+                // Cap dt to 50ms so a tab-backgrounded pause (rAF stops
+                // ticking) doesn't dump seconds of accumulated time into
+                // the accumulators and blast through every frame at once.
+                const raw = prevTimestamp.current ? timestamp - prevTimestamp.current : 0;
+                const dt = Math.min(raw, 50);
                 prevTimestamp.current = timestamp;
 
                 rows.forEach((sprites, rowIndex) => {
@@ -367,6 +371,7 @@
               + 'Grid: 8 rows x 8 columns; each cell 128 x 128 px.\n'
               + 'First column of each row is a text label with the row name. Remaining 7 columns are sprite frames.\n'
               + 'Background: solid uniform ' + bg + '; no gradient or noise.\n'
+              + 'The character must NOT use ' + bg + ' for any clothing, hair, skin, or accessories (it will be stripped as background).\n'
               + '\n'
               + 'Row 1: IDLE\n'
               + 'Row 2: RUN RIGHT\n'
@@ -546,6 +551,9 @@
                 setImage(img);
                 setImageDimensions({ width: img.width, height: img.height });
                 setIsLoading(false);
+                // Auto-adjust grid on default image load so the user
+                // doesn't have to click the sparkle button manually.
+                setTimeout(() => handleAutoAdjust(img), 100);
               };
               img.onerror = () => {
                 const synth = buildDefaultSpriteSheet();
