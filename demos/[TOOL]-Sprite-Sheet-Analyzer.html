@@ -366,6 +366,7 @@
               + '\n'
               + 'Character: same face, hair, and outfit in all frames; full body visible; no cropping; consistent scale.\n'
               + 'Cells: clear frame separation; no text, labels, or frame numbers inside sprite cells.\n'
+              + 'Each first and last frame should be able to loop.\n'
               + '\n'
               + 'Canvas: 1024 x 1024 px.\n'
               + 'Grid: 8 rows x 8 columns; each cell 128 x 128 px.\n'
@@ -1209,16 +1210,13 @@
                 }
                 const offsetY = Number.isFinite(firstRowTop) ? Math.max(0, Math.round(firstRowTop - 4)) : 0;
 
-                let labelWidth = 0;
+                // Simple label-width: skip column 0 (the text label) and
+                // set labelWidth = spriteWidth so the grid aligns with
+                // column 1 (the first actual sprite frame). No need to
+                // analyze label blob shapes or widths.
+                let labelWidth = labels.length ? spriteWidth : 0;
                 let offsetX = 0;
-                if (labels.length) {
-                  labelWidth = Math.round(median(labels.map(label => label.width)));
-                  let minLabelX = Infinity;
-                  for (const label of labels) {
-                    if (label.first.x < minLabelX) minLabelX = label.first.x;
-                  }
-                  offsetX = Number.isFinite(minLabelX) ? Math.round(minLabelX) : 0;
-                } else {
+                {
                   let minX = Infinity;
                   for (const bbox of bboxes) {
                     if (bbox.x < minX) minX = bbox.x;
@@ -1737,7 +1735,7 @@ img.onload = () => requestAnimationFrame(loop);
                   "Sprite Sheet Analyzer"
                 ),
                 React.createElement('p', { className: "mt-2 text-lg text-gray-400" },
-                  "Adjust the grid to find the perfect dimensions for your sprites."
+                  "Adjust the grid to find the perfect dimensions for your sprites using output of text-to-image model."
                 )
               ),
               React.createElement('main', { className: "w-full max-w-7xl" },
