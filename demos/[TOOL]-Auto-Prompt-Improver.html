@@ -184,17 +184,40 @@ EXAMPLES['self-improve'] = PROMPTS['self-improve']
   .replace('[INPUT — optional, delete this line if none]', _EX_INPUT)
   .replace('[GROUND TRUTH — the ideal answer you want a prompt to produce]', _EX_OUTPUT);
 
-PROMPTS['racenn'] = `[🟢 Easy] RaceNN CodeEval
+PROMPTS['racenn'] = `[🟢 Easy]
+As an expert in game development and AI, create a simplified 2D car racing simulation where AI learns to navigate a track efficiently. Key requirements:
 
-Coming soon — paste the RaceNN_CodeEval.txt prompt here.`;
+1. Environment:
+   - Looping track (points or mathematical function)
+   - Car object (position, angle, velocity)
+   - Simple physics for movement and collisions
+   - Pygame for visualization
 
-PROMPTS['spaceship'] = `[🟡 Medium] Spaceship Prompt
+2. AI and Learning:
+   - Neural network (PyTorch):
+     Inputs: distance sensors, speed
+     Outputs: steering, acceleration
+   - Genetic algorithm: mutation, selection, fitness based on performance
+   - Log and display performance metrics
 
-Coming soon — paste the Spaceship prompt here.`;
+3. Optimization:
+   - Ensure noticeable AI improvement over generations
+   - Balance simplicity with effective learning challenges
 
-PROMPTS['humanoid'] = `[🔴 Hard] Humanoid 3D
+Provide your solution as follows:
+1. Thought process: Explain your approach to simplifying while maintaining core functionality
+2. High-level design overview
+3. Key component pseudocode (track, car physics, neural network, learning algorithm)
+4. Complete, well-commented Python code
+5. Suggestions for potential improvements
 
-Coming soon — paste the Humanoid 3D prompt here.`;
+Focus on core functionality over complex graphics. Ensure gradual, consistent AI improvement.`;
+
+PROMPTS['spaceship'] = `[🟡 Medium]
+Create a PyGame RL powerful Liquid NN-based learning (use aware strength temporal-continuous learning) spaceship battle where two AI-controlled triangular ships (white) on a black background (dark mode), learning to fight shoot/dodge navigation each other with these rules: constant forward movement with drag physics; continuous left/right (-1.0/0/1.0) rotation controls in real-time based on decision feeback (space setting physique; inspired 'Asteroid' old 2D game), to avoid abuse do limited-rate shooting mechanics (velocity-aligned bullet spawn), wall border collisions (no wrapping), sensor inputs (visible raycasts for collision detection + relative ships pos/rot/velocity/shots), shot cooldown status (0.0-1.0 normalized timer), and ep-rounds rewards (+1 for hits/-1 for being hit or both -0.5 if 15s timeout), targeting extended overnight training with visible learning progress. It should be as creative/novel/unique/entertainment YouTube channel 'AI Warehouse'. Think step-by-step before show the full script. (My OS: Win + CUDA 12.8 + Python 3.10.8).`;
+
+PROMPTS['humanoid'] = `[🔴 Hard]
+Create Python script: 3D humanoid RL walk sim. Steps: 1) Custom 3D env with detailed physics but limited and simple shape forming "robot humanoid" (joint torques, balance control, multi-body dynamics, no external libraries) 2) Transformer/torch-based policy network only (no placeholders) 3) Manual RL training loop with complex reward function (no placeholders) 4) Advanced real-time 3D animation of trained humanoid walking (use sophisticated 3D libraries). Output the result to show the full simulation humanoid, with realistic physics, complex reward structure, and dynamic 3D visualization of it walking after training.`;
 
 function escapeHtml(s) {
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
