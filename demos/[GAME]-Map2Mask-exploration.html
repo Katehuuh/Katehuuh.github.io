@@ -372,92 +372,119 @@ import nipplejs from "nipplejs";
 
 const BASE_PROMPT = `isometric 3d render of a [THEME] game asset; a diorama of a central raised square island within a [surrounding natural environment] with rich outer ring, featuring [secondary buildings with variant colored details] around a [central monument or keep], connected on several sides by [large connectors like stairways or bridges] and outside map; faceted low-poly, geometric style, bright saturated color palette with high dynamic contrast, crisp daylight shadows, orthographic view, variety of layouts structured with a clear connecting paths grid, props, weather, and environmental conditions, precise consistent perspective ensuring all objects align with the grid, HDR, HD 4k, high resolution, high quality, clear image without Depth of Field/Camera wobble/blurry distortion/noise/Lens Flare/Film grain/Chromatic aberration/Motion blur/Vignette/Profanity filter/or other distracting/garbage effect. do not use simple outside-map with single static lazy color backgound. Do not create a floating island/map.`;
 
-// CLIPSeg ONNX for road mask generation (replaces websim.imageGen)
-// Model: Xenova/clipseg-rd64-refined uint8 quantized (132MB, cached after first load)
-// Hardcoded "road" tokens: BOS=49406, road=1759, EOS=49407
-const CLIPSEG_MODEL_URL = 'https://huggingface.co/Xenova/clipseg-rd64-refined/resolve/main/onnx/model_uint8.onnx';
-const CLIP_MEAN = [0.485, 0.456, 0.406];
-const CLIP_STD = [0.229, 0.224, 0.225];
-const ROAD_TOKENS = [49406, 1759, 49407];
-const MASK_THRESHOLD = 0.30;
+// SAM3 v2 ONNX - text-prompted segmentation (no GroundingDINO needed)
+// Models: vision-encoder (210MB) + text-encoder (339MB) + decoder (35MB) = 584MB total
+// Prompt "road" hardcoded as CLIP tokens: BOS=49406, road=1759, EOS=49407
+const SAM3_BASE = 'https://huggingface.co/Katehuuh/sam3-v2-onnx/resolve/main';
+const SAM3_MEAN = [123.675, 116.28, 103.53];
+const SAM3_STD = [58.395, 57.12, 57.375];
+const SAM3_SIZE = 1008;
+const ROAD_IDS = [49406, 1759, 49407];
+const TOKEN_PAD = 32;
 const EXIT_BORDER_PX = 15;
 
-let clipsegSession = null;
-async function loadClipSeg() {
-  if (clipsegSession) return clipsegSession;
-  clipsegSession = await ort.InferenceSession.create(CLIPSEG_MODEL_URL, {
-    executionProviders: ['wasm'],
-  });
-  return clipsegSession;
+let sam3Sessions = null;
+async function loadSAM3() {
+  if (sam3Sessions) return sam3Sessions;
+  const opts = { executionProviders: ['wasm'] };
+  const [vis, txt, dec] = await Promise.all([
+    ort.InferenceSession.create(`${SAM3_BASE}/vision-encoder.onnx`, opts),
+    ort.InferenceSession.create(`${SAM3_BASE}/text-encoder.onnx`, opts),
+    ort.InferenceSession.create(`${SAM3_BASE}/decoder.onnx`, opts),
+  ]);
+  sam3Sessions = { vis, txt, dec };
+  return sam3Sessions;
 }
 
 async function generateMaskFromImage(imgElement) {
-  const sess = await loadClipSeg();
+  const { vis, txt, dec } = await loadSAM3();
   const W = imgElement.naturalWidth || imgElement.width;
   const H = imgElement.naturalHeight || imgElement.height;
 
-  // Resize to 352x352 and CLIP normalize
-  const tmpCanvas = document.createElement('canvas');
-  tmpCanvas.width = 352; tmpCanvas.height = 352;
-  const tmpCtx = tmpCanvas.getContext('2d');
-  tmpCtx.drawImage(imgElement, 0, 0, 352, 352);
-  const imgData = tmpCtx.getImageData(0, 0, 352, 352).data;
-
-  const pixels = new Float32Array(1 * 3 * 352 * 352);
-  for (let y = 0; y < 352; y++) {
-    for (let x = 0; x < 352; x++) {
-      const i = (y * 352 + x) * 4;
+  // Vision encoder: resize to 1008x1008, ImageNet normalize (0-255 range)
+  const vc = document.createElement('canvas');
+  vc.width = SAM3_SIZE; vc.height = SAM3_SIZE;
+  const vctx = vc.getContext('2d');
+  vctx.drawImage(imgElement, 0, 0, SAM3_SIZE, SAM3_SIZE);
+  const vd = vctx.getImageData(0, 0, SAM3_SIZE, SAM3_SIZE).data;
+  const px = new Float32Array(3 * SAM3_SIZE * SAM3_SIZE);
+  for (let y = 0; y < SAM3_SIZE; y++) {
+    for (let x = 0; x < SAM3_SIZE; x++) {
+      const i = (y * SAM3_SIZE + x) * 4;
       for (let c = 0; c < 3; c++) {
-        pixels[c * 352 * 352 + y * 352 + x] = (imgData[i + c] / 255 - CLIP_MEAN[c]) / CLIP_STD[c];
+        px[c * SAM3_SIZE * SAM3_SIZE + y * SAM3_SIZE + x] = (vd[i + c] - SAM3_MEAN[c]) / SAM3_STD[c];
       }
     }
   }
+  const visOut = await vis.run({ 'images': new ort.Tensor('float32', px, [1, 3, SAM3_SIZE, SAM3_SIZE]) });
 
-  // int64 for token IDs — use BigInt64Array if available, else try int32 fallback
-  let idTensor, maskTensor;
+  // Text encoder: padded token IDs + attention mask
+  const ids = new Array(TOKEN_PAD).fill(0);
+  const amask = new Array(TOKEN_PAD).fill(0);
+  ROAD_IDS.forEach((t, i) => { ids[i] = t; amask[i] = 1; });
+  let idT, amT;
   if (typeof BigInt64Array !== 'undefined') {
-    idTensor = new ort.Tensor('int64', new BigInt64Array(ROAD_TOKENS.map(t => BigInt(t))), [1, 3]);
-    maskTensor = new ort.Tensor('int64', new BigInt64Array([1n, 1n, 1n]), [1, 3]);
+    idT = new ort.Tensor('int64', new BigInt64Array(ids.map(BigInt)), [1, TOKEN_PAD]);
+    amT = new ort.Tensor('int64', new BigInt64Array(amask.map(BigInt)), [1, TOKEN_PAD]);
   } else {
-    idTensor = new ort.Tensor('int32', new Int32Array(ROAD_TOKENS), [1, 3]);
-    maskTensor = new ort.Tensor('int32', new Int32Array([1, 1, 1]), [1, 3]);
+    idT = new ort.Tensor('int32', new Int32Array(ids), [1, TOKEN_PAD]);
+    amT = new ort.Tensor('int32', new Int32Array(amask), [1, TOKEN_PAD]);
   }
+  const txtOut = await txt.run({ 'input_ids': idT, 'attention_mask': amT });
 
-  const feeds = {
-    'input_ids': idTensor,
-    'pixel_values': new ort.Tensor('float32', pixels, [1, 3, 352, 352]),
-    'attention_mask': maskTensor,
-  };
-
-  const result = await sess.run(feeds);
-  const logits = result.logits.data;
-  const logitsH = result.logits.dims[0] === 352 ? 352 : result.logits.dims[1];
-
-  // Sigmoid + resize to original size
-  const heatCanvas = document.createElement('canvas');
-  heatCanvas.width = 352; heatCanvas.height = 352;
-  const heatCtx = heatCanvas.getContext('2d');
-  const heatData = heatCtx.createImageData(352, 352);
-  for (let i = 0; i < 352 * 352; i++) {
-    const sig = 1 / (1 + Math.exp(-logits[i]));
-    const v = sig > MASK_THRESHOLD ? 255 : 0;
-    heatData.data[i * 4] = v;
-    heatData.data[i * 4 + 1] = v;
-    heatData.data[i * 4 + 2] = v;
-    heatData.data[i * 4 + 3] = 255;
+  // Decoder: vision features + text features + full-image box
+  const boxT = new ort.Tensor('float32', new Float32Array([0, 0, 1, 1]), [1, 1, 4]);
+  let lblT;
+  if (typeof BigInt64Array !== 'undefined') {
+    lblT = new ort.Tensor('int64', new BigInt64Array([1n]), [1, 1]);
+  } else {
+    lblT = new ort.Tensor('int32', new Int32Array([1]), [1, 1]);
   }
-  heatCtx.putImageData(heatData, 0, 0);
+  const decOut = await dec.run({
+    'fpn_feat_0': visOut['fpn_feat_0'],
+    'fpn_feat_1': visOut['fpn_feat_1'],
+    'fpn_feat_2': visOut['fpn_feat_2'],
+    'fpn_pos_2': visOut['fpn_pos_2'],
+    'text_features': txtOut['text_features'],
+    'text_mask': txtOut['text_mask'],
+    'input_boxes': boxT,
+    'input_boxes_labels': lblT,
+  });
 
-  // Resize to original map size
-  const maskOut = document.createElement('canvas');
-  maskOut.width = W; maskOut.height = H;
-  const maskOutCtx = maskOut.getContext('2d');
-  maskOutCtx.imageSmoothingEnabled = false;
-  maskOutCtx.drawImage(heatCanvas, 0, 0, W, H);
+  // Pick best mask by logit score
+  const masks = decOut['pred_masks'];
+  const logits = decOut['pred_logits'];
+  const numMasks = masks.dims[1];
+  let bestIdx = 0;
+  if (logits) {
+    let bestScore = -Infinity;
+    for (let i = 0; i < numMasks; i++) {
+      if (logits.data[i] > bestScore) { bestScore = logits.data[i]; bestIdx = i; }
+    }
+  }
+  const mH = masks.dims[2], mW = masks.dims[3];
+  const offset = bestIdx * mH * mW;
 
-  // Convert to purple (#800080) walkable + cyan (#2BFAFA) at edges
-  const finalData = maskOutCtx.getImageData(0, 0, W, H);
-  const d = finalData.data;
+  // Render binary mask to canvas, resize to original
+  const mc = document.createElement('canvas');
+  mc.width = mW; mc.height = mH;
+  const mctx = mc.getContext('2d');
+  const mid = mctx.createImageData(mW, mH);
+  for (let i = 0; i < mH * mW; i++) {
+    const v = masks.data[offset + i] > 0 ? 255 : 0;
+    mid.data[i * 4] = v; mid.data[i * 4 + 1] = v; mid.data[i * 4 + 2] = v; mid.data[i * 4 + 3] = 255;
+  }
+  mctx.putImageData(mid, 0, 0);
+
+  const out = document.createElement('canvas');
+  out.width = W; out.height = H;
+  const octx = out.getContext('2d');
+  octx.imageSmoothingEnabled = false;
+  octx.drawImage(mc, 0, 0, W, H);
+
+  // Purple walkable + cyan exits at map edges
+  const fd = octx.getImageData(0, 0, W, H);
+  const d = fd.data;
   for (let y = 0; y < H; y++) {
     for (let x = 0; x < W; x++) {
       const idx = (y * W + x) * 4;
@@ -465,17 +492,17 @@ async function generateMaskFromImage(imgElement) {
         const atEdge = x < EXIT_BORDER_PX || x >= W - EXIT_BORDER_PX ||
                        y < EXIT_BORDER_PX || y >= H - EXIT_BORDER_PX;
         if (atEdge) {
-          d[idx] = 43; d[idx+1] = 250; d[idx+2] = 250; d[idx+3] = 255; // cyan exit
+          d[idx] = 43; d[idx+1] = 250; d[idx+2] = 250; d[idx+3] = 255;
         } else {
-          d[idx] = 128; d[idx+1] = 0; d[idx+2] = 128; d[idx+3] = 255; // purple walkable
+          d[idx] = 128; d[idx+1] = 0; d[idx+2] = 128; d[idx+3] = 255;
         }
       } else {
-        d[idx] = 0; d[idx+1] = 0; d[idx+2] = 0; d[idx+3] = 0; // transparent
+        d[idx] = 0; d[idx+1] = 0; d[idx+2] = 0; d[idx+3] = 0;
       }
     }
   }
-  maskOutCtx.putImageData(finalData, 0, 0);
-  return maskOut.toDataURL('image/png');
+  octx.putImageData(fd, 0, 0);
+  return out.toDataURL('image/png');
 }
 
 const THEME_VARIATIONS = [
