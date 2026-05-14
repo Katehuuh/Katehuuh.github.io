@@ -1,0 +1,1363 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>AI Map Walker</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+:root {
+  color-scheme: dark;
+  --bg: #0b0b0c;
+  --panel: #111214;
+  --muted: #6b7280;
+  --text: #e5e7eb;
+  --accent: #cbd5e1;
+  --line: #1f2937;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Noto Sans", system-ui, -apple-system, sans-serif;
+  overflow: hidden;
+}
+
+#app {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+  flex-wrap: wrap;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.brand-group {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.brand {
+  font-weight: 600;
+  font-size: 16px;
+}
+
+.tutorial {
+  font-size: 12px;
+  color: var(--muted);
+  font-style: italic;
+}
+
+.bottombar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: var(--panel);
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.controls {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.slider-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.slider-control label {
+  font-size: 12px;
+}
+
+.slider-control input[type="range"] {
+  width: 100px;
+  height: 4px;
+  background: var(--line);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+
+.slider-control input[type="range"]::-webkit-slider-thumb {
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  background: var(--accent);
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.slider-control input[type="range"]::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  background: var(--accent);
+  border-radius: 50%;
+  cursor: pointer;
+  border: none;
+}
+
+#sensitivityValue {
+  font-size: 12px;
+  color: var(--accent);
+  min-width: 35px;
+  text-align: right;
+}
+
+#log-container {
+  flex-shrink: 0;
+  max-height: 80px;
+  overflow: hidden;
+  padding: 0 12px;
+}
+
+.toggle {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  color: var(--muted);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.toggle input {
+  width: 16px;
+  height: 16px;
+}
+
+.btn {
+  background: #181a1f;
+  color: var(--text);
+  border: 1px solid var(--line);
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.btn:hover {
+  background: #1f2937;
+}
+
+.stage-wrap {
+  flex: 1;
+  position: relative;
+  display: grid;
+  place-items: center;
+  padding: 10px;
+  min-height: 0;
+  overflow: auto;
+}
+
+#gameCanvas {
+  width: min(90vw, 90vh, 100%);
+  height: min(90vw, 90vh, 100%);
+  max-width: 1024px;
+  max-height: 1024px;
+  background: #000;
+  border: 2px solid var(--line);
+  border-radius: 12px;
+  image-rendering: crisp-edges;
+  touch-action: none;
+  cursor: crosshair;
+}
+
+.loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(8px);
+  border-radius: 12px;
+  z-index: 10;
+}
+
+.hidden {
+  display: none !important;
+}
+
+.spinner {
+  width: 24px;
+  height: 24px;
+  border: 3px solid #2a2f37;
+  border-top-color: #e5e7eb;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.status {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+#statusTitle {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+#statusSub {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.mask {
+  position: absolute;
+  pointer-events: none;
+  border-radius: 12px;
+  z-index: 5;
+}
+
+.joystick {
+  position: absolute;
+  left: 20px;
+  bottom: 20px;
+  width: 80px;
+  height: 80px;
+  display: none;
+  z-index: 15;
+}
+
+.theme {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.req {
+  font-size: 12px;
+  color: var(--muted);
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.log {
+  max-width: 100%;
+  max-height: 80px;
+  overflow-y: auto;
+  font: 11px/1.4 ui-monospace, monospace;
+  color: var(--muted);
+  background: rgba(14, 15, 18, 0.9);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px 8px;
+  margin-top: 4px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+@media (max-width: 768px) {
+  .topbar {
+    padding: 6px 8px;
+    font-size: 12px;
+  }
+  .brand { font-size: 14px; }
+  .tutorial { font-size: 11px; }
+  .controls { gap: 8px; }
+  .slider-control input[type="range"] { width: 80px; }
+  .btn { padding: 4px 8px; font-size: 12px; }
+  #gameCanvas {
+    width: min(95vw, 95vh);
+    height: min(95vw, 95vh);
+  }
+  .log { max-height: 60px; font-size: 10px; }
+}
+
+@media (min-resolution: 150dpi) {
+  #app {
+    max-height: 100vh;
+  }
+  .stage-wrap {
+    overflow: auto;
+  }
+}
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/ort.min.js"></script>
+  <script type="importmap">
+  {
+    "imports": {
+      "nipplejs": "https://esm.sh/nipplejs@0.10.1"
+    }
+  }
+  </script>
+</head>
+<body>
+  <div id="app">
+    <header class="topbar">
+      <div class="brand-group">
+        <div class="brand">AI Map Walker</div>
+        <div class="tutorial">drag red dot or use arrow keys to walk</div>
+      </div>
+      <div class="controls">
+        <div class="slider-control">
+          <label for="sensitivitySlider">Path Detection:</label>
+          <input type="range" id="sensitivitySlider" min="0" max="100" value="70" />
+          <span id="sensitivityValue">70%</span>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="debugMask">
+          <span>Debug Mask</span>
+        </label>
+        <label class="toggle">
+          <input type="checkbox" id="autoCorrect">
+          <span>Auto-correction mask</span>
+        </label>
+        <button id="regenBtn" class="btn" title="Skip to next map">Next Map</button>
+        <div id="reqCount" class="req">0 req</div>
+      </div>
+    </header>
+    <div id="log-container">
+      <div id="log" class="log" aria-live="polite"></div>
+    </div>
+
+    <main class="stage-wrap">
+      <canvas id="gameCanvas" width="1024" height="1024" aria-label="Game canvas"></canvas>
+      <div id="loading" class="loading hidden">
+        <div class="spinner"></div>
+        <div class="status">
+          <div id="statusTitle">Preparing scene…</div>
+          <div id="statusSub">Calling AI model (≈10s)</div>
+        </div>
+      </div>
+      <canvas id="maskCanvasOverlay" class="mask hidden" aria-hidden="true"></canvas>
+      <div id="joystick" class="joystick"></div>
+    </main>
+
+    <footer class="bottombar">
+      <div id="hint">Arrows or WASD • Drag on canvas to move on touch</div>
+      <div id="themeLabel" class="theme">Theme: medieval village</div>
+    </footer>
+  </div>
+
+  <script type="module">
+import nipplejs from "nipplejs";
+
+/* ── ai.js ─────────────────────────────────────────────────────── */
+
+const BASE_PROMPT = `isometric 3d render of a [THEME] game asset; a diorama of a central raised square island within a [surrounding natural environment] with rich outer ring, featuring [secondary buildings with variant colored details] around a [central monument or keep], connected on several sides by [large connectors like stairways or bridges] and outside map; faceted low-poly, geometric style, bright saturated color palette with high dynamic contrast, crisp daylight shadows, orthographic view, variety of layouts structured with a clear connecting paths grid, props, weather, and environmental conditions, precise consistent perspective ensuring all objects align with the grid, HDR, HD 4k, high resolution, high quality, clear image without Depth of Field/Camera wobble/blurry distortion/noise/Lens Flare/Film grain/Chromatic aberration/Motion blur/Vignette/Profanity filter/or other distracting/garbage effect. do not use simple outside-map with single static lazy color backgound. Do not create a floating island/map.`;
+
+// CLIPSeg ONNX for road mask generation (replaces websim.imageGen)
+// Model: Xenova/clipseg-rd64-refined uint8 quantized (132MB, cached after first load)
+// Hardcoded "road" tokens: BOS=49406, road=1759, EOS=49407
+const CLIPSEG_MODEL_URL = 'https://huggingface.co/Xenova/clipseg-rd64-refined/resolve/main/onnx/model_uint8.onnx';
+const CLIP_MEAN = [0.485, 0.456, 0.406];
+const CLIP_STD = [0.229, 0.224, 0.225];
+const ROAD_TOKENS = [49406, 1759, 49407];
+const MASK_THRESHOLD = 0.30;
+const EXIT_BORDER_PX = 15;
+
+let clipsegSession = null;
+async function loadClipSeg() {
+  if (clipsegSession) return clipsegSession;
+  clipsegSession = await ort.InferenceSession.create(CLIPSEG_MODEL_URL, {
+    executionProviders: ['wasm'],
+  });
+  return clipsegSession;
+}
+
+async function generateMaskFromImage(imgElement) {
+  const sess = await loadClipSeg();
+  const W = imgElement.naturalWidth || imgElement.width;
+  const H = imgElement.naturalHeight || imgElement.height;
+
+  // Resize to 352x352 and CLIP normalize
+  const tmpCanvas = document.createElement('canvas');
+  tmpCanvas.width = 352; tmpCanvas.height = 352;
+  const tmpCtx = tmpCanvas.getContext('2d');
+  tmpCtx.drawImage(imgElement, 0, 0, 352, 352);
+  const imgData = tmpCtx.getImageData(0, 0, 352, 352).data;
+
+  const pixels = new Float32Array(1 * 3 * 352 * 352);
+  for (let y = 0; y < 352; y++) {
+    for (let x = 0; x < 352; x++) {
+      const i = (y * 352 + x) * 4;
+      for (let c = 0; c < 3; c++) {
+        pixels[c * 352 * 352 + y * 352 + x] = (imgData[i + c] / 255 - CLIP_MEAN[c]) / CLIP_STD[c];
+      }
+    }
+  }
+
+  const inputIds = new BigInt64Array(ROAD_TOKENS.map(t => BigInt(t)));
+  const attMask = new BigInt64Array([1n, 1n, 1n]);
+
+  const feeds = {
+    'input_ids': new ort.Tensor('int64', inputIds, [1, 3]),
+    'pixel_values': new ort.Tensor('float32', pixels, [1, 3, 352, 352]),
+    'attention_mask': new ort.Tensor('int64', attMask, [1, 3]),
+  };
+
+  const result = await sess.run(feeds);
+  const logits = result.logits.data;
+  const logitsH = result.logits.dims[0] === 352 ? 352 : result.logits.dims[1];
+
+  // Sigmoid + resize to original size
+  const heatCanvas = document.createElement('canvas');
+  heatCanvas.width = 352; heatCanvas.height = 352;
+  const heatCtx = heatCanvas.getContext('2d');
+  const heatData = heatCtx.createImageData(352, 352);
+  for (let i = 0; i < 352 * 352; i++) {
+    const sig = 1 / (1 + Math.exp(-logits[i]));
+    const v = sig > MASK_THRESHOLD ? 255 : 0;
+    heatData.data[i * 4] = v;
+    heatData.data[i * 4 + 1] = v;
+    heatData.data[i * 4 + 2] = v;
+    heatData.data[i * 4 + 3] = 255;
+  }
+  heatCtx.putImageData(heatData, 0, 0);
+
+  // Resize to original map size
+  const maskOut = document.createElement('canvas');
+  maskOut.width = W; maskOut.height = H;
+  const maskOutCtx = maskOut.getContext('2d');
+  maskOutCtx.imageSmoothingEnabled = false;
+  maskOutCtx.drawImage(heatCanvas, 0, 0, W, H);
+
+  // Convert to purple (#800080) walkable + cyan (#2BFAFA) at edges
+  const finalData = maskOutCtx.getImageData(0, 0, W, H);
+  const d = finalData.data;
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const idx = (y * W + x) * 4;
+      if (d[idx] > 128) {
+        const atEdge = x < EXIT_BORDER_PX || x >= W - EXIT_BORDER_PX ||
+                       y < EXIT_BORDER_PX || y >= H - EXIT_BORDER_PX;
+        if (atEdge) {
+          d[idx] = 43; d[idx+1] = 250; d[idx+2] = 250; d[idx+3] = 255; // cyan exit
+        } else {
+          d[idx] = 128; d[idx+1] = 0; d[idx+2] = 128; d[idx+3] = 255; // purple walkable
+        }
+      } else {
+        d[idx] = 0; d[idx+1] = 0; d[idx+2] = 0; d[idx+3] = 0; // transparent
+      }
+    }
+  }
+  maskOutCtx.putImageData(finalData, 0, 0);
+  return maskOut.toDataURL('image/png');
+}
+
+const THEME_VARIATIONS = [
+  "medieval village", "castle town", "fortress city", "highland keep",
+  "forest village", "woodland hamlet", "jungle settlement", "swamp settlement",
+  "coastal town", "harbor city", "merchant port", "fishing village",
+  "mountain fortress", "alpine village", "cliff city", "canyon outpost",
+  "desert outpost", "oasis town", "sandstone city", "mesa settlement",
+  "arctic camp", "frozen tundra", "ice fortress", "snow village",
+  "sky citadel", "floating gardens", "crystal city", "cloud fortress",
+  "underground city", "cave settlement", "mine town", "subterranean metropolis",
+  "ancient ruins", "temple complex", "lost city", "archaeological site",
+  "volcanic island", "lava fortress", "magma city", "fire temple",
+  "steampunk town", "clockwork city", "industrial complex", "cyberpunk city",
+  "bamboo village", "pagoda town", "zen garden city", "oriental palace"
+];
+
+const mapCache = new Map();
+let currentThemeIndex = 0;
+let requestCount = 0;
+let dailyLimitHit = false;
+let themeAttempts = new Map();
+
+function getRequestCount() { return requestCount; }
+function isDailyLimitHit() { return dailyLimitHit; }
+
+async function sleep(ms) {
+  return new Promise(r => setTimeout(r, ms));
+}
+
+async function urlToDataUrl(url) {
+  try {
+    const response = await fetch(url, { mode: "cors" });
+    if (!response.ok) throw new Error(`Failed to fetch: ${response.status}`);
+    const blob = await response.blob();
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  } catch (e) {
+    throw new Error(`Error loading image: ${e.message}`);
+  }
+}
+
+function getNextTheme(currentTheme, goingBack = false) {
+  let idx = THEME_VARIATIONS.indexOf(currentTheme);
+  if (idx === -1) idx = 0;
+
+  if (goingBack) {
+    currentThemeIndex = Math.max(0, idx - 1);
+  } else {
+    currentThemeIndex = (idx + 1) % THEME_VARIATIONS.length;
+  }
+
+  return THEME_VARIATIONS[currentThemeIndex];
+}
+
+async function generateMapAndMask(theme, { initialUseStarter = false, useCache = true, autoCorrect = false } = {}) {
+  if (dailyLimitHit) {
+    throw new Error("Daily rate limit exceeded. Please try again tomorrow.");
+  }
+
+  const cacheKey = `${theme}_map`;
+  if (useCache && mapCache.has(cacheKey)) {
+    console.log(`Using cached map for theme: ${theme}`);
+    return mapCache.get(cacheKey);
+  }
+
+  if (autoCorrect) {
+    const attempts = themeAttempts.get(theme) || 0;
+    if (attempts >= 2) {
+      console.log(`Auto-correction limit reached for ${theme}, allowing free movement`);
+      return { mapUrl: null, maskUrl: null, freeMovement: true };
+    }
+    themeAttempts.set(theme, attempts + 1);
+  }
+
+  let mapUrl;
+
+  if (initialUseStarter) {
+    const possibleFiles = [
+      "./initi_img_map (2).png",
+      "./initi_img_map.png",
+      "./starter_map.png",
+      "./Map2Dimage.webp"
+    ];
+
+    for (const file of possibleFiles) {
+      try {
+        const response = await fetch(file, { method: 'HEAD' });
+        if (response.ok) {
+          mapUrl = file;
+          console.log(`Using initial starter map: ${file}`);
+          break;
+        }
+      } catch (e) {
+        continue;
+      }
+    }
+
+    if (!mapUrl) {
+      throw new Error("No initial map file found");
+    }
+  } else {
+    try {
+      requestCount++;
+      await sleep(500);
+      const prompt = encodeURIComponent(BASE_PROMPT.replace("[THEME]", theme));
+      mapUrl = `https://image.pollinations.ai/prompt/${prompt}?width=1024&height=1024&nologo=true&seed=${Date.now() % 100000}`;
+      // Pre-fetch to trigger generation and cache
+      await fetch(mapUrl, { mode: 'cors' });
+    } catch (e) {
+      throw e;
+    }
+  }
+
+  const inputData = await urlToDataUrl(mapUrl);
+  await sleep(1500);
+
+  if (dailyLimitHit) {
+    throw new Error("Daily rate limit exceeded");
+  }
+
+  try {
+    requestCount++;
+    // Generate mask using CLIPSeg ONNX (runs in-browser, no API call)
+    const mapImg = new Image();
+    mapImg.crossOrigin = 'anonymous';
+    await new Promise((resolve, reject) => {
+      mapImg.onload = resolve;
+      mapImg.onerror = reject;
+      mapImg.src = mapUrl;
+    });
+    const maskDataUrl = await generateMaskFromImage(mapImg);
+
+    const result = { mapUrl, maskUrl: maskDataUrl };
+
+    if (!initialUseStarter) {
+      mapCache.set(cacheKey, result);
+    }
+
+    return result;
+  } catch (e) {
+    if (e.message?.includes("Daily rate limit exceeded") || e.message?.includes("Rate limit exceeded")) {
+      dailyLimitHit = true;
+      throw new Error("Daily rate limit exceeded (20 requests)");
+    }
+    throw e;
+  }
+}
+
+function clearCache() {
+  mapCache.clear();
+  themeAttempts.clear();
+}
+
+/* ── controls.js ───────────────────────────────────────────────── */
+
+function initControls({ onDir }) {
+  const keys = new Set();
+  const joystickEl = document.getElementById("joystick");
+  let manager = null;
+
+  function emitFromKeys() {
+    let x = 0, y = 0;
+    if (keys.has("ArrowLeft") || keys.has("a")) x -= 1;
+    if (keys.has("ArrowRight") || keys.has("d")) x += 1;
+    if (keys.has("ArrowUp") || keys.has("w")) y -= 1;
+    if (keys.has("ArrowDown") || keys.has("s")) y += 1;
+    const len = Math.hypot(x, y) || 1;
+    onDir({ x: x / len, y: y / len });
+  }
+
+  function down(e) { keys.add(e.key); if (["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(e.key)) e.preventDefault(); emitFromKeys(); }
+  function up(e) { keys.delete(e.key); emitFromKeys(); }
+
+  window.addEventListener("keydown", down, { passive: false });
+  window.addEventListener("keyup", up);
+
+  if ("ontouchstart" in window && joystickEl) {
+    joystickEl.style.display = "block";
+    manager = nipplejs.create({
+      zone: joystickEl,
+      mode: "static",
+      size: 80,
+      color: "white",
+      position: { left: "50%", top: "50%" },
+      restOpacity: 0.2,
+    });
+    manager.on("move", (_evt, data) => {
+      const a = data.angle?.radian ?? 0;
+      const f = Math.min(1, data.force ?? 0);
+      onDir({ x: Math.cos(a) * f, y: Math.sin(a) * f });
+    });
+    manager.on("end", () => onDir({ x: 0, y: 0 }));
+  }
+
+  return {
+    dispose() {
+      window.removeEventListener("keydown", down);
+      window.removeEventListener("keyup", up);
+      if (manager) manager.destroy();
+    },
+  };
+}
+
+/* ── main.js ───────────────────────────────────────────────────── */
+
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d", { willReadFrequently: true });
+const loading = document.getElementById("loading");
+const statusTitle = document.getElementById("statusTitle");
+const statusSub = document.getElementById("statusSub");
+const overlayCanvas = document.getElementById("maskCanvasOverlay");
+const overlayCtx = overlayCanvas.getContext("2d", { willReadFrequently: true });
+const debugMaskCheckbox = document.getElementById("debugMask");
+const themeLabel = document.getElementById("themeLabel");
+const reqCountEl = document.getElementById("reqCount");
+const autoCorrectCheckbox = document.getElementById("autoCorrect");
+const logEl = document.getElementById("log");
+const stageWrap = document.querySelector(".stage-wrap");
+const sensitivitySlider = document.getElementById("sensitivitySlider");
+const sensitivityValue = document.getElementById("sensitivityValue");
+
+let mapImg = null, maskImg = null;
+let maskCanvas = document.createElement("canvas");
+let maskCtx = maskCanvas.getContext("2d", { willReadFrequently: true });
+
+let player = { x: 512, y: 512, r: 10, speed: 200 };
+let dir = { x: 0, y: 0 };
+let currentTheme = "medieval village";
+let dragging = false, target = null;
+let cyanDwellTime = 0;
+let teleportLocked = true;
+let running = true;
+let freeMovementMode = false;
+let previousTheme = null;
+let isTransitioning = false;  // Prevent multiple simultaneous transitions
+let regenerationAttempts = 0; // Track regeneration attempts
+
+// Sensitivity value from 0 to 1 (0 = very strict, 1 = very relaxed)
+let pathSensitivity = 0.7;  // Default 70%
+
+// Update sensitivity when slider changes
+sensitivitySlider.addEventListener('input', (e) => {
+  pathSensitivity = e.target.value / 100;
+  sensitivityValue.textContent = `${e.target.value}%`;
+  log(`Path detection sensitivity set to ${e.target.value}%`);
+});
+
+function log(msg) {
+  const t = new Date().toLocaleTimeString();
+  logEl.textContent += `[${t}] ${msg}\n`;
+  logEl.scrollTop = logEl.scrollHeight;
+  console.log(msg);
+}
+
+function setLoading(on, title = "Loading…", sub = "") {
+  loading.classList.toggle("hidden", !on);
+  statusTitle.textContent = title;
+  statusSub.textContent = sub;
+  reqCountEl.textContent = `${getRequestCount()} req`;
+  if (on) log(`UI: ${title} — ${sub}`);
+}
+
+async function loadImage(url) {
+  return new Promise((res, rej) => {
+    const i = new Image();
+    i.crossOrigin = "anonymous";
+    i.onload = () => res(i);
+    i.onerror = () => rej(new Error(`Failed to load image: ${url}`));
+    i.src = url;
+  });
+}
+
+// Sensitivity-adjusted color detection for purple
+function isPurplePixel(rgba) {
+  const alphaThreshold = 20 + (1 - pathSensitivity) * 80; // 20-100 based on sensitivity
+  if (rgba[3] < alphaThreshold) return false;
+
+  const r = rgba[0], g = rgba[1], b = rgba[2];
+
+  // Adjust tolerance based on sensitivity
+  const tolerance = 40 + pathSensitivity * 60; // 40-100 tolerance
+
+  // Method 1: Direct purple RGB (128, 0, 128) with adjusted tolerance
+  const purpleRGB = (r > 128 - tolerance && r < 128 + tolerance) &&
+                    (g < 0 + tolerance) &&
+                    (b > 128 - tolerance && b < 128 + tolerance);
+
+  // Method 2: Purple balance - more relaxed with higher sensitivity
+  const balanceTolerance = 50 + pathSensitivity * 50;
+  const purpleBalance = Math.abs(r - b) < balanceTolerance && g < Math.min(r, b) - (20 - pathSensitivity * 15);
+
+  // Method 3: HSL detection
+  const hsl = rgb2hsl(r, g, b);
+  const hueMin = 240 - pathSensitivity * 20;  // 220-240
+  const hueMax = 340 + pathSensitivity * 20;  // 340-360
+  const satMin = 0.05 - pathSensitivity * 0.04; // 0.01-0.05
+  const purpleHSL = hsl.h >= hueMin && hsl.h <= hueMax && hsl.s > satMin;
+
+  // More methods enabled with higher sensitivity
+  if (pathSensitivity < 0.3) {
+    return purpleRGB;
+  } else if (pathSensitivity < 0.6) {
+    return purpleRGB || purpleBalance;
+  } else {
+    return purpleRGB || purpleBalance || purpleHSL || (r > 80 && b > 80 && g < 80);
+  }
+}
+
+// Sensitivity-adjusted color detection for cyan
+function isCyanPixel(rgba) {
+  const alphaThreshold = 20 + (1 - pathSensitivity) * 80;
+  if (rgba[3] < alphaThreshold) return false;
+
+  const r = rgba[0], g = rgba[1], b = rgba[2];
+
+  const tolerance = 50 + pathSensitivity * 50;
+
+  // Method 1: Direct cyan RGB (43, 250, 250)
+  const cyanRGB = (r < 43 + tolerance) &&
+                  (g > 250 - tolerance) &&
+                  (b > 250 - tolerance);
+
+  // Method 2: Cyan balance
+  const balanceTolerance = 50 + pathSensitivity * 50;
+  const cyanBalance = Math.abs(g - b) < balanceTolerance && r < Math.min(g, b) - (30 - pathSensitivity * 20);
+
+  // Method 3: HSL detection
+  const hsl = rgb2hsl(r, g, b);
+  const hueMin = 160 - pathSensitivity * 10;
+  const hueMax = 210 + pathSensitivity * 10;
+  const satMin = 0.2 - pathSensitivity * 0.15;
+  const cyanHSL = hsl.h >= hueMin && hsl.h <= hueMax && hsl.s > satMin;
+
+  if (pathSensitivity < 0.3) {
+    return cyanRGB;
+  } else if (pathSensitivity < 0.6) {
+    return cyanRGB || cyanBalance;
+  } else {
+    return cyanRGB || cyanBalance || cyanHSL || (r < 100 && g > 130 && b > 130);
+  }
+}
+
+function rgb2hsl(r, g, b) {
+  r /= 255; g /= 255; b /= 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  let h = 0, s = 0, l = (max + min) / 2;
+
+  if (max !== min) {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    switch (max) {
+      case r: h = ((g - b) / d + (g < b ? 6 : 0)) / 6; break;
+      case g: h = ((b - r) / d + 2) / 6; break;
+      case b: h = ((r - g) / d + 4) / 6; break;
+    }
+  }
+
+  return { h: h * 360, s, l };
+}
+
+function isNearMapEdge(x, y, threshold = 60) {
+  return x < threshold || x > maskCanvas.width - threshold ||
+         y < threshold || y > maskCanvas.height - threshold;
+}
+
+function buildColorClassifier() {
+  const w = maskCanvas.width, h = maskCanvas.height;
+  const img = maskCtx.getImageData(0, 0, w, h);
+  const d = img.data;
+
+  let purpleCount = 0, cyanCount = 0;
+  let purpleColors = [];
+  let cyanColors = [];
+
+  for (let i = 0; i < d.length; i += 4) {
+    if (d[i + 3] < 20) continue;
+
+    if (isPurplePixel(d.slice(i, i + 4))) {
+      purpleCount++;
+      if (purpleColors.length < 5) {
+        purpleColors.push(`rgb(${d[i]},${d[i+1]},${d[i+2]})`);
+      }
+    } else if (isCyanPixel(d.slice(i, i + 4))) {
+      cyanCount++;
+      if (cyanColors.length < 5) {
+        cyanColors.push(`rgb(${d[i]},${d[i+1]},${d[i+2]})`);
+      }
+    }
+  }
+
+  log(`Color analysis: ${purpleCount} purple, ${cyanCount} cyan pixels (sensitivity: ${Math.round(pathSensitivity * 100)}%)`);
+  if (purpleColors.length > 0) log(`Purple samples: ${purpleColors.join(', ')}`);
+  if (cyanColors.length > 0) log(`Cyan samples: ${cyanColors.join(', ')}`);
+
+  if (purpleCount === 0 && cyanCount === 0) {
+    log("WARNING: No valid paths detected!");
+    return false;
+  }
+  return true;
+}
+
+function sampleMask(x, y) {
+  if (freeMovementMode) return "walk";
+
+  x = Math.floor(x);
+  y = Math.floor(y);
+  if (x < 0 || x >= maskCanvas.width || y < 0 || y >= maskCanvas.height) return "collide";
+
+  // Adjust sampling radius based on sensitivity
+  const r = Math.floor(3 + pathSensitivity * 4); // 3-7 pixel radius
+  let purple = 0, cyan = 0, total = 0;
+
+  for (let dy = -r; dy <= r; dy++) {
+    for (let dx = -r; dx <= r; dx++) {
+      const sx = x + dx, sy = y + dy;
+      if (sx < 0 || sx >= maskCanvas.width || sy < 0 || sy >= maskCanvas.height) continue;
+
+      const p = maskCtx.getImageData(sx, sy, 1, 1).data;
+      total++;
+
+      if (isPurplePixel(p)) purple++;
+      else if (isCyanPixel(p)) cyan++;
+    }
+  }
+
+  if (total === 0) return "collide";
+
+  // Adjust thresholds based on sensitivity
+  const walkThreshold = 0.5 - pathSensitivity * 0.4; // 0.1 to 0.5
+  const teleportThreshold = 0.5 - pathSensitivity * 0.4;
+
+  if (purple > total * walkThreshold) return "walk";
+  if (cyan > total * teleportThreshold && isNearMapEdge(x, y)) return "teleport";
+  return "collide";
+}
+
+function normalizeMask() {
+  const w = maskCanvas.width, h = maskCanvas.height;
+  const img = maskCtx.getImageData(0, 0, w, h);
+  const d = img.data;
+  const original = new Uint8ClampedArray(d);
+
+  // Adjust dilation based on sensitivity
+  const dilationRadius = Math.floor(3 + pathSensitivity * 3); // 3-6 pixels
+
+  // First pass: dilate paths
+  for (let y = dilationRadius; y < h - dilationRadius; y++) {
+    for (let x = dilationRadius; x < w - dilationRadius; x++) {
+      const i = (y * w + x) * 4;
+      if (original[i + 3] > 100) continue;
+
+      let foundPurple = false, foundCyan = false;
+
+      for (let dy = -dilationRadius; dy <= dilationRadius; dy++) {
+        for (let dx = -dilationRadius; dx <= dilationRadius; dx++) {
+          const dist = Math.abs(dx) + Math.abs(dy);
+          if (dist > dilationRadius) continue;
+
+          const ni = ((y + dy) * w + (x + dx)) * 4;
+          const pixel = original.slice(ni, ni + 4);
+
+          if (isPurplePixel(pixel)) {
+            foundPurple = true;
+          } else if (isCyanPixel(pixel) && isNearMapEdge(x, y)) {
+            foundCyan = true;
+          }
+        }
+      }
+
+      if (foundPurple && !foundCyan) {
+        d[i] = 128; d[i + 1] = 0; d[i + 2] = 128; d[i + 3] = 255;
+      } else if (foundCyan && isNearMapEdge(x, y)) {
+        d[i] = 43; d[i + 1] = 250; d[i + 2] = 250; d[i + 3] = 255;
+      }
+    }
+  }
+
+  // Second pass: Bridge gaps if sensitivity is high
+  if (pathSensitivity > 0.5) {
+    const bridgeDistance = Math.floor(10 + pathSensitivity * 10); // 10-20 pixels
+
+    for (let y = 10; y < h - 10; y++) {
+      for (let x = 10; x < w - 10; x++) {
+        const i = (y * w + x) * 4;
+        if (d[i + 3] > 100) continue;
+
+        // Check for aligned paths to bridge
+        let leftPurple = false, rightPurple = false;
+        let topPurple = false, bottomPurple = false;
+
+        for (let dist = 1; dist <= bridgeDistance; dist++) {
+          if (x - dist >= 0 && isPurplePixel(d.slice(((y) * w + (x - dist)) * 4, ((y) * w + (x - dist)) * 4 + 4))) {
+            leftPurple = true;
+          }
+          if (x + dist < w && isPurplePixel(d.slice(((y) * w + (x + dist)) * 4, ((y) * w + (x + dist)) * 4 + 4))) {
+            rightPurple = true;
+          }
+          if (y - dist >= 0 && isPurplePixel(d.slice(((y - dist) * w + x) * 4, ((y - dist) * w + x) * 4 + 4))) {
+            topPurple = true;
+          }
+          if (y + dist < h && isPurplePixel(d.slice(((y + dist) * w + x) * 4, ((y + dist) * w + x) * 4 + 4))) {
+            bottomPurple = true;
+          }
+        }
+
+        if ((leftPurple && rightPurple) || (topPurple && bottomPurple)) {
+          d[i] = 128; d[i + 1] = 0; d[i + 2] = 128; d[i + 3] = 255;
+        }
+      }
+    }
+  }
+
+  maskCtx.putImageData(img, 0, 0);
+}
+
+function findSpawnPoint(preferCyan = false) {
+  const w = maskCanvas.width, h = maskCanvas.height;
+  const candidates = [];
+
+  for (let y = 20; y < h - 20; y += 8) {
+    for (let x = 20; x < w - 20; x += 8) {
+      const zone = sampleMask(x, y);
+
+      if (preferCyan && zone === "teleport" && isNearMapEdge(x, y)) {
+        candidates.push({ x, y, priority: 100 });
+      } else if (!preferCyan && zone === "walk") {
+        const distFromCenter = Math.hypot(x - w/2, y - h/2);
+        candidates.push({ x, y, priority: 1000 - distFromCenter });
+      } else if (zone === "walk") {
+        candidates.push({ x, y, priority: 1 });
+      }
+    }
+  }
+
+  candidates.sort((a, b) => b.priority - a.priority);
+  if (candidates.length > 0) {
+    return candidates[Math.floor(Math.random() * Math.min(5, candidates.length))];
+  }
+
+  return { x: maskCanvas.width / 2, y: maskCanvas.height / 2 };
+}
+
+function drawFrame() {
+  if (!mapImg) return;
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(mapImg, 0, 0, canvas.width, canvas.height);
+
+  if (!debugMaskCheckbox.checked) {
+    ctx.save();
+    ctx.shadowColor = "rgba(0,0,0,0.5)";
+    ctx.shadowBlur = 10;
+    ctx.fillStyle = "#ffffff";
+    ctx.beginPath();
+    ctx.arc(player.x, player.y, player.r + 3, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = "#ff0066";
+    ctx.beginPath();
+    ctx.arc(player.x, player.y, player.r, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = "#ffffff";
+    ctx.beginPath();
+    ctx.arc(player.x, player.y, 3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
+function updateMaskOverlay() {
+  if (!maskCanvas.width || !maskImg) return;
+
+  const rect = canvas.getBoundingClientRect();
+  const srect = stageWrap.getBoundingClientRect();
+
+  overlayCanvas.style.left = `${rect.left - srect.left}px`;
+  overlayCanvas.style.top = `${rect.top - srect.top}px`;
+  overlayCanvas.style.width = `${rect.width}px`;
+  overlayCanvas.style.height = `${rect.height}px`;
+
+  if (debugMaskCheckbox.checked) {
+    overlayCanvas.width = canvas.width;
+    overlayCanvas.height = canvas.height;
+    overlayCanvas.classList.remove("hidden");
+
+    overlayCtx.clearRect(0, 0, canvas.width, canvas.height);
+
+    overlayCtx.globalAlpha = 0.6;
+    overlayCtx.drawImage(maskImg, 0, 0, canvas.width, canvas.height);
+
+    overlayCtx.globalAlpha = 0.4;
+    overlayCtx.drawImage(maskCanvas, 0, 0, canvas.width, canvas.height);
+    overlayCtx.globalAlpha = 1.0;
+
+    for (let y = 0; y < canvas.height; y += 4) {
+      for (let x = 0; x < canvas.width; x += 4) {
+        const pixel = maskCtx.getImageData(x, y, 1, 1).data;
+        if (isPurplePixel(pixel)) {
+          overlayCtx.fillStyle = "rgba(0, 255, 0, 0.8)";
+          overlayCtx.fillRect(x - 1, y - 1, 3, 3);
+        } else if (isCyanPixel(pixel) && isNearMapEdge(x, y)) {
+          overlayCtx.fillStyle = "rgba(0, 255, 255, 1.0)";
+          overlayCtx.fillRect(x - 1, y - 1, 3, 3);
+        }
+      }
+    }
+
+    overlayCtx.save();
+    overlayCtx.strokeStyle = "#ffff00";
+    overlayCtx.lineWidth = 3;
+    overlayCtx.beginPath();
+    overlayCtx.arc(player.x, player.y, player.r + 5, 0, Math.PI * 2);
+    overlayCtx.stroke();
+
+    overlayCtx.fillStyle = "#ffff00";
+    overlayCtx.beginPath();
+    overlayCtx.arc(player.x, player.y, 5, 0, Math.PI * 2);
+    overlayCtx.fill();
+    overlayCtx.restore();
+
+    const currentPixel = maskCtx.getImageData(Math.floor(player.x), Math.floor(player.y), 1, 1).data;
+    overlayCtx.fillStyle = "#ffffff";
+    overlayCtx.font = "12px monospace";
+    overlayCtx.fillText(`Pixel: rgb(${currentPixel[0]},${currentPixel[1]},${currentPixel[2]}) a:${currentPixel[3]}`, 10, 20);
+    overlayCtx.fillText(`Zone: ${sampleMask(player.x, player.y)} | Sensitivity: ${Math.round(pathSensitivity * 100)}%`, 10, 35);
+  } else {
+    overlayCanvas.classList.add("hidden");
+  }
+}
+
+function step(dt) {
+  if (dragging && target) {
+    const dx = target.x - player.x;
+    const dy = target.y - player.y;
+    const dist = Math.hypot(dx, dy);
+
+    if (dist > 2) {
+      const targetDir = { x: dx / dist, y: dy / dist };
+      const smoothing = 0.3;
+      dir.x = dir.x * (1 - smoothing) + targetDir.x * smoothing;
+      dir.y = dir.y * (1 - smoothing) + targetDir.y * smoothing;
+
+      const dirMag = Math.hypot(dir.x, dir.y) || 1;
+      dir.x /= dirMag;
+      dir.y /= dirMag;
+    } else {
+      dir = { x: 0, y: 0 };
+    }
+  }
+
+  const speed = player.speed * (dt / 1000);
+  const moveX = dir.x * speed;
+  const moveY = dir.y * speed;
+
+  const nx = player.x + moveX;
+  const ny = player.y + moveY;
+
+  const boundedX = Math.max(player.r, Math.min(canvas.width - player.r, nx));
+  const boundedY = Math.max(player.r, Math.min(canvas.height - player.r, ny));
+
+  const zone = sampleMask(boundedX, boundedY);
+
+  if (zone === "walk" || zone === "teleport") {
+    player.x = boundedX;
+    player.y = boundedY;
+  } else if (!freeMovementMode) {
+    const zoneX = sampleMask(boundedX, player.y);
+    const zoneY = sampleMask(player.x, boundedY);
+
+    if (zoneX === "walk" || zoneX === "teleport") {
+      player.x = boundedX;
+    }
+    if (zoneY === "walk" || zoneY === "teleport") {
+      player.y = boundedY;
+    }
+  }
+
+  if (zone === "teleport" && isNearMapEdge(player.x, player.y)) {
+    if (!teleportLocked && !isTransitioning) {
+      cyanDwellTime += dt;
+      if (cyanDwellTime >= 500) {
+        goToNextMap();
+      }
+    }
+  } else if (zone === "walk") {
+    cyanDwellTime = 0;
+    teleportLocked = false;
+  }
+}
+
+async function goToNextMap() {
+  if (isTransitioning || teleportLocked || isDailyLimitHit()) {
+    if (isDailyLimitHit()) {
+      log("Cannot change map - daily API limit reached");
+      setLoading(true, "Rate Limit", "Daily limit reached (20 requests)");
+      setTimeout(() => setLoading(false), 3000);
+    }
+    return;
+  }
+
+  isTransitioning = true;
+  teleportLocked = true;
+  cyanDwellTime = 0;
+  running = false;
+  regenerationAttempts = 0; // Reset attempts for new transition
+
+  setLoading(true, "Loading next scene…", "Generating new map");
+
+  try {
+    previousTheme = currentTheme;
+    const theme = getNextTheme(currentTheme, false);
+    currentTheme = theme;
+    themeLabel.textContent = `Theme: ${currentTheme}`;
+
+    const result = await generateMapAndMask(currentTheme, {
+      autoCorrect: autoCorrectCheckbox.checked && regenerationAttempts === 0,
+      useCache: false
+    });
+
+    if (result.freeMovement) {
+      log("Auto-correction limit reached, enabling free movement");
+      freeMovementMode = true;
+      setLoading(false);
+      setTimeout(() => {
+        teleportLocked = false;
+        isTransitioning = false;
+      }, 1000);
+      return;
+    }
+
+    freeMovementMode = false;
+    mapImg = await loadImage(result.mapUrl);
+    maskImg = await loadImage(result.maskUrl);
+
+    maskCanvas.width = mapImg.width;
+    maskCanvas.height = mapImg.height;
+    canvas.width = mapImg.width;
+    canvas.height = mapImg.height;
+
+    maskCtx.clearRect(0, 0, maskCanvas.width, maskCanvas.height);
+    maskCtx.drawImage(maskImg, 0, 0);
+
+    const hasValidPaths = buildColorClassifier();
+
+    // Only try regeneration once, not in a loop
+    if (!hasValidPaths && autoCorrectCheckbox.checked && regenerationAttempts === 0) {
+      regenerationAttempts++;
+      log("No valid paths detected, trying once more with relaxed detection...");
+
+      // Temporarily increase sensitivity
+      const oldSensitivity = pathSensitivity;
+      pathSensitivity = Math.min(1.0, pathSensitivity + 0.2);
+
+      // Try to detect paths again with relaxed sensitivity
+      const retryValidPaths = buildColorClassifier();
+
+      if (!retryValidPaths) {
+        log("Still no paths found. Moving to next theme.");
+        pathSensitivity = oldSensitivity;
+        // Don't recursively call, just move on
+        currentTheme = getNextTheme(currentTheme, false);
+        themeLabel.textContent = `Theme: ${currentTheme}`;
+      }
+    }
+
+    normalizeMask();
+    updateMaskOverlay();
+
+    const spawn = findSpawnPoint(true);
+    player.x = spawn.x;
+    player.y = spawn.y;
+
+    log(`Entered ${currentTheme} at (${Math.round(player.x)}, ${Math.round(player.y)})`);
+    setLoading(false);
+
+    setTimeout(() => {
+      teleportLocked = false;
+      isTransitioning = false;
+    }, 2000);
+  } catch (error) {
+    log(`Map transition failed: ${error.message}`);
+    setLoading(false);
+    teleportLocked = false;
+    isTransitioning = false;
+    currentTheme = previousTheme;
+  } finally {
+    running = true;
+  }
+}
+
+let last = 0;
+function loop(ts) {
+  if (!running) return requestAnimationFrame(loop);
+  const dt = Math.min(50, ts - last);
+  last = ts;
+  step(dt);
+  drawFrame();
+  updateMaskOverlay();
+  requestAnimationFrame(loop);
+}
+
+canvas.addEventListener("pointerdown", (e) => {
+  const r = canvas.getBoundingClientRect();
+  dragging = true;
+  target = {
+    x: ((e.clientX - r.left) / r.width) * canvas.width,
+    y: ((e.clientY - r.top) / r.height) * canvas.height
+  };
+  canvas.setPointerCapture(e.pointerId);
+  e.preventDefault();
+});
+
+canvas.addEventListener("pointermove", (e) => {
+  if (dragging) {
+    const r = canvas.getBoundingClientRect();
+    target = {
+      x: ((e.clientX - r.left) / r.width) * canvas.width,
+      y: ((e.clientY - r.top) / r.height) * canvas.height
+    };
+    e.preventDefault();
+  }
+});
+
+canvas.addEventListener("pointerup", (e) => {
+  dragging = false;
+  target = null;
+  dir = { x: 0, y: 0 };
+  e.preventDefault();
+});
+
+window.addEventListener("resize", updateMaskOverlay);
+debugMaskCheckbox.addEventListener("change", updateMaskOverlay);
+document.getElementById("regenBtn").addEventListener("click", goToNextMap);
+
+initControls({
+  onDir: (v) => {
+    if (!dragging) {
+      dir = v;
+    }
+  }
+});
+
+async function init() {
+  setLoading(true, "Preparing first scene…", "Loading initial map");
+
+  try {
+    const { mapUrl, maskUrl } = await generateMapAndMask(currentTheme, { initialUseStarter: true });
+    mapImg = await loadImage(mapUrl);
+    maskImg = await loadImage(maskUrl);
+
+    maskCanvas.width = mapImg.width;
+    maskCanvas.height = mapImg.height;
+    canvas.width = mapImg.width;
+    canvas.height = mapImg.height;
+
+    maskCtx.clearRect(0, 0, maskCanvas.width, maskCanvas.height);
+    maskCtx.drawImage(maskImg, 0, 0);
+    buildColorClassifier();
+    normalizeMask();
+    updateMaskOverlay();
+
+    const spawn = findSpawnPoint(false);
+    player.x = spawn.x;
+    player.y = spawn.y;
+
+    log(`Started at (${Math.round(player.x)}, ${Math.round(player.y)})`);
+    themeLabel.textContent = `Theme: ${currentTheme}`;
+    setLoading(false);
+
+    setTimeout(() => { teleportLocked = false; }, 1000);
+    requestAnimationFrame(loop);
+  } catch (error) {
+    log(`Init failed: ${error.message}`);
+    setLoading(true, "Error", error.message);
+  }
+}
+
+window.addEventListener('beforeunload', () => {
+  clearCache();
+});
+
+init();
+  </script>
+</body>
+</html>
