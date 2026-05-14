@@ -616,16 +616,16 @@
                 const bgR = parseInt(hex.substr(0, 2), 16) || 0;
                 const bgG = parseInt(hex.substr(2, 2), 16) || 0;
                 const bgB = parseInt(hex.substr(4, 2), 16) || 0;
-                const TOL2 = 30 * 30; // tighter than auto-detect: user picked the exact color
-
-                // Step 1: per-pixel "matches bg" mask.
+                // Step 1: per-pixel exact-match bg mask. The background
+                // is one solid uniform color, so only pixels that match
+                // the picked hex EXACTLY get flagged. Anti-aliased edge
+                // pixels (blended with the character) naturally survive.
                 const isBg = new Uint8Array(W * H);
                 for (let y = 0; y < H; y++) {
                   for (let x = 0; x < W; x++) {
                     const i = (y * W + x) * 4;
                     if (data[i + 3] < 64) { isBg[y * W + x] = 1; continue; }
-                    const dr = data[i] - bgR, dg = data[i + 1] - bgG, db = data[i + 2] - bgB;
-                    if ((dr * dr + dg * dg + db * db) / 3 < TOL2) isBg[y * W + x] = 1;
+                    if (data[i] === bgR && data[i + 1] === bgG && data[i + 2] === bgB) isBg[y * W + x] = 1;
                   }
                 }
 
