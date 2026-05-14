@@ -241,10 +241,13 @@
 
             useEffect(() => {
               if (!image) return;
-              if (currentFrames.current.length !== rows.length) {
-                currentFrames.current = new Array(rows.length).fill(0);
-                accumulators.current = new Array(rows.length).fill(0);
-              }
+              // Always reset on effect re-run (image swap, fps change,
+              // timing mode toggle). Without this, stale accumulated
+              // time from the previous animation carries over and frames
+              // blast through too fast on the first few seconds.
+              currentFrames.current = new Array(rows.length).fill(0);
+              accumulators.current = new Array(rows.length).fill(0);
+              prevTimestamp.current = 0;
 
               const drawFrame = (rowIndex, frameIdx) => {
                 const sprites = rows[rowIndex];
@@ -1382,81 +1385,169 @@
             const generatedHtml = useMemo(() => {
               if (!animationRows.length || spriteWidth <= 0 || rowHeight <= 0) return '';
 
-              const PLACEHOLDER_FILENAME = 'spritesheet.png';
-              const comment = `<!--
-  IMPORTANT: This HTML file expects an image named "${PLACEHOLDER_FILENAME}"
-  to be in the same directory. Make sure you have your sprite sheet image
-  with this exact name in the same folder as this HTML file.
--->`;
+              const labels = ['idle', 'walk', 'run', 'jump', 'attack1', 'attack2', 'hurt', 'death', 'cast', 'crouch', 'climb', 'fall', 'block'];
+              const rowDefs = animationRows.map((sprites, i) => {
+                if (!sprites.length) return null;
+                return {
+                  name: labels[i] || ('row' + i),
+                  frames: sprites.map(s => ({ x: s.x, y: s.y })),
+                  count: sprites.length,
+                  y: sprites[0].y,
+                  x0: sprites[0].x,
+                };
+              }).filter(Boolean);
 
-              const styles = animationRows.map((sprites, index) => {
-                if (!sprites.length) return '';
-                const rowData = sprites[0];
-                const numFrames = sprites.length;
-                const animationDuration = (numFrames / fps).toFixed(2);
-                const startX = rowData.x;
-                const startY = rowData.y;
-                const endX = startX + (numFrames * spriteWidth);
-
-                return `
-  .sprite-row-${index} {
-    width: ${spriteWidth}px;
-    height: ${rowHeight}px;
-    background-image: url('${PLACEHOLDER_FILENAME}');
-    background-repeat: no-repeat;
-    animation: play-row-${index} ${animationDuration}s steps(${numFrames}) infinite;
-    image-rendering: pixelated;
-  }
-  @keyframes play-row-${index} {
-    from { background-position: -${startX}px -${startY}px; }
-    to   { background-position: -${endX}px -${startY}px; }
-  }`;
-              }).join('\n');
-
-              const elements = animationRows.map((sprites, index) => {
-                if (!sprites.length) return '';
-                return `
-    <div class="animation-container">
-      <h3 class="row-label">Row ${index + 1} (Original row ${sprites[0].row})</h3>
-      <div class="sprite-row-${index}"></div>
-    </div>`;
-              }).join('\n');
+              const ROWS_JSON = JSON.stringify(rowDefs);
 
               return `<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Sprite Animation Preview</title>
-  ${comment}
-  <style>
-    body {
-      font-family: sans-serif;
-      background: #111827;
-      color: #d1d5db;
-      display: flex;
-      flex-wrap: wrap;
-      gap: 20px;
-      padding: 20px;
-      justify-content: center;
-    }
-    .animation-container {
-      text-align: center;
-      background: #1f2937;
-      padding: 1rem;
-      border-radius: 0.5rem;
-      border: 1px solid #374151;
-    }
-    .row-label {
-      margin: 0 0 10px 0;
-      font-weight: normal;
-      color: #9ca3af;
-    }
-    ${styles}
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sprite Character Demo</title>
+<!-- Expects spritesheet.png in the same directory -->
+<style>
+html,body{margin:0;height:100%;overflow:hidden;background:#1a1a2e;font-family:sans-serif;}
+canvas{display:block;image-rendering:pixelated;width:100%;height:100%;}
+#hud{position:fixed;top:12px;left:12px;color:#aaa;font:13px/1.4 monospace;background:rgba(0,0,0,.6);padding:8px 12px;border-radius:6px;pointer-events:none;}
+#hud b{color:#6ee7b7;}
+</style>
 </head>
 <body>
-  ${elements}
+<div id="hud">
+  <b>Arrow keys</b> move | <b>Space</b> jump | <b>Z</b> attack<br>
+  State: <span id="state-label">idle</span>
+</div>
+<canvas id="c"></canvas>
+<script>
+"use strict";
+const ROWS = ${ROWS_JSON};
+const FW = ${spriteWidth}, FH = ${rowHeight};
+const GROUND_Y = 0.72; // fraction of canvas height
+const MOVE_SPEED = 3.5;
+const JUMP_VEL = -9;
+const GRAVITY = 0.45;
+const FPS = ${fps};
+
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const stateEl = document.getElementById('state-label');
+const img = new Image();
+img.src = 'spritesheet.png';
+
+const keys = {};
+addEventListener('keydown', e => { keys[e.code] = true; e.preventDefault(); });
+addEventListener('keyup', e => { keys[e.code] = false; });
+
+function resize() { canvas.width = innerWidth; canvas.height = innerHeight; }
+resize();
+addEventListener('resize', resize);
+
+const rowMap = {};
+ROWS.forEach(r => { rowMap[r.name] = r; });
+function getRow(name) { return rowMap[name] || ROWS[0]; }
+
+const player = {
+  x: 0, y: 0, vx: 0, vy: 0,
+  grounded: true,
+  facing: 1,
+  state: 'idle',
+  frame: 0,
+  frameTimer: 0,
+};
+
+function tick(dt) {
+  const sec = dt / 1000;
+  let moving = false;
+  if (keys['ArrowLeft'] || keys['KeyA']) { player.vx = -MOVE_SPEED; player.facing = -1; moving = true; }
+  else if (keys['ArrowRight'] || keys['KeyD']) { player.vx = MOVE_SPEED; player.facing = 1; moving = true; }
+  else { player.vx *= 0.75; if (Math.abs(player.vx) < 0.1) player.vx = 0; }
+
+  if ((keys['Space'] || keys['ArrowUp'] || keys['KeyW']) && player.grounded) {
+    player.vy = JUMP_VEL;
+    player.grounded = false;
+  }
+  if (keys['KeyZ'] || keys['KeyX']) {
+    player.state = rowMap['attack1'] ? 'attack1' : 'idle';
+  } else if (!player.grounded) {
+    player.state = rowMap['jump'] ? 'jump' : 'idle';
+  } else if (Math.abs(player.vx) > 1.5 && rowMap['run']) {
+    player.state = 'run';
+  } else if (Math.abs(player.vx) > 0.3 && rowMap['walk']) {
+    player.state = 'walk';
+  } else {
+    player.state = 'idle';
+  }
+
+  player.vy += GRAVITY;
+  player.x += player.vx;
+  player.y += player.vy;
+
+  const groundY = canvas.height * GROUND_Y;
+  if (player.y >= groundY) {
+    player.y = groundY;
+    player.vy = 0;
+    player.grounded = true;
+  }
+
+  // Wrap horizontally
+  if (player.x < -FW) player.x = canvas.width;
+  if (player.x > canvas.width + FW) player.x = -FW;
+
+  // Advance frame
+  player.frameTimer += dt;
+  const frameDur = 1000 / FPS;
+  if (player.frameTimer >= frameDur) {
+    player.frameTimer -= frameDur;
+    const row = getRow(player.state);
+    player.frame = (player.frame + 1) % row.count;
+  }
+
+  stateEl.textContent = player.state;
+}
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // Ground line
+  const gy = canvas.height * GROUND_Y + FH / 2;
+  ctx.fillStyle = '#2a2a4a';
+  ctx.fillRect(0, gy, canvas.width, canvas.height - gy);
+  ctx.strokeStyle = '#4a4a6a';
+  ctx.beginPath();
+  ctx.moveTo(0, gy);
+  ctx.lineTo(canvas.width, gy);
+  ctx.stroke();
+
+  if (!img.complete) return;
+  const row = getRow(player.state);
+  const frameIdx = player.frame % row.count;
+  const srcX = row.frames[frameIdx].x;
+  const srcY = row.frames[frameIdx].y;
+
+  const scale = 3;
+  const dw = FW * scale;
+  const dh = FH * scale;
+
+  ctx.save();
+  ctx.translate(player.x, player.y);
+  if (player.facing < 0) {
+    ctx.scale(-1, 1);
+  }
+  ctx.drawImage(img, srcX, srcY, FW, FH, -dw / 2, -dh, dw, dh);
+  ctx.restore();
+}
+
+let lastT = 0;
+function loop(t) {
+  const dt = Math.min(t - (lastT || t), 50);
+  lastT = t;
+  tick(dt);
+  draw();
+  requestAnimationFrame(loop);
+}
+img.onload = () => requestAnimationFrame(loop);
+<\/script>
 </body>
 </html>`;
             }, [animationRows, fps, spriteWidth, rowHeight]);
