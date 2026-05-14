@@ -626,7 +626,7 @@
                   for (let x = 0; x < W; x++) {
                     const i = (y * W + x) * 4;
                     if (data[i + 3] < 64) { isBg[y * W + x] = 1; continue; }
-                    if (Math.abs(data[i] - bgR) <= 3 && Math.abs(data[i + 1] - bgG) <= 3 && Math.abs(data[i + 2] - bgB) <= 3) isBg[y * W + x] = 1;
+                    if (Math.abs(data[i] - bgR) <= 8 && Math.abs(data[i + 1] - bgG) <= 8 && Math.abs(data[i + 2] - bgB) <= 8) isBg[y * W + x] = 1;
                   }
                 }
 
