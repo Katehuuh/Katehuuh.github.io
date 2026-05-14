@@ -536,9 +536,6 @@ function placeProps() {
 }
 placeProps();
 
-// Snow sparkle particles removed - they clung visually to the player's body
-// and head. Snow surface character will come from a fragment shader instead
-// (depth-driven glitter / sub-surface tint applied to the terrain material).
 
 // ============================================================
 // Checkpoints (rings along the runline, descending)
@@ -672,7 +669,6 @@ class Skier {
     this.ragdollVel = new THREE.Vector3();
     this.ragdollAng = new THREE.Vector3();
     this.ragdollPos = new THREE.Vector3();
-    this.lean = 0;
     this.group = new THREE.Group();
     this._buildRig(color, withFace);
   }
@@ -794,7 +790,6 @@ class Skier {
   }
 
   setState(s) { this.state = s; }
-  setLean(rz) { this.lean = rz; }
 
   triggerRagdoll(velocity, heading) {
     if (this.ragdoll) return;
@@ -1630,9 +1625,6 @@ trailDepthMat.onBeforeCompile = (shader) => {
 };
 terrain.customDepthMaterial = trailDepthMat;
 
-// Powder spray removed for the same reason as the snow sparkle: point
-// particles cling visually to the rig. The ski tracks already mark the
-// player's path; depth/parallax snow effects belong in a shader.
 
 // ============================================================
 // Web Audio (procedural wind + scrape)
@@ -1949,7 +1941,6 @@ const chatMsgsEl = document.getElementById("chat-msgs");
 const chatInputEl = document.getElementById("chat-in");
 const chatWrap = document.getElementById("chat");
 const chatMessages = [];
-const chatSeen = new Set();
 let chatHideTimer = null;
 function pushChatMessage(name, msg, ts) {
   chatMessages.push({ name, msg, ts });

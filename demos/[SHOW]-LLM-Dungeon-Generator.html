@@ -18,6 +18,14 @@ canvas { display: block; image-rendering: pixelated; }
 #win h1 { font-size: 3rem; color: #ffd700; text-shadow: 0 0 20px #ffd700; margin-bottom: 16px; }
 #win button { padding: 12px 28px; font-size: 1.1rem; background: #333; color: #fff; border: 1px solid #555; border-radius: 8px; cursor: pointer; }
 #hint { position: fixed; bottom: 12px; left: 50%; transform: translateX(-50%); color: #555; font-size: 12px; pointer-events: none; z-index: 10; }
+#dpad { display: none; position: fixed; bottom: 24px; left: 24px; z-index: 20; width: 120px; height: 120px; }
+#dpad button { position: absolute; width: 40px; height: 40px; background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; color: #fff; font-size: 18px; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+#dpad button:active { background: rgba(255,255,255,0.3); }
+#dpad .up { top: 0; left: 40px; }
+#dpad .down { bottom: 0; left: 40px; }
+#dpad .left { top: 40px; left: 0; }
+#dpad .right { top: 40px; right: 0; }
+@media (hover: none) { #dpad { display: block; } #hint { display: none; } }
 </style>
 </head>
 <body>
@@ -28,6 +36,12 @@ canvas { display: block; image-rendering: pixelated; }
 </div>
 <div id="win"><h1>You Win!</h1><button id="replay">New Dungeon</button></div>
 <div id="hint">WASD to move | Find Key (gold) then Exit (purple)</div>
+<div id="dpad">
+  <button class="up">&#9650;</button>
+  <button class="down">&#9660;</button>
+  <button class="left">&#9664;</button>
+  <button class="right">&#9654;</button>
+</div>
 <canvas id="c"></canvas>
 <script>
 "use strict";
@@ -56,6 +70,15 @@ var cam = { x: 0, y: 0 };
 var inputKeys = {};
 addEventListener('keydown', function(e) { inputKeys[e.code] = true; if (e.code.indexOf('Arrow') === 0) e.preventDefault(); });
 addEventListener('keyup', function(e) { inputKeys[e.code] = false; });
+// Touch d-pad for mobile
+document.querySelectorAll('#dpad button').forEach(function(btn) {
+  var map = { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight' };
+  var key = map[btn.className];
+  if (!key) return;
+  btn.addEventListener('touchstart', function(e) { e.preventDefault(); inputKeys[key] = true; });
+  btn.addEventListener('touchend', function(e) { e.preventDefault(); inputKeys[key] = false; });
+  btn.addEventListener('touchcancel', function() { inputKeys[key] = false; });
+});
 
 function fallbackDungeon() {
   return [
@@ -80,6 +103,8 @@ function fallbackDungeon() {
 
 async function askLLM(prompt) {
   try {
+    var controller = new AbortController();
+    var timeout = setTimeout(function() { controller.abort(); }, 20000);
     var res = await fetch('https://text.pollinations.ai/openai', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -92,7 +117,9 @@ async function askLLM(prompt) {
         temperature: 0.9,
         model: 'openai',
       }),
+      signal: controller.signal,
     });
+    clearTimeout(timeout);
     if (!res.ok) throw new Error('HTTP ' + res.status);
     var data = await res.json();
     var msg = data && data.choices && data.choices[0] && data.choices[0].message;
