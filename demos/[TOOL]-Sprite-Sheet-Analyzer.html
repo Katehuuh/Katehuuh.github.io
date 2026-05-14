@@ -364,21 +364,29 @@
               ? Math.max(1, Math.floor((s.imageH - s.offsetY) / s.rowHeight))
               : 5;
             const bg = s.bgColor.toUpperCase();
-            const allRows = ['IDLE', 'WALK', 'RUN', 'JUMP', 'ATTACK 1', 'ATTACK 2', 'HURT', 'DEATH', 'CAST', 'CROUCH', 'CLIMB', 'FALL', 'BLOCK'];
-            const lines = [];
-            lines.push('Create a 2D pixel-art sprite sheet: "girl with long hair".');
-            lines.push('');
-            lines.push('Character: same face, hair, and outfit in all frames; full body visible; no cropping; consistent scale.');
-            lines.push('Cells: clear frame separation; no text, labels, or frame numbers inside sprite cells.');
-            lines.push('');
-            lines.push('Canvas: ' + s.imageW + ' x ' + s.imageH + ' px.');
-            lines.push('Grid: ' + allRows.length + ' rows x ' + cols + ' columns; each cell ' + s.spriteWidth + ' x ' + s.rowHeight + ' px.');
-            lines.push('Background: solid uniform ' + bg + '; no gradient or noise.');
-            if (s.labelWidth > 0) lines.push('Left label column: ' + s.labelWidth + ' px wide; keep row labels outside sprite cells.');
-            lines.push('');
-            lines.push('Rows:');
-            for (let i = 0; i < allRows.length; i++) lines.push('Row ' + (i + 1) + ': ' + allRows[i]);
-            return lines.join('\n');
+            return 'Create a 2D pixel-art sprite sheet: "girl with long hair".\n'
+              + '\n'
+              + 'Character: same face, hair, and outfit in all frames; full body visible; no cropping; consistent scale.\n'
+              + 'Cells: clear frame separation; no text, labels, or frame numbers inside sprite cells.\n'
+              + '\n'
+              + 'Canvas: ' + s.imageW + ' x ' + s.imageH + ' px.\n'
+              + 'Grid: 13 rows x ' + cols + ' columns; each cell ' + s.spriteWidth + ' x ' + s.rowHeight + ' px.\n'
+              + 'Background: solid uniform ' + bg + '; no gradient or noise.\n'
+              + (s.labelWidth > 0 ? 'Left label column: ' + s.labelWidth + ' px wide; keep row labels outside sprite cells.\n' : '')
+              + '\n'
+              + 'Row 1: IDLE\n'
+              + 'Row 2: WALK\n'
+              + 'Row 3: RUN\n'
+              + 'Row 4: JUMP\n'
+              + 'Row 5: ATTACK 1\n'
+              + 'Row 6: ATTACK 2\n'
+              + 'Row 7: HURT\n'
+              + 'Row 8: DEATH\n'
+              + 'Row 9: CAST\n'
+              + 'Row 10: CROUCH\n'
+              + 'Row 11: CLIMB\n'
+              + 'Row 12: FALL\n'
+              + 'Row 13: BLOCK';
           };
 
           // Build a synthetic sprite sheet so the demo works offline / without external images.
