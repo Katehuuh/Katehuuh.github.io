@@ -357,41 +357,30 @@
           // precise pixel layout from the current sliders, bg-color reservation clause so
           // strip-bg has a uniform target post-generation.
           const buildRemixPrompt = (s) => {
-            const cellsPerRow = (s.imageW > 0 && s.spriteWidth > 0)
+            const cols = (s.imageW > 0 && s.spriteWidth > 0)
               ? Math.max(1, Math.floor((s.imageW - s.offsetX - s.labelWidth) / s.spriteWidth))
               : 6;
-            const rowsCount = (s.imageH > 0 && s.rowHeight > 0)
+            const rows = (s.imageH > 0 && s.rowHeight > 0)
               ? Math.max(1, Math.floor((s.imageH - s.offsetY) / s.rowHeight))
               : 5;
-            const labels = ['IDLE', 'WALK', 'RUN', 'JUMP', 'ATTACK 1', 'ATTACK 2', 'HURT', 'DEATH', 'CAST', 'CROUCH', 'CLIMB', 'FALL', 'BLOCK'];
-            const rowSpec = Array.from({ length: rowsCount }, (_, i) =>
-              `  Row ${i}: ${labels[i] || 'ROW ' + i}`
-            ).join('\n');
-            return [
-              `Generate a 2D pixel-art sprite sheet of "girl with long hair".`,
-              '',
-              'Character rules:',
-              '  Consistent character design across ALL frames (face, hair, outfit identical, only pose differs).',
-              '  Full body visible in every frame, not cropped by cell edges.',
-              '  Same size character in every frame.',
-              '  No text, labels, or frame numbers on the sprite cells.',
-              '',
-              'Layout:',
-              `  Total size: ${s.imageW} x ${s.imageH} px.`,
-              `  Background: solid uniform color ${s.bgColor.toUpperCase()}. No gradient, no shading, no noise near sprite edges.`,
-              `  Grid: ${rowsCount} rows x ${cellsPerRow} columns, strict regular grid.`,
-              `  Cell size: ${s.spriteWidth} x ${s.rowHeight} px each.`,
-              s.labelWidth > 0 ? `  Row label strip: ${s.labelWidth}px on the left edge.` : '',
-              '',
-              'Rows (top to bottom):',
-              rowSpec,
-              '',
-              'Per-cell rules:',
-              '  Each character centered within its cell.',
-              '  Limbs, hair, weapons stay inside cell bounds.',
-              '  Frame N+1 is the next animation phase.',
-              '  Clear separation between frames.',
-            ].filter(Boolean).join('\n');
+            const bg = s.bgColor.toUpperCase();
+            const allRows = ['IDLE', 'WALK', 'RUN', 'JUMP', 'ATTACK 1', 'ATTACK 2', 'HURT', 'DEATH', 'CAST', 'CROUCH', 'CLIMB', 'FALL', 'BLOCK'];
+            const lines = [];
+            lines.push('Generate a 2D pixel-art sprite sheet of "girl with long hair".');
+            lines.push('');
+            lines.push('Consistent character design across ALL frames: same face, hair, outfit in every pose.');
+            lines.push('Full body visible in every frame, not cropped.');
+            lines.push('Same size character in every frame.');
+            lines.push('No text, labels, or frame numbers on the sprite cells.');
+            lines.push('Clear separation between frames.');
+            lines.push('');
+            lines.push(s.imageW + ' x ' + s.imageH + ' pixels total.');
+            lines.push(rows + ' rows, ' + cols + ' columns, each cell ' + s.spriteWidth + ' x ' + s.rowHeight + ' pixels.');
+            lines.push('Solid uniform ' + bg + ' background, no gradient or noise.');
+            if (s.labelWidth > 0) lines.push('Row labels on the left, ' + s.labelWidth + ' pixels wide.');
+            lines.push('');
+            for (let i = 0; i < rows; i++) lines.push('Row ' + (i + 1) + ': ' + (allRows[i] || 'ROW ' + (i + 1)));
+            return lines.join('\n');
           };
 
           // Build a synthetic sprite sheet so the demo works offline / without external images.
