@@ -9,230 +9,215 @@
 html, body { height: 100%; background: #0a0a0a; color: #e0e0e0; overflow: hidden; font-family: -apple-system, system-ui, sans-serif; }
 canvas { display: block; image-rendering: pixelated; }
 #hud { position: fixed; top: 12px; left: 12px; z-index: 10; font-size: 14px; pointer-events: none; text-shadow: 1px 1px 3px rgba(0,0,0,0.8); }
-#hud .key-status { margin-top: 4px; }
-#overlay { position: fixed; inset: 0; z-index: 20; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(10,10,10,0.85); }
-#overlay.hidden { display: none; }
+#overlay { position: fixed; inset: 0; z-index: 20; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(10,10,10,0.85); transition: opacity 0.3s; }
+#overlay.hidden { opacity: 0; pointer-events: none; }
 #overlay .loader { width: 50px; height: 50px; border: 4px solid #333; border-top-color: #fff; border-radius: 50%; animation: spin 0.8s linear infinite; margin-bottom: 16px; }
 @keyframes spin { to { transform: rotate(360deg); } }
-#overlay .msg { color: #aaa; font-size: 1rem; }
 #win { position: fixed; inset: 0; z-index: 30; display: none; flex-direction: column; align-items: center; justify-content: center; background: rgba(0,0,0,0.7); }
 #win.show { display: flex; }
 #win h1 { font-size: 3rem; color: #ffd700; text-shadow: 0 0 20px #ffd700; margin-bottom: 16px; }
 #win button { padding: 12px 28px; font-size: 1.1rem; background: #333; color: #fff; border: 1px solid #555; border-radius: 8px; cursor: pointer; }
-#win button:hover { background: #444; }
-#controls-hint { position: fixed; bottom: 12px; left: 50%; transform: translateX(-50%); z-index: 10; color: #666; font-size: 12px; pointer-events: none; }
+#hint { position: fixed; bottom: 12px; left: 50%; transform: translateX(-50%); color: #555; font-size: 12px; pointer-events: none; z-index: 10; }
 </style>
 </head>
 <body>
-<div id="overlay">
-  <div class="loader"></div>
-  <div class="msg" id="gen-msg">Generating dungeon...</div>
-</div>
+<div id="overlay"><div class="loader"></div><div id="gen-msg">Generating dungeon...</div></div>
 <div id="hud">
-  <div id="room-label">LLM Dungeon</div>
-  <div class="key-status">Key: <span id="key-icon">--</span></div>
+  <div>LLM Dungeon</div>
+  <div>Key: <span id="key-icon">--</span></div>
 </div>
 <div id="win"><h1>You Win!</h1><button id="replay">New Dungeon</button></div>
-<div id="controls-hint">WASD / Arrow keys to move | Find the Key, then the Exit</div>
+<div id="hint">WASD to move | Find Key then Exit</div>
 <canvas id="c"></canvas>
-
 <script>
 "use strict";
-
-const TILE = 28;
-const PLAYER_SPEED = 160;
-const FRICTION = 0.88;
-
-const COLORS = {
-  '#': '#1a1a30', '.': '#2a2a3e', ',': '#1e1e2e',
-  'S': '#2a3a2a', 'K': '#ffd700', 'E': '#e040fb',
-};
-
-const canvas = document.getElementById('c');
-const ctx = canvas.getContext('2d');
+var TILE = 28, MAP_W = 40, MAP_H = 25;
+var SPEED = 160, FRIC = 0.88;
+var COLORS = { 0: '#0a0a12', 1: '#2a2a3e', 2: '#1e1e2e' };
+var canvas = document.getElementById('c');
+var ctx = canvas.getContext('2d');
 function resize() { canvas.width = innerWidth; canvas.height = innerHeight; }
 resize(); addEventListener('resize', resize);
 
-let dungeon = null;
-let player = null;
-let hasKey = false;
-let cam = { x: 0, y: 0 };
-const keys = {};
-addEventListener('keydown', function(e) { keys[e.code] = true; e.preventDefault(); });
+var grid = null, player = null, hasKey = false, keyPos = null, exitPos = null;
+var cam = { x: 0, y: 0 };
+var keys = {};
+addEventListener('keydown', function(e) { keys[e.code] = true; if ('ArrowUp ArrowDown ArrowLeft ArrowRight'.indexOf(e.code)!==-1) e.preventDefault(); });
 addEventListener('keyup', function(e) { keys[e.code] = false; });
 
-// Pollinations text API (same pattern as X-Toy-Clone, anonymous, no key)
-var POLLINATIONS_TEXT_URL = 'https://text.pollinations.ai/openai';
-var POLLINATIONS_TEXT_GET = 'https://text.pollinations.ai/';
+// Build grid from room/corridor specs
+function emptyGrid() {
+  var g = [];
+  for (var y = 0; y < MAP_H; y++) { var row = []; for (var x = 0; x < MAP_W; x++) row.push(0); g.push(row); }
+  return g;
+}
+function carveRoom(g, rx, ry, rw, rh) {
+  for (var y = ry; y < ry + rh && y < MAP_H; y++)
+    for (var x = rx; x < rx + rw && x < MAP_W; x++)
+      if (y > 0 && y < MAP_H-1 && x > 0 && x < MAP_W-1) g[y][x] = 1;
+}
+function carveCorridor(g, x1, y1, x2, y2) {
+  var cx = x1, cy = y1;
+  while (cx !== x2) {
+    if (cy > 0 && cy < MAP_H-1 && cx > 0 && cx < MAP_W-1) g[cy][cx] = 2;
+    cx += cx < x2 ? 1 : -1;
+  }
+  while (cy !== y2) {
+    if (cy > 0 && cy < MAP_H-1 && cx > 0 && cx < MAP_W-1) g[cy][cx] = 2;
+    cy += cy < y2 ? 1 : -1;
+  }
+  if (cy > 0 && cy < MAP_H-1 && cx > 0 && cx < MAP_W-1) g[cy][cx] = 2;
+}
+function randomInt(lo, hi) { return lo + Math.floor(Math.random() * (hi - lo + 1)); }
 
-async function askLLM(prompt) {
-  // Try OpenAI-compat POST first, fall back to simple GET
+function buildFromSpec(spec) {
+  var g = emptyGrid();
+  var rooms = spec.rooms || [];
+  for (var i = 0; i < rooms.length; i++) {
+    var r = rooms[i];
+    carveRoom(g, r.x, r.y, r.w, r.h);
+  }
+  var corrs = spec.corridors || [];
+  for (var j = 0; j < corrs.length; j++) {
+    var c = corrs[j];
+    // Connect room centers
+    var r1 = rooms[c.from], r2 = rooms[c.to];
+    if (r1 && r2) {
+      carveCorridor(g, Math.floor(r1.x + r1.w/2), Math.floor(r1.y + r1.h/2),
+                       Math.floor(r2.x + r2.w/2), Math.floor(r2.y + r2.h/2));
+    }
+  }
+  return g;
+}
+
+function fallbackSpec() {
+  var rooms = [];
+  var count = 4 + Math.floor(Math.random() * 3);
+  for (var i = 0; i < count; i++) {
+    var w = randomInt(5, 9), h = randomInt(4, 7);
+    var x = randomInt(2, MAP_W - w - 2), y = randomInt(2, MAP_H - h - 2);
+    rooms.push({ x: x, y: y, w: w, h: h });
+  }
+  var corrs = [];
+  for (var j = 1; j < rooms.length; j++) corrs.push({ from: j - 1, to: j });
+  // Extra random connection
+  if (rooms.length > 3) corrs.push({ from: 0, to: rooms.length - 1 });
+  return { rooms: rooms, corridors: corrs, start: 0, key: Math.floor(rooms.length / 2), exit: rooms.length - 1 };
+}
+
+async function askLLMForSpec() {
+  var prompt = 'Generate a dungeon layout as JSON. The map is ' + MAP_W + 'x' + MAP_H + ' tiles.\n'
+    + 'Output a JSON object with:\n'
+    + '- "rooms": array of {x, y, w, h} (4-7 rooms, each 4-9 tiles wide, 3-7 tall, all inside 2..' + (MAP_W-2) + ' x 2..' + (MAP_H-2) + ')\n'
+    + '- "corridors": array of {from, to} (room indices to connect, ensure all rooms reachable)\n'
+    + '- "start": room index for player start\n'
+    + '- "key": room index for the key\n'
+    + '- "exit": room index for the exit (different from start and key)\n'
+    + 'Output ONLY valid JSON, no explanation.';
+
   try {
-    var res = await fetch(POLLINATIONS_TEXT_URL, {
+    var res = await fetch('https://text.pollinations.ai/openai', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         messages: [
-          { role: 'system', content: 'You generate ASCII dungeon maps. Output ONLY the grid lines, no explanation, no markdown fences.' },
+          { role: 'system', content: 'Output valid JSON only. No markdown, no explanation.' },
           { role: 'user', content: prompt }
         ],
-        max_tokens: 800,
-        temperature: 0.9,
+        max_tokens: 500,
+        temperature: 0.8,
+        model: 'openai',
       }),
-      signal: AbortSignal.timeout(15000),
     });
-    if (!res.ok) throw new Error('POST ' + res.status);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
     var data = await res.json();
-    var text = data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
-    if (text) return text.trim();
-  } catch (e) {
-    console.warn('Pollinations POST failed:', e.message);
-  }
-  // Fallback: simple GET (returns plain text)
-  try {
-    var url = POLLINATIONS_TEXT_GET + encodeURIComponent('Output ONLY an ASCII dungeon grid, no explanation. ' + prompt);
-    var res2 = await fetch(url, { signal: AbortSignal.timeout(12000) });
-    if (res2.ok) {
-      var t = await res2.text();
-      if (t && t.trim()) return t.trim();
+    var content = data && data.choices && data.choices[0] && data.choices[0].message;
+    var text = (content && content.content) || '';
+    // Strip markdown fences
+    text = text.replace(/```json\s*/g, '').replace(/```/g, '').trim();
+    // Try to extract JSON
+    var match = text.match(/\{[\s\S]*\}/);
+    if (match) {
+      var spec = JSON.parse(match[0]);
+      if (spec.rooms && spec.rooms.length >= 3) return spec;
     }
-  } catch (e2) {
-    console.warn('Pollinations GET failed:', e2.message);
+  } catch (e) {
+    console.warn('LLM spec generation failed:', e);
   }
   return null;
 }
 
-function fallbackDungeon() {
-  return [
-    "##############################",
-    "#S.....#,,,,,,#.............E#",
-    "#......#,,,,,,#..............#",
-    "#......#,,,,,,#....####.....#",
-    "#..##..#,,,,,,#....#K.#.....#",
-    "#......#,,,,,,,.....####.....#",
-    "#......#,,,,,,#..............#",
-    "####,####,,,,####,###########",
-    "#,,,,,,,,,,,,,,,,,,,,,,,,,,,#",
-    "#,,,,,,,,,,,,,,,,,,,,,,,,,,,#",
-    "####,####,,,,####,###########",
-    "#......#,,,,,,#..............#",
-    "#......#,,,,,,,.............#",
-    "#......#,,,,,,#..............#",
-    "#......#,,,,,,#..............#",
-    "##############################",
-  ];
-}
-
 async function generateDungeon() {
   document.getElementById('overlay').classList.remove('hidden');
-  document.getElementById('gen-msg').textContent = 'Asking AI to generate dungeon...';
+  document.getElementById('gen-msg').textContent = 'Asking AI for dungeon layout...';
 
-  var prompt = 'Generate a dungeon room map as ASCII art.\n'
-    + 'Size: exactly 30 columns wide, 16 rows tall.\n'
-    + 'Characters: # = wall, . = room floor, , = corridor\n'
-    + 'S = start (one), K = key (one), E = exit (one)\n'
-    + 'Rules:\n'
-    + '- Border is all # walls\n'
-    + '- Create 3-5 rooms (areas of . characters) connected by , corridors\n'
-    + '- Place S in one room, K in a different room, E in a third room\n'
-    + '- There must be a walkable path from S to K to E\n'
-    + '- Add some interior walls (#) inside rooms for variety\n'
-    + 'Output ONLY the 16 lines of 30 characters. No explanation.';
-
-  var text = await askLLM(prompt);
-  var lines = null;
-
-  if (text) {
-    // Strip markdown fences if model wraps output
-    text = text.replace(/```[a-z]*\n?/g, '').replace(/```/g, '').trim();
-    var raw = text.split('\n').map(function(l) { return l.trim(); }).filter(function(l) { return l.length >= 10; });
-    if (raw.length >= 10) {
-      // Normalize: ensure only valid chars
-      lines = raw.map(function(row) {
-        return row.split('').map(function(ch) {
-          if ('#.,SKE'.indexOf(ch) !== -1) return ch;
-          return '.';
-        }).join('');
-      });
-      // Validate
-      var flat = lines.join('');
-      if (flat.indexOf('S') === -1 || flat.indexOf('K') === -1 || flat.indexOf('E') === -1) {
-        console.warn('LLM map missing S/K/E, using fallback');
-        lines = null;
-      }
-    }
+  var spec = await askLLMForSpec();
+  if (!spec) {
+    document.getElementById('gen-msg').textContent = 'Using procedural fallback...';
+    await new Promise(function(r) { setTimeout(r, 400); });
+    spec = fallbackSpec();
   }
 
-  if (!lines) {
-    document.getElementById('gen-msg').textContent = 'Using fallback dungeon...';
-    await new Promise(function(r) { setTimeout(r, 600); });
-    lines = fallbackDungeon();
-  }
+  // Validate indices
+  var n = spec.rooms.length;
+  if (typeof spec.start !== 'number' || spec.start >= n) spec.start = 0;
+  if (typeof spec.key !== 'number' || spec.key >= n || spec.key === spec.start) spec.key = Math.min(1, n - 1);
+  if (typeof spec.exit !== 'number' || spec.exit >= n || spec.exit === spec.start || spec.exit === spec.key) spec.exit = Math.min(2, n - 1);
 
-  document.getElementById('overlay').classList.add('hidden');
-  return lines;
-}
-
-function startGame(layout) {
-  dungeon = layout;
+  grid = buildFromSpec(spec);
   hasKey = false;
   document.getElementById('key-icon').textContent = '--';
   document.getElementById('win').classList.remove('show');
 
-  var sx = 1, sy = 1;
-  for (var y = 0; y < dungeon.length; y++) {
-    var x = dungeon[y].indexOf('S');
-    if (x !== -1) { sx = x; sy = y; break; }
-  }
-  player = { x: sx * TILE + TILE / 2, y: sy * TILE + TILE / 2, vx: 0, vy: 0 };
+  var sr = spec.rooms[spec.start];
+  var kr = spec.rooms[spec.key];
+  var er = spec.rooms[spec.exit];
+  keyPos = { x: Math.floor(kr.x + kr.w / 2), y: Math.floor(kr.y + kr.h / 2) };
+  exitPos = { x: Math.floor(er.x + er.w / 2), y: Math.floor(er.y + er.h / 2) };
+  player = {
+    x: (sr.x + sr.w / 2) * TILE,
+    y: (sr.y + sr.h / 2) * TILE,
+    vx: 0, vy: 0
+  };
   cam.x = player.x - canvas.width / 2;
   cam.y = player.y - canvas.height / 2;
+
+  document.getElementById('overlay').classList.add('hidden');
 }
 
-function tileAt(px, py) {
+function solid(px, py) {
   var tx = Math.floor(px / TILE), ty = Math.floor(py / TILE);
-  if (ty < 0 || ty >= dungeon.length) return '#';
-  var row = dungeon[ty];
-  if (tx < 0 || tx >= row.length) return '#';
-  return row[tx];
+  if (tx < 0 || tx >= MAP_W || ty < 0 || ty >= MAP_H) return true;
+  return grid[ty][tx] === 0;
 }
-
-function isSolid(px, py) { return tileAt(px, py) === '#'; }
 
 function tick(dt) {
-  if (!player || !dungeon) return;
+  if (!player || !grid) return;
   var dx = 0, dy = 0;
   if (keys['ArrowLeft'] || keys['KeyA']) dx = -1;
   if (keys['ArrowRight'] || keys['KeyD']) dx = 1;
   if (keys['ArrowUp'] || keys['KeyW']) dy = -1;
   if (keys['ArrowDown'] || keys['KeyS']) dy = 1;
-  var mag = Math.sqrt(dx * dx + dy * dy);
-  if (mag > 0) { dx /= mag; dy /= mag; }
+  var m = Math.sqrt(dx * dx + dy * dy);
+  if (m > 0) { dx /= m; dy /= m; }
+  player.vx += dx * SPEED * dt;
+  player.vy += dy * SPEED * dt;
+  player.vx *= FRIC; player.vy *= FRIC;
 
-  player.vx += dx * PLAYER_SPEED * dt;
-  player.vy += dy * PLAYER_SPEED * dt;
-  player.vx *= FRICTION;
-  player.vy *= FRICTION;
-
-  var r = 8;
+  var r = 7;
   var nx = player.x + player.vx * dt;
-  if (isSolid(nx - r, player.y - r) || isSolid(nx + r, player.y - r) ||
-      isSolid(nx - r, player.y + r) || isSolid(nx + r, player.y + r)) nx = player.x;
+  if (solid(nx - r, player.y - r) || solid(nx + r, player.y - r) || solid(nx - r, player.y + r) || solid(nx + r, player.y + r)) { nx = player.x; player.vx = 0; }
   var ny = player.y + player.vy * dt;
-  if (isSolid(player.x - r, ny - r) || isSolid(player.x + r, ny - r) ||
-      isSolid(player.x - r, ny + r) || isSolid(player.x + r, ny + r)) ny = player.y;
-  player.x = nx;
-  player.y = ny;
+  if (solid(player.x - r, ny - r) || solid(player.x + r, ny - r) || solid(player.x - r, ny + r) || solid(player.x + r, ny + r)) { ny = player.y; player.vy = 0; }
+  player.x = nx; player.y = ny;
 
-  var tile = tileAt(player.x, player.y);
-  if (tile === 'K' && !hasKey) {
-    hasKey = true;
-    document.getElementById('key-icon').textContent = 'YES';
-    var ty = Math.floor(player.y / TILE), tx = Math.floor(player.x / TILE);
-    dungeon[ty] = dungeon[ty].substring(0, tx) + '.' + dungeon[ty].substring(tx + 1);
+  if (keyPos && !hasKey) {
+    var kd = Math.hypot(player.x - keyPos.x * TILE - TILE/2, player.y - keyPos.y * TILE - TILE/2);
+    if (kd < TILE) { hasKey = true; document.getElementById('key-icon').textContent = 'YES'; keyPos = null; }
   }
-  if (tile === 'E' && hasKey) {
-    document.getElementById('win').classList.add('show');
+  if (exitPos && hasKey) {
+    var ed = Math.hypot(player.x - exitPos.x * TILE - TILE/2, player.y - exitPos.y * TILE - TILE/2);
+    if (ed < TILE) document.getElementById('win').classList.add('show');
   }
 
   cam.x += (player.x - canvas.width / 2 - cam.x) * 0.08;
@@ -242,70 +227,60 @@ function tick(dt) {
 function draw() {
   ctx.fillStyle = '#0a0a0a';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
-  if (!dungeon || !player) return;
+  if (!grid || !player) return;
 
-  var mapH = dungeon.length;
-  var mapW = dungeon[0] ? dungeon[0].length : 0;
   var sy = Math.max(0, Math.floor(cam.y / TILE));
-  var ey = Math.min(mapH, Math.ceil((cam.y + canvas.height) / TILE) + 1);
-  var sxc = Math.max(0, Math.floor(cam.x / TILE));
-  var exc = Math.min(mapW, Math.ceil((cam.x + canvas.width) / TILE) + 1);
+  var ey = Math.min(MAP_H, Math.ceil((cam.y + canvas.height) / TILE) + 1);
+  var sx = Math.max(0, Math.floor(cam.x / TILE));
+  var ex = Math.min(MAP_W, Math.ceil((cam.x + canvas.width) / TILE) + 1);
 
   for (var y = sy; y < ey; y++) {
-    for (var x = sxc; x < exc; x++) {
-      var ch = dungeon[y][x];
+    for (var x = sx; x < ex; x++) {
+      var t = grid[y][x];
+      if (t === 0) continue;
       var px = x * TILE - cam.x, py = y * TILE - cam.y;
-      ctx.fillStyle = COLORS[ch] || COLORS['.'];
+      ctx.fillStyle = COLORS[t];
       ctx.fillRect(px, py, TILE, TILE);
-
-      if (ch === 'K' || ch === 'E' || ch === 'S') {
-        ctx.fillStyle = COLORS['.'];
-        ctx.fillRect(px, py, TILE, TILE);
-        var pulse = Math.sin(Date.now() * 0.004) * 3;
-        ctx.fillStyle = COLORS[ch];
-        ctx.beginPath();
-        ctx.arc(px + TILE / 2, py + TILE / 2, TILE / 3 + pulse, 0, Math.PI * 2);
-        ctx.fill();
-      }
     }
+  }
+
+  // Key
+  if (keyPos && !hasKey) {
+    var kpx = keyPos.x * TILE - cam.x + TILE/2, kpy = keyPos.y * TILE - cam.y + TILE/2;
+    var pulse = Math.sin(Date.now() * 0.004) * 3;
+    ctx.fillStyle = '#ffd700';
+    ctx.beginPath(); ctx.arc(kpx, kpy, TILE/3 + pulse, 0, Math.PI * 2); ctx.fill();
+  }
+  // Exit
+  if (exitPos) {
+    var epx = exitPos.x * TILE - cam.x + TILE/2, epy = exitPos.y * TILE - cam.y + TILE/2;
+    var p2 = Math.sin(Date.now() * 0.003) * 3;
+    ctx.fillStyle = hasKey ? '#e040fb' : '#662266';
+    ctx.beginPath(); ctx.arc(epx, epy, TILE/3 + p2, 0, Math.PI * 2); ctx.fill();
   }
 
   // Player
   var ppx = player.x - cam.x, ppy = player.y - cam.y;
   ctx.fillStyle = 'rgba(0,0,0,0.3)';
-  ctx.beginPath();
-  ctx.ellipse(ppx, ppy + 5, 10, 6, 0, 0, Math.PI * 2);
-  ctx.fill();
+  ctx.beginPath(); ctx.ellipse(ppx, ppy + 5, 10, 6, 0, 0, Math.PI * 2); ctx.fill();
   ctx.fillStyle = '#00ff88';
-  ctx.beginPath();
-  ctx.arc(ppx, ppy, 10, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.strokeStyle = '#fff';
-  ctx.lineWidth = 2;
-  ctx.stroke();
+  ctx.beginPath(); ctx.arc(ppx, ppy, 10, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
 
   // Minimap
-  var mmSize = 120;
-  var mmScale = 3;
+  var ms = 3, mmw = MAP_W * ms, mmh = MAP_H * ms;
   ctx.fillStyle = 'rgba(0,0,0,0.6)';
-  ctx.fillRect(canvas.width - mmSize - 16, 12, mmSize + 8, (mapH * mmScale) + 8);
-  for (var my = 0; my < mapH; my++) {
-    for (var mx = 0; mx < mapW; mx++) {
-      var mc = dungeon[my][mx];
-      if (mc === '#') continue;
-      var color = '#444';
-      if (mc === 'S') color = '#0a0';
-      else if (mc === 'K') color = COLORS['K'];
-      else if (mc === 'E') color = COLORS['E'];
-      ctx.fillStyle = color;
-      ctx.fillRect(canvas.width - mmSize - 12 + mx * mmScale, 16 + my * mmScale, mmScale - 1, mmScale - 1);
-    }
+  ctx.fillRect(canvas.width - mmw - 16, 12, mmw + 8, mmh + 8);
+  for (var my = 0; my < MAP_H; my++) for (var mx = 0; mx < MAP_W; mx++) {
+    if (grid[my][mx] === 0) continue;
+    ctx.fillStyle = grid[my][mx] === 1 ? '#444' : '#333';
+    ctx.fillRect(canvas.width - mmw - 12 + mx * ms, 16 + my * ms, ms - 1, ms - 1);
   }
-  // Player dot on minimap
-  var pmx = Math.floor(player.x / TILE);
-  var pmy = Math.floor(player.y / TILE);
+  if (keyPos && !hasKey) { ctx.fillStyle = '#ffd700'; ctx.fillRect(canvas.width - mmw - 12 + keyPos.x * ms, 16 + keyPos.y * ms, ms, ms); }
+  if (exitPos) { ctx.fillStyle = '#e040fb'; ctx.fillRect(canvas.width - mmw - 12 + exitPos.x * ms, 16 + exitPos.y * ms, ms, ms); }
+  var pmx = Math.floor(player.x / TILE), pmy = Math.floor(player.y / TILE);
   ctx.fillStyle = '#00ff88';
-  ctx.fillRect(canvas.width - mmSize - 12 + pmx * mmScale - 1, 16 + pmy * mmScale - 1, mmScale + 1, mmScale + 1);
+  ctx.fillRect(canvas.width - mmw - 12 + pmx * ms - 1, 16 + pmy * ms - 1, ms + 1, ms + 1);
 }
 
 var lastT = 0;
@@ -317,17 +292,11 @@ function loop(t) {
   requestAnimationFrame(loop);
 }
 
-document.getElementById('replay').addEventListener('click', async function() {
-  document.getElementById('win').classList.remove('show');
-  var layout = await generateDungeon();
-  startGame(layout);
+document.getElementById('replay').addEventListener('click', function() {
+  generateDungeon();
 });
 
-(async function() {
-  var layout = await generateDungeon();
-  startGame(layout);
-  requestAnimationFrame(loop);
-})();
+generateDungeon().then(function() { requestAnimationFrame(loop); });
 </script>
 </body>
 </html>
