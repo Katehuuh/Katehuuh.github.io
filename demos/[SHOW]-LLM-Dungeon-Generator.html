@@ -27,177 +27,183 @@ canvas { display: block; image-rendering: pixelated; }
   <div>Key: <span id="key-icon">--</span></div>
 </div>
 <div id="win"><h1>You Win!</h1><button id="replay">New Dungeon</button></div>
-<div id="hint">WASD to move | Find Key then Exit</div>
+<div id="hint">WASD to move | Find Key (gold) then Exit (purple)</div>
 <canvas id="c"></canvas>
 <script>
 "use strict";
-var TILE = 28, MAP_W = 40, MAP_H = 25;
-var SPEED = 160, FRIC = 0.88;
-var COLORS = { 0: '#0a0a12', 1: '#2a2a3e', 2: '#1e1e2e' };
+var TILE = 28;
+var SPEED = 380;
+var FRIC = 0.85;
+
+var TILE_COLORS = {
+  '#': '#1a1a30',
+  '.': '#2a2a3e',
+  ',': '#1e1e2e',
+  'S': '#2a3a2a',
+  'K': '#2a2a3e',
+  'E': '#2a2a3e',
+};
+
 var canvas = document.getElementById('c');
 var ctx = canvas.getContext('2d');
 function resize() { canvas.width = innerWidth; canvas.height = innerHeight; }
 resize(); addEventListener('resize', resize);
 
-var grid = null, player = null, hasKey = false, keyPos = null, exitPos = null;
+var dungeon = null;
+var player = null;
+var hasKey = false;
 var cam = { x: 0, y: 0 };
-var keys = {};
-addEventListener('keydown', function(e) { keys[e.code] = true; if ('ArrowUp ArrowDown ArrowLeft ArrowRight'.indexOf(e.code)!==-1) e.preventDefault(); });
-addEventListener('keyup', function(e) { keys[e.code] = false; });
+var inputKeys = {};
+addEventListener('keydown', function(e) { inputKeys[e.code] = true; if (e.code.indexOf('Arrow') === 0) e.preventDefault(); });
+addEventListener('keyup', function(e) { inputKeys[e.code] = false; });
 
-// Build grid from room/corridor specs
-function emptyGrid() {
-  var g = [];
-  for (var y = 0; y < MAP_H; y++) { var row = []; for (var x = 0; x < MAP_W; x++) row.push(0); g.push(row); }
-  return g;
-}
-function carveRoom(g, rx, ry, rw, rh) {
-  for (var y = ry; y < ry + rh && y < MAP_H; y++)
-    for (var x = rx; x < rx + rw && x < MAP_W; x++)
-      if (y > 0 && y < MAP_H-1 && x > 0 && x < MAP_W-1) g[y][x] = 1;
-}
-function carveCorridor(g, x1, y1, x2, y2) {
-  var cx = x1, cy = y1;
-  while (cx !== x2) {
-    if (cy > 0 && cy < MAP_H-1 && cx > 0 && cx < MAP_W-1) g[cy][cx] = 2;
-    cx += cx < x2 ? 1 : -1;
-  }
-  while (cy !== y2) {
-    if (cy > 0 && cy < MAP_H-1 && cx > 0 && cx < MAP_W-1) g[cy][cx] = 2;
-    cy += cy < y2 ? 1 : -1;
-  }
-  if (cy > 0 && cy < MAP_H-1 && cx > 0 && cx < MAP_W-1) g[cy][cx] = 2;
-}
-function randomInt(lo, hi) { return lo + Math.floor(Math.random() * (hi - lo + 1)); }
-
-function buildFromSpec(spec) {
-  var g = emptyGrid();
-  var rooms = spec.rooms || [];
-  for (var i = 0; i < rooms.length; i++) {
-    var r = rooms[i];
-    carveRoom(g, r.x, r.y, r.w, r.h);
-  }
-  var corrs = spec.corridors || [];
-  for (var j = 0; j < corrs.length; j++) {
-    var c = corrs[j];
-    // Connect room centers
-    var r1 = rooms[c.from], r2 = rooms[c.to];
-    if (r1 && r2) {
-      carveCorridor(g, Math.floor(r1.x + r1.w/2), Math.floor(r1.y + r1.h/2),
-                       Math.floor(r2.x + r2.w/2), Math.floor(r2.y + r2.h/2));
-    }
-  }
-  return g;
+function fallbackDungeon() {
+  return [
+    "##############################",
+    "#S.....#,,,,,,#..............#",
+    "#......#,,,,,,#..............#",
+    "#......#,,,,,,#....####.....#",
+    "#..##..#,,,,,,#....#K.#.....#",
+    "#......#,,,,,,,....####.....#",
+    "#......#,,,,,,#..............#",
+    "####,####,,,,####,###########",
+    "#,,,,,,,,,,,,,,,,,,,,,,,,,,,,#",
+    "#,,,,,,,,,,,,,,,,,,,,,,,,,,,,#",
+    "####,####,,,,####,###########",
+    "#......#,,,,,,#..............#",
+    "#......#,,,,,,,..........##.#",
+    "#......#,,,,,,#..........#E.#",
+    "#......#,,,,,,#..........##.#",
+    "##############################",
+  ];
 }
 
-function fallbackSpec() {
-  var rooms = [];
-  var count = 4 + Math.floor(Math.random() * 3);
-  for (var i = 0; i < count; i++) {
-    var w = randomInt(5, 9), h = randomInt(4, 7);
-    var x = randomInt(2, MAP_W - w - 2), y = randomInt(2, MAP_H - h - 2);
-    rooms.push({ x: x, y: y, w: w, h: h });
-  }
-  var corrs = [];
-  for (var j = 1; j < rooms.length; j++) corrs.push({ from: j - 1, to: j });
-  // Extra random connection
-  if (rooms.length > 3) corrs.push({ from: 0, to: rooms.length - 1 });
-  return { rooms: rooms, corridors: corrs, start: 0, key: Math.floor(rooms.length / 2), exit: rooms.length - 1 };
-}
-
-async function askLLMForSpec() {
-  var prompt = 'Generate a dungeon layout as JSON. The map is ' + MAP_W + 'x' + MAP_H + ' tiles.\n'
-    + 'Output a JSON object with:\n'
-    + '- "rooms": array of {x, y, w, h} (4-7 rooms, each 4-9 tiles wide, 3-7 tall, all inside 2..' + (MAP_W-2) + ' x 2..' + (MAP_H-2) + ')\n'
-    + '- "corridors": array of {from, to} (room indices to connect, ensure all rooms reachable)\n'
-    + '- "start": room index for player start\n'
-    + '- "key": room index for the key\n'
-    + '- "exit": room index for the exit (different from start and key)\n'
-    + 'Output ONLY valid JSON, no explanation.';
-
+async function askLLM(prompt) {
   try {
     var res = await fetch('https://text.pollinations.ai/openai', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         messages: [
-          { role: 'system', content: 'Output valid JSON only. No markdown, no explanation.' },
+          { role: 'system', content: 'You generate ASCII dungeon maps. Output ONLY the grid lines. No markdown fences, no explanation, no commentary.' },
           { role: 'user', content: prompt }
         ],
         max_tokens: 32000,
-        temperature: 0.8,
+        temperature: 0.9,
         model: 'openai',
       }),
     });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     var data = await res.json();
-    var content = data && data.choices && data.choices[0] && data.choices[0].message;
-    var text = (content && content.content) || '';
-    // Strip markdown fences
-    text = text.replace(/```json\s*/g, '').replace(/```/g, '').trim();
-    // Try to extract JSON
-    var match = text.match(/\{[\s\S]*\}/);
-    if (match) {
-      var spec = JSON.parse(match[0]);
-      if (spec.rooms && spec.rooms.length >= 3) return spec;
+    var msg = data && data.choices && data.choices[0] && data.choices[0].message;
+    var text = (msg && msg.content) || '';
+    if (!text && msg && msg.reasoning) {
+      // Model put everything in reasoning, try to extract grid from it
+      var lines = msg.reasoning.split('\n').filter(function(l) {
+        var t = l.trim();
+        return t.length >= 20 && /^[#.,SKE\s"]+$/.test(t);
+      });
+      if (lines.length >= 10) text = lines.join('\n');
     }
+    return text.trim();
   } catch (e) {
-    console.warn('LLM spec generation failed:', e);
+    console.warn('Pollinations failed:', e);
+    return null;
   }
-  return null;
+}
+
+function parseGrid(text) {
+  if (!text) return null;
+  // Strip markdown fences and quotes
+  text = text.replace(/```[a-z]*\n?/g, '').replace(/```/g, '').trim();
+  text = text.replace(/^"/gm, '').replace(/"$/gm, '').replace(/",?$/gm, '');
+  var lines = text.split('\n').map(function(l) { return l.trim(); }).filter(function(l) { return l.length >= 15; });
+  if (lines.length < 10) return null;
+
+  // Normalize chars
+  var grid = lines.map(function(row) {
+    return row.split('').map(function(ch) {
+      if ('#.,SKE'.indexOf(ch) !== -1) return ch;
+      if (ch === ' ' || ch === '-' || ch === '|') return '#';
+      return '.';
+    }).join('');
+  });
+
+  // Pad rows to same width
+  var maxW = 0;
+  for (var i = 0; i < grid.length; i++) if (grid[i].length > maxW) maxW = grid[i].length;
+  grid = grid.map(function(row) {
+    while (row.length < maxW) row += '#';
+    return row;
+  });
+
+  var flat = grid.join('');
+  if (flat.indexOf('S') === -1 || flat.indexOf('K') === -1 || flat.indexOf('E') === -1) return null;
+  return grid;
 }
 
 async function generateDungeon() {
   document.getElementById('overlay').classList.remove('hidden');
-  document.getElementById('gen-msg').textContent = 'Asking AI for dungeon layout...';
+  document.getElementById('gen-msg').textContent = 'Asking AI for dungeon...';
 
-  var spec = await askLLMForSpec();
-  if (!spec) {
-    document.getElementById('gen-msg').textContent = 'Using procedural fallback...';
-    await new Promise(function(r) { setTimeout(r, 400); });
-    spec = fallbackSpec();
+  var prompt = 'Generate a dungeon room map as ASCII.\n'
+    + 'Size: 30 columns wide, 16 rows tall.\n'
+    + 'Characters: # wall, . room floor, , corridor\n'
+    + 'S = start (one), K = key (one), E = exit (one)\n'
+    + 'Rules:\n'
+    + '- Outer border is all # walls\n'
+    + '- Create 3-5 rooms of . connected by , corridors\n'
+    + '- S in one room, K in another room, E in a third\n'
+    + '- Must have walkable path S to K to E\n'
+    + '- Add interior # walls for interesting layout\n'
+    + 'Output the 16 lines of 30 chars each. Nothing else.';
+
+  var text = await askLLM(prompt);
+  var grid = parseGrid(text);
+
+  if (!grid) {
+    document.getElementById('gen-msg').textContent = 'Fallback dungeon...';
+    await new Promise(function(r) { setTimeout(r, 300); });
+    grid = fallbackDungeon();
   }
 
-  // Validate indices
-  var n = spec.rooms.length;
-  if (typeof spec.start !== 'number' || spec.start >= n) spec.start = 0;
-  if (typeof spec.key !== 'number' || spec.key >= n || spec.key === spec.start) spec.key = Math.min(1, n - 1);
-  if (typeof spec.exit !== 'number' || spec.exit >= n || spec.exit === spec.start || spec.exit === spec.key) spec.exit = Math.min(2, n - 1);
+  startGame(grid);
+  document.getElementById('overlay').classList.add('hidden');
+}
 
-  grid = buildFromSpec(spec);
+function startGame(grid) {
+  dungeon = grid;
   hasKey = false;
   document.getElementById('key-icon').textContent = '--';
   document.getElementById('win').classList.remove('show');
 
-  var sr = spec.rooms[spec.start];
-  var kr = spec.rooms[spec.key];
-  var er = spec.rooms[spec.exit];
-  keyPos = { x: Math.floor(kr.x + kr.w / 2), y: Math.floor(kr.y + kr.h / 2) };
-  exitPos = { x: Math.floor(er.x + er.w / 2), y: Math.floor(er.y + er.h / 2) };
-  player = {
-    x: (sr.x + sr.w / 2) * TILE,
-    y: (sr.y + sr.h / 2) * TILE,
-    vx: 0, vy: 0
-  };
+  var sx = 1, sy = 1;
+  for (var y = 0; y < dungeon.length; y++) {
+    var x = dungeon[y].indexOf('S');
+    if (x !== -1) { sx = x; sy = y; break; }
+  }
+  player = { x: sx * TILE + TILE / 2, y: sy * TILE + TILE / 2, vx: 0, vy: 0 };
   cam.x = player.x - canvas.width / 2;
   cam.y = player.y - canvas.height / 2;
-
-  document.getElementById('overlay').classList.add('hidden');
 }
 
-function solid(px, py) {
+function tileAt(px, py) {
   var tx = Math.floor(px / TILE), ty = Math.floor(py / TILE);
-  if (tx < 0 || tx >= MAP_W || ty < 0 || ty >= MAP_H) return true;
-  return grid[ty][tx] === 0;
+  if (!dungeon || ty < 0 || ty >= dungeon.length) return '#';
+  var row = dungeon[ty];
+  if (tx < 0 || tx >= row.length) return '#';
+  return row[tx];
 }
+
+function solid(px, py) { return tileAt(px, py) === '#'; }
 
 function tick(dt) {
-  if (!player || !grid) return;
+  if (!player || !dungeon) return;
   var dx = 0, dy = 0;
-  if (keys['ArrowLeft'] || keys['KeyA']) dx = -1;
-  if (keys['ArrowRight'] || keys['KeyD']) dx = 1;
-  if (keys['ArrowUp'] || keys['KeyW']) dy = -1;
-  if (keys['ArrowDown'] || keys['KeyS']) dy = 1;
+  if (inputKeys['ArrowLeft'] || inputKeys['KeyA']) dx = -1;
+  if (inputKeys['ArrowRight'] || inputKeys['KeyD']) dx = 1;
+  if (inputKeys['ArrowUp'] || inputKeys['KeyW']) dy = -1;
+  if (inputKeys['ArrowDown'] || inputKeys['KeyS']) dy = 1;
   var m = Math.sqrt(dx * dx + dy * dy);
   if (m > 0) { dx /= m; dy /= m; }
   player.vx += dx * SPEED * dt;
@@ -211,52 +217,48 @@ function tick(dt) {
   if (solid(player.x - r, ny - r) || solid(player.x + r, ny - r) || solid(player.x - r, ny + r) || solid(player.x + r, ny + r)) { ny = player.y; player.vy = 0; }
   player.x = nx; player.y = ny;
 
-  if (keyPos && !hasKey) {
-    var kd = Math.hypot(player.x - keyPos.x * TILE - TILE/2, player.y - keyPos.y * TILE - TILE/2);
-    if (kd < TILE) { hasKey = true; document.getElementById('key-icon').textContent = 'YES'; keyPos = null; }
+  var tile = tileAt(player.x, player.y);
+  if (tile === 'K' && !hasKey) {
+    hasKey = true;
+    document.getElementById('key-icon').textContent = 'YES';
+    var ty = Math.floor(player.y / TILE), tx = Math.floor(player.x / TILE);
+    dungeon[ty] = dungeon[ty].substring(0, tx) + '.' + dungeon[ty].substring(tx + 1);
   }
-  if (exitPos && hasKey) {
-    var ed = Math.hypot(player.x - exitPos.x * TILE - TILE/2, player.y - exitPos.y * TILE - TILE/2);
-    if (ed < TILE) document.getElementById('win').classList.add('show');
-  }
+  if (tile === 'E' && hasKey) document.getElementById('win').classList.add('show');
 
-  cam.x += (player.x - canvas.width / 2 - cam.x) * 0.08;
-  cam.y += (player.y - canvas.height / 2 - cam.y) * 0.08;
+  cam.x += (player.x - canvas.width / 2 - cam.x) * 0.1;
+  cam.y += (player.y - canvas.height / 2 - cam.y) * 0.1;
 }
 
 function draw() {
   ctx.fillStyle = '#0a0a0a';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
-  if (!grid || !player) return;
+  if (!dungeon || !player) return;
 
+  var mapH = dungeon.length;
+  var mapW = dungeon[0] ? dungeon[0].length : 0;
   var sy = Math.max(0, Math.floor(cam.y / TILE));
-  var ey = Math.min(MAP_H, Math.ceil((cam.y + canvas.height) / TILE) + 1);
+  var ey = Math.min(mapH, Math.ceil((cam.y + canvas.height) / TILE) + 1);
   var sx = Math.max(0, Math.floor(cam.x / TILE));
-  var ex = Math.min(MAP_W, Math.ceil((cam.x + canvas.width) / TILE) + 1);
+  var ex = Math.min(mapW, Math.ceil((cam.x + canvas.width) / TILE) + 1);
 
   for (var y = sy; y < ey; y++) {
     for (var x = sx; x < ex; x++) {
-      var t = grid[y][x];
-      if (t === 0) continue;
+      var ch = dungeon[y][x];
       var px = x * TILE - cam.x, py = y * TILE - cam.y;
-      ctx.fillStyle = COLORS[t];
+      ctx.fillStyle = TILE_COLORS[ch] || TILE_COLORS['.'];
       ctx.fillRect(px, py, TILE, TILE);
+      if (ch === 'K') {
+        var pulse = Math.sin(Date.now() * 0.004) * 3;
+        ctx.fillStyle = '#ffd700';
+        ctx.beginPath(); ctx.arc(px + TILE/2, py + TILE/2, TILE/3 + pulse, 0, Math.PI * 2); ctx.fill();
+      }
+      if (ch === 'E') {
+        var p2 = Math.sin(Date.now() * 0.003) * 3;
+        ctx.fillStyle = hasKey ? '#e040fb' : '#662266';
+        ctx.beginPath(); ctx.arc(px + TILE/2, py + TILE/2, TILE/3 + p2, 0, Math.PI * 2); ctx.fill();
+      }
     }
-  }
-
-  // Key
-  if (keyPos && !hasKey) {
-    var kpx = keyPos.x * TILE - cam.x + TILE/2, kpy = keyPos.y * TILE - cam.y + TILE/2;
-    var pulse = Math.sin(Date.now() * 0.004) * 3;
-    ctx.fillStyle = '#ffd700';
-    ctx.beginPath(); ctx.arc(kpx, kpy, TILE/3 + pulse, 0, Math.PI * 2); ctx.fill();
-  }
-  // Exit
-  if (exitPos) {
-    var epx = exitPos.x * TILE - cam.x + TILE/2, epy = exitPos.y * TILE - cam.y + TILE/2;
-    var p2 = Math.sin(Date.now() * 0.003) * 3;
-    ctx.fillStyle = hasKey ? '#e040fb' : '#662266';
-    ctx.beginPath(); ctx.arc(epx, epy, TILE/3 + p2, 0, Math.PI * 2); ctx.fill();
   }
 
   // Player
@@ -268,16 +270,17 @@ function draw() {
   ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
 
   // Minimap
-  var ms = 3, mmw = MAP_W * ms, mmh = MAP_H * ms;
+  var ms = 3, mmw = mapW * ms, mmh = mapH * ms;
   ctx.fillStyle = 'rgba(0,0,0,0.6)';
   ctx.fillRect(canvas.width - mmw - 16, 12, mmw + 8, mmh + 8);
-  for (var my = 0; my < MAP_H; my++) for (var mx = 0; mx < MAP_W; mx++) {
-    if (grid[my][mx] === 0) continue;
-    ctx.fillStyle = grid[my][mx] === 1 ? '#444' : '#333';
+  for (var my = 0; my < mapH; my++) for (var mx = 0; mx < mapW; mx++) {
+    var mc = dungeon[my][mx];
+    if (mc === '#') continue;
+    var cl = '#444';
+    if (mc === 'K') cl = '#ffd700'; else if (mc === 'E') cl = '#e040fb'; else if (mc === 'S') cl = '#0a0';
+    ctx.fillStyle = cl;
     ctx.fillRect(canvas.width - mmw - 12 + mx * ms, 16 + my * ms, ms - 1, ms - 1);
   }
-  if (keyPos && !hasKey) { ctx.fillStyle = '#ffd700'; ctx.fillRect(canvas.width - mmw - 12 + keyPos.x * ms, 16 + keyPos.y * ms, ms, ms); }
-  if (exitPos) { ctx.fillStyle = '#e040fb'; ctx.fillRect(canvas.width - mmw - 12 + exitPos.x * ms, 16 + exitPos.y * ms, ms, ms); }
   var pmx = Math.floor(player.x / TILE), pmy = Math.floor(player.y / TILE);
   ctx.fillStyle = '#00ff88';
   ctx.fillRect(canvas.width - mmw - 12 + pmx * ms - 1, 16 + pmy * ms - 1, ms + 1, ms + 1);
@@ -292,10 +295,7 @@ function loop(t) {
   requestAnimationFrame(loop);
 }
 
-document.getElementById('replay').addEventListener('click', function() {
-  generateDungeon();
-});
-
+document.getElementById('replay').addEventListener('click', function() { generateDungeon(); });
 generateDungeon().then(function() { requestAnimationFrame(loop); });
 </script>
 </body>
