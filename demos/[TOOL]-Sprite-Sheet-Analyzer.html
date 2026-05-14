@@ -360,8 +360,10 @@
             const rowsCount = (s.imageH > 0 && s.rowHeight > 0)
               ? Math.max(1, Math.floor((s.imageH - s.offsetY) / s.rowHeight))
               : 5;
-            const labels = ['IDLE', 'WALK', 'RUN', 'JUMP', 'ATTACK 1'];
-            const rowSpec = labels.slice(0, rowsCount).map((l, i) => `  Row ${i}: ${l}`).join('\n');
+            const labels = ['IDLE', 'WALK', 'RUN', 'JUMP', 'ATTACK 1', 'ATTACK 2', 'HURT', 'DEATH', 'CAST', 'CROUCH', 'CLIMB', 'FALL', 'BLOCK'];
+            const rowSpec = Array.from({ length: rowsCount }, (_, i) =>
+              `  Row ${i}: ${labels[i] || 'ROW ' + i}`
+            ).join('\n');
             return [
               `Generate a 2D pixel-art sprite sheet of "girl with long hair".`,
               '',
