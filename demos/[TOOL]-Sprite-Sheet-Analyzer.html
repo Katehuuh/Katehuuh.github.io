@@ -755,6 +755,7 @@
                   setImageDimensions({ width: img.width, height: img.height });
                   handleReset();
                   setIsLoading(false);
+                  setTimeout(() => handleAutoAdjust(img), 100);
                 };
                 img.onerror = () => {
                   setIsLoading(false);
