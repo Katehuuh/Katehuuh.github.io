@@ -124,7 +124,7 @@ async function askLLMForSpec() {
           { role: 'system', content: 'Output valid JSON only. No markdown, no explanation.' },
           { role: 'user', content: prompt }
         ],
-        max_tokens: 500,
+        max_tokens: 32000,
         temperature: 0.8,
         model: 'openai',
       }),
