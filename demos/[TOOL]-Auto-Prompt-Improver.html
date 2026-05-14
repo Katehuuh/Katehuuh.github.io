@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Prompt Gallery</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='80' font-size='80'%3E%F0%9F%93%9D%3C/text%3E%3C/svg%3E">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root { --bg: #0d1117; --surface: #161b22; --border: #30363d; --text: #e6edf3; --muted: #8b949e; --accent: #58a6ff; --green: #3fb950; }
+html, body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; min-height: 100vh; }
+.container { max-width: 800px; margin: 0 auto; padding: 2rem 1.5rem; }
+h1 { font-size: 1.8rem; font-weight: 700; margin-bottom: 0.4rem; }
+.subtitle { color: var(--muted); font-size: 0.95rem; margin-bottom: 2rem; line-height: 1.5; }
+
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; margin-bottom: 1.5rem; overflow: hidden; }
+.card-header { display: flex; justify-content: space-between; align-items: center; padding: 1rem 1.25rem; cursor: pointer; user-select: none; }
+.card-header:hover { background: rgba(255,255,255,0.02); }
+.card-title { font-weight: 600; font-size: 1.1rem; }
+.card-tag { font-size: 0.75rem; padding: 2px 8px; border-radius: 99px; background: rgba(88,166,255,0.15); color: var(--accent); }
+.card-arrow { color: var(--muted); transition: transform 0.2s; font-size: 1.2rem; }
+.card.open .card-arrow { transform: rotate(90deg); }
+.card-body { display: none; padding: 0 1.25rem 1.25rem; }
+.card.open .card-body { display: block; }
+
+.prompt-box { background: #0d1117; border: 1px solid var(--border); border-radius: 8px; padding: 1rem; font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace; font-size: 0.82rem; line-height: 1.6; white-space: pre-wrap; word-break: break-word; color: #c9d1d9; max-height: 60vh; overflow-y: auto; position: relative; }
+.prompt-box .placeholder { color: #f0883e; font-weight: 600; }
+.prompt-box .xml-tag { color: #7ee787; }
+.prompt-box .section-label { color: #d2a8ff; font-weight: 600; }
+
+.copy-btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; background: var(--accent); color: #0d1117; border: none; border-radius: 6px; font-weight: 600; font-size: 0.85rem; cursor: pointer; margin-top: 0.75rem; transition: background 0.15s; }
+.copy-btn:hover { background: #79c0ff; }
+.copy-btn.copied { background: var(--green); }
+
+.note { font-size: 0.8rem; color: var(--muted); margin-top: 0.75rem; line-height: 1.5; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Prompt Gallery</h1>
+  <p class="subtitle">Production-ready prompts. Click to expand, copy, and paste into any LLM chat. Replace the <code style="color:#f0883e;">[BRACKETED]</code> placeholders with your content.</p>
+
+  <div class="card open" id="card-self-improve">
+    <div class="card-header" onclick="toggleCard('card-self-improve')">
+      <div>
+        <div class="card-title">Self-Improving Prompt Engineer</div>
+        <div style="color:var(--muted);font-size:0.8rem;margin-top:2px;">Iterative self-testing loop that refines a prompt until it reliably produces the expected output.</div>
+      </div>
+      <span class="card-tag">COT + XML</span>
+      <span class="card-arrow">&#9654;</span>
+    </div>
+    <div class="card-body">
+      <div class="prompt-box" id="prompt-self-improve"></div>
+      <button class="copy-btn" onclick="copyPrompt('self-improve')">Copy to clipboard</button>
+      <p class="note">Works in a single chat. The model generates a prompt, answers it without looking at the expected output, evaluates the gap, and iterates. If it has access to subagents or tool-use, it can delegate step 2 for a more honest evaluation.</p>
+    </div>
+  </div>
+
+</div>
+
+<script>
+var PROMPTS = {};
+
+PROMPTS['self-improve'] = `You are an expert prompt engineer. Given a task description and the expected result, your job is to craft the optimal prompt that would make any LLM produce that result.
+
+<task>
+Instruction: [INSTRUCTION]
+Context: [INPUT — optional, delete this line if none]
+Expected output: [GROUND TRUTH — the ideal answer you want a prompt to produce]
+</task>
+
+Follow this self-improvement methodology. Each round you generate a prompt, test it, evaluate, and iterate. Continue until the prompt reliably produces output matching the expected result.
+
+Round 1:
+
+<prompt-1>
+Write your best first attempt at a prompt here. It must be self-contained — a stranger reading only this prompt (plus the context if any) should produce the expected output without ever seeing it. Do not embed, quote, or paraphrase the expected output inside the prompt.
+</prompt-1>
+
+<answer-1>
+Now answer the prompt above as if you were a completely fresh LLM seeing it for the first time. While writing this answer, deliberately set aside your knowledge of the expected output — answer only from the prompt's instructions. Be honest; a biased answer defeats the purpose.
+</answer-1>
+
+<evaluation-1>
+Compare your answer to the expected output:
+- What matched
+- What diverged and why
+- Specific changes to make in the next prompt iteration
+- Score: X/10
+</evaluation-1>
+
+If score is below 9, continue to round 2 with <prompt-2>, <answer-2>, <evaluation-2>, and so on. Each new prompt must try a genuinely different approach — not just minor rewording.
+
+Stop when score >= 9/10. Output the final winning prompt clearly labeled:
+
+<final-prompt>
+[The prompt that scored 9+]
+</final-prompt>
+
+---
+Additional rules:
+- The prompt must be generalizable. Never hardcode the expected answer or use examples that only work for this specific input.
+- Each iteration must attempt a different prompting strategy (e.g., role-play, step-by-step decomposition, output format constraints, few-shot with unrelated examples, chain-of-thought, structured output schema).
+- If you have access to a separate LLM call, subagent, or tool-use capability, use that for the <answer-N> step instead of self-answering — this prevents unconscious bias toward the expected output and gives a more honest evaluation.`;
+
+function escapeHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function highlightPrompt(text) {
+  var html = escapeHtml(text);
+  // Highlight [PLACEHOLDERS]
+  html = html.replace(/\[([A-Z][A-Z\s\-—,]+?)\]/g, '<span class="placeholder">[$1]</span>');
+  // Highlight <xml-tags>
+  html = html.replace(/&lt;(\/?)([\w-]+)(&gt;)/g, '<span class="xml-tag">&lt;$1$2&gt;</span>');
+  // Highlight section labels (lines starting with - or words before :)
+  html = html.replace(/^(Round \d+:)/gm, '<span class="section-label">$1</span>');
+  html = html.replace(/^(Additional rules:)/gm, '<span class="section-label">$1</span>');
+  html = html.replace(/^(Stop when)/gm, '<span class="section-label">$1</span>');
+  return html;
+}
+
+// Render prompts
+Object.keys(PROMPTS).forEach(function(key) {
+  var el = document.getElementById('prompt-' + key);
+  if (el) el.innerHTML = highlightPrompt(PROMPTS[key]);
+});
+
+function toggleCard(id) {
+  document.getElementById(id).classList.toggle('open');
+}
+
+function copyPrompt(key) {
+  var text = PROMPTS[key];
+  navigator.clipboard.writeText(text).then(function() {
+    var btns = document.querySelectorAll('.copy-btn');
+    btns.forEach(function(b) {
+      if (b.onclick.toString().indexOf(key) !== -1) {
+        b.textContent = 'Copied!';
+        b.classList.add('copied');
+        setTimeout(function() { b.textContent = 'Copy to clipboard'; b.classList.remove('copied'); }, 1500);
+      }
+    });
+  });
+}
+</script>
+</body>
+</html>
