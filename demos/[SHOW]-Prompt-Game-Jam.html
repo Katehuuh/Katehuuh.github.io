@@ -479,7 +479,10 @@
     player.vel.set(0, 0, 0);
     player.boost = BOOST_MAX;
     player.pos.set((TRACK_INNER + TRACK_OUTER) / 2, 0, 4);
-    player.rot.y = -Math.PI / 2;
+    // rot.y=0 → forward is (sin(0), cos(0)) = (0, +Z) → tangent to
+    // the circular track at the 3-o'clock spawn point. The old -PI/2
+    // pointed toward -X (track center), spawning the car sideways.
+    player.rot.y = 0;
     updateHud();
   }
 
