@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HF Space Color Picker</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='80' font-size='80'%3E%F0%9F%8E%A8%3C/text%3E%3C/svg%3E">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #0d1117; --surface: #161b22; --border: #30363d;
+  --text: #e6edf3; --muted: #8b949e; --accent: #58a6ff;
+}
+html, body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; min-height: 100vh; }
+
+.container { max-width: 960px; margin: 0 auto; padding: 2rem 1.5rem; }
+
+header { margin-bottom: 2rem; }
+h1 { font-size: 1.75rem; font-weight: 700; margin-bottom: 0.4rem; }
+h1 .emoji { font-size: 1.5rem; }
+.subtitle { color: var(--muted); font-size: 0.95rem; margin-bottom: 1.25rem; line-height: 1.5; }
+
+.input-row { display: flex; gap: 0.75rem; margin-bottom: 0.75rem; }
+.input-row input {
+  flex: 1; padding: 0.6rem 0.85rem;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 0.5rem;
+  color: var(--text); font-size: 0.95rem; outline: none;
+}
+.input-row input:focus { border-color: var(--accent); }
+.input-row button {
+  padding: 0.6rem 1.2rem; border: none; border-radius: 0.5rem;
+  background: #238636; color: #fff; font-weight: 600; font-size: 0.95rem;
+  cursor: pointer; white-space: nowrap; transition: background 0.15s;
+}
+.input-row button:hover { background: #2ea043; }
+.input-row button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+#status { font-size: 0.85rem; color: var(--muted); min-height: 1.2em; }
+#status.error { color: #f85149; }
+
+details {
+  margin-bottom: 2rem; border: 1px solid var(--border);
+  border-radius: 0.75rem; overflow: hidden;
+}
+summary {
+  cursor: pointer; padding: 0.85rem 1rem;
+  font-size: 1.15rem; font-weight: 700;
+  background: var(--surface); user-select: none;
+  list-style: none;
+}
+summary::-webkit-details-marker { display: none; }
+summary::before { content: '▸ '; transition: transform 0.15s; display: inline-block; }
+details[open] > summary::before { content: '▾ '; }
+
+.section-title { font-size: 1.15rem; font-weight: 700; margin-bottom: 1rem; }
+
+.card-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1rem; padding: 1rem;
+}
+
+.color-card {
+  position: relative; border-radius: 0.75rem; overflow: hidden;
+  height: 120px; cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+.color-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.4); }
+.color-card .overlay {
+  background: linear-gradient(to bottom right, rgba(0,0,0,0.2), transparent);
+  position: absolute; left: 0; top: 0; height: 100%; width: 50%;
+}
+.color-card .card-header {
+  position: absolute; top: 0; left: 0; right: 0;
+  display: flex; align-items: center; gap: 0.25rem;
+  padding: 0.5rem 0.75rem; font-size: 0.7rem;
+  background: linear-gradient(to top, rgba(0,0,0,0.04), transparent 10%);
+  background-color: rgba(0,0,0,0.06);
+  border-radius: 0 0 0.75rem 0.75rem;
+}
+.color-card .badge {
+  display: inline-flex; align-items: center; padding: 1px 5px;
+  border-radius: 2px; border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.12); color: #fff; opacity: 0.9;
+  font-family: ui-monospace, monospace; font-size: 0.7rem; line-height: 1.4;
+}
+.color-card .card-body {
+  position: absolute; bottom: 34px; left: 0; right: 0;
+  padding: 0 0.85rem;
+}
+.color-card h4 {
+  color: #fff; font-size: 0.95rem; font-weight: 600;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.color-card .color-label {
+  color: rgb(229 231 235); font-size: 0.8rem; opacity: 0.85;
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.3));
+  margin-top: 2px;
+}
+.color-card .card-footer {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  padding: 0.5rem 0.75rem; font-size: 0.7rem;
+  background-color: rgba(0,0,0,0.06);
+  border-radius: 0.75rem;
+  color: rgb(209 213 219); font-family: ui-monospace, monospace;
+}
+.color-card .spaces-list {
+  font-size: 0.65rem; color: #fde68a; margin-top: 2px;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.6);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.color-card.copied .card-footer::after {
+  content: 'Copied!'; position: absolute; right: 0.75rem; top: 0.5rem;
+  color: #4ade80; font-weight: 600;
+}
+
+.empty-state {
+  padding: 2rem; text-align: center; color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.copy-hint {
+  font-size: 0.8rem; color: var(--muted); margin-bottom: 1rem;
+  padding: 0 1rem;
+}
+
+@media (max-width: 640px) {
+  .card-grid { grid-template-columns: 1fr; }
+  .input-row { flex-direction: column; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1><span class="emoji">🎨</span> HuggingFace Space Color Picker</h1>
+    <p class="subtitle">Preview and discover unique color gradient combinations for your HF Spaces.<br>Click any card to copy <code>colorFrom</code> / <code>colorTo</code> YAML to clipboard.</p>
+    <div class="input-row">
+      <input type="text" id="orgs" value="Luminia,WeReCooking" placeholder="Orgs / usernames (comma-separated)">
+      <button id="scan">🔄 Scan Colors</button>
+    </div>
+    <div id="status">Ready. Press Scan to fetch color usage.</div>
+  </header>
+
+  <main id="results" style="display:none;">
+    <details open id="used-section">
+      <summary>📋 Currently Used Combinations (<span id="used-count">0</span>)</summary>
+      <p class="copy-hint">Click a card to copy its YAML frontmatter snippet.</p>
+      <div class="card-grid" id="used-grid"></div>
+    </details>
+
+    <section style="margin-top: 2rem;">
+      <h2 class="section-title">✨ Available Unique Combinations (<span id="avail-count">0</span>)</h2>
+      <p class="copy-hint">These color pairs are not yet used by the scanned orgs.</p>
+      <div class="card-grid" id="avail-grid"></div>
+    </section>
+  </main>
+</div>
+
+<script>
+"use strict";
+
+const VALID_COLORS = ['red', 'yellow', 'green', 'blue', 'indigo', 'purple', 'pink', 'gray'];
+const COLOR_MAP = {
+  red:    'rgb(220 38 38)',
+  yellow: 'rgb(234 179 8)',
+  green:  'rgb(22 163 74)',
+  blue:   'rgb(37 99 235)',
+  indigo: 'rgb(79 70 229)',
+  purple: 'rgb(147 51 234)',
+  pink:   'rgb(236 72 153)',
+  gray:   'rgb(107 114 128)'
+};
+
+const statusEl = document.getElementById('status');
+const scanBtn  = document.getElementById('scan');
+const orgsEl   = document.getElementById('orgs');
+const results  = document.getElementById('results');
+
+function setStatus(msg, isError) {
+  statusEl.textContent = msg;
+  statusEl.className = isError ? 'error' : '';
+}
+
+function createCard(cf, ct, title, status, spacesText) {
+  const fromRgb = COLOR_MAP[cf] || COLOR_MAP.gray;
+  const toRgb   = COLOR_MAP[ct] || COLOR_MAP.gray;
+  const card = document.createElement('div');
+  card.className = 'color-card';
+  card.style.background = `linear-gradient(to bottom right, ${fromRgb}, ${toRgb})`;
+  card.title = `${cf} → ${ct}\nClick to copy YAML`;
+  card.innerHTML = `
+    <div class="overlay"></div>
+    <div class="card-header"><span class="badge">${status}</span></div>
+    <div class="card-body">
+      <h4>${title}</h4>
+      <div class="color-label">${cf} → ${ct}</div>
+      ${spacesText ? `<div class="spaces-list">${spacesText}</div>` : ''}
+    </div>
+    <div class="card-footer">Click to copy</div>
+  `;
+  card.addEventListener('click', () => {
+    const yaml = `colorFrom: ${cf}\ncolorTo: ${ct}`;
+    navigator.clipboard.writeText(yaml).then(() => {
+      card.classList.add('copied');
+      setTimeout(() => card.classList.remove('copied'), 1200);
+    });
+  });
+  return card;
+}
+
+async function fetchSpacesList(org) {
+  const all = [];
+  let url = `https://huggingface.co/api/spaces?author=${encodeURIComponent(org)}&limit=100`;
+  while (url) {
+    const r = await fetch(url);
+    if (!r.ok) break;
+    const data = await r.json();
+    for (const s of data) {
+      const name = s.id.split('/').pop();
+      all.push({ name, org, private: s.private });
+    }
+    const link = r.headers.get('link');
+    const next = link && link.match(/<([^>]+)>;\s*rel="next"/);
+    url = next ? next[1] : null;
+  }
+  return all;
+}
+
+async function fetchReadmeColors(org, spaceName) {
+  try {
+    const url = `https://huggingface.co/spaces/${org}/${spaceName}/raw/main/README.md`;
+    const r = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    if (!r.ok) return null;
+    const text = await r.text();
+    let colorFrom = null, colorTo = null;
+    for (const line of text.split('\n')) {
+      if (line.startsWith('colorFrom:')) colorFrom = line.split(':')[1].trim();
+      else if (line.startsWith('colorTo:')) colorTo = line.split(':')[1].trim();
+      if (colorFrom && colorTo) break;
+    }
+    if (colorFrom && colorTo && VALID_COLORS.includes(colorFrom) && VALID_COLORS.includes(colorTo)) {
+      return { colorFrom, colorTo };
+    }
+  } catch {}
+  return null;
+}
+
+async function runWithConcurrency(tasks, concurrency) {
+  const results = [];
+  let idx = 0;
+  async function worker() {
+    while (idx < tasks.length) {
+      const i = idx++;
+      results[i] = await tasks[i]();
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, tasks.length) }, worker));
+  return results;
+}
+
+async function scanColors() {
+  const orgsStr = orgsEl.value.trim();
+  if (!orgsStr) { setStatus('Enter at least one org/username.', true); return; }
+  const orgs = orgsStr.split(',').map(s => s.trim()).filter(Boolean);
+
+  scanBtn.disabled = true;
+  results.style.display = 'none';
+  setStatus(`Fetching space lists for ${orgs.length} org(s)...`);
+
+  const allSpaces = [];
+  for (const org of orgs) {
+    try {
+      const spaces = await fetchSpacesList(org);
+      allSpaces.push(...spaces.filter(s => !s.private));
+      setStatus(`${org}: ${spaces.length} spaces found. Total: ${allSpaces.length}`);
+    } catch (e) {
+      setStatus(`Error fetching ${org}: ${e.message}`, true);
+    }
+  }
+
+  if (allSpaces.length === 0) {
+    setStatus('No public spaces found for the given orgs.', true);
+    scanBtn.disabled = false;
+    return;
+  }
+
+  setStatus(`Scanning ${allSpaces.length} spaces for color metadata...`);
+  const colorToSpaces = {};
+  const usedColors = [];
+  let done = 0;
+
+  const tasks = allSpaces.map(s => async () => {
+    const c = await fetchReadmeColors(s.org, s.name);
+    done++;
+    if (done % 5 === 0 || done === allSpaces.length) {
+      setStatus(`Scanned ${done} / ${allSpaces.length} spaces...`);
+    }
+    if (c) {
+      const key = `${c.colorFrom},${c.colorTo}`;
+      const label = `${s.org}/${s.name}`;
+      if (!colorToSpaces[key]) colorToSpaces[key] = [];
+      colorToSpaces[key].push(label);
+      usedColors.push(c);
+    }
+  });
+
+  await runWithConcurrency(tasks, 6);
+
+  const usedSet = new Set(usedColors.map(c => `${c.colorFrom},${c.colorTo}`));
+  const usedUnique = [...usedSet].map(k => k.split(','));
+  const allCombos = [];
+  for (const cf of VALID_COLORS) for (const ct of VALID_COLORS) allCombos.push([cf, ct]);
+  const available = allCombos.filter(([cf, ct]) => !usedSet.has(`${cf},${ct}`));
+
+  const usedGrid  = document.getElementById('used-grid');
+  const availGrid = document.getElementById('avail-grid');
+  usedGrid.innerHTML = '';
+  availGrid.innerHTML = '';
+
+  document.getElementById('used-count').textContent = usedUnique.length;
+  document.getElementById('avail-count').textContent = available.length;
+
+  for (const [cf, ct] of usedUnique) {
+    const spaces = colorToSpaces[`${cf},${ct}`] || [];
+    usedGrid.appendChild(createCard(cf, ct, `${cf} → ${ct}`, 'Used', spaces.join(', ')));
+  }
+
+  for (const [cf, ct] of available) {
+    availGrid.appendChild(createCard(cf, ct, `${cf} → ${ct}`, 'Available', ''));
+  }
+
+  results.style.display = 'block';
+  setStatus(`Done. ${usedUnique.length} used, ${available.length} available out of ${allCombos.length} total.`);
+  scanBtn.disabled = false;
+}
+
+scanBtn.addEventListener('click', scanColors);
+orgsEl.addEventListener('keydown', e => { if (e.key === 'Enter') scanColors(); });
+</script>
+</body>
+</html>
