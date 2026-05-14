@@ -51,7 +51,10 @@ h1 { font-size: 1.8rem; font-weight: 700; margin-bottom: 0.4rem; }
     </div>
     <div class="card-body">
       <div class="prompt-box" id="prompt-self-improve"></div>
-      <button class="copy-btn" onclick="copyPrompt('self-improve')">Copy to clipboard</button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:0.75rem;">
+        <button class="copy-btn" onclick="copyPrompt('self-improve')">Copy template</button>
+        <button class="copy-btn" style="background:#8b5cf6;" onclick="copyExample('self-improve')">Copy filled example</button>
+      </div>
       <p class="note">Works in a single chat. The model generates a prompt, answers it without looking at the expected output, evaluates the gap, and iterates. If it has access to subagents or tool-use, it can delegate step 2 for a more honest evaluation.</p>
     </div>
   </div>
@@ -103,6 +106,13 @@ Additional rules:
 - Each iteration must attempt a different prompting strategy (e.g., role-play, step-by-step decomposition, output format constraints, few-shot with unrelated examples, chain-of-thought, structured output schema).
 - If you have access to a separate LLM call, subagent, or tool-use capability, use that for the <answer-N> step instead of self-answering — this prevents unconscious bias toward the expected output and gives a more honest evaluation.`;
 
+// Pre-filled examples so users can see what a completed prompt looks like
+var EXAMPLES = {};
+EXAMPLES['self-improve'] = PROMPTS['self-improve']
+  .replace('[INSTRUCTION]', 'Summarize the following article into exactly 3 bullet points, each under 15 words.')
+  .replace('[INPUT — optional, delete this line if none]', 'The European Space Agency announced today that its new Ariel telescope, designed to study the atmospheres of exoplanets, has passed its critical design review and will launch in 2029. The mission will observe over 1,000 planets orbiting distant stars, analyzing their chemical composition, temperature, and weather patterns. Scientists hope the data will help determine which planets might be habitable.')
+  .replace('[GROUND TRUTH — the ideal answer you want a prompt to produce]', '- ESA\'s Ariel telescope passed its critical design review, launching 2029.\n- It will study atmospheres of 1,000+ exoplanets for composition and weather.\n- Goal: identify which distant planets could support life.');
+
 function escapeHtml(s) {
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
@@ -130,18 +140,19 @@ function toggleCard(id) {
   document.getElementById(id).classList.toggle('open');
 }
 
+function flashBtn(btn) {
+  var orig = btn.textContent;
+  btn.textContent = 'Copied!';
+  btn.classList.add('copied');
+  setTimeout(function() { btn.textContent = orig; btn.classList.remove('copied'); }, 1500);
+}
 function copyPrompt(key) {
-  var text = PROMPTS[key];
-  navigator.clipboard.writeText(text).then(function() {
-    var btns = document.querySelectorAll('.copy-btn');
-    btns.forEach(function(b) {
-      if (b.onclick.toString().indexOf(key) !== -1) {
-        b.textContent = 'Copied!';
-        b.classList.add('copied');
-        setTimeout(function() { b.textContent = 'Copy to clipboard'; b.classList.remove('copied'); }, 1500);
-      }
-    });
-  });
+  var btn = event.target;
+  navigator.clipboard.writeText(PROMPTS[key]).then(function() { flashBtn(btn); });
+}
+function copyExample(key) {
+  var btn = event.target;
+  navigator.clipboard.writeText(EXAMPLES[key]).then(function() { flashBtn(btn); });
 }
 </script>
 </body>
