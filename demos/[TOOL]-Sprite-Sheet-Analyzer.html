@@ -356,23 +356,22 @@
           // Replaced by buildRemixPrompt(state) below: text-to-image generation (NOT edit),
           // precise pixel layout from the current sliders, bg-color reservation clause so
           // strip-bg has a uniform target post-generation.
+          const PROMPT_ROWS = 8;
+          const PROMPT_COLS = 6;
           const buildRemixPrompt = (s) => {
-            const cols = (s.imageW > 0 && s.spriteWidth > 0)
-              ? Math.max(1, Math.floor((s.imageW - s.offsetX - s.labelWidth) / s.spriteWidth))
-              : 6;
-            const rows = (s.imageH > 0 && s.rowHeight > 0)
-              ? Math.max(1, Math.floor((s.imageH - s.offsetY) / s.rowHeight))
-              : 5;
+            const cw = s.spriteWidth || 192;
+            const ch = s.rowHeight || 192;
+            const canvasW = PROMPT_COLS * cw;
+            const canvasH = PROMPT_ROWS * ch;
             const bg = s.bgColor.toUpperCase();
             return 'Create a 2D pixel-art sprite sheet: "girl with long hair".\n'
               + '\n'
               + 'Character: same face, hair, and outfit in all frames; full body visible; no cropping; consistent scale.\n'
               + 'Cells: clear frame separation; no text, labels, or frame numbers inside sprite cells.\n'
               + '\n'
-              + 'Canvas: ' + s.imageW + ' x ' + s.imageH + ' px.\n'
-              + 'Grid: 8 rows x ' + cols + ' columns; each cell ' + s.spriteWidth + ' x ' + s.rowHeight + ' px.\n'
+              + 'Canvas: ' + canvasW + ' x ' + canvasH + ' px.\n'
+              + 'Grid: ' + PROMPT_ROWS + ' rows x ' + PROMPT_COLS + ' columns; each cell ' + cw + ' x ' + ch + ' px.\n'
               + 'Background: solid uniform ' + bg + '; no gradient or noise.\n'
-              + (s.labelWidth > 0 ? 'Left label column: ' + s.labelWidth + ' px wide; keep row labels outside sprite cells.\n' : '')
               + '\n'
               + 'Row 1: IDLE\n'
               + 'Row 2: RUN RIGHT\n'
