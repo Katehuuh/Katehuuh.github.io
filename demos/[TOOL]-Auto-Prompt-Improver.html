@@ -31,17 +31,27 @@ h1 { font-size: 1.8rem; font-weight: 700; margin-bottom: 0.4rem; }
   pointer-events: none;
 }
 .card.open .card-body { max-height: none; overflow: visible; pointer-events: auto; }
-.card:not(.open) .card-body .copy-btn,
+.card:not(.open) .card-body .copy-bar,
 .card:not(.open) .card-body .note { display: none; }
 
-.prompt-box { background: #0d1117; border: 1px solid var(--border); border-radius: 8px; padding: 1rem; font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace; font-size: 0.82rem; line-height: 1.6; white-space: pre-wrap; word-break: break-word; color: #c9d1d9; max-height: 60vh; overflow-y: auto; position: relative; }
+.prompt-wrap { position: relative; }
+.prompt-box { background: #0d1117; border: 1px solid var(--border); border-radius: 8px; padding: 1rem; font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace; font-size: 0.82rem; line-height: 1.6; white-space: pre-wrap; word-break: break-word; color: #c9d1d9; max-height: 60vh; overflow-y: auto; }
 .prompt-box .placeholder { color: #f0883e; font-weight: 600; }
 .prompt-box .xml-tag { color: #7ee787; }
 .prompt-box .section-label { color: #d2a8ff; font-weight: 600; }
-
-.copy-btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; background: var(--accent); color: #0d1117; border: none; border-radius: 6px; font-weight: 600; font-size: 0.85rem; cursor: pointer; margin-top: 0.75rem; transition: background 0.15s; }
-.copy-btn:hover { background: #79c0ff; }
-.copy-btn.copied { background: var(--green); }
+/* Inline copy buttons pinned to top-right of the code block */
+.copy-bar { position: absolute; top: 6px; right: 6px; display: flex; gap: 4px; z-index: 2; }
+.copy-bar button {
+  padding: 3px 8px; font-size: 0.7rem; font-weight: 600; border: none; border-radius: 4px;
+  cursor: pointer; opacity: 0.5; transition: opacity 0.15s, background 0.15s;
+  color: #fff; line-height: 1.3;
+}
+.prompt-wrap:hover .copy-bar button { opacity: 1; }
+.copy-bar .cp-tmpl { background: #30363d; }
+.copy-bar .cp-tmpl:hover { background: var(--accent); color: #0d1117; }
+.copy-bar .cp-ex { background: #30363d; }
+.copy-bar .cp-ex:hover { background: #8b5cf6; }
+.copy-bar button.copied { background: var(--green) !important; opacity: 1; }
 
 .note { font-size: 0.8rem; color: var(--muted); margin-top: 0.75rem; line-height: 1.5; }
 </style>
@@ -60,12 +70,14 @@ h1 { font-size: 1.8rem; font-weight: 700; margin-bottom: 0.4rem; }
       <span class="card-arrow">&#9654;</span>
     </div>
     <div class="card-body" onclick="if(!this.parentElement.classList.contains('open'))toggleCard('card-self-improve')">
-      <div class="prompt-box" id="prompt-self-improve"></div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:0.75rem;">
-        <button class="copy-btn" onclick="event.stopPropagation();copyPrompt('self-improve')">Copy template</button>
-        <button class="copy-btn" style="background:#8b5cf6;" onclick="event.stopPropagation();copyExample('self-improve')">Copy filled example</button>
+      <div class="prompt-wrap">
+        <div class="copy-bar">
+          <button class="cp-tmpl" onclick="event.stopPropagation();copyPrompt('self-improve',this)">Copy</button>
+          <button class="cp-ex" onclick="event.stopPropagation();copyExample('self-improve',this)">Example</button>
+        </div>
+        <div class="prompt-box" id="prompt-self-improve"></div>
       </div>
-      <p class="note">Works in a single chat. The model generates a prompt, answers it without looking at the expected output, evaluates the gap, and iterates. If it has access to subagents or tool-use, it can delegate step 2 for a more honest evaluation.</p>
+      <p class="note">Works in a single chat. The model generates a prompt, answers it without looking at the expected output, evaluates the gap, and iterates.</p>
     </div>
   </div>
 
@@ -79,9 +91,9 @@ h1 { font-size: 1.8rem; font-weight: 700; margin-bottom: 0.4rem; }
       <span class="card-arrow">&#9654;</span>
     </div>
     <div class="card-body" onclick="if(!this.parentElement.classList.contains('open'))toggleCard('card-racenn')">
-      <div class="prompt-box" id="prompt-racenn"></div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:0.75rem;">
-        <button class="copy-btn" onclick="event.stopPropagation();copyPrompt('racenn')">Copy prompt</button>
+      <div class="prompt-wrap">
+        <div class="copy-bar"><button class="cp-tmpl" onclick="event.stopPropagation();copyPrompt('racenn',this)">Copy</button></div>
+        <div class="prompt-box" id="prompt-racenn"></div>
       </div>
     </div>
   </div>
@@ -96,9 +108,9 @@ h1 { font-size: 1.8rem; font-weight: 700; margin-bottom: 0.4rem; }
       <span class="card-arrow">&#9654;</span>
     </div>
     <div class="card-body" onclick="if(!this.parentElement.classList.contains('open'))toggleCard('card-spaceship')">
-      <div class="prompt-box" id="prompt-spaceship"></div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:0.75rem;">
-        <button class="copy-btn" onclick="event.stopPropagation();copyPrompt('spaceship')">Copy prompt</button>
+      <div class="prompt-wrap">
+        <div class="copy-bar"><button class="cp-tmpl" onclick="event.stopPropagation();copyPrompt('spaceship',this)">Copy</button></div>
+        <div class="prompt-box" id="prompt-spaceship"></div>
       </div>
     </div>
   </div>
@@ -113,9 +125,9 @@ h1 { font-size: 1.8rem; font-weight: 700; margin-bottom: 0.4rem; }
       <span class="card-arrow">&#9654;</span>
     </div>
     <div class="card-body" onclick="if(!this.parentElement.classList.contains('open'))toggleCard('card-humanoid')">
-      <div class="prompt-box" id="prompt-humanoid"></div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:0.75rem;">
-        <button class="copy-btn" onclick="event.stopPropagation();copyPrompt('humanoid')">Copy prompt</button>
+      <div class="prompt-wrap">
+        <div class="copy-bar"><button class="cp-tmpl" onclick="event.stopPropagation();copyPrompt('humanoid',this)">Copy</button></div>
+        <div class="prompt-box" id="prompt-humanoid"></div>
       </div>
     </div>
   </div>
@@ -258,12 +270,10 @@ function flashBtn(btn) {
   btn.classList.add('copied');
   setTimeout(function() { btn.textContent = orig; btn.classList.remove('copied'); }, 1500);
 }
-function copyPrompt(key) {
-  var btn = event.target;
+function copyPrompt(key, btn) {
   navigator.clipboard.writeText(PROMPTS[key]).then(function() { flashBtn(btn); });
 }
-function copyExample(key) {
-  var btn = event.target;
+function copyExample(key, btn) {
   navigator.clipboard.writeText(EXAMPLES[key]).then(function() { flashBtn(btn); });
 }
 </script>
