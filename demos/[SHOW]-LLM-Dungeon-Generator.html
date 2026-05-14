@@ -8,40 +8,36 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
 html, body { height: 100%; background: #0a0a0a; color: #e0e0e0; overflow: hidden; font-family: -apple-system, system-ui, sans-serif; }
 canvas { display: block; image-rendering: pixelated; }
-#boot { position: fixed; inset: 0; z-index: 50; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #0a0a0a; gap: 14px; transition: opacity 0.4s; }
-#boot.done { opacity: 0; pointer-events: none; }
-#boot h1 { font-size: 1.8rem; }
-#boot .sub { color: #888; font-size: 0.9rem; text-align: center; max-width: 420px; line-height: 1.5; }
-#boot .bar-wrap { width: 300px; height: 6px; background: #222; border-radius: 3px; overflow: hidden; }
-#boot .bar { height: 100%; background: #9cdcfe; width: 0%; transition: width 0.3s; }
 #hud { position: fixed; top: 12px; left: 12px; z-index: 10; font-size: 14px; pointer-events: none; text-shadow: 1px 1px 3px rgba(0,0,0,0.8); }
 #hud .key-status { margin-top: 4px; }
-#generating { position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%); z-index: 20; background: rgba(0,0,0,0.8); padding: 16px 28px; border-radius: 10px; border: 1px solid #333; font-size: 1.1rem; display: none; }
-#generating.show { display: block; }
-#win { position: fixed; inset: 0; z-index: 30; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(0,0,0,0.7); display: none; }
+#overlay { position: fixed; inset: 0; z-index: 20; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(10,10,10,0.85); }
+#overlay.hidden { display: none; }
+#overlay .loader { width: 50px; height: 50px; border: 4px solid #333; border-top-color: #fff; border-radius: 50%; animation: spin 0.8s linear infinite; margin-bottom: 16px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+#overlay .msg { color: #aaa; font-size: 1rem; }
+#win { position: fixed; inset: 0; z-index: 30; display: none; flex-direction: column; align-items: center; justify-content: center; background: rgba(0,0,0,0.7); }
 #win.show { display: flex; }
 #win h1 { font-size: 3rem; color: #ffd700; text-shadow: 0 0 20px #ffd700; margin-bottom: 16px; }
 #win button { padding: 12px 28px; font-size: 1.1rem; background: #333; color: #fff; border: 1px solid #555; border-radius: 8px; cursor: pointer; }
 #win button:hover { background: #444; }
+#controls-hint { position: fixed; bottom: 12px; left: 50%; transform: translateX(-50%); z-index: 10; color: #666; font-size: 12px; pointer-events: none; }
 </style>
 </head>
 <body>
-<div id="boot">
-  <h1>LLM Dungeon Generator</h1>
-  <div class="sub">Loading Qwen3.5-2B via WebGPU. First visit downloads ~1.5 GB (cached after).</div>
-  <div class="bar-wrap"><div class="bar" id="bar"></div></div>
-  <div class="sub" id="boot-msg">Initializing...</div>
+<div id="overlay">
+  <div class="loader"></div>
+  <div class="msg" id="gen-msg">Generating dungeon...</div>
 </div>
 <div id="hud">
-  <div id="room-label">Dungeon</div>
+  <div id="room-label">LLM Dungeon</div>
   <div class="key-status">Key: <span id="key-icon">--</span></div>
 </div>
-<div id="generating" class=""><span id="gen-text">Generating dungeon...</span></div>
-<div id="win"><h1>You Win!</h1><button id="replay">Generate New Dungeon</button></div>
+<div id="win"><h1>You Win!</h1><button id="replay">New Dungeon</button></div>
+<div id="controls-hint">WASD / Arrow keys to move | Find the Key, then the Exit</div>
 <canvas id="c"></canvas>
 
-<script type="module">
-import * as webllm from "https://esm.run/@mlc-ai/web-llm";
+<script>
+"use strict";
 
 const TILE = 28;
 const PLAYER_SPEED = 160;
@@ -57,97 +53,124 @@ const ctx = canvas.getContext('2d');
 function resize() { canvas.width = innerWidth; canvas.height = innerHeight; }
 resize(); addEventListener('resize', resize);
 
-let engine = null;
 let dungeon = null;
 let player = null;
 let hasKey = false;
 let cam = { x: 0, y: 0 };
 const keys = {};
-addEventListener('keydown', e => { keys[e.code] = true; e.preventDefault(); });
-addEventListener('keyup', e => { keys[e.code] = false; });
+addEventListener('keydown', function(e) { keys[e.code] = true; e.preventDefault(); });
+addEventListener('keyup', function(e) { keys[e.code] = false; });
 
-async function initEngine() {
-  engine = await webllm.CreateMLCEngine("Qwen3.5-2B-q4f16_1-MLC", {
-    initProgressCallback: (r) => {
-      document.getElementById('bar').style.width = Math.round((r.progress || 0) * 100) + '%';
-      document.getElementById('boot-msg').textContent = r.text || 'Loading...';
-    },
-  });
-  document.getElementById('boot').classList.add('done');
+// Pollinations text API (same pattern as X-Toy-Clone, anonymous, no key)
+var POLLINATIONS_TEXT_URL = 'https://text.pollinations.ai/openai';
+var POLLINATIONS_TEXT_GET = 'https://text.pollinations.ai/';
+
+async function askLLM(prompt) {
+  // Try OpenAI-compat POST first, fall back to simple GET
+  try {
+    var res = await fetch(POLLINATIONS_TEXT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        messages: [
+          { role: 'system', content: 'You generate ASCII dungeon maps. Output ONLY the grid lines, no explanation, no markdown fences.' },
+          { role: 'user', content: prompt }
+        ],
+        max_tokens: 800,
+        temperature: 0.9,
+      }),
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!res.ok) throw new Error('POST ' + res.status);
+    var data = await res.json();
+    var text = data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+    if (text) return text.trim();
+  } catch (e) {
+    console.warn('Pollinations POST failed:', e.message);
+  }
+  // Fallback: simple GET (returns plain text)
+  try {
+    var url = POLLINATIONS_TEXT_GET + encodeURIComponent('Output ONLY an ASCII dungeon grid, no explanation. ' + prompt);
+    var res2 = await fetch(url, { signal: AbortSignal.timeout(12000) });
+    if (res2.ok) {
+      var t = await res2.text();
+      if (t && t.trim()) return t.trim();
+    }
+  } catch (e2) {
+    console.warn('Pollinations GET failed:', e2.message);
+  }
+  return null;
 }
 
 function fallbackDungeon() {
   return [
-    "############################",
-    "#S.....#,,,,#..............#",
-    "#......#,,,,#..............#",
-    "#......#,,,,#.....###.....#",
-    "#..###.#,,,,#.....#K#.....#",
-    "#......#,,,,,.....###.....#",
-    "#......#,,,,#..............#",
-    "####,###,,,,####,##########",
-    "#,,,,,,,,,,,,,,,,,,,,,,,,,,#",
-    "#,,,,,,,,,,,,,,,,,,,,,,,,,,#",
-    "####,###,,,,####,##########",
-    "#......#,,,,#..............#",
-    "#......#,,,,,.......####...#",
-    "#......#,,,,#.......#E.#...#",
-    "#......#,,,,#.......####...#",
-    "#S.....#,,,,#..............#",
-    "############################",
+    "##############################",
+    "#S.....#,,,,,,#.............E#",
+    "#......#,,,,,,#..............#",
+    "#......#,,,,,,#....####.....#",
+    "#..##..#,,,,,,#....#K.#.....#",
+    "#......#,,,,,,,.....####.....#",
+    "#......#,,,,,,#..............#",
+    "####,####,,,,####,###########",
+    "#,,,,,,,,,,,,,,,,,,,,,,,,,,,#",
+    "#,,,,,,,,,,,,,,,,,,,,,,,,,,,#",
+    "####,####,,,,####,###########",
+    "#......#,,,,,,#..............#",
+    "#......#,,,,,,,.............#",
+    "#......#,,,,,,#..............#",
+    "#......#,,,,,,#..............#",
+    "##############################",
   ];
 }
 
 async function generateDungeon() {
-  const genEl = document.getElementById('generating');
-  const genText = document.getElementById('gen-text');
-  genEl.classList.add('show');
-  genText.textContent = 'Asking LLM to generate dungeon...';
+  document.getElementById('overlay').classList.remove('hidden');
+  document.getElementById('gen-msg').textContent = 'Asking AI to generate dungeon...';
 
-  const prompt = `Generate an ASCII dungeon map. Use these characters:
-# = wall, . = room floor, , = corridor floor
-S = player start (exactly one), K = key (exactly one), E = exit (exactly one)
-Rules:
-- Map is 28 columns wide, 17 rows tall
-- Surround entire map with # walls
-- Create 3-5 rooms connected by corridors (,)
-- Rooms are open areas of . characters
-- S goes in one room, K in another, E in a third
-- Ensure a walkable path from S to K to E through corridors
-Output ONLY the 17 lines of 28 characters each. No explanation.`;
+  var prompt = 'Generate a dungeon room map as ASCII art.\n'
+    + 'Size: exactly 30 columns wide, 16 rows tall.\n'
+    + 'Characters: # = wall, . = room floor, , = corridor\n'
+    + 'S = start (one), K = key (one), E = exit (one)\n'
+    + 'Rules:\n'
+    + '- Border is all # walls\n'
+    + '- Create 3-5 rooms (areas of . characters) connected by , corridors\n'
+    + '- Place S in one room, K in a different room, E in a third room\n'
+    + '- There must be a walkable path from S to K to E\n'
+    + '- Add some interior walls (#) inside rooms for variety\n'
+    + 'Output ONLY the 16 lines of 30 characters. No explanation.';
 
-  try {
-    const result = await engine.chat.completions.create({
-      messages: [
-        { role: 'system', content: 'You output ASCII dungeon maps. Output ONLY the grid, nothing else.' },
-        { role: 'user', content: prompt }
-      ],
-      max_tokens: 600,
-      temperature: 1.0,
-      top_p: 0.95,
-    });
-    let text = result?.choices?.[0]?.message?.content || '';
-    if (text.includes('</think>')) text = text.split('</think>').pop();
-    text = text.trim();
-    const lines = text.split('\n').map(l => l.trim()).filter(l => l.length >= 10);
+  var text = await askLLM(prompt);
+  var lines = null;
 
-    if (lines.length >= 10 && validateMap(lines)) {
-      genEl.classList.remove('show');
-      return lines;
+  if (text) {
+    // Strip markdown fences if model wraps output
+    text = text.replace(/```[a-z]*\n?/g, '').replace(/```/g, '').trim();
+    var raw = text.split('\n').map(function(l) { return l.trim(); }).filter(function(l) { return l.length >= 10; });
+    if (raw.length >= 10) {
+      // Normalize: ensure only valid chars
+      lines = raw.map(function(row) {
+        return row.split('').map(function(ch) {
+          if ('#.,SKE'.indexOf(ch) !== -1) return ch;
+          return '.';
+        }).join('');
+      });
+      // Validate
+      var flat = lines.join('');
+      if (flat.indexOf('S') === -1 || flat.indexOf('K') === -1 || flat.indexOf('E') === -1) {
+        console.warn('LLM map missing S/K/E, using fallback');
+        lines = null;
+      }
     }
-  } catch (e) {
-    console.warn('LLM generation failed:', e);
   }
 
-  genText.textContent = 'LLM output invalid, using fallback...';
-  await new Promise(r => setTimeout(r, 800));
-  genEl.classList.remove('show');
-  return fallbackDungeon();
-}
+  if (!lines) {
+    document.getElementById('gen-msg').textContent = 'Using fallback dungeon...';
+    await new Promise(function(r) { setTimeout(r, 600); });
+    lines = fallbackDungeon();
+  }
 
-function validateMap(lines) {
-  const flat = lines.join('');
-  return flat.includes('S') && flat.includes('K') && flat.includes('E');
+  document.getElementById('overlay').classList.add('hidden');
+  return lines;
 }
 
 function startGame(layout) {
@@ -156,9 +179,9 @@ function startGame(layout) {
   document.getElementById('key-icon').textContent = '--';
   document.getElementById('win').classList.remove('show');
 
-  let sx = 1, sy = 1;
-  for (let y = 0; y < dungeon.length; y++) {
-    const x = dungeon[y].indexOf('S');
+  var sx = 1, sy = 1;
+  for (var y = 0; y < dungeon.length; y++) {
+    var x = dungeon[y].indexOf('S');
     if (x !== -1) { sx = x; sy = y; break; }
   }
   player = { x: sx * TILE + TILE / 2, y: sy * TILE + TILE / 2, vx: 0, vy: 0 };
@@ -167,9 +190,9 @@ function startGame(layout) {
 }
 
 function tileAt(px, py) {
-  const tx = Math.floor(px / TILE), ty = Math.floor(py / TILE);
+  var tx = Math.floor(px / TILE), ty = Math.floor(py / TILE);
   if (ty < 0 || ty >= dungeon.length) return '#';
-  const row = dungeon[ty];
+  var row = dungeon[ty];
   if (tx < 0 || tx >= row.length) return '#';
   return row[tx];
 }
@@ -178,12 +201,12 @@ function isSolid(px, py) { return tileAt(px, py) === '#'; }
 
 function tick(dt) {
   if (!player || !dungeon) return;
-  let dx = 0, dy = 0;
+  var dx = 0, dy = 0;
   if (keys['ArrowLeft'] || keys['KeyA']) dx = -1;
   if (keys['ArrowRight'] || keys['KeyD']) dx = 1;
   if (keys['ArrowUp'] || keys['KeyW']) dy = -1;
   if (keys['ArrowDown'] || keys['KeyS']) dy = 1;
-  const mag = Math.sqrt(dx * dx + dy * dy);
+  var mag = Math.sqrt(dx * dx + dy * dy);
   if (mag > 0) { dx /= mag; dy /= mag; }
 
   player.vx += dx * PLAYER_SPEED * dt;
@@ -191,19 +214,21 @@ function tick(dt) {
   player.vx *= FRICTION;
   player.vy *= FRICTION;
 
-  const r = 8;
-  let nx = player.x + player.vx * dt;
-  if (isSolid(nx - r, player.y) || isSolid(nx + r, player.y)) nx = player.x;
-  let ny = player.y + player.vy * dt;
-  if (isSolid(player.x, ny - r) || isSolid(player.x, ny + r)) ny = player.y;
+  var r = 8;
+  var nx = player.x + player.vx * dt;
+  if (isSolid(nx - r, player.y - r) || isSolid(nx + r, player.y - r) ||
+      isSolid(nx - r, player.y + r) || isSolid(nx + r, player.y + r)) nx = player.x;
+  var ny = player.y + player.vy * dt;
+  if (isSolid(player.x - r, ny - r) || isSolid(player.x + r, ny - r) ||
+      isSolid(player.x - r, ny + r) || isSolid(player.x + r, ny + r)) ny = player.y;
   player.x = nx;
   player.y = ny;
 
-  const tile = tileAt(player.x, player.y);
+  var tile = tileAt(player.x, player.y);
   if (tile === 'K' && !hasKey) {
     hasKey = true;
     document.getElementById('key-icon').textContent = 'YES';
-    const ty = Math.floor(player.y / TILE), tx = Math.floor(player.x / TILE);
+    var ty = Math.floor(player.y / TILE), tx = Math.floor(player.x / TILE);
     dungeon[ty] = dungeon[ty].substring(0, tx) + '.' + dungeon[ty].substring(tx + 1);
   }
   if (tile === 'E' && hasKey) {
@@ -219,24 +244,24 @@ function draw() {
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   if (!dungeon || !player) return;
 
-  const mapH = dungeon.length;
-  const mapW = dungeon[0]?.length || 0;
-  const sy = Math.max(0, Math.floor(cam.y / TILE));
-  const ey = Math.min(mapH, Math.ceil((cam.y + canvas.height) / TILE) + 1);
-  const sxc = Math.max(0, Math.floor(cam.x / TILE));
-  const exc = Math.min(mapW, Math.ceil((cam.x + canvas.width) / TILE) + 1);
+  var mapH = dungeon.length;
+  var mapW = dungeon[0] ? dungeon[0].length : 0;
+  var sy = Math.max(0, Math.floor(cam.y / TILE));
+  var ey = Math.min(mapH, Math.ceil((cam.y + canvas.height) / TILE) + 1);
+  var sxc = Math.max(0, Math.floor(cam.x / TILE));
+  var exc = Math.min(mapW, Math.ceil((cam.x + canvas.width) / TILE) + 1);
 
-  for (let y = sy; y < ey; y++) {
-    for (let x = sxc; x < exc; x++) {
-      const ch = dungeon[y][x];
-      const px = x * TILE - cam.x, py = y * TILE - cam.y;
+  for (var y = sy; y < ey; y++) {
+    for (var x = sxc; x < exc; x++) {
+      var ch = dungeon[y][x];
+      var px = x * TILE - cam.x, py = y * TILE - cam.y;
       ctx.fillStyle = COLORS[ch] || COLORS['.'];
       ctx.fillRect(px, py, TILE, TILE);
 
       if (ch === 'K' || ch === 'E' || ch === 'S') {
         ctx.fillStyle = COLORS['.'];
         ctx.fillRect(px, py, TILE, TILE);
-        const pulse = Math.sin(Date.now() * 0.004) * 3;
+        var pulse = Math.sin(Date.now() * 0.004) * 3;
         ctx.fillStyle = COLORS[ch];
         ctx.beginPath();
         ctx.arc(px + TILE / 2, py + TILE / 2, TILE / 3 + pulse, 0, Math.PI * 2);
@@ -246,7 +271,7 @@ function draw() {
   }
 
   // Player
-  const ppx = player.x - cam.x, ppy = player.y - cam.y;
+  var ppx = player.x - cam.x, ppy = player.y - cam.y;
   ctx.fillStyle = 'rgba(0,0,0,0.3)';
   ctx.beginPath();
   ctx.ellipse(ppx, ppy + 5, 10, 6, 0, 0, Math.PI * 2);
@@ -258,30 +283,51 @@ function draw() {
   ctx.strokeStyle = '#fff';
   ctx.lineWidth = 2;
   ctx.stroke();
+
+  // Minimap
+  var mmSize = 120;
+  var mmScale = 3;
+  ctx.fillStyle = 'rgba(0,0,0,0.6)';
+  ctx.fillRect(canvas.width - mmSize - 16, 12, mmSize + 8, (mapH * mmScale) + 8);
+  for (var my = 0; my < mapH; my++) {
+    for (var mx = 0; mx < mapW; mx++) {
+      var mc = dungeon[my][mx];
+      if (mc === '#') continue;
+      var color = '#444';
+      if (mc === 'S') color = '#0a0';
+      else if (mc === 'K') color = COLORS['K'];
+      else if (mc === 'E') color = COLORS['E'];
+      ctx.fillStyle = color;
+      ctx.fillRect(canvas.width - mmSize - 12 + mx * mmScale, 16 + my * mmScale, mmScale - 1, mmScale - 1);
+    }
+  }
+  // Player dot on minimap
+  var pmx = Math.floor(player.x / TILE);
+  var pmy = Math.floor(player.y / TILE);
+  ctx.fillStyle = '#00ff88';
+  ctx.fillRect(canvas.width - mmSize - 12 + pmx * mmScale - 1, 16 + pmy * mmScale - 1, mmScale + 1, mmScale + 1);
 }
 
-let lastT = 0;
+var lastT = 0;
 function loop(t) {
-  const dt = Math.min((t - (lastT || t)) / 1000, 0.05);
+  var dt = Math.min((t - (lastT || t)) / 1000, 0.05);
   lastT = t;
   tick(dt);
   draw();
   requestAnimationFrame(loop);
 }
 
-document.getElementById('replay').addEventListener('click', async () => {
+document.getElementById('replay').addEventListener('click', async function() {
   document.getElementById('win').classList.remove('show');
-  const layout = await generateDungeon();
+  var layout = await generateDungeon();
   startGame(layout);
 });
 
-initEngine().then(async () => {
-  const layout = await generateDungeon();
+(async function() {
+  var layout = await generateDungeon();
   startGame(layout);
   requestAnimationFrame(loop);
-}).catch(e => {
-  document.getElementById('boot-msg').textContent = 'WebGPU not available: ' + e.message;
-});
+})();
 </script>
 </body>
 </html>
