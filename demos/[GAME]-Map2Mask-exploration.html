@@ -407,7 +407,8 @@ async function fetchWithProgress(url, label, sizeMB) {
 
 async function loadSAM3() {
   if (sam3Sessions) return sam3Sessions;
-  const opts = { executionProviders: ['webgpu', 'wasm'] };
+  // uint8 quantized models run correctly on WASM, not WebGPU (quantization ops break on GPU)
+  const opts = { executionProviders: ['wasm'] };
   const yield_ = () => new Promise(r => setTimeout(r, 0));
 
   const visBuf = await fetchWithProgress(`${SAM3_BASE}/vision-encoder.onnx`, 'Vision encoder', 535);
