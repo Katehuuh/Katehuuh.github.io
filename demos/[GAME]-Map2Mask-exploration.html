@@ -711,6 +711,7 @@ async function generateMaskFromImage(imgElement) {
   const roadBits = new Uint8Array(W * H);
   for (let i = 0; i < W * H; i++) roadBits[i] = d[i * 4] > 128 ? 1 : 0;
   return paintMaskWithExits(roadBits, W, H, out, octx);
+  } catch (e) { log(`Mask error: ${e?.message || e}`); console.error('Mask generation error:', e); throw e; }
 }
 
 function paintMaskWithExits(roadBits, W, H, out, octx) {
@@ -811,10 +812,6 @@ function paintMaskWithExits(roadBits, W, H, out, octx) {
   }
   octx.putImageData(fd, 0, 0);
   return out.toDataURL('image/png');
-}
-
-// end of generateMaskFromImage (SAM3 path falls through to paintMaskWithExits above)
-  } catch (e) { log(`Mask error: ${e?.message || e}`); console.error('Mask generation error:', e); throw e; }
 }
 
 const THEME_VARIATIONS = [
