@@ -1528,6 +1528,24 @@ canvas.addEventListener("pointerup", (e) => {
 window.addEventListener("resize", updateMaskOverlay);
 debugMaskCheckbox.addEventListener("change", updateMaskOverlay);
 document.getElementById("regenBtn").addEventListener("click", goToNextMap);
+document.getElementById("modelSelect").addEventListener("change", async () => {
+  if (!mapImg) return;
+  running = false;
+  setLoading(true, "Switching model...", "Re-generating mask for current map");
+  try {
+    const maskDataUrl = await generateMaskFromImage(mapImg);
+    maskImg = await loadImage(maskDataUrl);
+    maskCanvas.width = mapImg.width; maskCanvas.height = mapImg.height;
+    maskCtx.clearRect(0, 0, maskCanvas.width, maskCanvas.height);
+    maskCtx.drawImage(maskImg, 0, 0);
+    buildColorClassifier();
+    normalizeMask();
+    updateMaskOverlay();
+    log(`Model switched to ${getModelChoice()}`);
+  } catch (e) { log(`Model switch failed: ${e?.message || e}`); }
+  setLoading(false);
+  running = true;
+});
 
 initControls({
   onDir: (v) => {
