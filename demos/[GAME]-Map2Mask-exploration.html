@@ -396,8 +396,12 @@ async function fetchWithProgress(url, label, sizeMB) {
     if (done) break;
     chunks.push(value);
     loaded += value.length;
-    const pct = Math.min(99, Math.round(loaded / total * 100));
-    setLoading(true, 'Downloading SAM3...', `${label} ${pct}% (${(loaded/1e6).toFixed(0)}/${sizeMB} MB)`);
+    const now = Date.now();
+    if (!fetchWithProgress._lastLog || now - fetchWithProgress._lastLog > 3000 || done) {
+      fetchWithProgress._lastLog = now;
+      const pct = Math.min(99, Math.round(loaded / total * 100));
+      setLoading(true, 'Downloading SAM3...', `${label} ${pct}% (${(loaded/1e6).toFixed(0)}/${sizeMB} MB)`);
+    }
   }
   const buf = new Uint8Array(loaded);
   let off = 0;
