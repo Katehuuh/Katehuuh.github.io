@@ -410,19 +410,19 @@ async function loadSAM3() {
   const opts = { executionProviders: ['webgpu', 'wasm'] };
   const yield_ = () => new Promise(r => setTimeout(r, 0));
 
-  const visBuf = await fetchWithProgress(`${SAM3_BASE}/vision-encoder.onnx`, 'Vision encoder', 510);
+  const visBuf = await fetchWithProgress(`${SAM3_BASE}/vision-encoder.onnx`, 'Vision encoder', 535);
   setLoading(true, 'Compiling SAM3...', 'Vision encoder (WebGPU)');
   await yield_();
   const vis = await ort.InferenceSession.create(visBuf, opts);
   await yield_();
 
-  const txtBuf = await fetchWithProgress(`${SAM3_BASE}/text-encoder.onnx`, 'Text encoder', 339);
+  const txtBuf = await fetchWithProgress(`${SAM3_BASE}/text-encoder.onnx`, 'Text encoder', 355);
   setLoading(true, 'Compiling SAM3...', 'Text encoder (WebGPU)');
   await yield_();
   const txt = await ort.InferenceSession.create(txtBuf, opts);
   await yield_();
 
-  const decBuf = await fetchWithProgress(`${SAM3_BASE}/decoder.onnx`, 'Decoder', 35);
+  const decBuf = await fetchWithProgress(`${SAM3_BASE}/decoder.onnx`, 'Decoder', 37);
   setLoading(true, 'Compiling SAM3...', 'Decoder (WebGPU)');
   await yield_();
   const dec = await ort.InferenceSession.create(decBuf, opts);
