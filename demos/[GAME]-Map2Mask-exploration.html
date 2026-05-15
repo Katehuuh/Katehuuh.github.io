@@ -411,8 +411,8 @@ async function fetchWithProgress(url, label, sizeMB) {
 
 async function loadSAM3() {
   if (sam3Sessions) return sam3Sessions;
-  // INT4 MatMulNBits works on both WebGPU and WASM (unlike uint8 DequantizeLinear)
-  const opts = { executionProviders: ['webgpu', 'wasm'] };
+  // WebGPU Conv kernel fails on this model; WASM is reliable
+  const opts = { executionProviders: ['wasm'] };
   const yield_ = () => new Promise(r => setTimeout(r, 0));
 
   const visBuf = await fetchWithProgress(`${SAM3_BASE}/vision-encoder.onnx`, 'Vision encoder', 320);
