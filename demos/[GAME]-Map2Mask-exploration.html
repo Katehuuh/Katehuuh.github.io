@@ -339,7 +339,7 @@ html, body {
           <span>Auto-correction mask</span>
         </label>
         <select id="modelSelect" class="btn" style="padding:4px 8px">
-          <option value="sam21" selected>SAM2.1 Tiny+DINO (314 MB, fast)</option>
+          <option value="clipseg" selected>CLIPSeg (132 MB, fast)</option>
           <option value="sam3">SAM3 (928 MB, quality)</option>
         </select>
         <button id="regenBtn" class="btn" title="Skip to next map">Next Map</button>
@@ -392,184 +392,88 @@ const GDINO_STD = [0.229, 0.224, 0.225];
 
 let sam3Sessions = null;
 let sam21Sessions = null;
-function getModelChoice() { return document.getElementById('modelSelect')?.value || 'sam21'; }
+function getModelChoice() { return document.getElementById('modelSelect')?.value || 'clipseg'; }
 
-async function loadSAM21() {
-  if (sam21Sessions) return sam21Sessions;
+const CLIPSEG_URL = 'https://huggingface.co/Xenova/clipseg-rd64-refined/resolve/main/onnx/model_uint8.onnx';
+const CLIP_MEAN = [0.485, 0.456, 0.406];
+const CLIP_STD = [0.229, 0.224, 0.225];
+const CLIPSEG_ROAD_IDS = [49406, 1759, 49407];
+const CLIPSEG_THRESHOLD = 0.30;
+
+let clipsegSession = null;
+async function loadCLIPSeg() {
+  if (clipsegSession) return clipsegSession;
   const opts = { executionProviders: ['wasm'] };
   const yield_ = () => new Promise(r => setTimeout(r, 0));
-
-  const gdinoBuf = await fetchWithProgress(`${HF_BASE}/gdino_uint8.onnx`, 'GDino', 195);
-  setLoading(true, 'Compiling...', 'GroundingDINO (WASM)');
+  const buf = await fetchWithProgress(CLIPSEG_URL, 'CLIPSeg', 132);
+  setLoading(true, 'Compiling...', 'CLIPSeg (WASM)');
   await yield_();
-  const gdino = await ort.InferenceSession.create(gdinoBuf, opts);
+  clipsegSession = await ort.InferenceSession.create(buf, opts);
   await yield_();
-
-  const encBuf = await fetchWithProgress(`${HF_BASE}/sam2.1_hiera_tiny.encoder.onnx`, 'SAM2.1 encoder', 105);
-  setLoading(true, 'Compiling...', 'SAM2.1 encoder (WASM)');
-  await yield_();
-  const enc = await ort.InferenceSession.create(encBuf, opts);
-  await yield_();
-
-  const decBuf = await fetchWithProgress(`${HF_BASE}/sam2.1_hiera_tiny.decoder.onnx`, 'SAM2.1 decoder', 16);
-  setLoading(true, 'Compiling...', 'SAM2.1 decoder (WASM)');
-  await yield_();
-  const dec = await ort.InferenceSession.create(decBuf, opts);
-  await yield_();
-
-  // Load GDino tokenizer
-  const tokResp = await fetch(`${HF_BASE}/gdino_tokenizer.json`);
-  const gdino_tokenizer = await tokResp.json();
-
-  sam21Sessions = { gdino, enc, dec, gdino_tokenizer };
-  return sam21Sessions;
+  return clipsegSession;
 }
 
-async function generateMaskSAM21(imgElement) {
-  // Load models on-demand to reduce peak WASM memory
-  const opts = { executionProviders: ['wasm'] };
-  const yield_ = () => new Promise(r => setTimeout(r, 0));
+async function generateMaskCLIPSeg(imgElement) {
+  const sess = await loadCLIPSeg();
   const W = imgElement.naturalWidth || imgElement.width;
   const H = imgElement.naturalHeight || imgElement.height;
-  log(`SAM2.1+GDino inference: ${W}x${H}`);
+  log(`CLIPSeg inference: ${W}x${H}`);
+  setLoading(true, 'Running...', 'CLIPSeg segmenting roads');
 
-  // Step 1: Load and run GDino
-  const gdinoBuf = await fetchWithProgress(`${HF_BASE}/gdino_uint8.onnx`, 'GDino', 195);
-  setLoading(true, 'Compiling...', 'GroundingDINO (WASM)');
-  await yield_();
-  let gdino = await ort.InferenceSession.create(gdinoBuf, opts);
-  await yield_();
-
-  const shorter = Math.min(W, H);
-  let sf = 800 / shorter;
-  if (Math.max(W, H) * sf > 1333) sf = 1333 / Math.max(W, H);
-  const nw = Math.round(W * sf), nh = Math.round(H * sf);
-
-  const gc = document.createElement('canvas');
-  gc.width = nw; gc.height = nh;
-  const gctx = gc.getContext('2d');
-  gctx.drawImage(imgElement, 0, 0, nw, nh);
-  const gd = gctx.getImageData(0, 0, nw, nh).data;
-  const gpx = new Float32Array(3 * nh * nw);
-  for (let y = 0; y < nh; y++)
-    for (let x = 0; x < nw; x++) {
-      const i = (y * nw + x) * 4;
+  const tc = document.createElement('canvas');
+  tc.width = 352; tc.height = 352;
+  const tctx = tc.getContext('2d');
+  tctx.drawImage(imgElement, 0, 0, 352, 352);
+  const td = tctx.getImageData(0, 0, 352, 352).data;
+  const px = new Float32Array(3 * 352 * 352);
+  for (let y = 0; y < 352; y++)
+    for (let x = 0; x < 352; x++) {
+      const i = (y * 352 + x) * 4;
       for (let c = 0; c < 3; c++)
-        gpx[c * nh * nw + y * nw + x] = (gd[i + c] / 255 - GDINO_MEAN[c]) / GDINO_STD[c];
+        px[c * 352 * 352 + y * 352 + x] = (td[i + c] / 255 - CLIP_MEAN[c]) / CLIP_STD[c];
     }
 
-  // Tokenize "path without collision." using the BERT tokenizer
-  // Hardcoded tokens for "path without collision."
-  const textIds = new Array(256).fill(0);
-  const textMask = new Array(256).fill(0);
-  const tokenTypeIds = new Array(256).fill(0);
-  // [CLS]=101, path=3014, without=2302, collision=12288, .=1012, [SEP]=102
-  const toks = [101, 3014, 2302, 12288, 1012, 102];
-  for (let i = 0; i < toks.length; i++) { textIds[i] = toks[i]; textMask[i] = 1; }
-  const pixelMask = new Array(nh * nw).fill(1);
-
-  // Run GDino
-  setLoading(true, 'Running...', 'GroundingDINO detecting roads');
-  const feeds = {};
-  for (const inp of gdino.inputNames) {
-    if (inp === 'pixel_values') feeds[inp] = new ort.Tensor('float32', gpx, [1, 3, nh, nw]);
-    else if (inp === 'input_ids') feeds[inp] = new ort.Tensor('int64', new BigInt64Array(textIds.map(BigInt)), [1, 256]);
-    else if (inp === 'attention_mask') feeds[inp] = new ort.Tensor('int64', new BigInt64Array(textMask.map(BigInt)), [1, 256]);
-    else if (inp === 'token_type_ids') feeds[inp] = new ort.Tensor('int64', new BigInt64Array(tokenTypeIds.map(BigInt)), [1, 256]);
-    else if (inp === 'pixel_mask') feeds[inp] = new ort.Tensor('int64', new BigInt64Array(pixelMask.map(BigInt)), [1, nh, nw]);
-  }
-  const gout = await gdino.run(feeds);
-  const logits = gout.logits?.data || gout[gdino.outputNames[0]].data;
-  const boxes = gout.pred_boxes?.data || gout[gdino.outputNames[1]].data;
-  const nQueries = logits.length / 256;
-
-  // Filter boxes by score
-  const kept = [];
-  for (let i = 0; i < nQueries; i++) {
-    let maxScore = -Infinity;
-    for (let j = 0; j < 256; j++) {
-      const s = 1 / (1 + Math.exp(-logits[i * 256 + j]));
-      if (s > maxScore) maxScore = s;
-    }
-    if (maxScore > 0.25) {
-      const cx = boxes[i * 4], cy = boxes[i * 4 + 1], bw = boxes[i * 4 + 2], bh = boxes[i * 4 + 3];
-      const x1 = (cx - bw / 2) * W, y1 = (cy - bh / 2) * H;
-      const x2 = (cx + bw / 2) * W, y2 = (cy + bh / 2) * H;
-      const area = (x2 - x1) * (y2 - y1);
-      if (area < 0.5 * W * H) kept.push({ x1, y1, x2, y2, score: maxScore });
-    }
-  }
-  log(`GDino: ${kept.length} road boxes detected`);
-
-  // Release GDino to free WASM memory before loading SAM2.1
-  gdino.release?.(); gdino = null;
-  await yield_();
-
-  // SAM2.1 encoder - load fresh (GDino released)
-  const encBuf2 = await fetchWithProgress(`${HF_BASE}/sam2.1_hiera_tiny.encoder.onnx`, 'SAM2.1 encoder', 105);
-  setLoading(true, 'Compiling...', 'SAM2.1 encoder (WASM)');
-  await yield_();
-  const enc = await ort.InferenceSession.create(encBuf2, opts);
-  await yield_();
-
-  const decBuf2 = await fetchWithProgress(`${HF_BASE}/sam2.1_hiera_tiny.decoder.onnx`, 'SAM2.1 decoder', 16);
-  setLoading(true, 'Compiling...', 'SAM2.1 decoder (WASM)');
-  await yield_();
-  const dec = await ort.InferenceSession.create(decBuf2, opts);
-  await yield_();
-
-  setLoading(true, 'Running...', 'SAM2.1 encoding image');
-  const sc = document.createElement('canvas');
-  sc.width = 1024; sc.height = 1024;
-  const sctx = sc.getContext('2d');
-  sctx.drawImage(imgElement, 0, 0, 1024, 1024);
-  const sd = sctx.getImageData(0, 0, 1024, 1024).data;
-  const spx = new Float32Array(3 * 1024 * 1024);
-  for (let y = 0; y < 1024; y++)
-    for (let x = 0; x < 1024; x++) {
-      const i = (y * 1024 + x) * 4;
-      for (let c = 0; c < 3; c++)
-        spx[c * 1024 * 1024 + y * 1024 + x] = (sd[i + c] - SAM3_MEAN[c]) / SAM3_STD[c];
-    }
-  const encOut = await enc.run({ image: new ort.Tensor('float32', spx, [1, 3, 1024, 1024]) });
-
-  // SAM2.1 decoder: one call per box
-  setLoading(true, 'Running...', `SAM2.1 segmenting ${kept.length} regions`);
-  const scale = 1024 / Math.max(W, H);
-  const combined = new Uint8Array(1024 * 1024);
-
-  for (const box of kept) {
-    const coords = new Float32Array([box.x1 * scale, box.y1 * scale, box.x2 * scale, box.y2 * scale]);
-    const labels = new Float32Array([2, 3]);
-    const decOut = await dec.run({
-      image_embed: encOut.image_embed,
-      high_res_feats_0: encOut.high_res_feats_0,
-      high_res_feats_1: encOut.high_res_feats_1,
-      point_coords: new ort.Tensor('float32', coords, [1, 2, 2]),
-      point_labels: new ort.Tensor('float32', labels, [1, 2]),
-      mask_input: new ort.Tensor('float32', new Float32Array(256 * 256), [1, 1, 256, 256]),
-      has_mask_input: new ort.Tensor('float32', new Float32Array([0]), [1]),
-    });
-    const masks = decOut[dec.outputNames[0]].data;
-    const scores = decOut[dec.outputNames[1]].data;
-    const best = scores[0] > scores[1] ? (scores[0] > scores[2] ? 0 : 2) : (scores[1] > scores[2] ? 1 : 2);
-    const mH = decOut[dec.outputNames[0]].dims[2], mW = decOut[dec.outputNames[0]].dims[3];
-    const off = best * mH * mW;
-    for (let i = 0; i < mH * mW; i++) if (masks[off + i] > 0) combined[i] = 1;
+  let idT, amT;
+  if (typeof BigInt64Array !== 'undefined') {
+    idT = new ort.Tensor('int64', new BigInt64Array(CLIPSEG_ROAD_IDS.map(BigInt)), [1, 3]);
+    amT = new ort.Tensor('int64', new BigInt64Array([1n, 1n, 1n]), [1, 3]);
+  } else {
+    idT = new ort.Tensor('int32', new Int32Array(CLIPSEG_ROAD_IDS), [1, 3]);
+    amT = new ort.Tensor('int32', new Int32Array([1, 1, 1]), [1, 3]);
   }
 
-  // Resize combined mask to original size and return as colored mask
+  const result = await sess.run({
+    input_ids: idT,
+    pixel_values: new ort.Tensor('float32', px, [1, 3, 352, 352]),
+    attention_mask: amT,
+  });
+  const logits = result.logits.data;
+
+  // Sigmoid + threshold -> binary mask at 352x352
   const mc = document.createElement('canvas');
-  mc.width = 1024; mc.height = 1024;
+  mc.width = 352; mc.height = 352;
   const mctx = mc.getContext('2d');
-  const mid = mctx.createImageData(1024, 1024);
-  for (let i = 0; i < 1024 * 1024; i++) {
-    const v = combined[i] ? 255 : 0;
+  const mid = mctx.createImageData(352, 352);
+  for (let i = 0; i < 352 * 352; i++) {
+    const v = (1 / (1 + Math.exp(-logits[i]))) > CLIPSEG_THRESHOLD ? 255 : 0;
     mid.data[i * 4] = v; mid.data[i * 4 + 1] = v; mid.data[i * 4 + 2] = v; mid.data[i * 4 + 3] = 255;
   }
   mctx.putImageData(mid, 0, 0);
-  return { maskCanvas: mc, W, H };
+
+  // Resize to original
+  const out = document.createElement('canvas');
+  out.width = W; out.height = H;
+  const octx = out.getContext('2d');
+  octx.imageSmoothingEnabled = false;
+  octx.drawImage(mc, 0, 0, W, H);
+
+  const fd = octx.getImageData(0, 0, W, H);
+  const d = fd.data;
+  const roadBits = new Uint8Array(W * H);
+  for (let i = 0; i < W * H; i++) roadBits[i] = d[i * 4] > 128 ? 1 : 0;
+  return paintMaskWithExits(roadBits, W, H, out, octx);
 }
+
 async function fetchWithProgress(url, label, sizeMB) {
   const resp = await fetch(url);
   const total = sizeMB * 1e6;
@@ -626,22 +530,8 @@ async function loadSAM3() {
 async function generateMaskFromImage(imgElement) {
   try {
   const model = getModelChoice();
-  if (model === 'sam21') {
-    const { maskCanvas, W, H } = await generateMaskSAM21(imgElement);
-    // Resize + paint purple/cyan using shared post-processing below
-    const out = document.createElement('canvas');
-    out.width = W; out.height = H;
-    const octx = out.getContext('2d');
-    octx.imageSmoothingEnabled = false;
-    octx.drawImage(maskCanvas, 0, 0, W, H);
-    // Jump to shared road mask post-processing (purple + cyan exit detection)
-    const fd = octx.getImageData(0, 0, W, H);
-    const d = fd.data;
-    // Convert white mask to roadBits for endpoint detection
-    const roadBits = new Uint8Array(W * H);
-    for (let i = 0; i < W * H; i++) roadBits[i] = d[i * 4] > 128 ? 1 : 0;
-    // Reuse the exit detection + painting code (duplicated from SAM3 path below)
-    return paintMaskWithExits(roadBits, W, H, out, octx);
+  if (model === 'clipseg') {
+    return await generateMaskCLIPSeg(imgElement);
   }
 
   const { vis, txt, dec } = await loadSAM3();
