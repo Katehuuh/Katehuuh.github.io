@@ -415,13 +415,13 @@ async function loadSAM3() {
   const opts = { executionProviders: ['wasm'] };
   const yield_ = () => new Promise(r => setTimeout(r, 0));
 
-  const visBuf = await fetchWithProgress(`${SAM3_BASE}/vision-encoder.onnx`, 'Vision encoder', 320);
+  const visBuf = await fetchWithProgress(`${SAM3_BASE}/vision-encoder.onnx`, 'Vision encoder', 535);
   setLoading(true, 'Compiling SAM3...', 'Vision encoder (WASM)');
   await yield_();
   const vis = await ort.InferenceSession.create(visBuf, opts);
   await yield_();
 
-  const txtBuf = await fetchWithProgress(`${SAM3_BASE}/text-encoder.onnx`, 'Text encoder', 350);
+  const txtBuf = await fetchWithProgress(`${SAM3_BASE}/text-encoder.onnx`, 'Text encoder', 355);
   setLoading(true, 'Compiling SAM3...', 'Text encoder (WASM)');
   await yield_();
   const txt = await ort.InferenceSession.create(txtBuf, opts);
