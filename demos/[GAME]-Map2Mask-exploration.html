@@ -1393,9 +1393,18 @@ async function init() {
   setLoading(true, "Preparing first scene…", "Loading initial map");
 
   try {
-    const { mapUrl, maskUrl } = await generateMapAndMask(currentTheme, { initialUseStarter: true });
-    mapImg = await loadImage(mapUrl);
-    maskImg = await loadImage(maskUrl);
+    // Starter map: render immediately with all-walkable mask (no SAM3 needed)
+    // SAM3 loads lazily on first "Next Map" click
+    mapImg = await loadImage(STARTER_MAP_B64);
+    const sc = document.createElement('canvas');
+    sc.width = mapImg.width; sc.height = mapImg.height;
+    const sctx = sc.getContext('2d');
+    const sd = sctx.createImageData(sc.width, sc.height);
+    for (let i = 0; i < sc.width * sc.height; i++) {
+      sd.data[i*4] = 128; sd.data[i*4+1] = 0; sd.data[i*4+2] = 128; sd.data[i*4+3] = 255;
+    }
+    sctx.putImageData(sd, 0, 0);
+    maskImg = await loadImage(sc.toDataURL());
 
     maskCanvas.width = mapImg.width;
     maskCanvas.height = mapImg.height;
