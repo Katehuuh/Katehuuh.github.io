@@ -426,12 +426,20 @@ async function loadSAM21() {
 }
 
 async function generateMaskSAM21(imgElement) {
-  const { gdino, enc, dec, gdino_tokenizer } = await loadSAM21();
+  // Load models on-demand to reduce peak WASM memory
+  const opts = { executionProviders: ['wasm'] };
+  const yield_ = () => new Promise(r => setTimeout(r, 0));
   const W = imgElement.naturalWidth || imgElement.width;
   const H = imgElement.naturalHeight || imgElement.height;
   log(`SAM2.1+GDino inference: ${W}x${H}`);
 
-  // GDino: preprocess image (800 shortest side, max 1333)
+  // Step 1: Load and run GDino
+  const gdinoBuf = await fetchWithProgress(`${HF_BASE}/gdino_uint8.onnx`, 'GDino', 195);
+  setLoading(true, 'Compiling...', 'GroundingDINO (WASM)');
+  await yield_();
+  let gdino = await ort.InferenceSession.create(gdinoBuf, opts);
+  await yield_();
+
   const shorter = Math.min(W, H);
   let sf = 800 / shorter;
   if (Math.max(W, H) * sf > 1333) sf = 1333 / Math.max(W, H);
@@ -493,7 +501,23 @@ async function generateMaskSAM21(imgElement) {
   }
   log(`GDino: ${kept.length} road boxes detected`);
 
-  // SAM2.1 encoder
+  // Release GDino to free WASM memory before loading SAM2.1
+  gdino.release?.(); gdino = null;
+  await yield_();
+
+  // SAM2.1 encoder - load fresh (GDino released)
+  const encBuf2 = await fetchWithProgress(`${HF_BASE}/sam2.1_hiera_tiny.encoder.onnx`, 'SAM2.1 encoder', 105);
+  setLoading(true, 'Compiling...', 'SAM2.1 encoder (WASM)');
+  await yield_();
+  const enc = await ort.InferenceSession.create(encBuf2, opts);
+  await yield_();
+
+  const decBuf2 = await fetchWithProgress(`${HF_BASE}/sam2.1_hiera_tiny.decoder.onnx`, 'SAM2.1 decoder', 16);
+  setLoading(true, 'Compiling...', 'SAM2.1 decoder (WASM)');
+  await yield_();
+  const dec = await ort.InferenceSession.create(decBuf2, opts);
+  await yield_();
+
   setLoading(true, 'Running...', 'SAM2.1 encoding image');
   const sc = document.createElement('canvas');
   sc.width = 1024; sc.height = 1024;
