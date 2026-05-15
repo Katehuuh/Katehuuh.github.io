@@ -385,19 +385,50 @@ const TOKEN_PAD = 32;
 const EXIT_RADIUS = 30;
 
 let sam3Sessions = null;
+async function fetchWithProgress(url, label, sizeMB) {
+  const resp = await fetch(url);
+  const total = sizeMB * 1e6;
+  const reader = resp.body.getReader();
+  const chunks = [];
+  let loaded = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    loaded += value.length;
+    const pct = Math.min(99, Math.round(loaded / total * 100));
+    setLoading(true, 'Downloading SAM3...', `${label} ${pct}% (${(loaded/1e6).toFixed(0)}/${sizeMB} MB)`);
+  }
+  const buf = new Uint8Array(loaded);
+  let off = 0;
+  for (const c of chunks) { buf.set(c, off); off += c.length; }
+  return buf.buffer;
+}
+
 async function loadSAM3() {
   if (sam3Sessions) return sam3Sessions;
   const opts = { executionProviders: ['webgpu', 'wasm'] };
   const yield_ = () => new Promise(r => setTimeout(r, 0));
-  if (typeof setLoading === 'function') setLoading(true, 'Loading SAM3...', 'Vision encoder (510 MB)');
-  const vis = await ort.InferenceSession.create(`${SAM3_BASE}/vision-encoder.onnx`, opts);
+
+  const visBuf = await fetchWithProgress(`${SAM3_BASE}/vision-encoder.onnx`, 'Vision encoder', 510);
+  setLoading(true, 'Compiling SAM3...', 'Vision encoder (WebGPU)');
   await yield_();
-  if (typeof setLoading === 'function') setLoading(true, 'Loading SAM3...', 'Text encoder (339 MB)');
-  const txt = await ort.InferenceSession.create(`${SAM3_BASE}/text-encoder.onnx`, opts);
+  const vis = await ort.InferenceSession.create(visBuf, opts);
   await yield_();
-  if (typeof setLoading === 'function') setLoading(true, 'Loading SAM3...', 'Decoder (35 MB)');
-  const dec = await ort.InferenceSession.create(`${SAM3_BASE}/decoder.onnx`, opts);
+
+  const txtBuf = await fetchWithProgress(`${SAM3_BASE}/text-encoder.onnx`, 'Text encoder', 339);
+  setLoading(true, 'Compiling SAM3...', 'Text encoder (WebGPU)');
   await yield_();
+  const txt = await ort.InferenceSession.create(txtBuf, opts);
+  await yield_();
+
+  const decBuf = await fetchWithProgress(`${SAM3_BASE}/decoder.onnx`, 'Decoder', 35);
+  setLoading(true, 'Compiling SAM3...', 'Decoder (WebGPU)');
+  await yield_();
+  const dec = await ort.InferenceSession.create(decBuf, opts);
+  await yield_();
+
+  setLoading(true, 'Running SAM3...', 'Generating road mask');
   sam3Sessions = { vis, txt, dec };
   return sam3Sessions;
 }
