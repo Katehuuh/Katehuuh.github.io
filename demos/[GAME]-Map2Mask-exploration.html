@@ -411,23 +411,23 @@ async function fetchWithProgress(url, label, sizeMB) {
 
 async function loadSAM3() {
   if (sam3Sessions) return sam3Sessions;
-  // uint8 quantized models run correctly on WASM, not WebGPU (quantization ops break on GPU)
-  const opts = { executionProviders: ['wasm'] };
+  // INT4 MatMulNBits works on both WebGPU and WASM (unlike uint8 DequantizeLinear)
+  const opts = { executionProviders: ['webgpu', 'wasm'] };
   const yield_ = () => new Promise(r => setTimeout(r, 0));
 
-  const visBuf = await fetchWithProgress(`${SAM3_BASE}/vision-encoder.onnx`, 'Vision encoder', 535);
+  const visBuf = await fetchWithProgress(`${SAM3_BASE}/vision-encoder.onnx`, 'Vision encoder', 320);
   setLoading(true, 'Compiling SAM3...', 'Vision encoder (WebGPU)');
   await yield_();
   const vis = await ort.InferenceSession.create(visBuf, opts);
   await yield_();
 
-  const txtBuf = await fetchWithProgress(`${SAM3_BASE}/text-encoder.onnx`, 'Text encoder', 355);
+  const txtBuf = await fetchWithProgress(`${SAM3_BASE}/text-encoder.onnx`, 'Text encoder', 350);
   setLoading(true, 'Compiling SAM3...', 'Text encoder (WebGPU)');
   await yield_();
   const txt = await ort.InferenceSession.create(txtBuf, opts);
   await yield_();
 
-  const decBuf = await fetchWithProgress(`${SAM3_BASE}/decoder.onnx`, 'Decoder', 37);
+  const decBuf = await fetchWithProgress(`${SAM3_BASE}/decoder.onnx`, 'Decoder', 35);
   setLoading(true, 'Compiling SAM3...', 'Decoder (WebGPU)');
   await yield_();
   const dec = await ort.InferenceSession.create(decBuf, opts);
