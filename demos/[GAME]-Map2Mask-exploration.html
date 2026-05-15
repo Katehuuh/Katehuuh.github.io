@@ -388,11 +388,16 @@ let sam3Sessions = null;
 async function loadSAM3() {
   if (sam3Sessions) return sam3Sessions;
   const opts = { executionProviders: ['webgpu', 'wasm'] };
-  const [vis, txt, dec] = await Promise.all([
-    ort.InferenceSession.create(`${SAM3_BASE}/vision-encoder.onnx`, opts),
-    ort.InferenceSession.create(`${SAM3_BASE}/text-encoder.onnx`, opts),
-    ort.InferenceSession.create(`${SAM3_BASE}/decoder.onnx`, opts),
-  ]);
+  const yield_ = () => new Promise(r => setTimeout(r, 0));
+  if (typeof setLoading === 'function') setLoading(true, 'Loading SAM3...', 'Vision encoder (510 MB)');
+  const vis = await ort.InferenceSession.create(`${SAM3_BASE}/vision-encoder.onnx`, opts);
+  await yield_();
+  if (typeof setLoading === 'function') setLoading(true, 'Loading SAM3...', 'Text encoder (339 MB)');
+  const txt = await ort.InferenceSession.create(`${SAM3_BASE}/text-encoder.onnx`, opts);
+  await yield_();
+  if (typeof setLoading === 'function') setLoading(true, 'Loading SAM3...', 'Decoder (35 MB)');
+  const dec = await ort.InferenceSession.create(`${SAM3_BASE}/decoder.onnx`, opts);
+  await yield_();
   sam3Sessions = { vis, txt, dec };
   return sam3Sessions;
 }
