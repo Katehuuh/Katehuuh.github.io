@@ -382,7 +382,7 @@ const SAM3_STD = [58.395, 57.12, 57.375];
 const SAM3_SIZE = 1008;
 const ROAD_IDS = [49406, 1759, 49407];
 const TOKEN_PAD = 32;
-const EXIT_BORDER_PX = 15;
+const EXIT_RADIUS = 30;
 
 let sam3Sessions = null;
 async function loadSAM3() {
@@ -483,16 +483,95 @@ async function generateMaskFromImage(imgElement) {
   octx.imageSmoothingEnabled = false;
   octx.drawImage(mc, 0, 0, W, H);
 
-  // Purple walkable + cyan exits at map edges
+  // Build binary road mask array
   const fd = octx.getImageData(0, 0, W, H);
   const d = fd.data;
+  const roadBits = new Uint8Array(W * H);
+  for (let i = 0; i < W * H; i++) roadBits[i] = d[i * 4] > 128 ? 1 : 0;
+
+  // Find road endpoints: road pixels with exactly 1 road neighbor
+  const endpoints = [];
+  for (let y = 1; y < H - 1; y++) {
+    for (let x = 1; x < W - 1; x++) {
+      if (!roadBits[y * W + x]) continue;
+      let nb = 0;
+      for (let dy = -1; dy <= 1; dy++)
+        for (let dx = -1; dx <= 1; dx++)
+          if ((dy || dx) && roadBits[(y+dy) * W + (x+dx)]) nb++;
+      if (nb <= 1) endpoints.push([x, y]);
+    }
+  }
+
+  // Cluster endpoints within 40px
+  const used = new Set();
+  const clusters = [];
+  for (let i = 0; i < endpoints.length; i++) {
+    if (used.has(i)) continue;
+    let sx = endpoints[i][0], sy = endpoints[i][1], n = 1;
+    used.add(i);
+    for (let j = i + 1; j < endpoints.length; j++) {
+      if (used.has(j)) continue;
+      const dx = endpoints[j][0] - endpoints[i][0], dy = endpoints[j][1] - endpoints[i][1];
+      if (dx * dx + dy * dy < 1600) {
+        sx += endpoints[j][0]; sy += endpoints[j][1]; n++;
+        used.add(j);
+      }
+    }
+    clusters.push([Math.round(sx / n), Math.round(sy / n)]);
+  }
+
+  // Road centroid
+  let rcx = 0, rcy = 0, rcn = 0;
+  for (let y = 0; y < H; y += 4)
+    for (let x = 0; x < W; x += 4)
+      if (roadBits[y * W + x]) { rcx += x; rcy += y; rcn++; }
+  rcx /= rcn; rcy /= rcn;
+
+  // Score each cluster: distance from centroid
+  const scored = clusters.map(([x, y]) => {
+    const dist = Math.sqrt((x - rcx) ** 2 + (y - rcy) ** 2);
+    return { x, y, dist };
+  }).sort((a, b) => b.dist - a.dist);
+
+  // Select exits: farthest from centroid, max 4, min 2
+  // But reject endpoints that are very close to other road pixels on all sides
+  // (those are interior junctions, not branch tips leading outward)
+  const MIN_EXITS = 2, MAX_EXITS = 4;
+  const exitSet = [];
+  for (const ep of scored) {
+    if (exitSet.length >= MAX_EXITS) break;
+    // Check: in 40px radius outward from centroid, how many road pixels?
+    const dirX = (ep.x - rcx) / ep.dist, dirY = (ep.y - rcy) / ep.dist;
+    let roadAhead = 0, emptyAhead = 0;
+    for (let t = 5; t < 50; t++) {
+      const px = Math.round(ep.x + dirX * t), py = Math.round(ep.y + dirY * t);
+      if (px < 0 || px >= W || py < 0 || py >= H) { emptyAhead += 5; break; }
+      if (roadBits[py * W + px]) roadAhead++; else emptyAhead++;
+    }
+    // Exit = mostly empty ahead (road ends, open space beyond)
+    if (emptyAhead > roadAhead || exitSet.length < MIN_EXITS) {
+      exitSet.push(ep);
+    }
+  }
+
+  // Paint: purple walkable, cyan exit zones (30px radius around exit endpoints)
+  const exitZone = new Uint8Array(W * H);
+  for (const ep of exitSet) {
+    for (let dy = -30; dy <= 30; dy++) {
+      for (let dx = -30; dx <= 30; dx++) {
+        if (dx * dx + dy * dy > 900) continue;
+        const py = ep.y + dy, px = ep.x + dx;
+        if (py >= 0 && py < H && px >= 0 && px < W && roadBits[py * W + px])
+          exitZone[py * W + px] = 1;
+      }
+    }
+  }
+
   for (let y = 0; y < H; y++) {
     for (let x = 0; x < W; x++) {
       const idx = (y * W + x) * 4;
-      if (d[idx] > 128) {
-        const atEdge = x < EXIT_BORDER_PX || x >= W - EXIT_BORDER_PX ||
-                       y < EXIT_BORDER_PX || y >= H - EXIT_BORDER_PX;
-        if (atEdge) {
+      if (roadBits[y * W + x]) {
+        if (exitZone[y * W + x]) {
           d[idx] = 43; d[idx+1] = 250; d[idx+2] = 250; d[idx+3] = 255;
         } else {
           d[idx] = 128; d[idx+1] = 0; d[idx+2] = 128; d[idx+3] = 255;
