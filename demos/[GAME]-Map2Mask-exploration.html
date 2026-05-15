@@ -828,8 +828,13 @@ sensitivitySlider.addEventListener('input', (e) => {
   log(`Path detection sensitivity set to ${e.target.value}%`);
 });
 
+const _logStart = Date.now();
 function log(msg) {
-  const t = new Date().toLocaleTimeString();
+  const elapsed = Date.now() - _logStart;
+  const s = Math.floor(elapsed / 1000) % 60;
+  const m = Math.floor(elapsed / 60000) % 60;
+  const h = Math.floor(elapsed / 3600000);
+  const t = `+${String(h).padStart(2,'0')}h:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
   logEl.textContent += `[${t}] ${msg}\n`;
   logEl.scrollTop = logEl.scrollHeight;
   console.log(msg);
