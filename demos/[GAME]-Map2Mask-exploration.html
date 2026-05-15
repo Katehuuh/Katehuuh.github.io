@@ -416,19 +416,19 @@ async function loadSAM3() {
   const yield_ = () => new Promise(r => setTimeout(r, 0));
 
   const visBuf = await fetchWithProgress(`${SAM3_BASE}/vision-encoder.onnx`, 'Vision encoder', 320);
-  setLoading(true, 'Compiling SAM3...', 'Vision encoder (WebGPU)');
+  setLoading(true, 'Compiling SAM3...', 'Vision encoder (WASM)');
   await yield_();
   const vis = await ort.InferenceSession.create(visBuf, opts);
   await yield_();
 
   const txtBuf = await fetchWithProgress(`${SAM3_BASE}/text-encoder.onnx`, 'Text encoder', 350);
-  setLoading(true, 'Compiling SAM3...', 'Text encoder (WebGPU)');
+  setLoading(true, 'Compiling SAM3...', 'Text encoder (WASM)');
   await yield_();
   const txt = await ort.InferenceSession.create(txtBuf, opts);
   await yield_();
 
   const decBuf = await fetchWithProgress(`${SAM3_BASE}/decoder.onnx`, 'Decoder', 35);
-  setLoading(true, 'Compiling SAM3...', 'Decoder (WebGPU)');
+  setLoading(true, 'Compiling SAM3...', 'Decoder (WASM)');
   await yield_();
   const dec = await ort.InferenceSession.create(decBuf, opts);
   await yield_();
@@ -439,9 +439,11 @@ async function loadSAM3() {
 }
 
 async function generateMaskFromImage(imgElement) {
+  try {
   const { vis, txt, dec } = await loadSAM3();
   const W = imgElement.naturalWidth || imgElement.width;
   const H = imgElement.naturalHeight || imgElement.height;
+  log(`SAM3 inference: ${W}x${H} image`);
 
   // Vision encoder: resize to 1008x1008, ImageNet normalize (0-255 range)
   const vc = document.createElement('canvas');
@@ -624,6 +626,7 @@ async function generateMaskFromImage(imgElement) {
   }
   octx.putImageData(fd, 0, 0);
   return out.toDataURL('image/png');
+  } catch (e) { log(`SAM3 mask error: ${e?.message || e}`); console.error('Mask generation error:', e); throw e; }
 }
 
 const THEME_VARIATIONS = [
@@ -1471,8 +1474,10 @@ async function init() {
     setTimeout(() => { teleportLocked = false; }, 1000);
     requestAnimationFrame(loop);
   } catch (error) {
-    log(`Init failed: ${error.message}`);
-    setLoading(true, "Error", error.message);
+    const msg = error?.message || error?.toString?.() || String(error);
+    log(`Init failed: ${msg}`);
+    console.error('Init error:', error);
+    setLoading(true, "Error", msg);
   }
 }
 
