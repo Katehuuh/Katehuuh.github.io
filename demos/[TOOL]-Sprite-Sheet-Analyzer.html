@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Sprite Sheet Analyzer</title>
+${favicon_line}
     <script src="https://cdn.tailwindcss.com"></script>
     <script type="importmap">
 {
@@ -542,6 +543,9 @@
             const [timingMode, setTimingMode] = useState('uniform');
             const [copySuccess, setCopySuccess] = useState('');
             const [activeTab, setActiveTab] = useState('json');
+            const [gamePreviewActive, setGamePreviewActive] = useState(false);
+            const gameContainerRef = useRef(null);
+            const gameCleanupRef = useRef(null);
 
             const imageToDraw = useMemo(() => {
               if (isDrawable(processedImage)) return processedImage;
@@ -1430,6 +1434,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Sprite Character Demo</title>
+${favicon_line}
 <!-- Expects spritesheet.png in the same directory -->
 <style>
 html,body{margin:0;height:100%;overflow:hidden;background:#1a1a2e;font-family:sans-serif;}
@@ -1588,44 +1593,475 @@ img.onload = () => requestAnimationFrame(loop);
               });
             };
 
+            // ---------- Game Preview Logic ----------
+            useEffect(() => {
+              if (!gamePreviewActive) return;
+              let cancelled = false;
+              let animId = null;
+
+              const loadThreeJS = () => new Promise((resolve) => {
+                if (window.THREE) { resolve(window.THREE); return; }
+                const script = document.createElement('script');
+                script.src = 'https://unpkg.com/three@0.160.0/build/three.min.js';
+                script.onload = () => resolve(window.THREE);
+                document.head.appendChild(script);
+              });
+
+              const initScene = async () => {
+                const THREE = await loadThreeJS();
+                if (cancelled) return;
+                const container = gameContainerRef.current;
+                if (!container) return;
+
+                const rect = container.getBoundingClientRect();
+                const PIXEL_SCALE = 0.2;
+                const renderW = Math.max(1, Math.floor(rect.width * PIXEL_SCALE));
+                const renderH = Math.max(1, Math.floor(rect.height * PIXEL_SCALE));
+
+                // Renderer
+                const renderer = new THREE.WebGLRenderer({ antialias: false, alpha: false });
+                renderer.setSize(renderW, renderH);
+                renderer.shadowMap.enabled = true;
+                renderer.shadowMap.type = THREE.BasicShadowMap;
+                renderer.domElement.style.width = '100%';
+                renderer.domElement.style.height = '100%';
+                renderer.domElement.style.imageRendering = 'pixelated';
+                renderer.domElement.style.display = 'block';
+                container.appendChild(renderer.domElement);
+
+                // Scene
+                const scene = new THREE.Scene();
+                scene.background = new THREE.Color(0x1a1a2a);
+                scene.fog = new THREE.FogExp2(0x1a1a2a, 0.04);
+
+                // Camera (static)
+                const camera = new THREE.PerspectiveCamera(50, rect.width / rect.height, 0.1, 200);
+                camera.position.set(0, 8, 18);
+                camera.lookAt(0, 1, 0);
+
+                // Lights
+                const ambientLight = new THREE.AmbientLight(0x404060, 1.2);
+                scene.add(ambientLight);
+
+                const sunLight = new THREE.DirectionalLight(0xffe8b0, 2.5);
+                sunLight.position.set(8, 12, -6);
+                sunLight.castShadow = true;
+                sunLight.shadow.mapSize.set(512, 512);
+                sunLight.shadow.camera.near = 0.5;
+                sunLight.shadow.camera.far = 60;
+                sunLight.shadow.camera.left = -20;
+                sunLight.shadow.camera.right = 20;
+                sunLight.shadow.camera.top = 20;
+                sunLight.shadow.camera.bottom = -20;
+                scene.add(sunLight);
+                scene.add(sunLight.target);
+                sunLight.target.position.set(0, 0, 0);
+
+                // Ground plane (grass colors from v1: #1a4a1a base)
+                const groundGeo = new THREE.PlaneGeometry(60, 60, 12, 12);
+                const groundCanvas = document.createElement('canvas');
+                groundCanvas.width = 64; groundCanvas.height = 64;
+                const gCtx = groundCanvas.getContext('2d');
+                gCtx.fillStyle = '#1a4a1a';
+                gCtx.fillRect(0, 0, 64, 64);
+                // Add texture variation
+                for (let i = 0; i < 200; i++) {
+                  const gx = Math.random() * 64;
+                  const gy = Math.random() * 64;
+                  gCtx.fillStyle = Math.random() > 0.5 ? '#1e5520' : '#163d16';
+                  gCtx.fillRect(gx, gy, 2, 2);
+                }
+                const groundTex = new THREE.CanvasTexture(groundCanvas);
+                groundTex.wrapS = THREE.RepeatWrapping;
+                groundTex.wrapT = THREE.RepeatWrapping;
+                groundTex.repeat.set(8, 8);
+                groundTex.magFilter = THREE.NearestFilter;
+                groundTex.minFilter = THREE.NearestFilter;
+                const groundMat = new THREE.MeshLambertMaterial({ map: groundTex });
+                const ground = new THREE.Mesh(groundGeo, groundMat);
+                ground.rotation.x = -Math.PI / 2;
+                ground.receiveShadow = true;
+                scene.add(ground);
+
+                // Props - rocks
+                const rockMat = new THREE.MeshLambertMaterial({ color: 0x5a5a5a });
+                const rockPositions = [[-6, 0, -4], [8, 0, -2], [-3, 0, -8], [10, 0, -7], [-9, 0, 2]];
+                rockPositions.forEach(pos => {
+                  const s = 0.5 + Math.random() * 0.8;
+                  const rock = new THREE.Mesh(new THREE.BoxGeometry(s * 1.4, s, s * 1.2), rockMat);
+                  rock.position.set(pos[0], s * 0.5, pos[2]);
+                  rock.rotation.y = Math.random() * Math.PI;
+                  rock.castShadow = true;
+                  rock.receiveShadow = true;
+                  scene.add(rock);
+                });
+
+                // Props - trees (trunk + foliage as colored boxes)
+                const trunkMat = new THREE.MeshLambertMaterial({ color: 0x5d3a1a });
+                const leafMat = new THREE.MeshLambertMaterial({ color: 0x2d6b2d });
+                const treePositions = [[-8, 0, -6], [7, 0, -9], [12, 0, -4], [-11, 0, -3]];
+                treePositions.forEach(pos => {
+                  const th = 2.5 + Math.random() * 1.5;
+                  const trunk = new THREE.Mesh(new THREE.BoxGeometry(0.5, th, 0.5), trunkMat);
+                  trunk.position.set(pos[0], th / 2, pos[2]);
+                  trunk.castShadow = true;
+                  scene.add(trunk);
+                  const lSize = 1.5 + Math.random();
+                  const leaf = new THREE.Mesh(new THREE.BoxGeometry(lSize, lSize, lSize), leafMat);
+                  leaf.position.set(pos[0], th + lSize * 0.3, pos[2]);
+                  leaf.castShadow = true;
+                  leaf.receiveShadow = true;
+                  scene.add(leaf);
+                });
+
+                // Sprite character setup
+                const spriteRows = animationRows;
+                const imgSrc = imageToDraw;
+                let spriteTex = null;
+                let spriteMesh = null;
+                const charW = spriteWidth;
+                const charH = rowHeight;
+
+                if (imgSrc) {
+                  const texCanvas = document.createElement('canvas');
+                  texCanvas.width = imgSrc.width || imgSrc.naturalWidth || 1024;
+                  texCanvas.height = imgSrc.height || imgSrc.naturalHeight || 1024;
+                  const tCtx = texCanvas.getContext('2d');
+                  tCtx.drawImage(imgSrc, 0, 0);
+                  spriteTex = new THREE.CanvasTexture(texCanvas);
+                  spriteTex.magFilter = THREE.NearestFilter;
+                  spriteTex.minFilter = THREE.NearestFilter;
+
+                  const aspect = charW / charH;
+                  const meshH = 4;
+                  const meshW = meshH * aspect;
+                  const spriteGeo = new THREE.PlaneGeometry(meshW, meshH);
+                  const spriteMat = new THREE.MeshBasicMaterial({
+                    map: spriteTex,
+                    transparent: true,
+                    alphaTest: 0.1,
+                    side: THREE.DoubleSide,
+                  });
+                  spriteMesh = new THREE.Mesh(spriteGeo, spriteMat);
+                  spriteMesh.position.set(0, meshH / 2, 0);
+                  spriteMesh.castShadow = true;
+                  scene.add(spriteMesh);
+
+                  // Set initial UVs
+                  const imgW = texCanvas.width;
+                  const imgH = texCanvas.height;
+                  if (spriteRows.length > 0 && spriteRows[0].length > 0) {
+                    const frame = spriteRows[0][0];
+                    const u0 = frame.x / imgW;
+                    const v0 = 1 - (frame.y + frame.h) / imgH;
+                    const u1 = (frame.x + frame.w) / imgW;
+                    const v1 = 1 - frame.y / imgH;
+                    const uvAttr = spriteGeo.attributes.uv;
+                    uvAttr.setXY(0, u0, v1); // top-left
+                    uvAttr.setXY(1, u1, v1); // top-right
+                    uvAttr.setXY(2, u0, v0); // bottom-left
+                    uvAttr.setXY(3, u1, v0); // bottom-right
+                    uvAttr.needsUpdate = true;
+                  }
+                }
+
+                // Character state
+                const player = {
+                  x: 0, y: 0, vx: 0, vy: 0,
+                  grounded: true,
+                  facing: 1,
+                  state: 'idle', // idle, walk, attack, defend, jump
+                  frame: 0,
+                  frameTimer: 0,
+                  attackTimer: 0,
+                  defendTimer: 0,
+                };
+
+                // Animation row mapping
+                const getAnimRow = (state) => {
+                  if (!spriteRows.length) return null;
+                  const count = spriteRows.length;
+                  switch (state) {
+                    case 'idle': return spriteRows[0] || null;
+                    case 'walk': return spriteRows[Math.min(1, count - 1)] || spriteRows[0];
+                    case 'jump': return spriteRows[Math.min(3, count - 1)] || spriteRows[0];
+                    case 'attack': return spriteRows[Math.min(4, count - 1)] || spriteRows[count - 1] || spriteRows[0];
+                    case 'defend': return spriteRows[Math.min(5, count - 1)] || spriteRows[Math.max(0, count - 2)] || spriteRows[0];
+                    default: return spriteRows[0];
+                  }
+                };
+
+                // Input handling
+                const keys = {};
+                let lastTap = 0;
+                let touchMoveDir = 0;
+
+                const onKeyDown = (e) => { keys[e.code] = true; };
+                const onKeyUp = (e) => { keys[e.code] = false; };
+                const onMouseDown = (e) => {
+                  if (e.button === 0) { player.state = 'attack'; player.attackTimer = 500; player.frame = 0; player.frameTimer = 0; }
+                  if (e.button === 2) { player.state = 'defend'; player.defendTimer = 600; player.frame = 0; player.frameTimer = 0; }
+                };
+                const onContextMenu = (e) => { e.preventDefault(); };
+                const onTouchStart = (e) => {
+                  const touch = e.touches[0];
+                  const now = Date.now();
+                  const thirdW = window.innerWidth / 3;
+                  if (now - lastTap < 300) {
+                    // Double-tap = defend
+                    player.state = 'defend'; player.defendTimer = 600; player.frame = 0; player.frameTimer = 0;
+                    touchMoveDir = 0;
+                  } else if (touch.clientX < thirdW) {
+                    touchMoveDir = -1; // Left third = move left
+                  } else if (touch.clientX > thirdW * 2) {
+                    touchMoveDir = 1; // Right third = move right
+                  } else {
+                    // Middle third = attack
+                    player.state = 'attack'; player.attackTimer = 500; player.frame = 0; player.frameTimer = 0;
+                    touchMoveDir = 0;
+                  }
+                  lastTap = now;
+                };
+                const onTouchEnd = () => { touchMoveDir = 0; };
+
+                document.addEventListener('keydown', onKeyDown);
+                document.addEventListener('keyup', onKeyUp);
+                renderer.domElement.addEventListener('mousedown', onMouseDown);
+                renderer.domElement.addEventListener('contextmenu', onContextMenu);
+                renderer.domElement.addEventListener('touchstart', onTouchStart);
+                renderer.domElement.addEventListener('touchend', onTouchEnd);
+
+                // Game loop
+                const clock = new THREE.Clock();
+                let lastTime = 0;
+
+                const gameLoop = () => {
+                  if (cancelled) return;
+                  animId = requestAnimationFrame(gameLoop);
+                  const t = clock.getElapsedTime();
+                  const dt = Math.min((t - lastTime) * 1000, 50);
+                  lastTime = t;
+
+                  // Sun movement (slow orbit for dynamic shadows)
+                  sunLight.position.set(
+                    Math.sin(t * 0.3) * 15,
+                    10 + Math.cos(t * 0.2) * 3,
+                    Math.cos(t * 0.3) * -10
+                  );
+
+                  // Player input
+                  const moveSpeed = 0.12;
+                  const jumpVel = 0.28;
+                  const gravity = 0.012;
+                  let moving = false;
+
+                  if (player.attackTimer > 0) {
+                    player.attackTimer -= dt;
+                    if (player.attackTimer <= 0) { player.state = 'idle'; player.frame = 0; }
+                  } else if (player.defendTimer > 0) {
+                    player.defendTimer -= dt;
+                    if (player.defendTimer <= 0) { player.state = 'idle'; player.frame = 0; }
+                  } else {
+                    // Movement
+                    if (keys['ArrowLeft'] || keys['KeyA'] || touchMoveDir < 0) {
+                      player.vx = -moveSpeed; player.facing = -1; moving = true;
+                    } else if (keys['ArrowRight'] || keys['KeyD'] || touchMoveDir > 0) {
+                      player.vx = moveSpeed; player.facing = 1; moving = true;
+                    } else {
+                      player.vx *= 0.8;
+                      if (Math.abs(player.vx) < 0.01) player.vx = 0;
+                    }
+
+                    // Jump
+                    if ((keys['Space'] || keys['ArrowUp'] || keys['KeyW']) && player.grounded) {
+                      player.vy = jumpVel;
+                      player.grounded = false;
+                    }
+
+                    // Attack / Defend from keyboard
+                    if (keys['KeyA'] && !keys['ArrowLeft'] && !keys['KeyW'] && !keys['KeyD']) {
+                      // 'A' for attack only when not used for movement - use click instead
+                    }
+                    if (keys['KeyZ'] || keys['KeyJ']) {
+                      player.state = 'attack'; player.attackTimer = 500; player.frame = 0; player.frameTimer = 0;
+                    }
+                    if (keys['KeyE'] || keys['KeyK']) {
+                      player.state = 'defend'; player.defendTimer = 600; player.frame = 0; player.frameTimer = 0;
+                    }
+
+                    // State
+                    if (player.attackTimer <= 0 && player.defendTimer <= 0) {
+                      if (!player.grounded) {
+                        player.state = 'jump';
+                      } else if (moving) {
+                        player.state = 'walk';
+                      } else {
+                        player.state = 'idle';
+                      }
+                    }
+                  }
+
+                  // Physics
+                  player.vy -= gravity;
+                  player.x += player.vx;
+                  player.y += player.vy;
+
+                  if (player.y <= 0) {
+                    player.y = 0;
+                    player.vy = 0;
+                    player.grounded = true;
+                  }
+
+                  // Boundaries
+                  if (player.x < -20) player.x = -20;
+                  if (player.x > 20) player.x = 20;
+
+                  // Animation frame advance
+                  player.frameTimer += dt;
+                  const frameDur = 1000 / Math.max(1, fps);
+                  if (player.frameTimer >= frameDur) {
+                    player.frameTimer -= frameDur;
+                    const row = getAnimRow(player.state);
+                    if (row && row.length > 0) {
+                      player.frame = (player.frame + 1) % row.length;
+                    }
+                  }
+
+                  // Update sprite mesh
+                  if (spriteMesh && spriteTex) {
+                    const meshH = 4;
+                    spriteMesh.position.x = player.x;
+                    spriteMesh.position.y = meshH / 2 + player.y * 10;
+                    spriteMesh.scale.x = player.facing;
+
+                    const row = getAnimRow(player.state);
+                    if (row && row.length > 0) {
+                      const frame = row[player.frame % row.length];
+                      const imgW = spriteTex.image.width;
+                      const imgH = spriteTex.image.height;
+                      const u0 = frame.x / imgW;
+                      const v0 = 1 - (frame.y + frame.h) / imgH;
+                      const u1 = (frame.x + frame.w) / imgW;
+                      const v1 = 1 - frame.y / imgH;
+                      const uvAttr = spriteMesh.geometry.attributes.uv;
+                      uvAttr.setXY(0, u0, v1);
+                      uvAttr.setXY(1, u1, v1);
+                      uvAttr.setXY(2, u0, v0);
+                      uvAttr.setXY(3, u1, v0);
+                      uvAttr.needsUpdate = true;
+                    }
+                  }
+
+                  // Render
+                  renderer.render(scene, camera);
+                };
+
+                animId = requestAnimationFrame(gameLoop);
+
+                // Resize handler
+                const handleResize = () => {
+                  const r = container.getBoundingClientRect();
+                  const rw = Math.max(1, Math.floor(r.width * PIXEL_SCALE));
+                  const rh = Math.max(1, Math.floor(r.height * PIXEL_SCALE));
+                  renderer.setSize(rw, rh);
+                  camera.aspect = r.width / r.height;
+                  camera.updateProjectionMatrix();
+                };
+                const resizeObs = new ResizeObserver(handleResize);
+                resizeObs.observe(container);
+
+                // Cleanup function
+                gameCleanupRef.current = () => {
+                  if (animId) cancelAnimationFrame(animId);
+                  document.removeEventListener('keydown', onKeyDown);
+                  document.removeEventListener('keyup', onKeyUp);
+                  renderer.domElement.removeEventListener('mousedown', onMouseDown);
+                  renderer.domElement.removeEventListener('contextmenu', onContextMenu);
+                  renderer.domElement.removeEventListener('touchstart', onTouchStart);
+                  renderer.domElement.removeEventListener('touchend', onTouchEnd);
+                  resizeObs.disconnect();
+                  renderer.dispose();
+                  if (spriteTex) spriteTex.dispose();
+                  if (container.contains(renderer.domElement)) {
+                    container.removeChild(renderer.domElement);
+                  }
+                };
+              };
+
+              initScene();
+              return () => {
+                cancelled = true;
+                if (gameCleanupRef.current) {
+                  gameCleanupRef.current();
+                  gameCleanupRef.current = null;
+                }
+              };
+            }, [gamePreviewActive]);
+
+            const handleStartGamePreview = () => { setGamePreviewActive(true); };
+            const handleStopGamePreview = () => {
+              if (gameCleanupRef.current) {
+                gameCleanupRef.current();
+                gameCleanupRef.current = null;
+              }
+              setGamePreviewActive(false);
+            };
+
             return React.createElement('div', null,
               React.createElement('div', { className: "grid grid-cols-1 lg:grid-cols-3 gap-6" },
                 React.createElement('div', { className: "lg:col-span-2 bg-gray-800 rounded-lg shadow-2xl p-4 flex flex-col gap-3" },
-                  React.createElement('div', {
-                      ref: canvasContainerRef,
-                      className: `w-full h-[42vh] lg:h-[50vh] bg-gray-900/50 rounded-md border ${isDragOver ? 'border-cyan-400 drop-target-active' : 'border-gray-700'} relative overflow-hidden`,
-                      onDragOver: handleDragOver,
-                      onDragEnter: handleDragOver,
-                      onDragLeave: handleDragLeave,
-                      onDrop: handleDrop
-                    },
-                    isLoading && React.createElement('div', { className: "absolute inset-0 text-gray-400 w-full h-full flex items-center justify-center z-10" }, "Loading Image..."),
-                    isDragOver && React.createElement('div', { className: "absolute inset-0 flex items-center justify-center z-20 pointer-events-none" },
-                      React.createElement('span', { className: "text-cyan-300 text-lg font-semibold bg-gray-900/80 px-4 py-2 rounded-md" }, "Drop image to load")
-                    ),
-                    React.createElement('canvas', {
-                      ref: canvasRef,
-                      className: `transition-opacity duration-300 ${isLoading ? 'opacity-50' : 'opacity-100'}`
-                    }),
-                    debugInfo && React.createElement('div', {
-                      className: "absolute bottom-2 left-2 right-2 bg-gray-900/90 border border-cyan-500/40 rounded-md p-2 text-xs font-mono text-cyan-100 z-30 pointer-events-none",
-                    },
-                      React.createElement('div', { className: "text-cyan-300 font-semibold" }, "auto-adjust trail (3s)"),
-                      React.createElement('div', null, `bg=${debugInfo.bg}  blobs=${debugInfo.blobCount}  rows=${debugInfo.rowCount}`),
-                      React.createElement('div', null, `spriteWidth=${debugInfo.spriteWidth}  rowHeight=${debugInfo.rowHeight}  labelWidth=${debugInfo.labelWidth}  applied=${debugInfo.applied}`)
-                    )
-                  ),
-                  // Animation preview lives inside the same column to keep the
-                  // grid view + previews on screen together; the controls panel
-                  // is on the right (lg) or below (mobile).
-                  imageToDraw && animationRows.length > 0 && React.createElement(AnimationPreviewer, {
-                    image: imageToDraw,
-                    rows: animationRows,
-                    spriteWidth: spriteWidth,
-                    rowHeight: rowHeight,
-                    fps: fps,
-                    timingMode: timingMode,
-                  })
+                  gamePreviewActive
+                    ? React.createElement('div', { className: "flex flex-col gap-3 h-full" },
+                        React.createElement('div', { className: "flex items-center justify-between" },
+                          React.createElement('span', { className: "text-sm text-gray-300 font-mono" }, "WASD/Arrows: move | Space: jump | Click/Z: attack | Right-click/E: defend"),
+                          React.createElement('button', {
+                            onClick: handleStopGamePreview,
+                            className: "px-3 py-1.5 rounded-md bg-red-600 hover:bg-red-500 text-white text-sm font-semibold transition-colors"
+                          }, "Back to Analyzer")
+                        ),
+                        React.createElement('div', {
+                          ref: gameContainerRef,
+                          className: "w-full flex-1 min-h-[42vh] lg:min-h-[50vh] bg-black rounded-md border border-gray-700 relative overflow-hidden",
+                          style: { imageRendering: 'pixelated' }
+                        })
+                      )
+                    : React.createElement(React.Fragment, null,
+                        React.createElement('div', {
+                            ref: canvasContainerRef,
+                            className: `w-full h-[42vh] lg:h-[50vh] bg-gray-900/50 rounded-md border ${isDragOver ? 'border-cyan-400 drop-target-active' : 'border-gray-700'} relative overflow-hidden`,
+                            onDragOver: handleDragOver,
+                            onDragEnter: handleDragOver,
+                            onDragLeave: handleDragLeave,
+                            onDrop: handleDrop
+                          },
+                          isLoading && React.createElement('div', { className: "absolute inset-0 text-gray-400 w-full h-full flex items-center justify-center z-10" }, "Loading Image..."),
+                          isDragOver && React.createElement('div', { className: "absolute inset-0 flex items-center justify-center z-20 pointer-events-none" },
+                            React.createElement('span', { className: "text-cyan-300 text-lg font-semibold bg-gray-900/80 px-4 py-2 rounded-md" }, "Drop image to load")
+                          ),
+                          React.createElement('canvas', {
+                            ref: canvasRef,
+                            className: `transition-opacity duration-300 ${isLoading ? 'opacity-50' : 'opacity-100'}`
+                          }),
+                          debugInfo && React.createElement('div', {
+                            className: "absolute bottom-2 left-2 right-2 bg-gray-900/90 border border-cyan-500/40 rounded-md p-2 text-xs font-mono text-cyan-100 z-30 pointer-events-none",
+                          },
+                            React.createElement('div', { className: "text-cyan-300 font-semibold" }, "auto-adjust trail (3s)"),
+                            React.createElement('div', null, `bg=${debugInfo.bg}  blobs=${debugInfo.blobCount}  rows=${debugInfo.rowCount}`),
+                            React.createElement('div', null, `spriteWidth=${debugInfo.spriteWidth}  rowHeight=${debugInfo.rowHeight}  labelWidth=${debugInfo.labelWidth}  applied=${debugInfo.applied}`)
+                          )
+                        ),
+                        // Animation preview lives inside the same column to keep the
+                        // grid view + previews on screen together; the controls panel
+                        // is on the right (lg) or below (mobile).
+                        imageToDraw && animationRows.length > 0 && React.createElement(AnimationPreviewer, {
+                          image: imageToDraw,
+                          rows: animationRows,
+                          spriteWidth: spriteWidth,
+                          rowHeight: rowHeight,
+                          fps: fps,
+                          timingMode: timingMode,
+                        })
+                      )
                 ),
                 React.createElement('div', { className: "bg-gray-800 rounded-lg shadow-2xl p-6 flex flex-col space-y-4" },
                   React.createElement('div', { className: "flex justify-between items-center pb-2 border-b border-gray-700" },
@@ -1729,6 +2165,11 @@ img.onload = () => requestAnimationFrame(loop);
                         React.createElement('span', null, `${spriteWidth}px wide / ${rowHeight}px high`)
                       )
                     ),
+                    React.createElement('button', {
+                      onClick: gamePreviewActive ? handleStopGamePreview : handleStartGamePreview,
+                      disabled: !imageToDraw || animationRows.length === 0,
+                      className: "w-full flex items-center justify-center gap-2 p-3 rounded-lg font-semibold text-white transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-400 disabled:opacity-40 disabled:cursor-not-allowed " + (gamePreviewActive ? "bg-red-600 hover:bg-red-500" : "bg-emerald-600 hover:bg-emerald-500")
+                    }, gamePreviewActive ? "Back to Analyzer" : "Preview Sprite in Game"),
                     React.createElement('div', { className: "bg-gray-900 rounded-lg" },
                       React.createElement('div', { className: "flex border-b border-gray-700" },
                         React.createElement('button', {
