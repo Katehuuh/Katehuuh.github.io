@@ -1684,9 +1684,9 @@ img.onload = () => requestAnimationFrame(loop);
                 scene.fog = new THREE.FogExp2(0x0a0a12, 0.018);
 
                 // Camera (static)
-                const camera = new THREE.PerspectiveCamera(30, 4/3, 0.1, 300);
-                camera.position.set(0, 22, 32);
-                camera.lookAt(0, 0, -4);
+                const camera = new THREE.PerspectiveCamera(45, 4/3, 0.1, 300);
+                camera.position.set(0, 6, 14);
+                camera.lookAt(0, 1, -5);
 
                 // Resize renderer to match container - use ResizeObserver for reliable sizing
                 const PIXEL_SCALE = 0.25;
