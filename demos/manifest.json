@@ -1,6 +1,12 @@
 {
   "demos": [
     {
+      "name": "[GAME]-SoundOfPath",
+      "type": "file",
+      "filename": "[GAME]-SoundOfPath.html",
+      "description": "Accessible labyrinth for fully blind. high-tech RT sound | Control key: arrow keys or mobile gyroscope and found exit."
+    },
+    {
       "name": "Text-to-ASCII-QR",
       "type": "file",
       "filename": "Text-to-ASCII-QR.html"
@@ -14,11 +20,6 @@
       "name": "[TOOL]-Prompt-Library",
       "type": "file",
       "filename": "[TOOL]-Prompt-Library.html"
-    },
-    {
-      "name": "[GAME]-Labyrinth-Audio-Ray-Traced",
-      "type": "file",
-      "filename": "[GAME]-Labyrinth-Audio-Ray-Traced.html"
     },
     {
       "name": "[GAME]-Map2Mask-exploration",
