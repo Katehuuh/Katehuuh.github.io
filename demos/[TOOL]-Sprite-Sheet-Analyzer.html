@@ -1824,14 +1824,6 @@ img.onload = () => requestAnimationFrame(loop);
                   texCanvas.height = imgSrc.height || imgSrc.naturalHeight || 1024;
                   const tCtx = texCanvas.getContext('2d');
                   tCtx.drawImage(imgSrc, 0, 0);
-                  // Strip near-white border pixels: set alpha to 0 for pixels where
-                  // RGB are all > 240 (grid lines / sheet background bleed)
-                  const imgData = tCtx.getImageData(0, 0, texCanvas.width, texCanvas.height);
-                  const px = imgData.data;
-                  for (let i = 0; i < px.length; i += 4) {
-                    if (px[i] > 200 && px[i+1] > 200 && px[i+2] > 200) px[i+3] = 0;
-                  }
-                  tCtx.putImageData(imgData, 0, 0);
                   spriteTex = new THREE.CanvasTexture(texCanvas);
                   spriteTex.magFilter = THREE.NearestFilter;
                   spriteTex.minFilter = THREE.NearestFilter;
@@ -1851,19 +1843,7 @@ img.onload = () => requestAnimationFrame(loop);
                   spriteMesh.castShadow = true;
                   scene.add(spriteMesh);
 
-                  // Sprite-shaped shadow: ellipse on ground, no texture (simple dark oval)
-                  const shadowGeo = new THREE.CircleGeometry(meshW * 0.4, 16);
-                  const shadowMat = new THREE.MeshBasicMaterial({
-                    color: 0x000000,
-                    transparent: true,
-                    opacity: 0.25,
-                    depthWrite: false,
-                  });
-                  shadowMesh = new THREE.Mesh(shadowGeo, shadowMat);
-                  shadowMesh.rotation.x = -Math.PI / 2;
-                  shadowMesh.scale.set(1, 0.6, 1);
-                  shadowMesh.position.set(0, 0.02, 0);
-                  scene.add(shadowMesh);
+                  // Shadow handled by volumetric lighting pass
 
                   // Set initial UVs
                   // Set initial sprite UVs from first frame
