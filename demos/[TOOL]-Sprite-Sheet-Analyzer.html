@@ -934,8 +934,15 @@
               });
 
               resizeObserver.observe(container);
+              // Force initial size + draw after re-mount (e.g. returning from game preview)
+              const { width, height } = container.getBoundingClientRect();
+              if (width && height) {
+                canvas.width = width;
+                canvas.height = height;
+                draw();
+              }
               return () => resizeObserver.disconnect();
-            }, [draw]);
+            }, [draw, gamePreviewActive]);
 
             useEffect(() => {
               draw();
@@ -1634,13 +1641,13 @@ img.onload = () => requestAnimationFrame(loop);
 
                 // Scene
                 const scene = new THREE.Scene();
-                scene.background = new THREE.Color(0x1a1a2a);
-                scene.fog = new THREE.FogExp2(0x1a1a2a, 0.04);
+                scene.background = new THREE.Color(0x0a0a12);
+                scene.fog = new THREE.FogExp2(0x0a0a12, 0.035);
 
                 // Camera (static)
-                const camera = new THREE.PerspectiveCamera(50, (container.offsetWidth || 400) / (container.offsetHeight || 300), 0.1, 200);
-                camera.position.set(0, 8, 18);
-                camera.lookAt(0, 1, 0);
+                const camera = new THREE.PerspectiveCamera(35, (container.offsetWidth || 400) / (container.offsetHeight || 300), 0.1, 200);
+                camera.position.set(0, 14, 22);
+                camera.lookAt(0, 0, 0);
 
                 // Lights
                 const ambientLight = new THREE.AmbientLight(0x404060, 1.2);
@@ -1661,7 +1668,7 @@ img.onload = () => requestAnimationFrame(loop);
                 sunLight.target.position.set(0, 0, 0);
 
                 // Ground plane (grass colors from v1: #1a4a1a base)
-                const groundGeo = new THREE.PlaneGeometry(60, 60, 12, 12);
+                const groundGeo = new THREE.PlaneGeometry(80, 80, 12, 12);
                 const groundCanvas = document.createElement('canvas');
                 groundCanvas.width = 64; groundCanvas.height = 64;
                 const gCtx = groundCanvas.getContext('2d');
@@ -1717,6 +1724,27 @@ img.onload = () => requestAnimationFrame(loop);
                   scene.add(leaf);
                 });
 
+                // Buildings behind the play area
+                const buildingColors = [0x2a2a3a, 0x1e1e2e, 0x3a3040, 0x2a2a3a, 0x1e1e2e, 0x3a3040, 0x2a2a3a];
+                const buildingData = [
+                  { x: -12, z: -14, w: 3, h: 6, d: 3 },
+                  { x: -7, z: -16, w: 4, h: 8, d: 3.5 },
+                  { x: -2, z: -13, w: 3.5, h: 5, d: 3 },
+                  { x: 3, z: -17, w: 3, h: 7, d: 4 },
+                  { x: 8, z: -14, w: 4, h: 4, d: 3 },
+                  { x: 13, z: -18, w: 3.5, h: 6.5, d: 3.5 },
+                  { x: -4, z: -19, w: 4, h: 3.5, d: 3 },
+                ];
+                buildingData.forEach((b, i) => {
+                  const bMat = new THREE.MeshLambertMaterial({ color: buildingColors[i % buildingColors.length] });
+                  const bGeo = new THREE.BoxGeometry(b.w, b.h, b.d);
+                  const bMesh = new THREE.Mesh(bGeo, bMat);
+                  bMesh.position.set(b.x, b.h / 2, b.z);
+                  bMesh.castShadow = true;
+                  bMesh.receiveShadow = true;
+                  scene.add(bMesh);
+                });
+
                 // Sprite character setup
                 const spriteRows = animationRows;
                 const imgSrc = imageToDraw;
@@ -1725,6 +1753,7 @@ img.onload = () => requestAnimationFrame(loop);
                 const charW = spriteWidth;
                 const charH = rowHeight;
 
+                let shadowMesh = null;
                 if (imgSrc) {
                   const texCanvas = document.createElement('canvas');
                   texCanvas.width = imgSrc.width || imgSrc.naturalWidth || 1024;
@@ -1736,19 +1765,35 @@ img.onload = () => requestAnimationFrame(loop);
                   spriteTex.minFilter = THREE.NearestFilter;
 
                   const aspect = charW / charH;
-                  const meshH = 4;
+                  const meshH = 3;
                   const meshW = meshH * aspect;
                   const spriteGeo = new THREE.PlaneGeometry(meshW, meshH);
                   const spriteMat = new THREE.MeshBasicMaterial({
                     map: spriteTex,
                     transparent: true,
-                    alphaTest: 0.1,
+                    alphaTest: 0.5,
                     side: THREE.DoubleSide,
                   });
                   spriteMesh = new THREE.Mesh(spriteGeo, spriteMat);
                   spriteMesh.position.set(0, meshH / 2, 0);
                   spriteMesh.castShadow = true;
                   scene.add(spriteMesh);
+
+                  // Sprite-shaped shadow plane (flattened, dark, on ground)
+                  const shadowGeo = new THREE.PlaneGeometry(meshW, meshH);
+                  const shadowMat = new THREE.MeshBasicMaterial({
+                    map: spriteTex,
+                    transparent: true,
+                    alphaTest: 0.1,
+                    color: 0x000000,
+                    opacity: 0.3,
+                    depthWrite: false,
+                  });
+                  shadowMesh = new THREE.Mesh(shadowGeo, shadowMat);
+                  shadowMesh.rotation.x = -Math.PI / 2;
+                  shadowMesh.scale.set(1, 0.3, 1);
+                  shadowMesh.position.set(0, 0.05, 0);
+                  scene.add(shadowMesh);
 
                   // Set initial UVs
                   const imgW = texCanvas.width;
@@ -1760,17 +1805,24 @@ img.onload = () => requestAnimationFrame(loop);
                     const u1 = (frame.x + frame.w) / imgW;
                     const v1 = 1 - frame.y / imgH;
                     const uvAttr = spriteGeo.attributes.uv;
-                    uvAttr.setXY(0, u0, v1); // top-left
-                    uvAttr.setXY(1, u1, v1); // top-right
-                    uvAttr.setXY(2, u0, v0); // bottom-left
-                    uvAttr.setXY(3, u1, v0); // bottom-right
+                    uvAttr.setXY(0, u0, v1);
+                    uvAttr.setXY(1, u1, v1);
+                    uvAttr.setXY(2, u0, v0);
+                    uvAttr.setXY(3, u1, v0);
                     uvAttr.needsUpdate = true;
+                    // Same UVs for shadow
+                    const sUvAttr = shadowGeo.attributes.uv;
+                    sUvAttr.setXY(0, u0, v1);
+                    sUvAttr.setXY(1, u1, v1);
+                    sUvAttr.setXY(2, u0, v0);
+                    sUvAttr.setXY(3, u1, v0);
+                    sUvAttr.needsUpdate = true;
                   }
                 }
 
                 // Character state
                 const player = {
-                  x: 0, y: 0, vx: 0, vy: 0,
+                  x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0,
                   grounded: true,
                   facing: 1,
                   state: 'idle', // idle, walk, attack, defend, jump
@@ -1854,7 +1906,7 @@ img.onload = () => requestAnimationFrame(loop);
 
                   // Player input
                   const moveSpeed = 0.12;
-                  const jumpVel = 0.28;
+                  const jumpVel = 0.06;
                   const gravity = 0.012;
                   let moving = false;
 
@@ -1865,7 +1917,7 @@ img.onload = () => requestAnimationFrame(loop);
                     player.defendTimer -= dt;
                     if (player.defendTimer <= 0) { player.state = 'idle'; player.frame = 0; }
                   } else {
-                    // Movement
+                    // Movement (X axis: left/right)
                     if (keys['ArrowLeft'] || keys['KeyA'] || touchMoveDir < 0) {
                       player.vx = -moveSpeed; player.facing = -1; moving = true;
                     } else if (keys['ArrowRight'] || keys['KeyD'] || touchMoveDir > 0) {
@@ -1875,16 +1927,23 @@ img.onload = () => requestAnimationFrame(loop);
                       if (Math.abs(player.vx) < 0.01) player.vx = 0;
                     }
 
+                    // Movement (Z axis: forward/backward)
+                    if (keys['ArrowUp'] || keys['KeyW']) {
+                      player.vz = -moveSpeed; moving = true;
+                    } else if (keys['ArrowDown'] || keys['KeyS']) {
+                      player.vz = moveSpeed; moving = true;
+                    } else {
+                      player.vz *= 0.8;
+                      if (Math.abs(player.vz) < 0.01) player.vz = 0;
+                    }
+
                     // Jump
-                    if ((keys['Space'] || keys['ArrowUp'] || keys['KeyW']) && player.grounded) {
+                    if (keys['Space'] && player.grounded) {
                       player.vy = jumpVel;
                       player.grounded = false;
                     }
 
                     // Attack / Defend from keyboard
-                    if (keys['KeyA'] && !keys['ArrowLeft'] && !keys['KeyW'] && !keys['KeyD']) {
-                      // 'A' for attack only when not used for movement - use click instead
-                    }
                     if (keys['KeyZ'] || keys['KeyJ']) {
                       player.state = 'attack'; player.attackTimer = 500; player.frame = 0; player.frameTimer = 0;
                     }
@@ -1908,6 +1967,7 @@ img.onload = () => requestAnimationFrame(loop);
                   player.vy -= gravity;
                   player.x += player.vx;
                   player.y += player.vy;
+                  player.z += player.vz;
 
                   if (player.y <= 0) {
                     player.y = 0;
@@ -1915,9 +1975,11 @@ img.onload = () => requestAnimationFrame(loop);
                     player.grounded = true;
                   }
 
-                  // Boundaries
-                  if (player.x < -20) player.x = -20;
-                  if (player.x > 20) player.x = 20;
+                  // Invisible walls
+                  if (player.x < -12) player.x = -12;
+                  if (player.x > 12) player.x = 12;
+                  if (player.z < -8) player.z = -8;
+                  if (player.z > 8) player.z = 8;
 
                   // Animation frame advance
                   player.frameTimer += dt;
@@ -1932,10 +1994,18 @@ img.onload = () => requestAnimationFrame(loop);
 
                   // Update sprite mesh
                   if (spriteMesh && spriteTex) {
-                    const meshH = 4;
+                    const meshH = 3;
                     spriteMesh.position.x = player.x;
                     spriteMesh.position.y = meshH / 2 + player.y * 10;
+                    spriteMesh.position.z = player.z;
                     spriteMesh.scale.x = player.facing;
+
+                    // Update shadow position to follow character on ground
+                    if (shadowMesh) {
+                      shadowMesh.position.x = player.x;
+                      shadowMesh.position.z = player.z;
+                      shadowMesh.scale.x = player.facing;
+                    }
 
                     const row = getAnimRow(player.state);
                     if (row && row.length > 0) {
@@ -1954,6 +2024,15 @@ img.onload = () => requestAnimationFrame(loop);
                       uvAttr.setXY(2, u0, v0);
                       uvAttr.setXY(3, u1, v0);
                       uvAttr.needsUpdate = true;
+                      // Sync shadow UVs
+                      if (shadowMesh) {
+                        const sUv = shadowMesh.geometry.attributes.uv;
+                        sUv.setXY(0, u0, v1);
+                        sUv.setXY(1, u1, v1);
+                        sUv.setXY(2, u0, v0);
+                        sUv.setXY(3, u1, v0);
+                        sUv.needsUpdate = true;
+                      }
                     }
                   }
 
@@ -1964,6 +2043,7 @@ img.onload = () => requestAnimationFrame(loop);
                 animId = requestAnimationFrame(gameLoop);
 
                 // Resize handler
+                const PIXEL_SCALE = 0.25;
                 const handleResize = () => {
                   const r = container.getBoundingClientRect();
                   const rw = Math.max(1, Math.floor(r.width * PIXEL_SCALE));
