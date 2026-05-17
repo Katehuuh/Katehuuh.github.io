@@ -260,21 +260,14 @@
                   if (ctx) {
                     ctx.clearRect(0, 0, canvas.width, canvas.height);
                     if (sprite.trim) {
-                      // Draw the trimmed sprite centered, inset 1px to avoid edge bleed
                       const t = sprite.trim;
-                      const inset = 1;
-                      const sx = sprite.x + t.x + inset, sy = sprite.y + t.y + inset;
-                      const sw = Math.max(1, t.w - inset * 2), sh = Math.max(1, t.h - inset * 2);
-                      const scale = Math.min(canvas.width / sw, canvas.height / sh, 1);
-                      const dw = sw * scale, dh = sh * scale;
+                      const sx = sprite.x + t.x, sy = sprite.y + t.y;
+                      const scale = Math.min(canvas.width / t.w, canvas.height / t.h, 1);
+                      const dw = t.w * scale, dh = t.h * scale;
                       const dx = (canvas.width - dw) / 2, dy = (canvas.height - dh) / 2;
-                      ctx.drawImage(image, sx, sy, sw, sh, dx, dy, dw, dh);
+                      ctx.drawImage(image, sx, sy, t.w, t.h, dx, dy, dw, dh);
                     } else {
-                      // Inset 1px on each edge to clip bleeding border pixels
-                      const inset = 1;
-                      const sx = sprite.x + inset, sy = sprite.y + inset;
-                      const sw = Math.max(1, sprite.w - inset * 2), sh = Math.max(1, sprite.h - inset * 2);
-                      ctx.drawImage(image, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+                      ctx.drawImage(image, sprite.x, sprite.y, sprite.w, sprite.h, 0, 0, canvas.width, canvas.height);
                     }
                   }
                 }
@@ -1411,6 +1404,47 @@
                     }
                   }
                   if (x1 >= x0 && y1 >= y0) {
+                    // Remove isolated edge debris: shrink trim if edge pixels
+                    // have no opaque neighbors (lone artifacts from sheet grid)
+                    const isOpaque = (px, py) => px >= 0 && px < w && py >= 0 && py < h && d[(py * w + px) * 4 + 3] > 20;
+                    const hasNeighbor = (px, py) => {
+                      for (let dy = -1; dy <= 1; dy++)
+                        for (let dx = -1; dx <= 1; dx++)
+                          if ((dx || dy) && isOpaque(px + dx, py + dy)) return true;
+                      return false;
+                    };
+                    // Shrink left edge
+                    while (x0 < x1) {
+                      let allIsolated = true;
+                      for (let py = y0; py <= y1; py++) {
+                        if (isOpaque(x0, py) && hasNeighbor(x0, py)) { allIsolated = false; break; }
+                      }
+                      if (allIsolated) x0++; else break;
+                    }
+                    // Shrink right edge
+                    while (x1 > x0) {
+                      let allIsolated = true;
+                      for (let py = y0; py <= y1; py++) {
+                        if (isOpaque(x1, py) && hasNeighbor(x1, py)) { allIsolated = false; break; }
+                      }
+                      if (allIsolated) x1--; else break;
+                    }
+                    // Shrink top edge
+                    while (y0 < y1) {
+                      let allIsolated = true;
+                      for (let px = x0; px <= x1; px++) {
+                        if (isOpaque(px, y0) && hasNeighbor(px, y0)) { allIsolated = false; break; }
+                      }
+                      if (allIsolated) y0++; else break;
+                    }
+                    // Shrink bottom edge
+                    while (y1 > y0) {
+                      let allIsolated = true;
+                      for (let px = x0; px <= x1; px++) {
+                        if (isOpaque(px, y1) && hasNeighbor(px, y1)) { allIsolated = false; break; }
+                      }
+                      if (allIsolated) y1--; else break;
+                    }
                     return { ...sprite, trim: { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 } };
                   }
                 } catch {}
