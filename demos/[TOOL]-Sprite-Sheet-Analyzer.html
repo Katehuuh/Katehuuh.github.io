@@ -1807,7 +1807,7 @@ img.onload = () => requestAnimationFrame(loop);
                   const imgData = tCtx.getImageData(0, 0, texCanvas.width, texCanvas.height);
                   const px = imgData.data;
                   for (let i = 0; i < px.length; i += 4) {
-                    if (px[i] > 240 && px[i+1] > 240 && px[i+2] > 240) px[i+3] = 0;
+                    if (px[i] > 200 && px[i+1] > 200 && px[i+2] > 200) px[i+3] = 0;
                   }
                   tCtx.putImageData(imgData, 0, 0);
                   spriteTex = new THREE.CanvasTexture(texCanvas);
@@ -1950,8 +1950,8 @@ img.onload = () => requestAnimationFrame(loop);
 
                   // Player input
                   const moveSpeed = 0.12;
-                  const jumpVel = 0.06;
-                  const gravity = 0.012;
+                  const jumpVel = 0.04;
+                  const gravity = 0.003;
                   let moving = false;
 
                   if (player.attackTimer > 0) {
@@ -2056,12 +2056,14 @@ img.onload = () => requestAnimationFrame(loop);
                       const frame = row[player.frame % row.length];
                       const imgW = spriteTex.image.width;
                       const imgH = spriteTex.image.height;
-                      // Half-texel inset to prevent bleeding from neighboring frames
-                      const px = 0.5 / imgW, py = 0.5 / imgH;
-                      const u0 = frame.x / imgW + px;
-                      const v0 = 1 - (frame.y + frame.h) / imgH + py;
-                      const u1 = (frame.x + frame.w) / imgW - px;
-                      const v1 = 1 - frame.y / imgH - py;
+                      // Use trim bounds if available (excludes edge debris)
+                      const t = frame.trim || { x: 0, y: 0, w: frame.w, h: frame.h };
+                      const fx = frame.x + t.x, fy = frame.y + t.y, fw = t.w, fh = t.h;
+                      const px = 1.0 / imgW, py = 1.0 / imgH;
+                      const u0 = fx / imgW + px;
+                      const v0 = 1 - (fy + fh) / imgH + py;
+                      const u1 = (fx + fw) / imgW - px;
+                      const v1 = 1 - fy / imgH - py;
                       const uvAttr = spriteMesh.geometry.attributes.uv;
                       uvAttr.setXY(0, u0, v1);
                       uvAttr.setXY(1, u1, v1);
