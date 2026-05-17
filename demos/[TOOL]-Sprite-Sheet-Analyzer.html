@@ -2132,6 +2132,7 @@ void main(){
                     if (keys['Space'] && player.grounded) {
                       player.vy = jumpVel;
                       player.grounded = false;
+                      player.frame = 0; player.frameTimer = 0;
                     }
 
                     // Attack / Defend from keyboard
@@ -2177,13 +2178,19 @@ void main(){
                   if (player.z > 8) player.z = 8;
 
                   // Animation frame advance
+                  // For jump: sync animation to physics so all frames play during arc
+                  // Jump duration = 2 * jumpVel / gravity frames at 60fps = ms
                   player.frameTimer += dt;
-                  const frameDur = 1000 / Math.max(1, fps);
+                  const animRow = getAnimRow(player.state);
+                  let frameDur = 1000 / Math.max(1, fps);
+                  if (player.state === 'jump' && animRow && animRow.length > 1) {
+                    const jumpDurMs = (2 * jumpVel / gravity) * (1000 / 60);
+                    frameDur = jumpDurMs / animRow.length;
+                  }
                   if (player.frameTimer >= frameDur) {
                     player.frameTimer -= frameDur;
-                    const row = getAnimRow(player.state);
-                    if (row && row.length > 0) {
-                      player.frame = (player.frame + 1) % row.length;
+                    if (animRow && animRow.length > 0) {
+                      player.frame = (player.frame + 1) % animRow.length;
                     }
                   }
 
