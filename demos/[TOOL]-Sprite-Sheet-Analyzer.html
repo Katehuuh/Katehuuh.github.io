@@ -1795,44 +1795,37 @@ img.onload = () => requestAnimationFrame(loop);
                   spriteMesh.castShadow = true;
                   scene.add(spriteMesh);
 
-                  // Sprite-shaped shadow plane (flattened, dark, on ground)
-                  const shadowGeo = new THREE.PlaneGeometry(meshW, meshH);
+                  // Sprite-shaped shadow: ellipse on ground, no texture (simple dark oval)
+                  const shadowGeo = new THREE.CircleGeometry(meshW * 0.4, 16);
                   const shadowMat = new THREE.MeshBasicMaterial({
-                    map: spriteTex,
-                    transparent: true,
-                    alphaTest: 0.1,
                     color: 0x000000,
-                    opacity: 0.3,
+                    transparent: true,
+                    opacity: 0.25,
                     depthWrite: false,
                   });
                   shadowMesh = new THREE.Mesh(shadowGeo, shadowMat);
                   shadowMesh.rotation.x = -Math.PI / 2;
-                  shadowMesh.scale.set(1, 0.3, 1);
-                  shadowMesh.position.set(0, 0.05, 0);
+                  shadowMesh.scale.set(1, 0.6, 1);
+                  shadowMesh.position.set(0, 0.02, 0);
                   scene.add(shadowMesh);
 
                   // Set initial UVs
+                  // Set initial sprite UVs from first frame
                   const imgW = texCanvas.width;
                   const imgH = texCanvas.height;
                   if (spriteRows.length > 0 && spriteRows[0].length > 0) {
                     const frame = spriteRows[0][0];
-                    const u0 = frame.x / imgW;
-                    const v0 = 1 - (frame.y + frame.h) / imgH;
-                    const u1 = (frame.x + frame.w) / imgW;
-                    const v1 = 1 - frame.y / imgH;
+                    const px = 0.5 / imgW, py = 0.5 / imgH;
+                    const u0 = frame.x / imgW + px;
+                    const v0 = 1 - (frame.y + frame.h) / imgH + py;
+                    const u1 = (frame.x + frame.w) / imgW - px;
+                    const v1 = 1 - frame.y / imgH - py;
                     const uvAttr = spriteGeo.attributes.uv;
                     uvAttr.setXY(0, u0, v1);
                     uvAttr.setXY(1, u1, v1);
                     uvAttr.setXY(2, u0, v0);
                     uvAttr.setXY(3, u1, v0);
                     uvAttr.needsUpdate = true;
-                    // Same UVs for shadow
-                    const sUvAttr = shadowGeo.attributes.uv;
-                    sUvAttr.setXY(0, u0, v1);
-                    sUvAttr.setXY(1, u1, v1);
-                    sUvAttr.setXY(2, u0, v0);
-                    sUvAttr.setXY(3, u1, v0);
-                    sUvAttr.needsUpdate = true;
                   }
                 }
 
@@ -2042,14 +2035,7 @@ img.onload = () => requestAnimationFrame(loop);
                       uvAttr.setXY(3, u1, v0);
                       uvAttr.needsUpdate = true;
                       // Sync shadow UVs
-                      if (shadowMesh) {
-                        const sUv = shadowMesh.geometry.attributes.uv;
-                        sUv.setXY(0, u0, v1);
-                        sUv.setXY(1, u1, v1);
-                        sUv.setXY(2, u0, v0);
-                        sUv.setXY(3, u1, v0);
-                        sUv.needsUpdate = true;
-                      }
+                      // Shadow is a simple circle, no UV sync needed
                     }
                   }
 
