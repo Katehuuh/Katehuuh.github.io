@@ -1602,7 +1602,7 @@ img.onload = () => requestAnimationFrame(loop);
               const loadThreeJS = () => new Promise((resolve) => {
                 if (window.THREE) { resolve(window.THREE); return; }
                 const script = document.createElement('script');
-                script.src = 'https://unpkg.com/three@0.160.0/build/three.min.js';
+                script.src = 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js';
                 script.onload = () => resolve(window.THREE);
                 document.head.appendChild(script);
               });
@@ -1988,7 +1988,8 @@ img.onload = () => requestAnimationFrame(loop);
                 };
               };
 
-              initScene();
+              // Wait for React to mount the container div before initializing Three.js
+              requestAnimationFrame(() => requestAnimationFrame(() => initScene()));
               return () => {
                 cancelled = true;
                 if (gameCleanupRef.current) {
