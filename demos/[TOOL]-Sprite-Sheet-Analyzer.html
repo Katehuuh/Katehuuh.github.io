@@ -1961,91 +1961,145 @@ img.onload = () => requestAnimationFrame(loop);
                 mainTarget.depthTexture = new THREE.DepthTexture();
                 mainTarget.depthTexture.type = THREE.FloatType;
 
-                const lightDepthTarget = new THREE.WebGLRenderTarget(512, 512);
+                const lightDepthTarget = new THREE.WebGLRenderTarget(1024, 1024);
                 lightDepthTarget.depthTexture = new THREE.DepthTexture();
                 lightDepthTarget.depthTexture.type = THREE.FloatType;
 
-                const lightCamera = new THREE.OrthographicCamera(-25, 25, 25, -25, 1, 80);
+                const lightCamera = new THREE.OrthographicCamera(-30, 30, 30, -30, 1, 100);
 
                 const volDepthMat = new THREE.MeshDepthMaterial();
                 volDepthMat.depthPacking = THREE.BasicDepthPacking;
 
                 const _volVert = `varying vec2 vUv;void main(){vUv=uv;gl_Position=vec4(position,1.0);}`;
                 const _volFrag = `
-varying vec2 vUv;
-uniform sampler2D tColor;
-uniform sampler2D tDepth;
-uniform sampler2D tLightDepth;
-uniform mat4 invViewProj;
-uniform mat4 lightViewProj;
-uniform vec3 uCamPos;
-uniform vec3 sunDir;
-uniform float time;
-uniform vec2 resolution;
-vec2 hash2(vec2 p){
-  p=vec2(dot(p,vec2(127.1,311.7)),dot(p,vec2(269.5,183.3)));
-  return -1.0+2.0*fract(sin(p)*43758.5453123);
-}
-float noise(vec2 p){
-  const float K1=0.366025404,K2=0.211324865;
-  vec2 i=floor(p+(p.x+p.y)*K1);
-  vec2 a=p-i+(i.x+i.y)*K2;
-  float m=step(a.y,a.x);vec2 o=vec2(m,1.0-m);
-  vec2 b=a-o+K2;vec2 c=a-1.0+2.0*K2;
-  vec3 h=max(0.5-vec3(dot(a,a),dot(b,b),dot(c,c)),0.0);
-  vec3 n=h*h*h*h*vec3(dot(a,hash2(i)),dot(b,hash2(i+o)),dot(c,hash2(i+1.0)));
-  return dot(n,vec3(70.0))*0.5+0.5;
-}
-void main(){
-  vec4 base=texture2D(tColor,vUv);
-  float depth=texture2D(tDepth,vUv).r;
-  vec4 ndc=vec4(vUv*2.0-1.0,depth*2.0-1.0,1.0);
-  vec4 wp4=invViewProj*ndc;
-  vec3 wPos=wp4.xyz/wp4.w;
-  vec3 rd;float rl;
-  if(depth>=0.9999){
-    vec4 nf=vec4(vUv*2.0-1.0,0.5,1.0);
-    vec4 wf=invViewProj*nf;
-    rd=normalize((wf.xyz/wf.w)-uCamPos);rl=50.0;
-  }else{
-    rd=wPos-uCamPos;rl=min(length(rd),50.0);rd=normalize(rd);
-  }
-  float ss=rl/24.0;
-  vec2 pc=vUv*resolution;
-  int bx=int(mod(pc.x,4.0));int by=int(mod(pc.y,4.0));int id=bx+by*4;
-  float di=0.0;
-  if(id==0)di=0.0;else if(id==1)di=0.5;else if(id==2)di=0.125;else if(id==3)di=0.625;
-  else if(id==4)di=0.75;else if(id==5)di=0.25;else if(id==6)di=0.875;else if(id==7)di=0.375;
-  else if(id==8)di=0.1875;else if(id==9)di=0.6875;else if(id==10)di=0.0625;else if(id==11)di=0.5625;
-  else if(id==12)di=0.9375;else if(id==13)di=0.4375;else if(id==14)di=0.8125;else di=0.3125;
-  vec3 cp=uCamPos+rd*(ss*di);float acc=0.0;
-  for(int i=0;i<24;i++){
-    vec4 lsp=lightViewProj*vec4(cp,1.0);
-    vec3 lc=lsp.xyz/lsp.w*0.5+0.5;
-    bool shad=false;
-    if(lc.x>0.0&&lc.x<1.0&&lc.y>0.0&&lc.y<1.0){
-      if(lc.z>texture2D(tLightDepth,lc.xy).r+0.002)shad=true;
-    }
-    if(!shad){
-      float sl=1.0;
-      if(sunDir.y>0.001){
-        float tc=(15.0-cp.y)/sunDir.y;
-        if(tc>0.0){
-          vec3 hp=cp+tc*sunDir;
-          float cn=noise(hp.xz*0.05+vec2(time*0.12));
-          if(cn>=0.4)sl-=ceil(clamp((cn-0.4)/0.6,0.0,1.0)*3.0)/3.0;
-        }
-      }
-      acc+=max(sl,0.0)*smoothstep(50.0,5.0,distance(uCamPos,cp));
-    }
-    cp+=rd*ss;
-  }
-  acc/=24.0;
-  acc=floor(acc*5.0)/5.0;
-  float phase=pow(max(dot(rd,sunDir),0.0),2.0)*0.5+0.5;
-  vec3 rays=vec3(0.9,0.8,0.5)*acc*phase*2.2;
-  gl_FragColor=vec4(base.rgb+rays,1.0);
-}`;
+            varying vec2 vUv;
+
+            uniform sampler2D tColor;
+            uniform sampler2D tDepth;
+            uniform sampler2D tLightDepth;
+
+            uniform mat4 invViewProj;
+            uniform mat4 lightViewProj;
+
+            uniform vec3 uCamPos;
+            uniform vec3 sunDir;
+            uniform float time;
+            uniform vec2 resolution;
+
+            uniform float planeHeight;
+            uniform float cloudScale;
+            uniform float threshold;
+            uniform float bandCount;
+
+            // Procedural Noise for Clouds
+            vec2 hash( vec2 p ) {
+                p = vec2( dot(p,vec2(127.1,311.7)), dot(p,vec2(269.5,183.3)) );
+                return -1.0 + 2.0*fract(sin(p)*43758.5453123);
+            }
+            float noise( in vec2 p ) {
+                const float K1 = 0.366025404; const float K2 = 0.211324865;
+                vec2  i = floor( p + (p.x+p.y)*K1 ); vec2  a = p - i + (i.x+i.y)*K2;
+                float m = step( a.y, a.x ); vec2  o = vec2( m, 1.0 - m );
+                vec2  b = a - o + K2; vec2  c = a - 1.0 + 2.0*K2;
+                vec3  h = max( 0.5 - vec3(dot(a,a), dot(b,b), dot(c,c) ), 0.0 );
+                vec3  n = h*h*h*h*vec3( dot(a,hash(i+0.0)), dot(b,hash(i+o)), dot(c,hash(i+1.0)));
+                return dot( n, vec3(70.0) ) * 0.5 + 0.5;
+            }
+
+            void main() {
+                vec4 baseColor = texture2D(tColor, vUv);
+                float depth = texture2D(tDepth, vUv).r;
+
+                // Unproject screen pixel to 3D World Space
+                vec4 ndc = vec4(vUv * 2.0 - 1.0, depth * 2.0 - 1.0, 1.0);
+                vec4 worldPosVec4 = invViewProj * ndc;
+                vec3 worldPos = worldPosVec4.xyz / worldPosVec4.w;
+
+                vec3 rayDir; float rayLength;
+
+                if(depth >= 0.9999) {
+                    // It hit the sky, shoot ray into the air
+                    vec4 ndcFar = vec4(vUv * 2.0 - 1.0, 0.5, 1.0);
+                    vec4 wposFar = invViewProj * ndcFar;
+                    rayDir = normalize((wposFar.xyz / wposFar.w) - uCamPos);
+                    rayLength = 60.0;
+                } else {
+                    // It hit an object, limit ray to the object
+                    rayDir = worldPos - uCamPos;
+                    rayLength = min(length(rayDir), 60.0);
+                    rayDir = normalize(rayDir);
+                }
+
+                int STEPS = 24;
+                float stepSize = rayLength / float(STEPS);
+
+                // 4x4 BAYER DITHERING (Clean Pixel Art blending)
+                vec2 pixelCoord = vUv * resolution;
+                int x = int(mod(pixelCoord.x, 4.0));
+                int y = int(mod(pixelCoord.y, 4.0));
+                int index = x + y * 4;
+                float dither = 0.0;
+
+                if(index==0) dither=0.0; else if(index==1) dither=0.5; else if(index==2) dither=0.125; else if(index==3) dither=0.625;
+                else if(index==4) dither=0.75; else if(index==5) dither=0.25; else if(index==6) dither=0.875; else if(index==7) dither=0.375;
+                else if(index==8) dither=0.1875; else if(index==9) dither=0.6875; else if(index==10) dither=0.0625; else if(index==11) dither=0.5625;
+                else if(index==12) dither=0.9375; else if(index==13) dither=0.4375; else if(index==14) dither=0.8125; else dither=0.3125;
+
+                vec3 currentPos = uCamPos + rayDir * (stepSize * dither);
+                float accumulatedLight = 0.0;
+
+                // THE RAYMARCH LOOP
+                for(int i = 0; i < 24; i++) {
+
+                    // 1. Is this step blocked by a 3D Box? (Shadow Map)
+                    vec4 lightSpacePos = lightViewProj * vec4(currentPos, 1.0);
+                    vec3 projCoords = lightSpacePos.xyz / lightSpacePos.w;
+                    projCoords = projCoords * 0.5 + 0.5; // Convert NDC to UV [0,1]
+
+                    bool inShadow = false;
+                    if(projCoords.x > 0.0 && projCoords.x < 1.0 && projCoords.y > 0.0 && projCoords.y < 1.0) {
+                        float closestDepth = texture2D(tLightDepth, projCoords.xy).r;
+                        if(projCoords.z > closestDepth + 0.002) {
+                            inShadow = true; // A box is blocking the sun here
+                        }
+                    }
+
+                    // 2. Is this step blocked by a Cloud? (Math from Video)
+                    float sampleLight = 1.0;
+
+                    if(!inShadow && sunDir.y > 0.001) {
+                        float t = (planeHeight - currentPos.y) / sunDir.y;
+                        if(t > 0.0) {
+                            vec3 hitPoint = currentPos + t * sunDir;
+                            vec2 cloudUV = hitPoint.xz * cloudScale + vec2(time * 0.15);
+                            float cloudNoise = noise(cloudUV);
+
+                            // Video Math: Quantized Cloud Shadows
+                            if(cloudNoise >= threshold) {
+                                float norm = clamp((cloudNoise - threshold) / (1.0 - threshold), 0.0, 1.0);
+                                float bandedDensity = ceil(norm * bandCount) / bandCount;
+                                sampleLight -= bandedDensity;
+                            }
+                        }
+                        accumulatedLight += max(sampleLight, 0.0);
+                    }
+
+                    currentPos += rayDir * stepSize;
+                }
+
+                accumulatedLight /= float(STEPS);
+
+                // QUANTIZE FINAL RAYS for Retro Aesthetic
+                float fogBands = 5.0;
+                accumulatedLight = floor(accumulatedLight * fogBands) / fogBands;
+
+                vec3 sunColor = vec3(0.9, 0.8, 0.5); // Warm yellow
+                vec3 finalRays = sunColor * accumulatedLight * 1.5;
+
+                // Additive Blending
+                gl_FragColor = vec4(baseColor.rgb + finalRays, 1.0);
+            }
+        `;
 
                 const volPostCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
                 const volPostScene = new THREE.Scene();
@@ -2062,7 +2116,11 @@ void main(){
                     sunDir: { value: new THREE.Vector3(0.5, 0.8, -0.5).normalize() },
                     time: { value: 0 },
                     resolution: { value: new THREE.Vector2(
-                      Math.max(1, _rSz.x), Math.max(1, _rSz.y)) }
+                      Math.max(1, _rSz.x), Math.max(1, _rSz.y)) },
+                    planeHeight: { value: 15.0 },
+                    cloudScale: { value: 0.05 },
+                    threshold: { value: 0.4 },
+                    bandCount: { value: 3.0 }
                   }
                 });
                 volPostScene.add(new THREE.Mesh(
