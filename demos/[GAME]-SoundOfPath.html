@@ -17,6 +17,16 @@
     MeshPhysical floor with clearcoat + envMap, bloom post-processing, full-block maze walls
   - Equation: S(t) = (1-M_t)*G_dir(theta)*EQ(E_dir)*A_dir*delta(t-d/c) + sum[reflections]
   - URL params: ?difficulty=easy|medium|hard&groove=1&audioRays=128
+  - Fix: ball was out of map due fake isometric view. Orientation did not give velocity to
+    ball with left/right movement and up/down went clipping underground or above wall due
+    sudden jump.
+  - Background: visually stunning nebula with volumetric fog/cloud effects featuring lighting
+    passthrough refraction/ray casting light from advanced rendering techniques for realistic
+    and believable moving sci-fi effects, fog for atmospheric depth, multiple lights (ambient,
+    directional, colored point lights) to achieve cosmic glow, semi-transparent smoke particles
+    that slowly rotate. Starry sky with glowing ethereal effects. Renderer resizes dynamically.
+    Deep space aesthetics with floating elements and starfield, performance acceptable for mobile.
+  - Exit sound softer and quieter, letting the rolling ball sound be more noticeable.
   - [v12 -> v30 RT sound, v73 sky-stars, v102 combined + bugfixes]
 -->
 <!DOCTYPE html>
