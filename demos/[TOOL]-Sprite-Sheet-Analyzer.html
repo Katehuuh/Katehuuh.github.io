@@ -1809,6 +1809,15 @@ img.onload = () => requestAnimationFrame(loop);
                   scene.add(bMesh);
                 });
 
+                // Platform AABBs from building data for collision
+                const platforms = buildingData.map(b => ({
+                  x: b.x,
+                  z: b.z,
+                  halfW: b.w / 2,
+                  halfD: b.d / 2,
+                  topY: b.h
+                }));
+
                 // Sprite character setup
                 const spriteRows = animationRows;
                 const imgSrc = imageToDraw;
@@ -1816,6 +1825,10 @@ img.onload = () => requestAnimationFrame(loop);
                 let spriteMesh = null;
                 const charW = spriteWidth;
                 const charH = rowHeight;
+
+                // Pixel-accurate collider (computed from sprite transparency below)
+                let colliderOffset = { x: 0, y: 0 };
+                let colliderSize = { x: 0, y: 0 };
 
                 let shadowMesh = null;
                 if (imgSrc) {
@@ -1874,6 +1887,42 @@ img.onload = () => requestAnimationFrame(loop);
                     uvAttr.setXY(2, u0, v0);
                     uvAttr.setXY(3, u1, v0);
                     uvAttr.needsUpdate = true;
+                  }
+
+                  // Compute pixel-accurate collision bounds from ALL frames across ALL rows
+                  let unionMinX = Infinity, unionMinY = Infinity;
+                  let unionMaxX = -Infinity, unionMaxY = -Infinity;
+                  for (const row of spriteRows) {
+                    for (const fr of row) {
+                      const fw = fr.w, fh = fr.h;
+                      const imgData = tCtx.getImageData(fr.x, fr.y, fw, fh);
+                      const px4 = imgData.data;
+                      for (let py = 0; py < fh; py++) {
+                        for (let px = 0; px < fw; px++) {
+                          if (px4[(py * fw + px) * 4 + 3] > 20) {
+                            // Normalize pixel coords to charW x charH space
+                            const nx = (px / fw) * charW;
+                            const ny = (py / fh) * charH;
+                            if (nx < unionMinX) unionMinX = nx;
+                            if (nx > unionMaxX) unionMaxX = nx;
+                            if (ny < unionMinY) unionMinY = ny;
+                            if (ny > unionMaxY) unionMaxY = ny;
+                          }
+                        }
+                      }
+                    }
+                  }
+                  if (unionMinX !== Infinity) {
+                    const scaleX = meshW / charW;
+                    const scaleY = meshH / charH;
+                    colliderOffset.x = (((unionMinX + unionMaxX) / 2) - charW / 2) * scaleX;
+                    colliderOffset.y = (charH / 2 - ((unionMinY + unionMaxY) / 2)) * scaleY;
+                    colliderSize.x = (unionMaxX - unionMinX) * scaleX;
+                    colliderSize.y = (unionMaxY - unionMinY) * scaleY;
+                  } else {
+                    // Fallback: use full mesh dimensions
+                    colliderSize.x = meshW;
+                    colliderSize.y = meshH;
                   }
                 }
 
@@ -2220,19 +2269,63 @@ img.onload = () => requestAnimationFrame(loop);
                   // Physics
                   player.vy -= gravity;
                   player.x += player.vx;
+                  const prevY = player.y;
                   player.y += player.vy;
                   player.z += player.vz;
 
-                  if (player.y <= 0) {
+                  // Platform collision using pixel-accurate collider
+                  const collHalfW = colliderSize.x / 2;
+                  const playerLeft = player.x + colliderOffset.x - collHalfW;
+                  const playerRight = player.x + colliderOffset.x + collHalfW;
+                  const playerZ = player.z;
+                  const playerZRadius = 0.4; // small Z extent for billboard sprite
+
+                  let onPlatform = false;
+                  for (let pi = 0; pi < platforms.length; pi++) {
+                    const plat = platforms[pi];
+                    const platLeft = plat.x - plat.halfW;
+                    const platRight = plat.x + plat.halfW;
+                    const platBack = plat.z - plat.halfD;
+                    const platFront = plat.z + plat.halfD;
+
+                    // Check XZ overlap
+                    if (playerRight > platLeft && playerLeft < platRight &&
+                        playerZ + playerZRadius > platBack && playerZ - playerZRadius < platFront) {
+                      const platYPlayer = plat.topY / 10; // platform top in player Y units
+                      // Landing: falling and crossed through or near the platform top
+                      if (player.vy <= 0 && prevY >= platYPlayer - 0.005 && player.y <= platYPlayer) {
+                        player.y = platYPlayer;
+                        player.vy = 0;
+                        player.grounded = true;
+                        onPlatform = true;
+                        break;
+                      }
+                      // Already standing on this platform
+                      if (Math.abs(player.y - platYPlayer) < 0.005 && player.vy <= 0) {
+                        player.y = platYPlayer;
+                        player.grounded = true;
+                        onPlatform = true;
+                        break;
+                      }
+                    }
+                  }
+
+                  // If grounded above ground level, check if still on a platform (walk-off edge detection)
+                  if (!onPlatform && player.grounded && player.y > 0.001) {
+                    player.grounded = false; // walked off edge, start falling
+                  }
+
+                  // Ground collision (base landing surface y=0)
+                  if (!onPlatform && player.y <= 0) {
                     player.y = 0;
                     player.vy = 0;
                     player.grounded = true;
                   }
 
                   // Invisible walls
-                  if (player.x < -12) player.x = -12;
-                  if (player.x > 12) player.x = 12;
-                  if (player.z < -8) player.z = -8;
+                  if (player.x < -14) player.x = -14;
+                  if (player.x > 14) player.x = 14;
+                  if (player.z < -20) player.z = -20;
                   if (player.z > 8) player.z = 8;
 
                   // Animation frame advance
