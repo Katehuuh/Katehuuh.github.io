@@ -1,2385 +1,1306 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Labyrinth - Audio Ray Traced</title>
-<style>
-/* =======================================================================
-   STYLES - Dark sci-fi aesthetic, accessible controls, overlay UI
-   ======================================================================= */
+  <meta charset="UTF-8" />
+  <meta
+    name="viewport"
+    content="width=device-width, height=device-height, initial-scale=1.0, user-scalable=no, viewport-fit=cover"
+  />
+  <title>AudioOfPath — Ray‑Traced Audio</title>
+  <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
-html, body {
-  width: 100%; height: 100%; overflow: hidden;
-  background: #0a0a0f; color: #e0e0e0;
-  font-family: 'Segoe UI', system-ui, sans-serif;
+html, body { width: 100%; height: 100%; }
+body {
+  width: 100vw; height: 100vh; overflow: hidden;
+  background: #070a0f;
+  position: fixed; touch-action: none;
+  font-family: -apple-system, system-ui, Segoe UI, Roboto, sans-serif;
+  color: #00ff88;
 }
-canvas { display: block; width: 100%; height: 100%; }
-
-/* --- Start Screen --- */
-#start-screen {
-  position: fixed; inset: 0; z-index: 1000;
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  background: radial-gradient(ellipse at center, #0d1117 0%, #010409 100%);
-  gap: 1.2rem;
+#canvas { width: 100%; height: 100%; display: block; }
+#fps {
+  position: absolute; top: 10px; left: 10px; z-index: 1000;
+  color: #00ff88; font: 12px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  text-shadow: 0 0 5px rgba(0, 255, 136, 0.5);
+  background: rgba(0,0,0,0.7); padding: 4px 8px; border-radius: 4px;
+  border: 1px solid rgba(0, 255, 136, 0.3); pointer-events: none;
 }
-#start-screen h1 {
-  font-size: 2.4rem; font-weight: 300; letter-spacing: 0.3rem;
-  color: #7fdbca; text-shadow: 0 0 20px rgba(127,219,202,0.4);
-}
-#start-screen p {
-  font-size: 0.95rem; color: #8b949e; max-width: 28rem; text-align: center; line-height: 1.5;
-}
-.btn {
-  padding: 0.8rem 2rem; font-size: 1rem; border: 1px solid #30363d;
-  background: #161b22; color: #c9d1d9; border-radius: 6px; cursor: pointer;
-  transition: background 0.2s, border-color 0.2s; min-width: 12rem;
-}
-.btn:hover, .btn:focus { background: #21262d; border-color: #7fdbca; outline: none; }
-.btn:disabled { opacity: 0.4; cursor: not-allowed; }
-.btn.active { border-color: #3fb950; color: #3fb950; }
-
-/* --- HUD --- */
-#hud {
-  position: fixed; top: 0.8rem; left: 0.8rem; z-index: 100;
-  display: flex; gap: 1rem; align-items: center;
-  font-size: 0.85rem; color: #8b949e; pointer-events: none;
-}
-#hud .stat {
-  background: rgba(13,17,23,0.7); padding: 0.3rem 0.6rem; border-radius: 4px;
-}
-
-/* --- Controls Bar --- */
-#controls-bar {
-  position: fixed; top: 0.8rem; right: 0.8rem; z-index: 100;
-  display: flex; gap: 0.5rem;
-}
-#controls-bar button {
-  padding: 0.4rem 0.8rem; font-size: 0.8rem; border: 1px solid #30363d;
-  background: rgba(22,27,34,0.8); color: #c9d1d9; border-radius: 4px; cursor: pointer;
-}
-#controls-bar button:hover { border-color: #7fdbca; }
-
-/* --- Debug Overlay (toggle with D key) --- */
-#debug-overlay {
-  position: fixed; bottom: 0.8rem; left: 0.8rem; z-index: 100;
-  background: rgba(13,17,23,0.85); padding: 0.6rem 1rem; border-radius: 6px;
-  font-family: 'Cascadia Code', 'Fira Code', monospace; font-size: 0.75rem;
-  color: #7fdbca; display: none; line-height: 1.6; pointer-events: none;
-}
-
-/* --- Win/Lose Banner --- */
-#banner {
-  position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-  z-index: 200; padding: 1.5rem 3rem; border-radius: 8px;
-  font-size: 1.4rem; font-weight: 300; letter-spacing: 0.15rem;
-  display: none; text-align: center;
-}
-#banner.win { background: rgba(63,185,80,0.15); border: 1px solid #3fb950; color: #3fb950; }
-#banner.lose { background: rgba(248,81,73,0.15); border: 1px solid #f85149; color: #f85149; }
-
-/* --- Screen reader only --- */
-.sr-only {
-  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
-  overflow: hidden; clip: rect(0,0,0,0); border: 0;
-}
-</style>
+  </style>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.164.1/examples/jsm/",
+      "cannon-es": "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cannon-es.js"
+    }
+  }
+  </script>
 </head>
 <body>
+  <canvas id="canvas"></canvas>
+  <div id="fps">0 fps</div>
+  <script type="module">
+/*
+Strict equation mapping:
 
-<!-- ===================================================================
-     START SCREEN - Accessible overlay with audio/motion/start buttons
-     =================================================================== -->
-<div id="start-screen" role="dialog" aria-label="Game start menu">
-  <h1>Labyrinth</h1>
-  <p>
-    Tilt the board to guide a metallic ball through a maze.
-    Spatial audio ray tracing lets you hear walls, the goal beacon,
-    and reflections -- fully playable by sound alone.
-  </p>
-  <button class="btn" id="btn-audio" aria-label="Enable spatial audio">Enable Audio</button>
-  <button class="btn" id="btn-motion" aria-label="Enable motion controls for mobile">Enable Motion</button>
-  <button class="btn" id="btn-start" aria-label="Start the game">Start Game</button>
-  <p style="font-size:0.8rem;color:#484f58;">
-    Arrow keys / WASD to tilt. D for debug. P to pause. R to restart. Gamepad supported.
-  </p>
-</div>
+S(t) = (1 - M_t) G_dir(θ_dir) EQ(E_dir) A_dir δ(t - d_dir/c)
+     + Σ_r Σ_j H_{r,j} E_{r,j} (1/d_{r,j}^2) G_pan(θ_{r,j}) EQ(E_{r,j}) δ(t - d_{r,j}/c)
+*/
+import * as THREE from 'three';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import * as CANNON from 'cannon-es';
 
-<!-- HUD -->
-<div id="hud" aria-live="polite">
-  <span class="stat" id="hud-time">0:00</span>
-  <span class="stat" id="hud-level">Level 1</span>
-</div>
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const lerp = (a, b, t) => a + (b - a) * t;
 
-<!-- Controls -->
-<div id="controls-bar">
-  <button id="btn-pause" aria-label="Pause game">Pause</button>
-  <button id="btn-restart" aria-label="Restart level">Restart</button>
-</div>
+/* ============================================================
+   Ray‑marched Volumetric Clouds — smooth "v1" aesthetic
+   - Single ShaderPass behind scene
+   - Larger features, fewer octaves, center focus mask
+   - Yellow god‑rays inside shader with soft shadows
+============================================================ */
+const VolumetricCloudsShader = {
+  uniforms: {
+    uTime:        { value: 0 },
+    uResolution:  { value: new THREE.Vector2(1,1) },
+    uCamPos:      { value: new THREE.Vector3() },
+    uCamDir:      { value: new THREE.Vector3(0,0,-1) },
+    uCamRight:    { value: new THREE.Vector3(1,0,0) },
+    uCamUp:       { value: new THREE.Vector3(0,1,0) },
+    uFovY:        { value: 50 * Math.PI / 180 },
+    uAspect:      { value: 1.0 },
+    uLightDir:    { value: new THREE.Vector3(0.35, 0.35, -0.88).normalize() },
 
-<!-- Debug Overlay -->
-<div id="debug-overlay" aria-hidden="true">
-  <div>Rays: <span id="dbg-rays">0</span></div>
-  <div>LOS: <span id="dbg-los">0.00</span></div>
-  <div>Taps: <span id="dbg-taps">0</span></div>
-  <div>Speed: <span id="dbg-speed">0.00</span></div>
-  <div>Occlusion: <span id="dbg-occ">0.00</span></div>
-  <div>FPS: <span id="dbg-fps">0</span></div>
-</div>
+    // Look
+    uDensity:     { value: 0.42 },
+    uBrightness:  { value: 0.84 },
+    uAmbient:     { value: 0.08 },
+    uNoiseScale:  { value: 0.012 },   // larger structures (less noisy)
+    uSteps:       { value: 52.0 },    // float (mobile-stable)
 
-<!-- Banner -->
-<div id="banner" role="alert"></div>
+    // Aesthetic colors
+    uCloudColor1: { value: new THREE.Color(0x4cc9f0) },
+    uCloudColor2: { value: new THREE.Color(0xf72585) },
 
-<!-- Screen reader live region -->
-<div class="sr-only" aria-live="assertive" id="sr-announce"></div>
+    // Center focus
+    uFocusStrength:{ value: 0.65 },   // 0..1 amount of center emphasis
+    uFocusRadius:  { value: 0.55 },   // 0..1 radius in NDC
 
-<!-- ===================================================================
-     MAIN SCRIPT - ES Module with Three.js + cannon-es from esm.sh
-     =================================================================== -->
-<script type="module">
-// ===========================================================================
-// IMPORTS
-// ===========================================================================
-import * as THREE from 'https://esm.sh/three@0.162.0';
-import { EffectComposer } from 'https://esm.sh/three@0.162.0/examples/jsm/postprocessing/EffectComposer.js';
-import { RenderPass } from 'https://esm.sh/three@0.162.0/examples/jsm/postprocessing/RenderPass.js';
-import { UnrealBloomPass } from 'https://esm.sh/three@0.162.0/examples/jsm/postprocessing/UnrealBloomPass.js';
-import * as CANNON from 'https://esm.sh/cannon-es@0.20.0';
+    // Jitter and shadowing
+    uJitterAmp:   { value: 0.25 },    // smaller => less shimmer
+    uShadowTaps:  { value: 6.0 },
 
-// ===========================================================================
-// CONFIGURATION - URL parameters and difficulty presets
-// ===========================================================================
-const params = new URLSearchParams(window.location.search);
-const DIFFICULTY = params.get('difficulty') || 'medium';
-const USE_GROOVE = params.get('groove') === '1'; // Raised edges along passages
+    // God-rays
+    uBeamColor:   { value: new THREE.Color(1.0, 0.88, 0.52) }, // warm yellow
+    uBeamStrength:{ value: 0.85 },    // shaft intensity
+    uAniso:       { value: 0.65 }     // HG anisotropy
+  },
+  vertexShader: `
+    varying vec2 vUv;
+    void main(){
+      vUv = uv;
+      gl_Position = vec4(position, 1.0);
+    }
+  `,
+  fragmentShader: `
+    precision highp float;
+    varying vec2 vUv;
 
-/** Difficulty presets control maze size, hole count, tilt power, max ball speed */
-const DIFFICULTY_PRESETS = {
-  easy:   { gridSize: 7,  holes: 2,  tiltStrength: 12, maxSpeed: 8  },
-  medium: { gridSize: 11, holes: 5,  tiltStrength: 16, maxSpeed: 12 },
-  hard:   { gridSize: 15, holes: 10, tiltStrength: 22, maxSpeed: 16 },
+    uniform vec2  uResolution;
+    uniform float uTime, uFovY, uAspect, uDensity, uBrightness, uAmbient, uSteps, uNoiseScale;
+    uniform float uJitterAmp, uShadowTaps, uFocusStrength, uFocusRadius, uAniso, uBeamStrength;
+    uniform vec3  uCamPos, uCamDir, uCamRight, uCamUp, uLightDir, uCloudColor1, uCloudColor2, uBeamColor;
+
+    // Starfield: procedural stars visible behind clouds
+    float hash2(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7))) * 43758.5453); }
+    float starField(vec3 rd){
+      // Project ray direction to spherical coords for stable star positions
+      vec2 uv = vec2(atan(rd.z, rd.x), asin(clamp(rd.y,-1.0,1.0)));
+      uv *= vec2(20.0, 20.0); // grid density
+      vec2 id = floor(uv);
+      vec2 f = fract(uv);
+      float star = 0.0;
+      // Check 3x3 neighborhood for nearest star
+      for(int j=-1;j<=1;j++) for(int i=-1;i<=1;i++){
+        vec2 n = vec2(float(i),float(j));
+        vec2 p = vec2(hash2(id+n), hash2(id+n+73.1));
+        vec2 d = n + p - f;
+        float dist = length(d);
+        float brightness = hash2(id+n+137.3);
+        // Only ~30% of cells have visible stars
+        if(brightness > 0.7){
+          float sz = 0.015 + brightness * 0.012;
+          float s = smoothstep(sz, sz*0.3, dist);
+          // Subtle twinkle
+          s *= 0.5 + 0.5 * sin(brightness*6.28 + uTime*0.8 + hash2(id+n+42.0)*6.28);
+          star = max(star, s * (brightness - 0.7) * 3.33);
+        }
+      }
+      return star;
+    }
+
+    // 3D value noise + fbm (fewer octaves => smoother look)
+    float hash(vec3 p){ return fract(sin(dot(p, vec3(12.9898,78.233,45.164))) * 43758.5453); }
+
+    float noise3D(vec3 x){
+      vec3 p = floor(x);
+      vec3 f = fract(x);
+      f = f*f*(3.0-2.0*f);
+      float n = dot(p, vec3(1.0,57.0,113.0));
+      float a = hash(p);
+      float b = hash(p + vec3(1.0,0.0,0.0));
+      float c = hash(p + vec3(0.0,1.0,0.0));
+      float d = hash(p + vec3(1.0,1.0,0.0));
+      float e = hash(p + vec3(0.0,0.0,1.0));
+      float fz= hash(p + vec3(1.0,0.0,1.0));
+      float g = hash(p + vec3(0.0,1.0,1.0));
+      float h = hash(p + vec3(1.0,1.0,1.0));
+      float k1 = mix(mix(a,b,f.x), mix(c,d,f.x), f.y);
+      float k2 = mix(mix(e,fz,f.x),mix(g,h,f.x), f.y);
+      return mix(k1, k2, f.z);
+    }
+
+    float fbm(vec3 p){
+      float sum=0.0, amp=0.55;
+      for(int i=0;i<4;i++){    // 4 octaves only (less noisy)
+        sum += amp * noise3D(p);
+        p *= 2.0;
+        amp *= 0.5;
+      }
+      return sum;
+    }
+
+    // Soft density with domain warp and tight thresholds (v1 feel)
+    float smoothDensity(vec3 p){
+      vec3 q = p * uNoiseScale + vec3(0.0, uTime*0.02, 0.0);
+      float w1 = fbm(q);
+      float w2 = fbm(q*1.7 + w1);
+      float n  = fbm(q + w2*1.35);
+      // Tighter window -> smoother blobs, less speckle
+      return smoothstep(0.60, 0.80, n);
+    }
+
+    // Henyey–Greenstein phase
+    float hg(float g, float ct){
+      float gg=g*g;
+      return (1.0 - gg) / pow(1.0 + gg - 2.0*g*ct, 1.5);
+    }
+
+    void main(){
+      vec2 uv = vUv*2.0 - 1.0;
+      float tanFov = tan(0.5 * uFovY);
+      vec3 rd = normalize(uCamDir + uv.x * uAspect * tanFov * uCamRight + uv.y * tanFov * uCamUp);
+      vec3 ro = uCamPos;
+
+      float tMin = 12.0;
+      float tMax = 160.0;
+
+      // tiny temporal jitter for anti-banding without shimmer
+      float seed = fract(sin(dot(uv, vec2(12.9898,78.233)) + uTime*0.73) * 43758.5453);
+      float jitter = (seed - 0.5) * uJitterAmp;
+
+      const int MAX_STEPS = 96;
+      float stepLen = (tMax - tMin) / max(1.0, uSteps);
+
+      vec3  col = vec3(0.0);
+      float T   = 1.0;
+      vec3  L   = normalize(uLightDir);
+      float g   = clamp(uAniso, 0.0, 0.95);
+
+      // Center-focus mask in NDC
+      float r2 = dot(uv, uv);
+      float sigma2 = max(1e-3, uFocusRadius*uFocusRadius);
+      float focus = exp(-r2 / sigma2);
+      float focusMix = mix(1.0, focus, clamp(uFocusStrength, 0.0, 1.0));
+
+      for (int i=0; i<MAX_STEPS; i++){
+        if (float(i) >= uSteps) break;
+        float t = tMin + (float(i) + jitter) * stepLen;
+        vec3 p = ro + rd * t;
+
+        float d = smoothDensity(p) * uDensity * focusMix;
+        if (d > 0.001){
+          // Soft shadow along light
+          float occ = 0.0;
+          vec3  lp  = p;
+          float lstep = 11.0;
+          int taps = int(clamp(uShadowTaps, 0.0, 8.0));
+          for (int s=0; s<8; s++){
+            if (s >= taps) break;
+            lp -= L * lstep;
+            occ += smoothDensity(lp) * 0.09;
+          }
+          float shadow = exp(-occ * 1.7);
+
+          // Color and phase
+          float ct = dot(rd, -L);
+          float phase = hg(g, ct);
+
+          // Yellow god-ray boost along sun axis
+          float beam = pow(max(ct,0.0), 18.0) * uBeamStrength;
+
+          float absorb = exp(-d * stepLen * 1.6);
+
+          float mixv = clamp(fbm(p * (uNoiseScale*2.4)), 0.0, 1.0);
+          vec3 scatterCol = mix(uCloudColor1, uCloudColor2, mixv);
+
+          vec3 contrib = (scatterCol * phase + uBeamColor * beam) * shadow;
+
+          col += (1.0 - absorb) * contrib * T;
+          T   *= absorb;
+
+          if (T < 0.02) break;
+        }
+      }
+
+      // Stars behind clouds: only visible where transmittance is high (no cloud)
+      float stars = starField(rd) * 0.6;
+      vec3 starCol = mix(vec3(0.8,0.85,1.0), vec3(1.0,0.9,0.8), hash2(rd.xz*10.0));
+      col += stars * starCol * T; // T is remaining transmittance - clouds occlude stars
+
+      // Ambient tone + background
+      col += vec3(0.02, 0.02, 0.03) * uAmbient;
+      vec3 bg = vec3(0.02, 0.03, 0.05);
+      col = col * uBrightness + bg * T * 0.5;
+
+      gl_FragColor = vec4(col, 1.0);
+    }
+  `
 };
-const CONFIG = DIFFICULTY_PRESETS[DIFFICULTY] || DIFFICULTY_PRESETS.medium;
 
-// Spatial constants
-const CELL_SIZE = 1.0;       // World units per maze cell
-const WALL_HEIGHT = 0.6;     // Wall height above floor
-const WALL_THICKNESS = 0.12; // Wall visual edge thickness
-const BALL_RADIUS = 0.35;    // Ball collision sphere radius
-const BOARD_PADDING = 0.5;   // Extra space around board edges
-const GROOVE_HEIGHT = 0.08;  // Groove rail height (when groove mode on)
-
-// Audio ray tracer parameters
-const RAY_COUNT = 64;            // Rays cast per update from source
-const MAX_BOUNCES = 4;           // Maximum wall reflections per ray
-const RAY_UPDATE_HZ = 15;       // Worker update frequency
-const SPEED_OF_SOUND = 343.0;   // m/s for delay calculation
-const EMA_ALPHA = 0.15;         // Exponential moving average smoothing
-const LOS_RAYS = 16;            // Rays for line-of-sight check
-const LISTENER_RADIUS = 0.4;    // Hit detection radius for listener
-
-// Physics constants
-const GRAVITY_Y = -30;          // Downward gravity component (always negative)
-const FIXED_TIMESTEP = 1 / 60;  // Physics fixed step
-const MAX_SUBSTEPS = 5;         // Maximum physics iterations per frame
-const BALL_LINEAR_DAMP = 0.4;   // Ball linear damping
-const BALL_ANGULAR_DAMP = 0.4;  // Ball angular damping
-const BALL_RESTITUTION = 0.3;   // Ball bounciness
-
-// Audio echo tap pool size
-const MAX_ECHO_TAPS = 8;
-
-// Haptics throttle
-const HAPTIC_THROTTLE_MS = 50;
-
-// Wall-scrape detection: if ball is within this distance of a wall and moving along it
-const WALL_SCRAPE_DIST = BALL_RADIUS + 0.15;
-const WALL_SCRAPE_MIN_SPEED = 1.5;
-
-// ===========================================================================
-// WEB WORKER - Audio Ray Tracer (embedded as Blob URL)
-//
-// The worker casts 2D rays from a source position (goal beacon),
-// traces reflections off wall segments, and checks if rays intersect
-// the listener (ball) position. Returns:
-//   - reflections: array of {distance, energy[3], angle, bounces}
-//   - los: smoothed line-of-sight ratio (0=fully occluded, 1=clear)
-//   - directDistance: euclidean distance source -> listener
-//
-// Audio equation implemented:
-//   S(t) = (1-M_t) * G_dir(theta) * EQ(E_dir) * A_dir * delta(t - d/c)
-//        + SUM_i [ G_i(theta) * EQ(E_i) * A_i * delta(t - d_i/c) ]
-//   where M_t = occlusion factor, G = gain, EQ = per-band filter,
-//   A = absorption attenuation, d = path distance, c = speed of sound
-// ===========================================================================
-const workerCode = `
-"use strict";
-
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
-const TWO_PI = Math.PI * 2;
-const EMA = 0.15;
-
-// Material acoustic properties: reflection coefficient per frequency band
-// [low ~200Hz, mid ~1200Hz, high ~4000Hz]
+/* ============================================================
+   Worker — occlusion + transmission + reflections (unchanged)
+============================================================ */
+const RAY_WORKER = `
+const SPEED_OF_SOUND = 343;
+const AIR = { low: 0.001, mid: 0.01, high: 0.05 };
 const MATERIALS = {
   wall: {
-    absorption: [0.05, 0.15, 0.35],
-    reflection: [0.95, 0.85, 0.65],
-    // Transmission is negligible for solid walls
-    transmission: [0.0, 0.0, 0.0],
-  },
-  floor: {
-    absorption: [0.20, 0.30, 0.40],
-    reflection: [0.80, 0.70, 0.60],
-    transmission: [0.0, 0.0, 0.0],
-  },
-};
-
-// State
-let walls = [];           // Array of {x1, y1, x2, y2} line segments
-let listenerPos = { x: 0, y: 0 };
-let sourcePos = { x: 0, y: 0 };
-let rayCount = 64;
-let maxBounces = 4;
-let listenerRadius = 0.4;
-
-// Results accumulated per frame
-let reflections = [];
-let losSmoothed = 1.0;
-
-// ---------------------------------------------------------------------------
-// Ray casting: find nearest wall segment intersection
-// Uses parametric line-segment intersection
-// ---------------------------------------------------------------------------
-function castRay(ox, oy, dx, dy, maxDist) {
-  let minT = maxDist;
-  let hitWall = null;
-  let hitNx = 0, hitNy = 0;
-
-  for (let i = 0; i < walls.length; i++) {
-    const w = walls[i];
-    // Direction vector of the wall segment
-    const ex = w.x2 - w.x1;
-    const ey = w.y2 - w.y1;
-    // Cross product for parallel check
-    const denom = dx * ey - dy * ex;
-    if (Math.abs(denom) < 1e-8) continue; // Parallel, skip
-
-    // Parametric t for ray, tw for wall segment
-    const tx = ((w.x1 - ox) * ey - (w.y1 - oy) * ex) / denom;
-    const tw = ((w.x1 - ox) * (-dy) - (w.y1 - oy) * (-dx)) / (-denom);
-
-    // Valid intersection: t > 0 (ahead), t < minT (closer), tw in [0,1] (on segment)
-    if (tx > 0.001 && tx < minT && tw >= 0 && tw <= 1) {
-      minT = tx;
-      hitWall = w;
-      // Compute wall normal (perpendicular to segment direction)
-      const segLen = Math.sqrt(ex * ex + ey * ey);
-      hitNx = -ey / segLen;
-      hitNy = ex / segLen;
-      // Ensure normal faces toward ray origin
-      if (hitNx * dx + hitNy * dy > 0) {
-        hitNx = -hitNx;
-        hitNy = -hitNy;
-      }
-    }
-  }
-
-  return { t: minT, wall: hitWall, nx: hitNx, ny: hitNy };
-}
-
-// ---------------------------------------------------------------------------
-// Check if a ray intersects the listener sphere (circle in 2D)
-// Returns parametric t if hit, -1 otherwise
-// ---------------------------------------------------------------------------
-function checkListenerHit(ox, oy, dx, dy, maxDist) {
-  // Vector from ray origin to listener center
-  const fx = ox - listenerPos.x;
-  const fy = oy - listenerPos.y;
-  // Quadratic coefficients for circle-ray intersection
-  const a = dx * dx + dy * dy;
-  const b = 2 * (fx * dx + fy * dy);
-  const c = fx * fx + fy * fy - listenerRadius * listenerRadius;
-  let disc = b * b - 4 * a * c;
-  if (disc < 0) return -1; // No intersection
-  disc = Math.sqrt(disc);
-  // Check both solutions (entry and exit points)
-  const t1 = (-b - disc) / (2 * a);
-  if (t1 > 0.001 && t1 < maxDist) return t1;
-  const t2 = (-b + disc) / (2 * a);
-  if (t2 > 0.001 && t2 < maxDist) return t2;
-  return -1;
-}
-
-// ---------------------------------------------------------------------------
-// Main ray tracing routine
-// Casts rayCount rays from source, traces bounces, detects listener hits
-// Also performs LOS (line-of-sight) occlusion check
-// ---------------------------------------------------------------------------
-function traceRays() {
-  reflections = [];
-
-  // --- Line-of-sight occlusion check ---
-  // Cast LOS_RAYS from listener toward source with slight angular spread
-  const dxLS = sourcePos.x - listenerPos.x;
-  const dyLS = sourcePos.y - listenerPos.y;
-  const distLS = Math.sqrt(dxLS * dxLS + dyLS * dyLS);
-
-  if (distLS < 0.01) {
-    // Listener and source are at same position: perfect LOS
-    losSmoothed = losSmoothed * (1 - EMA) + 1.0 * EMA;
-  } else {
-    let losHits = 0;
-    const losRays = 16;
-    const baseAngle = Math.atan2(dyLS, dxLS);
-
-    for (let i = 0; i < losRays; i++) {
-      // Spread rays +/- 0.15 rad around direct path
-      const spread = (i / (losRays - 1) - 0.5) * 0.3;
-      const angle = baseAngle + spread;
-      const rdx = Math.cos(angle);
-      const rdy = Math.sin(angle);
-      const hit = castRay(listenerPos.x, listenerPos.y, rdx, rdy, distLS + 0.1);
-      // If the nearest wall is farther than the source, ray has clear LOS
-      if (hit.t >= distLS - 0.1) losHits++;
-    }
-    const rawLos = losHits / losRays;
-    losSmoothed = losSmoothed * (1 - EMA) + rawLos * EMA;
-  }
-
-  // --- Cast reflection rays from source ---
-  for (let i = 0; i < rayCount; i++) {
-    const angle = (i / rayCount) * TWO_PI + (Math.random() - 0.5) * 0.02; // Slight jitter
-    let dx = Math.cos(angle);
-    let dy = Math.sin(angle);
-    let ox = sourcePos.x;
-    let oy = sourcePos.y;
-    // Per-band energy starts at 1.0, reduced by material absorption each bounce
-    let energy = [1.0, 1.0, 1.0];
-    let totalDist = 0;
-
-    for (let bounce = 0; bounce <= maxBounces; bounce++) {
-      // First check if ray hits listener before hitting any wall
-      const listenerT = checkListenerHit(ox, oy, dx, dy, 50);
-      const wallHit = castRay(ox, oy, dx, dy, 50);
-
-      if (listenerT > 0 && listenerT < wallHit.t) {
-        // Ray reached listener -- record this as a reflection/direct hit
-        totalDist += listenerT;
-        // Angle of incidence at listener (used for stereo panning)
-        const hitX = ox + dx * listenerT;
-        const hitY = oy + dy * listenerT;
-        const hitAngle = Math.atan2(hitX - listenerPos.x, hitY - listenerPos.y);
-        // Inverse-square distance attenuation (clamped to prevent infinity)
-        const atten = 1.0 / Math.max(1.0, totalDist * totalDist * 0.08);
-        reflections.push({
-          distance: totalDist,
-          energy: [energy[0] * atten, energy[1] * atten, energy[2] * atten],
-          angle: hitAngle,
-          bounces: bounce,
-        });
-        break;
-      }
-
-      // No wall hit at all: ray escaped
-      if (!wallHit.wall) break;
-
-      // Accumulate distance traveled
-      totalDist += wallHit.t;
-
-      // Apply material absorption for this bounce
-      const mat = MATERIALS.wall;
-      energy[0] *= mat.reflection[0];
-      energy[1] *= mat.reflection[1];
-      energy[2] *= mat.reflection[2];
-
-      // Move ray origin to hit point
-      ox = ox + dx * wallHit.t;
-      oy = oy + dy * wallHit.t;
-
-      // Reflect direction: d' = d - 2(d.n)n
-      const dot2 = 2 * (dx * wallHit.nx + dy * wallHit.ny);
-      dx = dx - dot2 * wallHit.nx;
-      dy = dy - dot2 * wallHit.ny;
-
-      // Normalize (should already be unit but floating point)
-      const len = Math.sqrt(dx * dx + dy * dy);
-      dx /= len;
-      dy /= len;
-
-      // Early termination if energy is negligible
-      if (energy[0] + energy[1] + energy[2] < 0.01) break;
-    }
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Worker message handler
-// ---------------------------------------------------------------------------
-self.onmessage = function(e) {
-  const msg = e.data;
-
-  switch (msg.type) {
-    case 'init':
-      // Initialize wall geometry and parameters
-      walls = msg.walls || [];
-      rayCount = msg.rayCount || 64;
-      maxBounces = msg.maxBounces || 4;
-      listenerRadius = msg.listenerRadius || 0.4;
-      break;
-
-    case 'update':
-      // Update positions and run ray trace
-      listenerPos = msg.listener;
-      sourcePos = msg.source;
-      traceRays();
-      // Post results back to main thread
-      self.postMessage({
-        type: 'result',
-        reflections: reflections,
-        los: losSmoothed,
-        directDistance: Math.sqrt(
-          (sourcePos.x - listenerPos.x) ** 2 +
-          (sourcePos.y - listenerPos.y) ** 2
-        ),
-      });
-      break;
-
-    case 'updateWalls':
-      // Hot-reload wall geometry (for level transitions)
-      walls = msg.walls || [];
-      break;
+    absorb:   { low: 0.05, mid: 0.10, high: 0.20 },
+    reflect:  { low: 0.90, mid: 0.85, high: 0.75 },
+    transmit: { low: 0.05, mid: 0.05, high: 0.05 },
+    thickness: 0.3
   }
 };
-`;
+let walls = [];
 
-// Create the Worker from the Blob URL
-const workerBlob = new Blob([workerCode], { type: 'application/javascript' });
-const workerUrl = URL.createObjectURL(workerBlob);
+self.onmessage = (e) => {
+  const { type, data } = e.data || {};
+  if (type === 'init') {
+    walls = data.walls || [];
+  } else if (type === 'trace') {
+    const { source, listener, numRays=64, maxBounces=5 } = data;
+    const occlusion = computeOcclusion(source, listener, walls);
+    const Edir = computeDirectTransmission(source, listener, walls, MATERIALS.wall);
+    const reflections = traceReflections(source, listener, walls, numRays, maxBounces);
+    self.postMessage({ occlusion, Edir, reflections });
+  }
+};
 
-// ===========================================================================
-// MAZE GENERATOR - Recursive Backtracker Algorithm
-//
-// Generates a perfect maze (exactly one path between any two cells) on an
-// odd-sized grid. Wall cells = 0, passage cells = 1.
-// Also places the goal at the farthest reachable point and holes in dead ends.
-// ===========================================================================
-class MazeGenerator {
-  /**
-   * Generate a new maze.
-   * @param {number} w - Grid width (forced odd)
-   * @param {number} h - Grid height (forced odd)
-   * @param {number} holeCount - Number of trap holes to place
-   * @returns {{ grid, start, end, holes, width, height }}
-   */
-  static generate(w, h, holeCount = 5) {
-    // Force odd dimensions for proper maze structure
-    if (w % 2 === 0) w++;
-    if (h % 2 === 0) h++;
+function computeOcclusion(source, listener, w) {
+    const dx = listener.x - source.x, dz = listener.z - source.z;
+    const d = Math.hypot(dx, dz) || 1e-6;
 
-    // Initialize grid: all walls (0)
-    const grid = Array.from({ length: h }, () => new Array(w).fill(0));
+    // Hard LOS check: if the straight ray hits a wall before the listener, we are blocked.
+    const dir0 = { x: dx / d, z: dz / d };
+    const hit0 = findClosest(source, dir0, w);
+    if (hit0 && hit0.distance < d - 1e-4) return 1.0;
 
-    // Start carving from (1,1) -- always a valid cell position
-    const startX = 1;
-    const startY = 1;
-    grid[startY][startX] = 1;
+    // Wedge sampling around the direct path for partial occlusion
+    const base = Math.atan2(dz, dx);
+    const N = 31, spread = Math.PI/18;
+    let occ = 0;
+    for (let k=0;k<N;k++){
+      const a = base + (k/(N-1)-0.5)*spread;
+      const dir={x:Math.cos(a),z:Math.sin(a)};
+      const hit=findClosest(source, dir, w);
+      if (hit && hit.distance < d-0.1) occ++;
+    }
+    return occ/N;
+  }
 
-    // Recursive backtracker using explicit stack (avoids call stack overflow)
-    const stack = [{ x: startX, y: startY }];
-    const directions = [
-      { dx: 0, dy: -2 }, // North
-      { dx: 2, dy: 0 },  // East
-      { dx: 0, dy: 2 },  // South
-      { dx: -2, dy: 0 }, // West
-    ];
+function computeDirectTransmission(source, listener, w, mat) {
+  const dx = listener.x - source.x, dz = listener.z - source.z;
+  const total = Math.hypot(dx, dz) || 1e-6;
+  const dir = { x: dx/total, z: dz/total };
+  let pos={x:source.x, z:source.z}, remaining=total;
+  let E={ low:1, mid:1, high:1 };
+  const th = mat.thickness;
 
-    while (stack.length > 0) {
-      const current = stack[stack.length - 1];
+  for (let i=0;i<24 && remaining>0.01;i++){
+    const hit=findClosest(pos, dir, w);
+    if (!hit || hit.distance >= remaining) {
+      E.low *= Math.exp(-AIR.low*remaining);
+      E.mid *= Math.exp(-AIR.mid*remaining);
+      E.high*= Math.exp(-AIR.high*remaining);
+      break;
+    }
+    E.low *= Math.exp(-AIR.low*hit.distance);
+    E.mid *= Math.exp(-AIR.mid*hit.distance);
+    E.high*= Math.exp(-AIR.high*hit.distance);
 
-      // Find unvisited neighbors (2 cells away)
-      const neighbors = [];
-      for (const dir of directions) {
-        const nx = current.x + dir.dx;
-        const ny = current.y + dir.dy;
-        if (nx > 0 && nx < w - 1 && ny > 0 && ny < h - 1 && grid[ny][nx] === 0) {
-          neighbors.push({
-            x: nx, y: ny,
-            // The cell between current and neighbor (the wall to carve)
-            mx: current.x + dir.dx / 2,
-            my: current.y + dir.dy / 2,
+    const aL = 1 - Math.pow(1 - mat.absorb.low, th);
+    const aM = 1 - Math.pow(1 - mat.absorb.mid, th);
+    const aH = 1 - Math.pow(1 - mat.absorb.high, th);
+    E.low *= Math.pow(mat.transmit.low, th) * (1 - aL);
+    E.mid *= Math.pow(mat.transmit.mid, th) * (1 - aM);
+    E.high*= Math.pow(mat.transmit.high, th) * (1 - aH);
+
+    pos={ x: hit.point.x + dir.x*1e-3, z: hit.point.z + dir.z*1e-3 };
+    remaining -= hit.distance;
+  }
+  return E;
+}
+
+function traceReflections(source, listener, w, numRays, maxBounces) {
+  const taps=[];
+  for (let i=0;i<numRays;i++){
+    const ang=(i/numRays)*Math.PI*2;
+    let pos={x:source.x, z:source.z};
+    let dir={x:Math.cos(ang), z:Math.sin(ang)};
+    let E={low:1, mid:1, high:1};
+    let traveled=0;
+
+    for (let b=0;b<maxBounces;b++){
+      const hit=findClosest(pos, dir, w);
+      if(!hit) break;
+      traveled += hit.distance;
+
+      E.low *= Math.exp(-AIR.low*hit.distance);
+      E.mid *= Math.exp(-AIR.mid*hit.distance);
+      E.high*= Math.exp(-AIR.high*hit.distance);
+
+      // compute reflected direction at this hit (specular)
+      const nd0 = dir.x*hit.normal.x + dir.z*hit.normal.z;
+      const dirRef = { x: dir.x - 2*nd0*hit.normal.x, z: dir.z - 2*nd0*hit.normal.z };
+
+      // test if listener is reachable from this bounce point
+      const vLx = listener.x - hit.point.x;
+      const vLz = listener.z - hit.point.z;
+      const dL = Math.hypot(vLx, vLz);
+      if (dL > 1e-3) {
+        const dirToL = { x: vLx/dL, z: vLz/dL };
+        // alignment 0..1: favor bounces that point toward listener
+        const align = Math.max(0, dirRef.x*dirToL.x + dirRef.z*dirToL.z);
+        // line-of-sight from bounce to listener
+        const hitL = findClosest(hit.point, dirToL, w);
+        if (!hitL || hitL.distance >= dL - 1e-3) {
+          const dTot = traveled + dL;
+          const atten = 1 / Math.max(0.5, dTot*dTot);
+          const g = 0.35 + 0.65*align; // weight by alignment
+          taps.push({
+            delay: dTot / SPEED_OF_SOUND,
+            energy: { low: E.low*atten*g, mid: E.mid*atten*g, high: E.high*atten*g },
+            angle: Math.atan2(vLz, vLx)
           });
         }
       }
 
-      if (neighbors.length === 0) {
-        // Backtrack: no unvisited neighbors
-        stack.pop();
-      } else {
-        // Choose random unvisited neighbor
-        const chosen = neighbors[Math.floor(Math.random() * neighbors.length)];
-        // Carve passage through the wall between current and chosen
-        grid[chosen.my][chosen.mx] = 1;
-        grid[chosen.y][chosen.x] = 1;
-        stack.push({ x: chosen.x, y: chosen.y });
-      }
+      const th = 0.3;
+      const aL = 1 - Math.pow(1 - 0.05, th);
+      const aM = 1 - Math.pow(1 - 0.10, th);
+      const aH = 1 - Math.pow(1 - 0.20, th);
+      E.low *= 0.90 * (1 - aL);
+      E.mid *= 0.85 * (1 - aM);
+      E.high*= 0.75 * (1 - aH);
+
+      const nd = dir.x*hit.normal.x + dir.z*hit.normal.z;
+      dir = { x: dir.x - 2*nd*hit.normal.x, z: dir.z - 2*nd*hit.normal.z };
+      pos = { x: hit.point.x + dir.x*1e-3, z: hit.point.z + dir.z*1e-3 };
+
+      if ((E.low+E.mid+E.high) < 1e-3) break;
     }
-
-    // Find goal position: BFS from start to find farthest reachable cell
-    const end = MazeGenerator.findFarthest(grid, startX, startY, w, h);
-
-    // Place holes in dead-end corridors
-    const holes = MazeGenerator.placeHoles(grid, w, h, holeCount, startX, startY, end.x, end.y);
-
-    return { grid, start: { x: startX, y: startY }, end, holes, width: w, height: h };
   }
-
-  /**
-   * BFS to find the farthest passage cell from a starting position.
-   * Used to place the goal at maximum maze distance from start.
-   */
-  static findFarthest(grid, sx, sy, w, h) {
-    const visited = Array.from({ length: h }, () => new Array(w).fill(false));
-    const queue = [{ x: sx, y: sy, dist: 0 }];
-    visited[sy][sx] = true;
-    let farthest = { x: sx, y: sy, dist: 0 };
-
-    while (queue.length > 0) {
-      const cur = queue.shift();
-      if (cur.dist > farthest.dist) farthest = cur;
-
-      // Check 4-connected neighbors
-      for (const [dx, dy] of [[0, -1], [1, 0], [0, 1], [-1, 0]]) {
-        const nx = cur.x + dx;
-        const ny = cur.y + dy;
-        if (nx >= 0 && nx < w && ny >= 0 && ny < h && !visited[ny][nx] && grid[ny][nx] === 1) {
-          visited[ny][nx] = true;
-          queue.push({ x: nx, y: ny, dist: cur.dist + 1 });
-        }
-      }
-    }
-    return { x: farthest.x, y: farthest.y };
-  }
-
-  /**
-   * Place holes in dead-end cells (cells with 3+ wall neighbors).
-   * Avoids placing holes at start or end positions.
-   */
-  static placeHoles(grid, w, h, count, sx, sy, ex, ey) {
-    const candidates = [];
-
-    for (let y = 1; y < h - 1; y++) {
-      for (let x = 1; x < w - 1; x++) {
-        if (grid[y][x] !== 1) continue; // Must be a passage
-        if (x === sx && y === sy) continue; // Not at start
-        if (x === ex && y === ey) continue; // Not at goal
-
-        // Count orthogonal wall neighbors
-        let wallCount = 0;
-        if (grid[y - 1][x] === 0) wallCount++;
-        if (grid[y + 1][x] === 0) wallCount++;
-        if (grid[y][x - 1] === 0) wallCount++;
-        if (grid[y][x + 1] === 0) wallCount++;
-
-        // Dead ends have 3 wall neighbors (only one exit)
-        if (wallCount >= 3) candidates.push({ x, y });
-      }
-    }
-
-    // Fisher-Yates shuffle
-    for (let i = candidates.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
-    }
-
-    return candidates.slice(0, Math.min(count, candidates.length));
-  }
+  taps.sort((a,b)=> ((b.energy.low+b.energy.mid+b.energy.high) - (a.energy.low+a.energy.mid+a.energy.high)));
+  return taps.slice(0, 16);
 }
 
-// ===========================================================================
-// PHYSICS ENGINE - cannon-es world management
-//
-// Manages the CANNON.World, creates static wall/floor bodies, the dynamic ball,
-// handles gravity rotation for board tilt, and detects trigger zones (holes, goal).
-// ===========================================================================
-class PhysicsEngine {
-  constructor() {
-    this.world = new CANNON.World();
-    this.world.gravity.set(0, GRAVITY_Y, 0);
-    this.world.broadphase = new CANNON.SAPBroadphase(this.world);
-    this.world.allowSleep = false;
-
-    // Body references
-    this.ballBody = null;
-    this.wallBodies = [];
-    this.holeTriggers = [];  // {x, z, radius}
-    this.goalTrigger = null; // {x, z, radius}
-
-    // Fixed timestep accumulator
-    this.accumulator = 0;
-
-    // Callbacks
-    this.collisionCallbacks = [];
-    this.holeCallback = null;
-    this.goalCallback = null;
-
-    // Wall proximity data (for scrape detection)
-    this.wallCells = []; // {x, z} world positions of wall cells
+function findClosest(origin, dir, w) {
+  let best=null, min=Infinity;
+  for (const S of w){
+    const h = raySeg(origin, dir, {x:S.x1,z:S.z1}, {x:S.x2,z:S.z2});
+    if (h && h.distance>1e-4 && h.distance<min){ best=h; min=h.distance; }
   }
-
-  /**
-   * Build the physics world from maze data.
-   * Creates floor, wall bodies, ball, trigger zones.
-   */
-  createBoard(mazeData) {
-    this.clearBodies();
-
-    const { grid, width, height, holes, end, start } = mazeData;
-
-    // Materials
-    const floorMat = new CANNON.Material('floor');
-    const wallMat = new CANNON.Material('wall');
-    const ballMat = new CANNON.Material('ball');
-
-    // Floor plane
-    const floorBody = new CANNON.Body({ mass: 0, type: CANNON.Body.STATIC });
-    floorBody.addShape(new CANNON.Plane());
-    floorBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
-    floorBody.position.set(0, 0, 0);
-    floorBody.material = floorMat;
-    this.world.addBody(floorBody);
-    this.wallBodies.push(floorBody);
-
-    // Wall bodies: each wall cell gets a box collider
-    this.wallCells = [];
-    for (let gy = 0; gy < height; gy++) {
-      for (let gx = 0; gx < width; gx++) {
-        if (grid[gy][gx] === 0) {
-          const wx = (gx - width / 2 + 0.5) * CELL_SIZE;
-          const wz = (gy - height / 2 + 0.5) * CELL_SIZE;
-
-          const wallBody = new CANNON.Body({ mass: 0, type: CANNON.Body.STATIC });
-          wallBody.addShape(
-            new CANNON.Box(new CANNON.Vec3(CELL_SIZE / 2, WALL_HEIGHT / 2, CELL_SIZE / 2))
-          );
-          wallBody.position.set(wx, WALL_HEIGHT / 2, wz);
-          wallBody.material = wallMat;
-          this.world.addBody(wallBody);
-          this.wallBodies.push(wallBody);
-          this.wallCells.push({ x: wx, z: wz });
-        }
-      }
-    }
-
-    // Boundary walls (thick border around the entire board)
-    const halfW = (width * CELL_SIZE) / 2;
-    const halfH = (height * CELL_SIZE) / 2;
-    const borderThickness = 0.5;
-    const borders = [
-      { x: 0, z: -(halfH + borderThickness / 2), sx: halfW + borderThickness, sz: borderThickness / 2 },
-      { x: 0, z: halfH + borderThickness / 2, sx: halfW + borderThickness, sz: borderThickness / 2 },
-      { x: -(halfW + borderThickness / 2), z: 0, sx: borderThickness / 2, sz: halfH + borderThickness },
-      { x: halfW + borderThickness / 2, z: 0, sx: borderThickness / 2, sz: halfH + borderThickness },
-    ];
-    for (const b of borders) {
-      const body = new CANNON.Body({ mass: 0, type: CANNON.Body.STATIC });
-      body.addShape(new CANNON.Box(new CANNON.Vec3(b.sx, WALL_HEIGHT, b.sz)));
-      body.position.set(b.x, WALL_HEIGHT, b.z);
-      body.material = wallMat;
-      this.world.addBody(body);
-      this.wallBodies.push(body);
-    }
-
-    // Groove rails (optional: raised edges along passage corridors)
-    if (USE_GROOVE) {
-      this.addGrooveRails(grid, width, height);
-    }
-
-    // Contact materials
-    this.world.addContactMaterial(new CANNON.ContactMaterial(ballMat, wallMat, {
-      friction: 0.3,
-      restitution: BALL_RESTITUTION,
-    }));
-    this.world.addContactMaterial(new CANNON.ContactMaterial(ballMat, floorMat, {
-      friction: 0.5,
-      restitution: 0.1,
-    }));
-
-    // Ball body
-    const startX = (start.x - width / 2 + 0.5) * CELL_SIZE;
-    const startZ = (start.y - height / 2 + 0.5) * CELL_SIZE;
-    this.ballBody = new CANNON.Body({
-      mass: 1,
-      shape: new CANNON.Sphere(BALL_RADIUS),
-      position: new CANNON.Vec3(startX, BALL_RADIUS + 0.05, startZ),
-      linearDamping: BALL_LINEAR_DAMP,
-      angularDamping: BALL_ANGULAR_DAMP,
-      material: ballMat,
-    });
-    this.world.addBody(this.ballBody);
-
-    // Collision event listener on ball
-    this.ballBody.addEventListener('collide', (e) => {
-      const relVel = e.contact.getImpactVelocityAlongNormal();
-      if (Math.abs(relVel) > 0.5) {
-        for (const cb of this.collisionCallbacks) cb(Math.abs(relVel));
-      }
-    });
-
-    // Hole trigger zones (circle areas in XZ plane)
-    for (const hole of holes) {
-      const hx = (hole.x - width / 2 + 0.5) * CELL_SIZE;
-      const hz = (hole.y - height / 2 + 0.5) * CELL_SIZE;
-      this.holeTriggers.push({ x: hx, z: hz, radius: CELL_SIZE * 0.35 });
-    }
-
-    // Goal trigger zone
-    const gx = (end.x - width / 2 + 0.5) * CELL_SIZE;
-    const gz = (end.y - height / 2 + 0.5) * CELL_SIZE;
-    this.goalTrigger = { x: gx, z: gz, radius: CELL_SIZE * 0.4 };
-  }
-
-  /**
-   * Add groove rails along passages (raised thin edges).
-   * Creates small box bodies along passage-wall boundaries.
-   */
-  addGrooveRails(grid, width, height) {
-    const railMat = new CANNON.Material('rail');
-    const halfCell = CELL_SIZE / 2;
-    const railW = 0.04; // Very thin
-
-    for (let gy = 0; gy < height; gy++) {
-      for (let gx = 0; gx < width; gx++) {
-        if (grid[gy][gx] !== 1) continue; // Only passages get rails
-
-        const cx = (gx - width / 2 + 0.5) * CELL_SIZE;
-        const cz = (gy - height / 2 + 0.5) * CELL_SIZE;
-
-        // Check each side: if adjacent is wall, add a low rail
-        // North
-        if (gy > 0 && grid[gy - 1][gx] === 0) {
-          const body = new CANNON.Body({ mass: 0, type: CANNON.Body.STATIC });
-          body.addShape(new CANNON.Box(new CANNON.Vec3(halfCell, GROOVE_HEIGHT / 2, railW)));
-          body.position.set(cx, GROOVE_HEIGHT / 2, cz - halfCell + railW);
-          body.material = railMat;
-          this.world.addBody(body);
-        }
-        // South
-        if (gy < height - 1 && grid[gy + 1][gx] === 0) {
-          const body = new CANNON.Body({ mass: 0, type: CANNON.Body.STATIC });
-          body.addShape(new CANNON.Box(new CANNON.Vec3(halfCell, GROOVE_HEIGHT / 2, railW)));
-          body.position.set(cx, GROOVE_HEIGHT / 2, cz + halfCell - railW);
-          body.material = railMat;
-          this.world.addBody(body);
-        }
-        // West
-        if (gx > 0 && grid[gy][gx - 1] === 0) {
-          const body = new CANNON.Body({ mass: 0, type: CANNON.Body.STATIC });
-          body.addShape(new CANNON.Box(new CANNON.Vec3(railW, GROOVE_HEIGHT / 2, halfCell)));
-          body.position.set(cx - halfCell + railW, GROOVE_HEIGHT / 2, cz);
-          body.material = railMat;
-          this.world.addBody(body);
-        }
-        // East
-        if (gx < width - 1 && grid[gy][gx + 1] === 0) {
-          const body = new CANNON.Body({ mass: 0, type: CANNON.Body.STATIC });
-          body.addShape(new CANNON.Box(new CANNON.Vec3(railW, GROOVE_HEIGHT / 2, halfCell)));
-          body.position.set(cx + halfCell - railW, GROOVE_HEIGHT / 2, cz);
-          body.material = railMat;
-          this.world.addBody(body);
-        }
-      }
-    }
-  }
-
-  /** Remove all bodies from the world */
-  clearBodies() {
-    while (this.world.bodies.length > 0) {
-      this.world.removeBody(this.world.bodies[0]);
-    }
-    this.wallBodies = [];
-    this.holeTriggers = [];
-    this.goalTrigger = null;
-    this.ballBody = null;
-    this.wallCells = [];
-  }
-
-  /**
-   * Set board tilt by rotating the gravity vector.
-   * tiltX and tiltZ range from -1 to 1.
-   * Y component remains negative (downward), X and Z add lateral force.
-   */
-  setTilt(tiltX, tiltZ) {
-    const strength = CONFIG.tiltStrength;
-    this.world.gravity.set(
-      tiltX * strength,
-      GRAVITY_Y,
-      tiltZ * strength
-    );
-  }
-
-  /**
-   * Advance physics simulation with fixed timestep accumulator.
-   * Clamps max substeps to prevent spiral of death.
-   */
-  step(dt) {
-    if (!this.ballBody) return;
-
-    this.accumulator += dt;
-    let steps = 0;
-    while (this.accumulator >= FIXED_TIMESTEP && steps < MAX_SUBSTEPS) {
-      this.world.step(FIXED_TIMESTEP);
-      this.accumulator -= FIXED_TIMESTEP;
-      steps++;
-    }
-    // Prevent accumulator from growing unbounded
-    if (this.accumulator > FIXED_TIMESTEP * MAX_SUBSTEPS) {
-      this.accumulator = 0;
-    }
-
-    // Clamp maximum ball velocity
-    const vel = this.ballBody.velocity;
-    const speed = vel.length();
-    if (speed > CONFIG.maxSpeed) {
-      vel.scale(CONFIG.maxSpeed / speed, vel);
-    }
-
-    // Check trigger zones
-    const bx = this.ballBody.position.x;
-    const bz = this.ballBody.position.z;
-
-    // Hole detection
-    for (const hole of this.holeTriggers) {
-      const dist = Math.sqrt((bx - hole.x) ** 2 + (bz - hole.z) ** 2);
-      if (dist < hole.radius) {
-        if (this.holeCallback) this.holeCallback(hole);
-        return;
-      }
-    }
-
-    // Goal detection
-    if (this.goalTrigger) {
-      const dist = Math.sqrt((bx - this.goalTrigger.x) ** 2 + (bz - this.goalTrigger.z) ** 2);
-      if (dist < this.goalTrigger.radius) {
-        if (this.goalCallback) this.goalCallback();
-      }
-    }
-  }
-
-  /** Check if ball is scraping along a wall (for scrape sound) */
-  isScrapingWall() {
-    if (!this.ballBody) return false;
-    const bx = this.ballBody.position.x;
-    const bz = this.ballBody.position.z;
-    const speed = this.ballBody.velocity.length();
-    if (speed < WALL_SCRAPE_MIN_SPEED) return false;
-
-    // Check proximity to nearest wall cell
-    for (const wall of this.wallCells) {
-      const dx = Math.abs(bx - wall.x);
-      const dz = Math.abs(bz - wall.z);
-      // Chebyshev distance approximation
-      if (dx < WALL_SCRAPE_DIST && dz < CELL_SIZE / 2 + BALL_RADIUS) return true;
-      if (dz < WALL_SCRAPE_DIST && dx < CELL_SIZE / 2 + BALL_RADIUS) return true;
-    }
-    return false;
-  }
-
-  /** Get nearest hole distance (for proximity warnings) */
-  getNearestHoleDistance() {
-    if (!this.ballBody || this.holeTriggers.length === 0) return Infinity;
-    const bx = this.ballBody.position.x;
-    const bz = this.ballBody.position.z;
-    let minDist = Infinity;
-    for (const hole of this.holeTriggers) {
-      const dist = Math.sqrt((bx - hole.x) ** 2 + (bz - hole.z) ** 2);
-      if (dist < minDist) minDist = dist;
-    }
-    return minDist;
-  }
-
-  getBallPosition() {
-    if (!this.ballBody) return { x: 0, y: 0, z: 0 };
-    const p = this.ballBody.position;
-    return { x: p.x, y: p.y, z: p.z };
-  }
-
-  getBallSpeed() {
-    if (!this.ballBody) return 0;
-    return this.ballBody.velocity.length();
-  }
-
-  getBallQuaternion() {
-    if (!this.ballBody) return new CANNON.Quaternion();
-    return this.ballBody.quaternion;
-  }
-
-  /** Reset ball to start position with zero velocity */
-  resetBall(mazeData) {
-    if (!this.ballBody) return;
-    const { start, width, height } = mazeData;
-    const sx = (start.x - width / 2 + 0.5) * CELL_SIZE;
-    const sz = (start.y - height / 2 + 0.5) * CELL_SIZE;
-    this.ballBody.position.set(sx, BALL_RADIUS + 0.05, sz);
-    this.ballBody.velocity.set(0, 0, 0);
-    this.ballBody.angularVelocity.set(0, 0, 0);
-    this.ballBody.force.set(0, 0, 0);
-    this.ballBody.torque.set(0, 0, 0);
-  }
-
-  onCollision(cb) { this.collisionCallbacks.push(cb); }
-  onHole(cb) { this.holeCallback = cb; }
-  onGoal(cb) { this.goalCallback = cb; }
+  return best;
 }
-
-// ===========================================================================
-// AUDIO ENGINE - Web Audio API
-//
-// Manages all sound synthesis and spatialization:
-//  - Goal beacon: warm pad (pink noise + triangle oscillator + vibrato)
-//  - Rolling sound: bandpass-filtered white noise, gain ~ ball speed
-//  - Collision bursts: short filtered noise, intensity-proportional
-//  - Wall scrape: continuous filtered noise when ball drags along wall
-//  - Hole proximity: low rumble warning
-//  - Echo taps: pool of DelayNodes driven by ray tracer reflections
-//  - Occlusion EQ: 3-band filter on beacon driven by LOS ratio
-//  - Stereo panning: pan = sin(angle) from source-listener vector
-//
-// No per-frame oscillator creation. Uses node pooling and EMA smoothing.
-// ===========================================================================
-class AudioEngine {
-  constructor() {
-    this.ctx = null;
-    this.masterGain = null;
-
-    // Beacon nodes
-    this.beaconGain = null;
-    this.beaconPanner = null;
-    this.beaconLowEQ = null;
-    this.beaconMidEQ = null;
-    this.beaconHighEQ = null;
-    this.beaconNoise = null;
-    this.beaconOsc = null;
-    this.beaconMixNode = null;
-
-    // Rolling sound nodes
-    this.rollingGain = null;
-    this.rollingFilter = null;
-    this.rollingNoise = null;
-    this.rollingPanner = null;
-
-    // Wall scrape nodes
-    this.scrapeGain = null;
-    this.scrapeFilter = null;
-    this.scrapeNoise = null;
-
-    // Hole proximity rumble
-    this.rumbleGain = null;
-    this.rumbleOsc = null;
-
-    // Echo tap pool
-    this.echoTaps = [];
-    this.maxEchoTaps = MAX_ECHO_TAPS;
-
-    // Smoothed values
-    this.losSmoothed = 1.0;
-    this.speedSmoothed = 0;
-    this.scrapeSmoothed = 0;
-    this.rumbleSmoothed = 0;
-
-    this.initialized = false;
+function raySeg(o, d, a, b){
+  const sx=b.x-a.x, sz=b.z-a.z;
+  const det = d.x*sz - d.z*sx; if (Math.abs(det)<1e-10) return null;
+  const t = ((a.x-o.x)*sz - (a.z-o.z)*sx)/det;
+  const u = ((a.x-o.x)*d.z - (a.z-o.z)*d.x)/det;
+  if (t>0 && u>=0 && u<=1){
+    const x = o.x + d.x*t, z = o.z + d.z*t;
+    const len = Math.hypot(sx,sz)||1, nx=sz/len, nz=-sx/len;
+    return { distance:t, point:{x,z}, normal:{x:nx,z:nz} };
   }
-
-  /** Initialize the AudioContext and all persistent nodes */
-  async init() {
-    this.ctx = new AudioContext({ sampleRate: 44100 });
-    if (this.ctx.state === 'suspended') await this.ctx.resume();
-
-    // Master output gain
-    this.masterGain = this.ctx.createGain();
-    this.masterGain.gain.value = 0.8;
-    this.masterGain.connect(this.ctx.destination);
-
-    this.initBeacon();
-    this.initRolling();
-    this.initScrape();
-    this.initRumble();
-    this.initEchoTaps();
-
-    this.initialized = true;
-  }
-
-  /** Create the goal beacon sound chain */
-  initBeacon() {
-    const ctx = this.ctx;
-
-    // Signal chain: [noise+osc] -> beaconMix -> lowEQ -> midEQ -> highEQ -> panner -> gain -> master
-    this.beaconGain = ctx.createGain();
-    this.beaconGain.gain.value = 0.25;
-
-    this.beaconPanner = ctx.createStereoPanner();
-    this.beaconPanner.pan.value = 0;
-
-    // 3-band EQ for occlusion simulation
-    this.beaconLowEQ = ctx.createBiquadFilter();
-    this.beaconLowEQ.type = 'lowshelf';
-    this.beaconLowEQ.frequency.value = 300;
-    this.beaconLowEQ.gain.value = 0;
-
-    this.beaconMidEQ = ctx.createBiquadFilter();
-    this.beaconMidEQ.type = 'peaking';
-    this.beaconMidEQ.frequency.value = 1200;
-    this.beaconMidEQ.Q.value = 1.0;
-    this.beaconMidEQ.gain.value = 0;
-
-    this.beaconHighEQ = ctx.createBiquadFilter();
-    this.beaconHighEQ.type = 'highshelf';
-    this.beaconHighEQ.frequency.value = 3000;
-    this.beaconHighEQ.gain.value = 0;
-
-    // --- Pink noise source ---
-    const bufferSize = ctx.sampleRate * 2;
-    const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-    const data = noiseBuffer.getChannelData(0);
-    // Paul Kellet's refined pink noise algorithm
-    let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
-    for (let i = 0; i < bufferSize; i++) {
-      const white = Math.random() * 2 - 1;
-      b0 = 0.99886 * b0 + white * 0.0555179;
-      b1 = 0.99332 * b1 + white * 0.0750759;
-      b2 = 0.96900 * b2 + white * 0.1538520;
-      b3 = 0.86650 * b3 + white * 0.3104856;
-      b4 = 0.55000 * b4 + white * 0.5329522;
-      b5 = -0.7616 * b5 - white * 0.0168980;
-      data[i] = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362) * 0.08;
-      b6 = white * 0.115926;
-    }
-
-    this.beaconNoise = ctx.createBufferSource();
-    this.beaconNoise.buffer = noiseBuffer;
-    this.beaconNoise.loop = true;
-    this.beaconNoise.start();
-
-    // Bandpass to warm the noise
-    const beaconBP = ctx.createBiquadFilter();
-    beaconBP.type = 'bandpass';
-    beaconBP.frequency.value = 400;
-    beaconBP.Q.value = 0.8;
-
-    // --- Triangle oscillator for tonal component ---
-    this.beaconOsc = ctx.createOscillator();
-    this.beaconOsc.type = 'triangle';
-    this.beaconOsc.frequency.value = 220; // A3
-    this.beaconOsc.start();
-
-    // Subtle vibrato via LFO
-    const vibrato = ctx.createOscillator();
-    vibrato.type = 'sine';
-    vibrato.frequency.value = 4.5; // Gentle speed
-    vibrato.start();
-    const vibratoGain = ctx.createGain();
-    vibratoGain.gain.value = 3; // +/- 3 Hz modulation (very subtle)
-    vibrato.connect(vibratoGain);
-    vibratoGain.connect(this.beaconOsc.frequency);
-
-    // Mix gains
-    const oscGain = ctx.createGain();
-    oscGain.gain.value = 0.12; // Oscillator is quieter than noise
-
-    const noiseGain = ctx.createGain();
-    noiseGain.gain.value = 0.5;
-
-    // Beacon mix node (combination point for noise + osc)
-    this.beaconMixNode = ctx.createGain();
-    this.beaconMixNode.gain.value = 1.0;
-
-    // Wire up
-    this.beaconNoise.connect(beaconBP);
-    beaconBP.connect(noiseGain);
-    noiseGain.connect(this.beaconMixNode);
-
-    this.beaconOsc.connect(oscGain);
-    oscGain.connect(this.beaconMixNode);
-
-    // Beacon mix -> EQ chain -> panner -> gain -> master
-    this.beaconMixNode.connect(this.beaconLowEQ);
-    this.beaconLowEQ.connect(this.beaconMidEQ);
-    this.beaconMidEQ.connect(this.beaconHighEQ);
-    this.beaconHighEQ.connect(this.beaconPanner);
-    this.beaconPanner.connect(this.beaconGain);
-    this.beaconGain.connect(this.masterGain);
-  }
-
-  /** Create the rolling sound (continuous bandpass noise) */
-  initRolling() {
-    const ctx = this.ctx;
-
-    // White noise buffer
-    const bufferSize = ctx.sampleRate * 2;
-    const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-    const data = noiseBuffer.getChannelData(0);
-    for (let i = 0; i < bufferSize; i++) {
-      data[i] = Math.random() * 2 - 1;
-    }
-
-    this.rollingNoise = ctx.createBufferSource();
-    this.rollingNoise.buffer = noiseBuffer;
-    this.rollingNoise.loop = true;
-    this.rollingNoise.start();
-
-    this.rollingFilter = ctx.createBiquadFilter();
-    this.rollingFilter.type = 'bandpass';
-    this.rollingFilter.frequency.value = 200;
-    this.rollingFilter.Q.value = 1.5;
-
-    this.rollingGain = ctx.createGain();
-    this.rollingGain.gain.value = 0;
-
-    this.rollingPanner = ctx.createStereoPanner();
-    this.rollingPanner.pan.value = 0;
-
-    // Chain: noise -> bandpass -> gain -> panner -> master
-    this.rollingNoise.connect(this.rollingFilter);
-    this.rollingFilter.connect(this.rollingGain);
-    this.rollingGain.connect(this.rollingPanner);
-    this.rollingPanner.connect(this.masterGain);
-  }
-
-  /** Create the wall scrape sound (high-frequency filtered noise) */
-  initScrape() {
-    const ctx = this.ctx;
-
-    const bufferSize = ctx.sampleRate * 2;
-    const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-    const data = noiseBuffer.getChannelData(0);
-    for (let i = 0; i < bufferSize; i++) {
-      data[i] = Math.random() * 2 - 1;
-    }
-
-    this.scrapeNoise = ctx.createBufferSource();
-    this.scrapeNoise.buffer = noiseBuffer;
-    this.scrapeNoise.loop = true;
-    this.scrapeNoise.start();
-
-    this.scrapeFilter = ctx.createBiquadFilter();
-    this.scrapeFilter.type = 'highpass';
-    this.scrapeFilter.frequency.value = 2000;
-    this.scrapeFilter.Q.value = 2.0;
-
-    this.scrapeGain = ctx.createGain();
-    this.scrapeGain.gain.value = 0;
-
-    // Chain: noise -> highpass -> gain -> master
-    this.scrapeNoise.connect(this.scrapeFilter);
-    this.scrapeFilter.connect(this.scrapeGain);
-    this.scrapeGain.connect(this.masterGain);
-  }
-
-  /** Create the hole proximity rumble (low oscillator) */
-  initRumble() {
-    const ctx = this.ctx;
-
-    this.rumbleOsc = ctx.createOscillator();
-    this.rumbleOsc.type = 'sine';
-    this.rumbleOsc.frequency.value = 45; // Sub-bass rumble
-    this.rumbleOsc.start();
-
-    // Second harmonic for richness
-    const rumbleOsc2 = ctx.createOscillator();
-    rumbleOsc2.type = 'sine';
-    rumbleOsc2.frequency.value = 90;
-    rumbleOsc2.start();
-
-    const osc2Gain = ctx.createGain();
-    osc2Gain.gain.value = 0.3;
-    rumbleOsc2.connect(osc2Gain);
-
-    this.rumbleGain = ctx.createGain();
-    this.rumbleGain.gain.value = 0;
-
-    // Mix oscillators
-    this.rumbleOsc.connect(this.rumbleGain);
-    osc2Gain.connect(this.rumbleGain);
-    this.rumbleGain.connect(this.masterGain);
-  }
-
-  /** Create the echo tap pool (delay + EQ + panner per tap) */
-  initEchoTaps() {
-    const ctx = this.ctx;
-    this.echoTaps = [];
-
-    for (let i = 0; i < this.maxEchoTaps; i++) {
-      // Each tap: delay -> lowpass -> highpass -> gain -> panner -> master
-      const delay = ctx.createDelay(1.5); // Max 1.5s delay
-      delay.delayTime.value = 0;
-
-      const gain = ctx.createGain();
-      gain.gain.value = 0;
-
-      const panner = ctx.createStereoPanner();
-      panner.pan.value = 0;
-
-      const lowpass = ctx.createBiquadFilter();
-      lowpass.type = 'lowpass';
-      lowpass.frequency.value = 8000;
-
-      const highpass = ctx.createBiquadFilter();
-      highpass.type = 'highpass';
-      highpass.frequency.value = 80;
-
-      // Wire: delay -> lowpass -> highpass -> gain -> panner -> master
-      delay.connect(lowpass);
-      lowpass.connect(highpass);
-      highpass.connect(gain);
-      gain.connect(panner);
-      panner.connect(this.masterGain);
-
-      this.echoTaps.push({ delay, gain, panner, lowpass, highpass, active: false });
-    }
-
-    // Connect beacon mix to all echo tap inputs (they share the source)
-    // This happens after beacon is initialized
-    if (this.beaconMixNode) {
-      for (const tap of this.echoTaps) {
-        this.beaconMixNode.connect(tap.delay);
-      }
-    }
-  }
-
-  /**
-   * Update audio spatialization from ray tracer results.
-   * Implements the audio equation:
-   *   S(t) = (1-M_t)*G_dir*EQ(E_dir)*A_dir*delta(t-d/c) + SUM[reflections]
-   *
-   * @param {object} result - Ray tracer output {reflections, los, directDistance}
-   * @param {{x,y,z}} ballPos - Current ball world position
-   * @param {{x,z}} goalPos - Goal world position (XZ plane)
-   */
-  updateFromRayTracer(result, ballPos, goalPos) {
-    if (!this.initialized || !this.ctx) return;
-    const now = this.ctx.currentTime;
-    const { reflections, los, directDistance } = result;
-
-    // --- Smooth LOS for stable audio ---
-    this.losSmoothed += (los - this.losSmoothed) * EMA_ALPHA;
-    const occlusionFactor = 1.0 - this.losSmoothed; // 0 = clear, 1 = fully blocked
-
-    // --- Beacon 3-band EQ driven by occlusion ---
-    // When occluded: cut highs significantly, slight low boost (muffled sound)
-    // This simulates how sound is filtered passing through/around obstacles
-    this.beaconHighEQ.gain.setTargetAtTime(-14 * occlusionFactor, now, 0.08);
-    this.beaconLowEQ.gain.setTargetAtTime(5 * occlusionFactor, now, 0.08);
-    this.beaconMidEQ.gain.setTargetAtTime(-4 * occlusionFactor, now, 0.08);
-
-    // --- Beacon distance attenuation ---
-    // Inverse distance with soft clamp to prevent silence at far distances
-    const distAtten = Math.max(0.05, 1.0 / (1.0 + directDistance * 0.25));
-    this.beaconGain.gain.setTargetAtTime(0.3 * distAtten, now, 0.05);
-
-    // --- Stereo panning: pan = sin(angle from ball to goal) ---
-    const dx = goalPos.x - ballPos.x;
-    const dz = goalPos.z - ballPos.z;
-    const angle = Math.atan2(dx, -dz); // Relative to camera forward (-Z)
-    const pan = Math.max(-1, Math.min(1, Math.sin(angle)));
-    this.beaconPanner.pan.setTargetAtTime(pan, now, 0.05);
-
-    // --- Update echo taps from reflected rays ---
-    // Sort reflections by energy, take top N for the tap pool
-    const reflected = reflections
-      .filter(r => r.bounces > 0) // Only bounced rays (not direct)
-      .sort((a, b) => {
-        const ea = a.energy[0] + a.energy[1] + a.energy[2];
-        const eb = b.energy[0] + b.energy[1] + b.energy[2];
-        return eb - ea;
-      })
-      .slice(0, this.maxEchoTaps);
-
-    for (let i = 0; i < this.maxEchoTaps; i++) {
-      const tap = this.echoTaps[i];
-
-      if (i < reflected.length) {
-        const ref = reflected[i];
-
-        // Delay = distance / speed of sound (clamped to max delay line length)
-        const delayTime = Math.min(1.4, ref.distance / SPEED_OF_SOUND);
-
-        // Gain from total energy (scaled down for subtlety)
-        const totalEnergy = (ref.energy[0] + ref.energy[1] + ref.energy[2]) / 3;
-        const tapGain = Math.min(0.25, totalEnergy * 0.4);
-
-        // Panning from reflection arrival angle
-        const tapPan = Math.max(-1, Math.min(1, Math.sin(ref.angle)));
-
-        // Per-band EQ: high energy[2] -> keep more highs, low energy[0] -> cut lows
-        const highCut = 1500 + ref.energy[2] * 6500;
-        const lowCut = 60 + (1 - ref.energy[0]) * 250;
-
-        // Smooth parameter changes
-        tap.delay.delayTime.setTargetAtTime(delayTime, now, 0.02);
-        tap.gain.gain.setTargetAtTime(tapGain, now, 0.03);
-        tap.panner.pan.setTargetAtTime(tapPan, now, 0.03);
-        tap.lowpass.frequency.setTargetAtTime(highCut, now, 0.03);
-        tap.highpass.frequency.setTargetAtTime(lowCut, now, 0.03);
-        tap.active = true;
-      } else {
-        // Fade out unused taps smoothly
-        tap.gain.gain.setTargetAtTime(0, now, 0.15);
-        tap.active = false;
-      }
-    }
-  }
-
-  /**
-   * Update rolling sound based on ball speed and position.
-   * Gain proportional to speed, frequency sweeps with speed,
-   * stereo panning follows ball X position.
-   */
-  updateRolling(speed, ballPos, boardWidth) {
-    if (!this.initialized) return;
-    const now = this.ctx.currentTime;
-
-    // Smooth speed to avoid jitter
-    this.speedSmoothed += (speed - this.speedSmoothed) * 0.12;
-    const normalizedSpeed = Math.min(1, this.speedSmoothed / CONFIG.maxSpeed);
-
-    // Rolling volume and frequency track speed
-    this.rollingGain.gain.setTargetAtTime(normalizedSpeed * 0.22, now, 0.04);
-    this.rollingFilter.frequency.setTargetAtTime(150 + normalizedSpeed * 900, now, 0.04);
-    this.rollingFilter.Q.setTargetAtTime(1.0 + normalizedSpeed * 2.5, now, 0.04);
-
-    // Pan follows ball horizontal position
-    const panVal = Math.max(-1, Math.min(1, ballPos.x / (boardWidth * 0.5)));
-    this.rollingPanner.pan.setTargetAtTime(panVal * 0.5, now, 0.04);
-  }
-
-  /** Update wall scrape sound (on/off with smoothing) */
-  updateScrape(isScraping, speed) {
-    if (!this.initialized) return;
-    const now = this.ctx.currentTime;
-
-    const target = isScraping ? Math.min(0.15, speed * 0.02) : 0;
-    this.scrapeSmoothed += (target - this.scrapeSmoothed) * 0.2;
-    this.scrapeGain.gain.setTargetAtTime(this.scrapeSmoothed, now, 0.03);
-
-    // Modulate scrape filter frequency with speed
-    if (isScraping) {
-      this.scrapeFilter.frequency.setTargetAtTime(1500 + speed * 300, now, 0.05);
-    }
-  }
-
-  /** Update hole proximity rumble */
-  updateRumble(distance) {
-    if (!this.initialized) return;
-    const now = this.ctx.currentTime;
-
-    // Rumble intensifies as ball approaches hole
-    // Active within 2 cell widths, max at 0.5 cell widths
-    const threshold = CELL_SIZE * 2.0;
-    let target = 0;
-    if (distance < threshold) {
-      target = Math.max(0, 1.0 - distance / threshold) * 0.2;
-    }
-    this.rumbleSmoothed += (target - this.rumbleSmoothed) * 0.1;
-    this.rumbleGain.gain.setTargetAtTime(this.rumbleSmoothed, now, 0.05);
-
-    // Pitch rises as distance decreases (urgency)
-    const freqTarget = 40 + (1.0 - Math.min(1, distance / threshold)) * 30;
-    this.rumbleOsc.frequency.setTargetAtTime(freqTarget, now, 0.1);
-  }
-
-  /**
-   * Play a collision burst.
-   * Short filtered noise, intensity determines volume and brightness.
-   */
-  playCollision(intensity) {
-    if (!this.initialized) return;
-    const ctx = this.ctx;
-    const now = ctx.currentTime;
-
-    // Create one-shot noise burst
-    const duration = 0.07;
-    const bufSize = Math.floor(ctx.sampleRate * duration);
-    const buf = ctx.createBuffer(1, bufSize, ctx.sampleRate);
-    const d = buf.getChannelData(0);
-    for (let i = 0; i < bufSize; i++) {
-      // Exponential decay envelope
-      const env = Math.exp(-i / (bufSize * 0.12));
-      d[i] = (Math.random() * 2 - 1) * env;
-    }
-
-    const src = ctx.createBufferSource();
-    src.buffer = buf;
-
-    // Lowpass filter: brighter hits get higher cutoff
-    const filter = ctx.createBiquadFilter();
-    filter.type = 'lowpass';
-    filter.frequency.value = 1200 + Math.min(intensity, 10) * 600;
-    filter.Q.value = 0.7;
-
-    // Gain proportional to impact intensity
-    const gain = ctx.createGain();
-    gain.gain.value = Math.min(0.4, intensity * 0.06);
-
-    // Wire and play
-    src.connect(filter);
-    filter.connect(gain);
-    gain.connect(this.masterGain);
-    src.start(now);
-    src.stop(now + duration + 0.01);
-  }
-
-  /** Play descending tone when ball falls into a hole */
-  playHoleFall() {
-    if (!this.initialized) return;
-    const ctx = this.ctx;
-    const now = ctx.currentTime;
-
-    // Descending sine sweep
-    const osc = ctx.createOscillator();
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(400, now);
-    osc.frequency.exponentialRampToValueAtTime(60, now + 0.7);
-
-    const gain = ctx.createGain();
-    gain.gain.setValueAtTime(0.4, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.7);
-
-    osc.connect(gain);
-    gain.connect(this.masterGain);
-    osc.start(now);
-    osc.stop(now + 0.8);
-
-    // Additional noise burst for impact feel
-    const noiseDur = 0.15;
-    const nBuf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * noiseDur), ctx.sampleRate);
-    const nd = nBuf.getChannelData(0);
-    for (let i = 0; i < nd.length; i++) {
-      nd[i] = (Math.random() * 2 - 1) * Math.exp(-i / (nd.length * 0.1));
-    }
-    const nSrc = ctx.createBufferSource();
-    nSrc.buffer = nBuf;
-    const nGain = ctx.createGain();
-    nGain.gain.value = 0.2;
-    nSrc.connect(nGain);
-    nGain.connect(this.masterGain);
-    nSrc.start(now + 0.3);
-    nSrc.stop(now + 0.3 + noiseDur);
-  }
-
-  /** Play ascending arpeggio when goal is reached */
-  playGoalReached() {
-    if (!this.initialized) return;
-    const ctx = this.ctx;
-    const now = ctx.currentTime;
-
-    // C major arpeggio ascending: C4, E4, G4, C5
-    const notes = [261.63, 329.63, 392.00, 523.25];
-    const spacing = 0.1; // seconds between notes
-
-    notes.forEach((freq, i) => {
-      const osc = ctx.createOscillator();
-      osc.type = 'triangle';
-      osc.frequency.value = freq;
-
-      const gain = ctx.createGain();
-      const start = now + i * spacing;
-      gain.gain.setValueAtTime(0, start);
-      gain.gain.linearRampToValueAtTime(0.2, start + 0.04);
-      gain.gain.setValueAtTime(0.2, start + 0.15);
-      gain.gain.exponentialRampToValueAtTime(0.001, start + 0.5);
-
-      osc.connect(gain);
-      gain.connect(this.masterGain);
-      osc.start(start);
-      osc.stop(start + 0.6);
-    });
-  }
-
-  suspend() { if (this.ctx && this.ctx.state === 'running') this.ctx.suspend(); }
-  resume() { if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume(); }
+  return null;
 }
-
-// ===========================================================================
-// INPUT CONTROLLER
-//
-// Handles keyboard (arrows/WASD), DeviceOrientation (mobile tilt),
-// and gamepad input. Outputs normalized tiltX/tiltZ in [-1, 1].
-// ===========================================================================
-class InputController {
-  constructor() {
-    this.tiltX = 0;
-    this.tiltZ = 0;
-    this.keys = {};
-    this.motionEnabled = false;
-    this.gamepadIndex = null;
-
-    // Device orientation values
-    this.orientBeta = 0;
-    this.orientGamma = 0;
-
-    this.setupKeyboard();
-    this.setupGamepad();
-  }
-
-  setupKeyboard() {
-    window.addEventListener('keydown', (e) => { this.keys[e.code] = true; });
-    window.addEventListener('keyup', (e) => { this.keys[e.code] = false; });
-  }
-
-  /**
-   * Request motion permission (iOS requires explicit user gesture)
-   * and start listening to device orientation events.
-   */
-  async enableMotion() {
-    // iOS 13+ requires explicit permission request
-    if (typeof DeviceOrientationEvent !== 'undefined' &&
-        typeof DeviceOrientationEvent.requestPermission === 'function') {
-      try {
-        const perm = await DeviceOrientationEvent.requestPermission();
-        if (perm !== 'granted') return false;
-      } catch (e) {
-        console.warn('Motion permission denied:', e);
-        return false;
-      }
-    }
-
-    window.addEventListener('deviceorientation', (e) => {
-      this.orientBeta = e.beta || 0;   // Front-back tilt (-180 to 180)
-      this.orientGamma = e.gamma || 0; // Left-right tilt (-90 to 90)
-    });
-
-    this.motionEnabled = true;
-    return true;
-  }
-
-  setupGamepad() {
-    window.addEventListener('gamepadconnected', (e) => {
-      this.gamepadIndex = e.gamepad.index;
-    });
-    window.addEventListener('gamepaddisconnected', () => {
-      this.gamepadIndex = null;
-    });
-  }
-
-  /** Poll all input sources and compute final tilt values */
-  update() {
-    let tx = 0, tz = 0;
-
-    // --- Keyboard (digital: -1, 0, or +1 per axis) ---
-    if (this.keys['ArrowLeft'] || this.keys['KeyA']) tx -= 1;
-    if (this.keys['ArrowRight'] || this.keys['KeyD']) tx += 1;
-    if (this.keys['ArrowUp'] || this.keys['KeyW']) tz -= 1;
-    if (this.keys['ArrowDown'] || this.keys['KeyS']) tz += 1;
-
-    // --- Gamepad (analog sticks) ---
-    if (this.gamepadIndex !== null) {
-      const gp = navigator.getGamepads()[this.gamepadIndex];
-      if (gp) {
-        const deadzone = 0.15;
-        const lx = Math.abs(gp.axes[0]) > deadzone ? gp.axes[0] : 0;
-        const ly = Math.abs(gp.axes[1]) > deadzone ? gp.axes[1] : 0;
-        tx += lx;
-        tz += ly;
-      }
-    }
-
-    // --- Device orientation (analog tilt) ---
-    if (this.motionEnabled) {
-      // Normalize gamma (-90..90) to -1..1, with 30 deg = full tilt
-      tx += Math.max(-1, Math.min(1, this.orientGamma / 30));
-      // Beta: assume phone held at ~45 deg; deviation from 45 = tilt
-      tz += Math.max(-1, Math.min(1, (this.orientBeta - 45) / 30));
-    }
-
-    // Clamp combined input
-    this.tiltX = Math.max(-1, Math.min(1, tx));
-    this.tiltZ = Math.max(-1, Math.min(1, tz));
-  }
+function segmentNearListener(p1,p2,c,r){
+  const vx = p2.x - p1.x, vz = p2.z - p1.z, wx = c.x - p1.x, wz = c.z - p1.z;
+  const vv=vx*vx+vz*vz; if (vv<1e-10) return false;
+  let t=(wx*vx+wz*vz)/vv; t=Math.max(0,Math.min(1,t));
+  const px=p1.x+t*vx, pz=p1.z+t*vz;
+  const dx=c.x-px, dz=c.z-pz;
+  return (dx*dx+dz*dz)<=r*r;
 }
+`;
 
-// ===========================================================================
-// HAPTICS MANAGER
-//
-// Provides vibration feedback via navigator.vibrate().
-// All patterns are throttled to prevent motor overdrive on mobile.
-// ===========================================================================
-class HapticsManager {
-  constructor() {
-    this.lastVibrate = 0;
-    this.throttleMs = HAPTIC_THROTTLE_MS;
-    this.supported = 'vibrate' in navigator;
-  }
-
-  /** Low-level vibrate with throttling */
-  vibrate(pattern) {
-    if (!this.supported) return;
+/* ============================================================
+   Haptics
+============================================================ */
+class Haptics {
+  constructor() { this.enabled = 'vibrate' in navigator; this.nextAt = 0; }
+  update(prox, mt, speed) {
+    if (!this.enabled) return;
     const now = performance.now();
-    if (now - this.lastVibrate < this.throttleMs) return;
-    this.lastVibrate = now;
-    try { navigator.vibrate(pattern); } catch (e) { /* silently fail */ }
+    const minPeriod = 120, maxPeriod = 450;
+    const period = lerp(maxPeriod, minPeriod, prox);
+    if (now < this.nextAt) return;
+    const base = lerp(3, 24, prox);
+    const speedBoost = Math.min(10, speed * 2);
+    const strength = Math.min(40, base + speedBoost);
+    const occ = mt;
+    const trimmed = Math.max(5, strength * (0.85 - 0.5 * occ));
+    if (occ > 0.4) navigator.vibrate([trimmed, 60, trimmed * 0.6]); else navigator.vibrate(trimmed);
+    this.nextAt = now + period;
+  }
+  impact(v) { if (!this.enabled) return; navigator.vibrate(Math.min(200, 40 + v * 160)); }
+}
+
+/* ============================================================
+   Audio engine — balanced beacon/rolling (math intact)
+============================================================ */
+class PerfectRayAudio {
+  constructor(){
+    this.ctx=null; this.master=null;
+    this.sourceBus=null;
+    this.direct={ gain:null, low:null, mid:null, high:null, tone:null, delay:null, panner:null, osc1:null, tremOsc:null, tremDepth:null, trem:null };
+    this.taps=[];
+    this.ball={ filter:null, gain:null, panner:null, ema:0 };
+    this.worker=null; this.initialized=false;
+    this.M_t=0; this.E_dir={low:1,mid:1,high:1};
+    this.lastTrace=0;
+    this.listenerPos={x:0,z:0};
+    this.lastProximity=0;
+    this.minAudibleFloor = 0.025;
+    this.wallsPending = null;
   }
 
-  /** Collision jolt: short pulse proportional to impact */
-  collision(intensity) {
-    const dur = Math.min(80, Math.floor(intensity * 12));
-    this.vibrate([dur]);
+  async init(){
+    const start = async ()=>{
+      if (this.initialized) return;
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      this.ctx = new Ctx({ latencyHint:'interactive', sampleRate:48000 });
+
+      const comp=this.ctx.createDynamicsCompressor();
+      comp.threshold.value=-12; comp.knee.value=8; comp.ratio.value=4; comp.attack.value=0.002; comp.release.value=0.1;
+      this.master=this.ctx.createGain(); this.master.gain.value=0.75;
+      this.master.connect(comp); comp.connect(this.ctx.destination);
+
+      this.initSignal();
+      this.initDirectChain();
+      this.initTaps(16);
+      this.initBall();
+      this.initWorker();
+
+      this.initialized=true;
+      document.removeEventListener('pointerdown', start);
+      document.removeEventListener('keydown', start);
+    };
+    document.addEventListener('pointerdown', start, { once:true });
+    document.addEventListener('keydown', start, { once:true });
   }
 
-  /** Wall scrape: rapid taps */
-  wallScrape() {
-    this.vibrate([10, 10, 10, 10, 10]);
+  // --- FIX START: AUDIO RESET ---
+  reset() {
+    if (!this.initialized) return;
+
+    // Reset all state variables
+    this.M_t = 0;
+    this.E_dir = {low:1, mid:1, high:1};
+    this.lastTrace = 0;
+    this.listenerPos = {x:0, z:0};
+    this.lastProximity = 0;
+
+    // Reset audio parameters to initial values
+    const now = this.ctx.currentTime;
+    this.direct.gain.gain.setTargetAtTime(0, now, 0.01);
+    this.direct.tremDepth.gain.setTargetAtTime(0, now, 0.01);
+
+    // Reset EQ filters and frequencies to initial values
+    this.direct.low.gain.setTargetAtTime(0, now, 0.01);
+    this.direct.mid.gain.setTargetAtTime(-1, now, 0.01);
+    this.direct.high.gain.setTargetAtTime(-2, now, 0.01);
+    this.direct.tone.frequency.setTargetAtTime(1350, now, 0.01);
+    this.direct.osc1.frequency.setTargetAtTime(195, now, 0.01);
+    this.direct.tremOsc.frequency.setTargetAtTime(2.2, now, 0.01);
+
+    this.ball.ema = 0;
+    this.ball.gain.gain.setTargetAtTime(0, now, 0.01);
+
+    // Reset all reflection taps
+    for (let i = 0; i < this.taps.length; i++) {
+      this.taps[i].mix.gain.setTargetAtTime(0, now, 0.01);
+    }
+  }
+  // --- FIX END: AUDIO RESET ---
+
+  initSignal(){
+    const noiseBuf = this.ctx.createBuffer(1, this.ctx.sampleRate * 2, this.ctx.sampleRate);
+    const d = noiseBuf.getChannelData(0);
+    let x1=0,x2=0,x3=0;
+    for (let i=0;i<d.length;i++){
+      const w = Math.random()*2-1;
+      x1 = 0.997*x1 + w*0.05;
+      x2 = 0.985*x2 + w*0.03;
+      x3 = 0.950*x3 + w*0.02;
+      d[i] = (x1+x2+x3)*0.33;
+    }
+    const noise = this.ctx.createBufferSource(); noise.buffer = noiseBuf; noise.loop = true;
+    const noiseLP = this.ctx.createBiquadFilter(); noiseLP.type='lowpass'; noiseLP.frequency.value=1100; noiseLP.Q.value=0.4;
+    const noiseGain = this.ctx.createGain(); noiseGain.gain.value = 0.18;
+
+    const tri1 = this.ctx.createOscillator(); tri1.type='triangle'; tri1.frequency.value=195;
+    const tri2 = this.ctx.createOscillator(); tri2.type='sine';     tri2.frequency.value=390;
+    const g1 = this.ctx.createGain(); g1.gain.value = 0.10;
+    const g2 = this.ctx.createGain(); g2.gain.value = 0.06;
+
+    const vib = this.ctx.createOscillator(); vib.type='sine'; vib.frequency.value=3.2;
+    const vibG = this.ctx.createGain(); vibG.gain.value=1.4;
+    vib.connect(vibG); vibG.connect(tri1.frequency); vibG.connect(tri2.frequency);
+
+    const src = this.ctx.createGain(); src.gain.value = 1;
+    noise.connect(noiseLP); noiseLP.connect(noiseGain); noiseGain.connect(src);
+    tri1.connect(g1); g1.connect(src);
+    tri2.connect(g2); g2.connect(src);
+    noise.start(); tri1.start(); tri2.start(); vib.start();
+
+    this.sourceBus = src;
+    this.direct.osc1 = tri1;
   }
 
-  /** Hole proximity: escalating rumble pattern */
-  holeProximity() {
-    this.vibrate([30, 20, 30, 20, 40]);
+  initDirectChain(){
+    const tremOsc=this.ctx.createOscillator(); tremOsc.type='sine'; tremOsc.frequency.value=2.2;
+    const tremDepth=this.ctx.createGain(); tremDepth.gain.value=0;
+    const trem=this.ctx.createGain(); trem.gain.value=1.0;
+    const tremDC=this.ctx.createConstantSource(); tremDC.offset.value=1.0; tremDC.start();
+    tremOsc.connect(tremDepth); tremDepth.connect(trem.gain); tremDC.connect(trem.gain);
+
+    const gain=this.ctx.createGain(); gain.gain.value=0;
+    const low=this.ctx.createBiquadFilter(); low.type='lowshelf'; low.frequency.value=180;
+    const mid=this.ctx.createBiquadFilter(); mid.type='peaking'; mid.frequency.value=1000; mid.Q.value=1.2; mid.gain.value=-1;
+    const high=this.ctx.createBiquadFilter(); high.type='highshelf'; high.frequency.value=3500; high.gain.value=-2.0;
+    const tone=this.ctx.createBiquadFilter(); tone.type='lowpass'; tone.frequency.value=1350; tone.Q.value=0.5;
+
+    const delay=this.ctx.createDelay(1.5);
+    const panner=new PannerNode(this.ctx,{panningModel:'HRTF', distanceModel:'inverse', rolloffFactor:0, refDistance:1, maxDistance:20});
+
+    this.sourceBus.connect(trem);
+    trem.connect(gain); gain.connect(low); low.connect(mid); mid.connect(high); high.connect(tone); tone.connect(delay); delay.connect(panner); panner.connect(this.master);
+    tremOsc.start();
+
+    this.direct={ gain, low, mid, high, tone, delay, panner, osc1: this.direct.osc1, tremOsc, tremDepth, trem };
   }
 
-  /** Goal capture: celebratory burst */
-  goalCapture() {
-    this.vibrate([50, 30, 50, 30, 100]);
+  initTaps(n){
+    this.taps.length=0;
+    for(let i=0;i<n;i++){
+      const delay=this.ctx.createDelay(3);
+      const lp=this.ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=600;
+      const bp=this.ctx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=1500; bp.Q.value=1;
+      const hp=this.ctx.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=3000;
+      const gL=this.ctx.createGain(), gM=this.ctx.createGain(), gH=this.ctx.createGain();
+      const mix=this.ctx.createGain(); mix.gain.value=0;
+      const pan=new PannerNode(this.ctx,{panningModel:'HRTF', distanceModel:'inverse', rolloffFactor:0, refDistance:1, maxDistance:20});
+      this.sourceBus.connect(delay);
+      delay.connect(lp); delay.connect(bp); delay.connect(hp);
+      lp.connect(gL); bp.connect(gM); hp.connect(gH);
+      gL.connect(mix); gM.connect(mix); gH.connect(mix);
+      mix.connect(pan); pan.connect(this.master);
+      this.taps.push({ delay, gL, gM, gH, mix, pan });
+    }
   }
 
-  /** Hole fall: strong double pulse */
-  holeFall() {
-    this.vibrate([200, 50, 200]);
+  initBall(){
+    const noise=this.ctx.createBuffer(1,this.ctx.sampleRate*2,this.ctx.sampleRate);
+    const d=noise.getChannelData(0); let b0=0,b1=0,b2=0,b3=0,b4=0,b5=0,b6=0;
+    for(let i=0;i<d.length;i++){ const w=Math.random()*2-1;
+      b0=0.99886*b0 + w*0.0555179; b1=0.99332*b1 + w*0.0750759; b2=0.96900*b2 + w*0.1538520;
+      b3=0.86650*b3 + w*0.3104856; b4=0.55000*b4 + w*0.5329522; b5=-0.7616*b5 - w*0.0168980;
+      d[i]=(b0+b1+b2+b3+b4+b5+b6 + w*0.5362)*0.06; b6=w*0.115926;
+    }
+    const src=this.ctx.createBufferSource(); src.buffer=noise; src.loop=true;
+    const filt=this.ctx.createBiquadFilter(); filt.type='bandpass'; filt.frequency.value=300; filt.Q.value=2.2;
+    const gain=this.ctx.createGain(); gain.gain.value=0;
+    const pan=new PannerNode(this.ctx,{panningModel:'HRTF', distanceModel:'inverse', rolloffFactor:0, refDistance:0.1, maxDistance:10});
+    src.connect(filt); filt.connect(gain); gain.connect(pan); pan.connect(this.master); src.start();
+    this.ball={ filter:filt, gain, panner:pan, ema:0 };
+  }
+
+  initWorker(){
+    const blob=new Blob([RAY_WORKER],{type:'application/javascript'});
+    this.worker=new Worker(URL.createObjectURL(blob));
+    this.worker.onmessage=(e)=>{
+      if(!this.initialized||!this.ctx) return;
+      const { occlusion, Edir, reflections } = e.data||{};
+      if (typeof occlusion==='number'){
+        const k=0.15; this.M_t = (1-k)*this.M_t + k*occlusion;
+      }
+      if (Edir) this.E_dir = Edir;
+      if (Array.isArray(reflections)) { this.updateReflectionTaps(reflections); }
+    };
+    if (this.wallsPending) this.worker.postMessage({ type:'init', data:{ walls: this.wallsPending } });
+  }
+
+  setWalls(segs){
+    this.wallsPending = segs;
+    if (this.worker) {
+      this.worker.postMessage({ type:'init', data:{ walls: segs } });
+    }
+  }
+
+  setListener(pos){
+    if(!this.initialized||!this.ctx) return;
+    this.listenerPos = { x: pos.x, z: pos.z };
+    const L=this.ctx.listener, t=this.ctx.currentTime;
+    if ('positionX' in L){
+      L.positionX.setValueAtTime(pos.x,t); L.positionY.setValueAtTime(0.5,t); L.positionZ.setValueAtTime(pos.z,t);
+      L.forwardX.setValueAtTime(0,t); L.forwardY.setValueAtTime(0,t); L.forwardZ.setValueAtTime(-1,t);
+      L.upX.setValueAtTime(0,t); L.upY.setValueAtTime(1,t); L.upZ.setValueAtTime(0,t);
+    } else {
+      L.setPosition(pos.x,0.5,pos.z); L.setOrientation(0,0,-1, 0,1,0);
+    }
+  }
+
+  updateDirectPath(ball, exit){
+    if(!this.initialized||!this.ctx) return;
+    const now=this.ctx.currentTime;
+    const dx=exit.x-ball.x, dz=exit.z-ball.z, dist=Math.hypot(dx,dz);
+
+    this.direct.delay.delayTime.setTargetAtTime(Math.min(dist/343,1.5), now, 0.01);
+
+    const maxRange = 12;
+    const nd = clamp(dist / maxRange, 0, 1);
+    const curve = Math.pow(1 - nd, 1.7);
+    const A_phys = clamp(curve * (1 - this.M_t), 0, 0.16);
+    const assist = this.minAudibleFloor * (1 - 0.3 * this.M_t);
+    const gain = Math.max(A_phys, assist) * 0.7;
+    this.direct.gain.gain.setTargetAtTime(gain, now, 0.05);
+
+    const tremDepth = lerp(0.16, 0.04, curve);
+    const tremRate = lerp(2.0, 4.0, curve);
+    this.direct.tremDepth.gain.setTargetAtTime(tremDepth, now, 0.2);
+    this.direct.tremOsc.frequency.setTargetAtTime(tremRate, now, 0.2);
+
+    if ('positionX' in this.direct.panner){
+      this.direct.panner.positionX.setValueAtTime(exit.x, now);
+      this.direct.panner.positionY.setValueAtTime(0.5, now);
+      this.direct.panner.positionZ.setValueAtTime(exit.z, now);
+    } else this.direct.panner.setPosition(exit.x,0.5,exit.z);
+
+    const toDb = (x)=> 10*Math.log10(Math.max(1e-8, x));
+    this.direct.low.gain.setTargetAtTime( toDb(this.E_dir.low) + this.M_t*3, now, 0.05);
+    this.direct.mid.gain.setTargetAtTime( toDb(this.E_dir.mid) - this.M_t*5, now, 0.05);
+    this.direct.high.gain.setTargetAtTime(toDb(this.E_dir.high) - this.M_t*10, now, 0.05);
+
+    const cutoff = 1100 + curve * 1200;
+    this.direct.tone.frequency.setTargetAtTime(cutoff, now, 0.1);
+
+    const base = 200, spread = 90;
+    this.direct.osc1.frequency.setTargetAtTime(base + spread * curve, now, 0.12);
+
+    this.lastProximity = curve * (1 - this.M_t);
+
+    const ms=performance.now();
+    if (ms - this.lastTrace > 50){
+      this.lastTrace = ms;
+      if (this.worker) this.worker.postMessage({ type:'trace', data:{ source: exit, listener: ball, numRays:64, maxBounces:5 } });
+    }
+  }
+
+  updateReflectionTaps(list){
+    if(!this.initialized||!this.ctx) return;
+    const now=this.ctx.currentTime, N=Math.min(this.taps.length, list.length);
+    const lp = this.listenerPos || { x:0, z:0 };
+    // Gate reflections by proximity so there's no constant drone when far away
+    const proxGate = clamp(this.lastProximity * 2.0, 0, 1);
+    for (let i=0;i<N;i++){
+      const r=list[i], node=this.taps[i];
+      node.delay.delayTime.setTargetAtTime(Math.min(r.delay,3), now, 0.02);
+      const boost = 14.0; // scale energy -> audible amplitude (tune 10..20)
+      node.gL.gain.setTargetAtTime(Math.min(r.energy.low*0.35*boost, 0.60) * proxGate, now, 0.05);
+      node.gM.gain.setTargetAtTime(Math.min(r.energy.mid*0.35*boost, 0.60) * proxGate, now, 0.05);
+      node.gH.gain.setTargetAtTime(Math.min(r.energy.high*0.35*boost, 0.60) * proxGate, now, 0.05);
+      const tot = (r.energy.low + r.energy.mid + r.energy.high) * (boost / 3);
+      node.mix.gain.setTargetAtTime(Math.min(tot, 0.60), now, 0.05);
+      const R=2.0, x=lp.x+Math.cos(r.angle)*R, z=lp.z+Math.sin(r.angle)*R;
+      if ('positionX' in node.pan){
+        node.pan.positionX.setValueAtTime(x, now);
+        node.pan.positionY.setValueAtTime(0.5, now);
+        node.pan.positionZ.setValueAtTime(z, now);
+      } else node.pan.setPosition(x,0.5,z);
+    }
+    for (let i=N;i<this.taps.length;i++){
+      this.taps[i].mix.gain.setTargetAtTime(0, now, 0.1);
+    }
+  }
+
+  updateBallRolling(vel,pos,angVel){
+    if(!this.initialized||!this.ctx) return;
+    const angContrib = angVel ? Math.hypot(angVel.x, angVel.z) * 0.15 : 0;
+    const sp=Math.hypot(vel.x,vel.z) + angContrib;
+    this.ball.ema = 0.85*this.ball.ema + 0.15*sp;
+    const sEff = Math.max(0, this.ball.ema - 0.03);
+    // no idle noise; base fades in only once it's actually rolling
+    const base = sEff > 0.015 ? 0.10 : 0.0;
+    // duck rolling under the beacon as you get closer
+    const duck = 1 - 0.45 * clamp(this.lastProximity, 0, 1);
+    const vol = Math.min((base + sEff/2.0) * duck, 0.28);
+    const now=this.ctx.currentTime;
+    this.ball.gain.gain.setTargetAtTime(vol, now, 0.05);
+    this.ball.filter.frequency.setTargetAtTime(200 + sEff*180, now, 0.08);
+    if ('positionX' in this.ball.panner){
+      this.ball.panner.positionX.setValueAtTime(pos.x, now);
+      this.ball.panner.positionY.setValueAtTime(0.25, now);
+      this.ball.panner.positionZ.setValueAtTime(pos.z, now);
+    } else this.ball.panner.setPosition(pos.x,0.25,pos.z);
+  }
+
+  playCollision(intensity=0.5,pos={x:0,z:0}){
+    if(!this.initialized||!this.ctx) return;
+    if (intensity < 0.12) return;
+    const dur=0.1, buf=this.ctx.createBuffer(1, Math.floor(this.ctx.sampleRate*dur), this.ctx.sampleRate);
+    const d=buf.getChannelData(0);
+    for(let i=0;i<d.length;i++){ d[i]=(Math.random()*2-1)*Math.exp(-i/(d.length*0.28)); }
+    const src=this.ctx.createBufferSource(); src.buffer=buf;
+
+    const lp = this.ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=2000;
+    const g=this.ctx.createGain(); g.gain.value=Math.min(0.12 + intensity*0.18, 0.3);
+
+    const p=new PannerNode(this.ctx,{panningModel:'HRTF', distanceModel:'inverse', rolloffFactor:0, refDistance:0.1, maxDistance:10});
+    src.connect(lp); lp.connect(g); g.connect(p); p.connect(this.master);
+    const t=this.ctx.currentTime;
+    if ('positionX' in p){ p.positionX.setValueAtTime(pos.x,t); p.positionY.setValueAtTime(0.25,t); p.positionZ.setValueAtTime(pos.z,t); }
+    else p.setPosition(pos.x,0.25,pos.z);
+    src.start();
+
+    // Short sine tone for richer impact
+    const sine=this.ctx.createOscillator(); sine.type='sine'; sine.frequency.value=80;
+    const sineG=this.ctx.createGain(); sineG.gain.setValueAtTime(0.3*intensity, t);
+    sineG.gain.exponentialRampToValueAtTime(0.001, t+0.06);
+    sine.connect(sineG); sineG.connect(p);
+    sine.start(t); sine.stop(t+0.06);
   }
 }
 
-// ===========================================================================
-// RENDERER - Three.js Scene
-//
-// Builds the visual representation: floor, walls, ball, goal, holes,
-// starfield background, nebula planes, and post-processing bloom.
-// ===========================================================================
+/* ============================================================
+   Renderer — BG ShaderPass first, then scene, then bloom
+============================================================ */
 class Renderer {
-  constructor(container) {
-    // --- Core Three.js setup ---
-    this.scene = new THREE.Scene();
-    this.camera = new THREE.PerspectiveCamera(
-      50, window.innerWidth / window.innerHeight, 0.1, 200
-    );
-    this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
-    this.renderer.setSize(window.innerWidth, window.innerHeight);
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.0;
-    container.appendChild(this.renderer.domElement);
+  constructor(){
+    this.scene=new THREE.Scene();
+    this.camera=new THREE.PerspectiveCamera(50, 1, 0.1, 500);
+    this.renderer=new THREE.WebGLRenderer({ canvas: document.getElementById('canvas'), antialias:true, powerPreference:'high-performance' });
+    this.renderer.shadowMap.enabled=true; this.renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+    this.renderer.toneMapping=THREE.ACESFilmicToneMapping; this.renderer.toneMappingExposure=1.1;
 
-    // --- Post-processing: bloom for glow effects ---
-    this.composer = new EffectComposer(this.renderer);
-    this.composer.addPass(new RenderPass(this.scene, this.camera));
-    const bloom = new UnrealBloomPass(
-      new THREE.Vector2(window.innerWidth, window.innerHeight),
-      0.6,  // strength
-      0.3,  // radius
-      0.9   // threshold
-    );
+    this.composer=new EffectComposer(this.renderer);
+
+    // Background clouds
+    this.bgPass = new ShaderPass(VolumetricCloudsShader);
+    this.composer.addPass(this.bgPass);
+
+    // Scene on top of background: don't clear color; DO clear depth
+    const renderPass = new RenderPass(this.scene, this.camera);
+    renderPass.clear = false;
+    renderPass.clearDepth = true;
+    this.composer.addPass(renderPass);
+
+    // Bloom
+    const bloom = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.6, 0.3, 0.9);
     this.composer.addPass(bloom);
 
-    // Mesh references (cleared/rebuilt each level)
-    this.ballMesh = null;
-    this.wallMeshes = [];
-    this.goalMesh = null;
-    this.goalLight = null;
-    this.holeMeshes = [];
-    this.floorMesh = null;
+    // Environment
+    const pmrem=new THREE.PMREMGenerator(this.renderer);
+    this.staticEnv = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    this.scene.environment=this.staticEnv;
 
-    this.setupLighting();
-    this.setupBackground();
+    // Board group
+    this.group=new THREE.Group();
+    this.scene.add(this.group);
 
-    window.addEventListener('resize', () => this.onResize());
+    // Lighting
+    const hemi=new THREE.HemisphereLight(0x455a88, 0x0a0b12, 0.35);
+    this.scene.add(hemi);
+    const dir=new THREE.DirectionalLight(0xa0aefb, 0.75);
+    dir.position.set(6,16,8);
+    dir.castShadow=true; dir.shadow.mapSize.set(4096,4096); dir.shadow.bias=-0.0002; dir.shadow.normalBias=0.05;
+    this.scene.add(dir);
+
+    const rimL = new THREE.PointLight(0x66ccff, 0.35, 12); rimL.position.set(-3, 3.5, 5);
+    const rimR = new THREE.PointLight(0xff6699, 0.28, 12); rimR.position.set( 3, 3.5,-5);
+    this.scene.add(rimL, rimR);
+
+    // Dynamic cube map for the ball
+    const crt = new THREE.WebGLCubeRenderTarget(512, { generateMipmaps:true, minFilter:THREE.LinearMipmapLinearFilter });
+    this.cubeCam=new THREE.CubeCamera(0.1, 100, crt); this.scene.add(this.cubeCam);
+    this.ballEnvMap=crt.texture;
+
+    this.ballMesh=null; this.lastEnv=0;
+
+    window.addEventListener('resize', ()=>this.onResize());
+    this.onResize();
   }
 
-  /** Set up scene lighting (ambient + directional key/rim) */
-  setupLighting() {
-    // Dim ambient for overall visibility without washing out
-    const ambient = new THREE.AmbientLight(0x1a1a2e, 0.3);
-    this.scene.add(ambient);
+  createMaze(data){
+    while(this.group.children.length){
+      const m=this.group.children.pop();
+      if (m.geometry && typeof m.geometry.dispose === 'function') m.geometry.dispose();
+      if (Array.isArray(m.material)) { m.material.forEach(mm=>{ if (mm && typeof mm.dispose === 'function') mm.dispose(); }); }
+      else if (m.material && typeof m.material.dispose === 'function') m.material.dispose();
+    }
 
-    // Key light: soft blue-white from above-front
-    const dirLight = new THREE.DirectionalLight(0x4a6fa5, 0.6);
-    dirLight.position.set(2, 10, 4);
-    this.scene.add(dirLight);
+    // Floor
+    const floorGeo=new THREE.BoxGeometry(data.size, 0.2, data.size);
+    const floorCanvas=document.createElement('canvas'); floorCanvas.width=floorCanvas.height=512;
+    const ctx=floorCanvas.getContext('2d');
+    const grad=ctx.createRadialGradient(256,256,0,256,256,300);
+    grad.addColorStop(0,'#0d121b');
+    grad.addColorStop(0.65,'#121826');
+    grad.addColorStop(1,'#151c2a');
+    ctx.fillStyle=grad; ctx.fillRect(0,0,512,512);
+    const floorTex=new THREE.CanvasTexture(floorCanvas);
+    floorTex.wrapS=floorTex.wrapT=THREE.RepeatWrapping; floorTex.repeat.set(4,4);
 
-    // Rim light: teal accent from behind
-    const rimLight = new THREE.DirectionalLight(0x7fdbca, 0.2);
-    rimLight.position.set(-3, 5, -5);
-    this.scene.add(rimLight);
+    const floorMat=new THREE.MeshPhysicalMaterial({
+      color:0x151c2a, metalness:0.65, roughness:0.22,
+      clearcoat:0.6, clearcoatRoughness:0.15,
+      reflectivity:0.5,
+      envMap:this.staticEnv,
+      envMapIntensity:0.5,
+      map:floorTex
+    });
+    const floor=new THREE.Mesh(floorGeo, floorMat);
+    floor.position.set(0,-0.1,0); floor.receiveShadow=true; this.group.add(floor);
+
+    // Walls — full cell-size blocks for solid room/office look
+    const wallH=0.6, cellSize=1.0;
+    const wallMat=new THREE.MeshStandardMaterial({ color:0x2a2535, roughness:0.7, metalness:0.1 });
+    const wallGeo=new THREE.BoxGeometry(cellSize, wallH, cellSize);
+    const N=data.size;
+    for (let y=0;y<N;y++) for (let x=0;x<N;x++){
+      if (data.maze[y][x]!==1) continue;
+      const wx = x - (N-1)/2;
+      const wz = y - (N-1)/2;
+      const wall=new THREE.Mesh(wallGeo, wallMat);
+      wall.position.set(wx, wallH/2, wz);
+      wall.castShadow=true; wall.receiveShadow=true;
+      this.group.add(wall);
+    }
+
+    // Exit
+    const exitGeo=new THREE.CylinderGeometry(0.35,0.35,0.1,64);
+    const exitMat=new THREE.MeshStandardMaterial({ color:0x00ff88, emissive:0x00ff88, emissiveIntensity:1.5, roughness:0.1, metalness:0.9 });
+    const exitMesh=new THREE.Mesh(exitGeo, exitMat); exitMesh.position.set(data.exit.x,0.05,data.exit.z); exitMesh.receiveShadow=true; this.group.add(exitMesh);
+    const exitLight=new THREE.PointLight(0x00ff88,1.1,3.2); exitLight.position.set(data.exit.x,0.7,data.exit.z); this.group.add(exitLight);
+
+    // Ball
+    const r=0.25;
+    const ballGeo=new THREE.SphereGeometry(r,128,64);
+    const ballMat=new THREE.MeshPhysicalMaterial({
+      color:0xffffff, metalness:1.0, roughness:0.03, clearcoat:1.0, clearcoatRoughness:0.0, reflectivity:1.0,
+      envMap:this.ballEnvMap, envMapIntensity:1.7
+    });
+    this.ballMesh=new THREE.Mesh(ballGeo, ballMat); this.ballMesh.position.set(data.start.x, r, data.start.z); this.ballMesh.castShadow=true; this.ballMesh.receiveShadow=true; this.group.add(this.ballMesh);
+
+    this.fitCameraToGroup();
   }
 
-  /** Create the nebula/starfield background */
-  setupBackground() {
-    // --- Starfield: scattered points on a sphere ---
-    const starCount = 1500;
-    const starGeo = new THREE.BufferGeometry();
-    const positions = new Float32Array(starCount * 3);
-    const colors = new Float32Array(starCount * 3);
-    const sizes = new Float32Array(starCount);
-
-    for (let i = 0; i < starCount; i++) {
-      // Uniform distribution on sphere surface
-      const theta = Math.random() * Math.PI * 2;
-      const phi = Math.acos(2 * Math.random() - 1);
-      const r = 80 + Math.random() * 20;
-      positions[i * 3] = r * Math.sin(phi) * Math.cos(theta);
-      positions[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
-      positions[i * 3 + 2] = r * Math.cos(phi);
-
-      // Vary star color slightly (warm white to cool blue)
-      const brightness = 0.3 + Math.random() * 0.7;
-      const tint = Math.random();
-      colors[i * 3] = brightness * (0.8 + tint * 0.2);
-      colors[i * 3 + 1] = brightness * (0.85 + tint * 0.15);
-      colors[i * 3 + 2] = brightness;
-
-      sizes[i] = 0.15 + Math.random() * 0.3;
-    }
-
-    starGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    starGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-
-    const starMat = new THREE.PointsMaterial({
-      size: 0.3,
-      vertexColors: true,
-      transparent: true,
-      opacity: 0.8,
-      depthWrite: false,
-      depthTest: true,
-      sizeAttenuation: true,
-    });
-
-    const stars = new THREE.Points(starGeo, starMat);
-    stars.renderOrder = -1;
-    this.scene.add(stars);
-
-    // --- Nebula planes: large semi-transparent colored sheets ---
-    const nebulaColors = [0x1a0033, 0x001a33, 0x0a1a0a];
-    for (let i = 0; i < 3; i++) {
-      const geo = new THREE.PlaneGeometry(60, 60);
-      const mat = new THREE.MeshBasicMaterial({
-        color: nebulaColors[i],
-        transparent: true,
-        opacity: 0.12,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false,
-        depthTest: true,
-        side: THREE.DoubleSide,
-      });
-      const mesh = new THREE.Mesh(geo, mat);
-      mesh.position.set(
-        (Math.random() - 0.5) * 30,
-        (Math.random() - 0.5) * 20 + 20,
-        -50 - Math.random() * 20
-      );
-      mesh.rotation.set(
-        Math.random() * 0.5,
-        Math.random() * 0.5,
-        Math.random() * Math.PI
-      );
-      mesh.renderOrder = -1;
-      this.scene.add(mesh);
-    }
+  fitCameraToGroup(){
+    const box=new THREE.Box3().setFromObject(this.group);
+    const size=new THREE.Vector3(), center=new THREE.Vector3();
+    box.getSize(size); box.getCenter(center);
+    const aspect=window.innerWidth/window.innerHeight;
+    const fov=this.camera.fov*Math.PI/180;
+    const half=Math.max(size.x,size.z)*0.55;
+    const dist=Math.max(half/Math.tan(fov/2), (half/aspect)/Math.tan(fov/2))*1.3;
+    this.camera.position.set(center.x, dist*0.95, center.z + dist*0.35);
+    this.camera.lookAt(center.x,0,center.z);
   }
 
-  /**
-   * Build the visual maze from maze data.
-   * Creates floor, wall cubes, goal tile, holes, and ball mesh.
-   */
-  buildMaze(mazeData) {
-    this.clearMaze();
-
-    const { grid, width, height, holes, end, start } = mazeData;
-    const boardW = width * CELL_SIZE + BOARD_PADDING * 2;
-    const boardH = height * CELL_SIZE + BOARD_PADDING * 2;
-
-    // --- Floor with dark radial gradient ---
-    const floorGeo = new THREE.PlaneGeometry(boardW, boardH);
-    const texSize = 512;
-    const canvas = document.createElement('canvas');
-    canvas.width = texSize;
-    canvas.height = texSize;
-    const ctx2d = canvas.getContext('2d');
-    const gradient = ctx2d.createRadialGradient(
-      texSize / 2, texSize / 2, 0,
-      texSize / 2, texSize / 2, texSize * 0.55
-    );
-    gradient.addColorStop(0, '#1a1a2e');
-    gradient.addColorStop(0.6, '#0f0f1a');
-    gradient.addColorStop(1, '#050510');
-    ctx2d.fillStyle = gradient;
-    ctx2d.fillRect(0, 0, texSize, texSize);
-    const floorTex = new THREE.CanvasTexture(canvas);
-
-    const floorMat = new THREE.MeshPhysicalMaterial({
-      map: floorTex,
-      color: 0x1a1a2e,
-      metalness: 0.1,
-      roughness: 0.7,
-      clearcoat: 0.3,
-      clearcoatRoughness: 0.4,
-    });
-    this.floorMesh = new THREE.Mesh(floorGeo, floorMat);
-    this.floorMesh.rotation.x = -Math.PI / 2;
-    this.floorMesh.position.y = -0.01;
-    this.floorMesh.receiveShadow = true;
-    this.scene.add(this.floorMesh);
-
-    // --- Walls: dark boxes with emissive edge tint ---
-    const wallGeo = new THREE.BoxGeometry(CELL_SIZE, WALL_HEIGHT, CELL_SIZE);
-    const wallMat = new THREE.MeshPhysicalMaterial({
-      color: 0x0d1117,
-      metalness: 0.4,
-      roughness: 0.6,
-      emissive: 0x1a2332,
-      emissiveIntensity: 0.15,
-    });
-
-    for (let gy = 0; gy < height; gy++) {
-      for (let gx = 0; gx < width; gx++) {
-        if (grid[gy][gx] === 0) {
-          const mesh = new THREE.Mesh(wallGeo, wallMat);
-          const wx = (gx - width / 2 + 0.5) * CELL_SIZE;
-          const wz = (gy - height / 2 + 0.5) * CELL_SIZE;
-          mesh.position.set(wx, WALL_HEIGHT / 2, wz);
-          this.scene.add(mesh);
-          this.wallMeshes.push(mesh);
-        }
-      }
-    }
-
-    // --- Wall edge highlights (top edges of walls adjacent to passages) ---
-    const edgeMat = new THREE.MeshBasicMaterial({
-      color: 0x2d4a6f,
-      transparent: true,
-      opacity: 0.3,
-    });
-    const edgeGeo = new THREE.PlaneGeometry(CELL_SIZE, WALL_THICKNESS);
-    // Add edge highlights on top faces of boundary walls only for perf
-    // (The emissive material + bloom handles most of the glow effect)
-
-    // --- Goal tile: glowing green plane + point light ---
-    const goalX = (end.x - width / 2 + 0.5) * CELL_SIZE;
-    const goalZ = (end.y - height / 2 + 0.5) * CELL_SIZE;
-
-    const goalGeo = new THREE.PlaneGeometry(CELL_SIZE * 0.8, CELL_SIZE * 0.8);
-    const goalMat = new THREE.MeshBasicMaterial({
-      color: 0x3fb950,
-      transparent: true,
-      opacity: 0.6,
-    });
-    this.goalMesh = new THREE.Mesh(goalGeo, goalMat);
-    this.goalMesh.rotation.x = -Math.PI / 2;
-    this.goalMesh.position.set(goalX, 0.02, goalZ);
-    this.scene.add(this.goalMesh);
-
-    this.goalLight = new THREE.PointLight(0x3fb950, 2, 6);
-    this.goalLight.position.set(goalX, 1.0, goalZ);
-    this.scene.add(this.goalLight);
-
-    // --- Holes: dark circles with dim red underglow ---
-    const holeGeo = new THREE.CircleGeometry(CELL_SIZE * 0.3, 20);
-    const holeMat = new THREE.MeshBasicMaterial({
-      color: 0x1a0000,
-      transparent: true,
-      opacity: 0.9,
-    });
-
-    for (const hole of holes) {
-      const hx = (hole.x - width / 2 + 0.5) * CELL_SIZE;
-      const hz = (hole.y - height / 2 + 0.5) * CELL_SIZE;
-
-      const holeMesh = new THREE.Mesh(holeGeo, holeMat);
-      holeMesh.rotation.x = -Math.PI / 2;
-      holeMesh.position.set(hx, 0.015, hz);
-      this.scene.add(holeMesh);
-      this.holeMeshes.push(holeMesh);
-
-      // Subtle red point light beneath hole
-      const holeLight = new THREE.PointLight(0xff2020, 0.3, 1.5);
-      holeLight.position.set(hx, -0.3, hz);
-      this.scene.add(holeLight);
-    }
-
-    // --- Ball: metallic sphere with clearcoat ---
-    const ballGeo = new THREE.SphereGeometry(BALL_RADIUS, 32, 32);
-    const ballMat = new THREE.MeshPhysicalMaterial({
-      color: 0x8899aa,
-      metalness: 0.9,
-      roughness: 0.15,
-      clearcoat: 0.8,
-      clearcoatRoughness: 0.1,
-      envMapIntensity: 1.0,
-    });
-    this.ballMesh = new THREE.Mesh(ballGeo, ballMat);
-    this.ballMesh.castShadow = true;
-    // Position at start
-    const ballStartX = (start.x - width / 2 + 0.5) * CELL_SIZE;
-    const ballStartZ = (start.y - height / 2 + 0.5) * CELL_SIZE;
-    this.ballMesh.position.set(ballStartX, BALL_RADIUS + 0.05, ballStartZ);
-    this.scene.add(this.ballMesh);
-
-    // --- Camera: angled top-down, auto-fit to board ---
-    const maxDim = Math.max(boardW, boardH);
-    const camDist = maxDim * 1.05;
-    this.camera.position.set(0, camDist * 0.85, camDist * 0.4);
-    this.camera.lookAt(0, 0, 0);
-  }
-
-  /** Remove all maze-specific objects from scene */
-  clearMaze() {
-    for (const m of this.wallMeshes) {
-      this.scene.remove(m);
-      m.geometry?.dispose();
-    }
-    for (const m of this.holeMeshes) {
-      this.scene.remove(m);
-      m.geometry?.dispose();
-    }
-    if (this.ballMesh) { this.scene.remove(this.ballMesh); }
-    if (this.goalMesh) { this.scene.remove(this.goalMesh); }
-    if (this.goalLight) { this.scene.remove(this.goalLight); }
-    if (this.floorMesh) { this.scene.remove(this.floorMesh); }
-    this.wallMeshes = [];
-    this.holeMeshes = [];
-    this.ballMesh = null;
-    this.goalMesh = null;
-    this.goalLight = null;
-    this.floorMesh = null;
-  }
-
-  /** Update ball mesh transform from physics */
-  updateBall(pos, quat) {
+  updateBall(pos, quat){
     if (!this.ballMesh) return;
-    this.ballMesh.position.set(pos.x, pos.y, pos.z);
-    this.ballMesh.quaternion.set(quat.x, quat.y, quat.z, quat.w);
-  }
-
-  /** Animate goal tile pulse */
-  animateGoal(time) {
-    if (this.goalMesh) {
-      this.goalMesh.material.opacity = 0.4 + Math.sin(time * 3) * 0.2;
-    }
-    if (this.goalLight) {
-      this.goalLight.intensity = 1.5 + Math.sin(time * 2.5) * 0.5;
+    this.ballMesh.position.copy(pos);
+    this.ballMesh.quaternion.copy(quat);
+    const now=performance.now();
+    if (this.cubeCam && this.ballEnvMap && now - this.lastEnv > 100){
+      this.lastEnv=now;
+      this.cubeCam.position.copy(this.ballMesh.position);
+      this.ballMesh.visible=false; this.cubeCam.update(this.renderer, this.scene); this.ballMesh.visible=true;
     }
   }
 
-  /** Render frame with post-processing */
-  render() {
-    this.composer.render();
+  update(t, prox=0){
+    // Update BG shader
+    if (this.bgPass && this.bgPass.material && this.bgPass.material.uniforms){
+      const u = this.bgPass.material.uniforms;
+      u.uTime.value = t;
+      const camDir = new THREE.Vector3(); this.camera.getWorldDirection(camDir);
+      const camRight = new THREE.Vector3().crossVectors(camDir, this.camera.up).normalize();
+      const camUp = new THREE.Vector3().crossVectors(camRight, camDir).normalize();
+      u.uCamPos.value.copy(this.camera.position);
+      u.uCamDir.value.copy(camDir);
+      u.uCamRight.value.copy(camRight);
+      u.uCamUp.value.copy(camUp);
+      u.uFovY.value = this.camera.fov * Math.PI / 180;
+      const w = this.renderer.domElement.width, h = this.renderer.domElement.height;
+      u.uAspect.value = w / Math.max(1, h);
+      u.uResolution.value.set(w, h);
+
+      // Perf/adaptive samples
+      const minDim = Math.min(w, h);
+      u.uSteps.value = (minDim < 900 ? 44.0 : 52.0);
+
+      // Slightly lift brightness as you near goal
+      u.uBrightness.value = 0.82 + 0.12 * prox;
+    }
   }
 
-  /** Handle window resize */
-  onResize() {
-    const w = window.innerWidth;
-    const h = window.innerHeight;
-    this.camera.aspect = w / h;
-    this.camera.updateProjectionMatrix();
-    this.renderer.setSize(w, h);
-    this.composer.setSize(w, h);
+  render(){ this.composer.render(); }
+
+  onResize(){
+    const w=window.innerWidth, h=window.innerHeight;
+    this.renderer.setSize(w,h); this.composer.setSize(w,h);
+    this.camera.aspect=w/h; this.camera.updateProjectionMatrix();
+    this.fitCameraToGroup();
+    if (this.bgPass && this.bgPass.material && this.bgPass.material.uniforms){
+      this.bgPass.material.uniforms.uResolution.value.set(w,h);
+    }
   }
 }
 
-// ===========================================================================
-// APP - Main Orchestrator
-//
-// Connects all subsystems: input -> physics -> audio/haptics -> rendering.
-// Manages game state (levels, pause, restart) and the main game loop.
-// ===========================================================================
-class App {
-  constructor() {
-    this.renderer = null;
-    this.physics = new PhysicsEngine();
-    this.audio = new AudioEngine();
-    this.input = new InputController();
-    this.haptics = new HapticsManager();
-    this.worker = null;
+/* ============================================================
+   Physics — stronger damping when no input (stops cleanly)
+============================================================ */
+class Physics {
+  constructor(){
+    this.world=new CANNON.World();
+    this.world.gravity.set(0,-9.82,0);
+    this.world.solver.iterations=40;
+    this.world.solver.tolerance=1e-6;
+    this.world.broadphase=new CANNON.SAPBroadphase(this.world);
 
-    // Game state
-    this.mazeData = null;
-    this.level = 1;
-    this.paused = false;
-    this.started = false;
-    this.elapsed = 0;
-    this.lastTime = 0;
-    this.debugVisible = false;
-    this.goalReachedLock = false; // Prevent multiple goal triggers
+    this.matBall=new CANNON.Material('ball');
+    this.matWall=new CANNON.Material('wall');
+    this.world.addContactMaterial(new CANNON.ContactMaterial(this.matBall, this.matWall, {
+      friction:0.55, restitution:0.06, contactEquationStiffness:1e8, contactEquationRelaxation:3
+    }));
 
-    // Ray tracer results (updated async from worker)
-    this.rayResult = null;
-    this.rayInterval = null;
-    this.lastRaySend = 0;
-
-    // DOM references
-    this.startScreen = document.getElementById('start-screen');
-    this.hudTime = document.getElementById('hud-time');
-    this.hudLevel = document.getElementById('hud-level');
-    this.banner = document.getElementById('banner');
-    this.debugOverlay = document.getElementById('debug-overlay');
-    this.srAnnounce = document.getElementById('sr-announce');
-
-    this.setupUI();
+    this.ballBody=null; this.lastTilt={x:0,z:0};
   }
 
-  /** Wire up UI button handlers and keyboard shortcuts */
-  setupUI() {
-    // Audio enable button
-    document.getElementById('btn-audio').addEventListener('click', async () => {
-      await this.audio.init();
-      document.getElementById('btn-audio').classList.add('active');
-      document.getElementById('btn-audio').textContent = 'Audio Enabled';
-      this.announce('Spatial audio enabled');
-    });
+  createMaze(data){
+    while(this.world.bodies.length) this.world.removeBody(this.world.bodies[0]);
 
-    // Motion enable button (for mobile DeviceOrientation)
-    document.getElementById('btn-motion').addEventListener('click', async () => {
-      const ok = await this.input.enableMotion();
-      if (ok) {
-        document.getElementById('btn-motion').classList.add('active');
-        document.getElementById('btn-motion').textContent = 'Motion Enabled';
-        this.announce('Motion controls enabled');
-      } else {
-        this.announce('Motion permission denied');
-      }
-    });
+    const ground=new CANNON.Body({ mass:0, shape:new CANNON.Box(new CANNON.Vec3(data.size/2,0.1,data.size/2)), material:this.matWall });
+    ground.position.set(0,-0.1,0); this.world.addBody(ground);
 
-    // Start button
-    document.getElementById('btn-start').addEventListener('click', () => {
-      this.start();
-    });
-
-    // Pause/Restart buttons
-    document.getElementById('btn-pause').addEventListener('click', () => this.togglePause());
-    document.getElementById('btn-restart').addEventListener('click', () => this.restart());
-
-    // Keyboard shortcuts
-    window.addEventListener('keydown', (e) => {
-      if (!this.started) return;
-      switch (e.code) {
-        case 'KeyD':
-          this.debugVisible = !this.debugVisible;
-          this.debugOverlay.style.display = this.debugVisible ? 'block' : 'none';
-          break;
-        case 'KeyP':
-        case 'Escape':
-          this.togglePause();
-          break;
-        case 'KeyR':
-          this.restart();
-          break;
-      }
-    });
-  }
-
-  /** Post a message to the screen reader live region */
-  announce(msg) {
-    this.srAnnounce.textContent = '';
-    // Brief delay to force re-announcement of same text
-    requestAnimationFrame(() => { this.srAnnounce.textContent = msg; });
-  }
-
-  /** Hide start screen, initialize renderer, begin game loop */
-  start() {
-    this.startScreen.style.display = 'none';
-    this.renderer = new Renderer(document.body);
-    this.started = true;
-    this.level = 1;
-
-    this.setupWorker();
-    this.newLevel();
-
-    // Register physics callbacks
-    this.physics.onCollision((intensity) => {
-      this.audio.playCollision(intensity);
-      this.haptics.collision(intensity);
-    });
-
-    this.physics.onHole(() => {
-      this.onHoleFall();
-    });
-
-    this.physics.onGoal(() => {
-      this.onGoalReached();
-    });
-
-    // Start the main loop
-    this.lastTime = performance.now();
-    this.loop();
-  }
-
-  /** Create the Web Worker for audio ray tracing */
-  setupWorker() {
-    this.worker = new Worker(workerUrl);
-    this.worker.onmessage = (e) => {
-      if (e.data.type === 'result') {
-        this.rayResult = e.data;
-      }
-    };
-  }
-
-  /** Generate a new maze and set up all subsystems for it */
-  newLevel() {
-    this.elapsed = 0;
-    this.goalReachedLock = false;
-
-    // Generate maze
-    this.mazeData = MazeGenerator.generate(CONFIG.gridSize, CONFIG.gridSize, CONFIG.holes);
-
-    // Build physics world
-    this.physics.createBoard(this.mazeData);
-
-    // Build visual scene
-    this.renderer.buildMaze(this.mazeData);
-
-    // Send wall segments to ray tracer worker
-    const wallSegments = this.buildWallSegments(this.mazeData);
-    this.worker.postMessage({
-      type: 'init',
-      walls: wallSegments,
-      rayCount: RAY_COUNT,
-      maxBounces: MAX_BOUNCES,
-      listenerRadius: LISTENER_RADIUS,
-    });
-
-    // Start periodic ray updates
-    if (this.rayInterval) clearInterval(this.rayInterval);
-    this.rayInterval = setInterval(() => this.sendRayUpdate(), 1000 / RAY_UPDATE_HZ);
-
-    // Update HUD
-    this.hudLevel.textContent = `Level ${this.level}`;
-    this.showBanner('', '');
-    this.announce(`Level ${this.level}. Navigate the ball to the green goal. ${this.mazeData.holes.length} holes to avoid.`);
-  }
-
-  /**
-   * Convert maze grid into 2D line segments for the ray tracer.
-   * Only generates segments at wall-passage boundaries (avoids interior edges).
-   */
-  buildWallSegments(mazeData) {
-    const { grid, width, height } = mazeData;
-    const segments = [];
-
-    for (let gy = 0; gy < height; gy++) {
-      for (let gx = 0; gx < width; gx++) {
-        if (grid[gy][gx] !== 0) continue; // Only process wall cells
-
-        const cx = (gx - width / 2 + 0.5) * CELL_SIZE;
-        const cy = (gy - height / 2 + 0.5) * CELL_SIZE;
-        const half = CELL_SIZE / 2;
-
-        // Add edge only where adjacent cell is a passage (prevents duplicates)
-        // North edge
-        if (gy > 0 && grid[gy - 1][gx] === 1) {
-          segments.push({ x1: cx - half, y1: cy - half, x2: cx + half, y2: cy - half });
-        }
-        // South edge
-        if (gy < height - 1 && grid[gy + 1][gx] === 1) {
-          segments.push({ x1: cx - half, y1: cy + half, x2: cx + half, y2: cy + half });
-        }
-        // West edge
-        if (gx > 0 && grid[gy][gx - 1] === 1) {
-          segments.push({ x1: cx - half, y1: cy - half, x2: cx - half, y2: cy + half });
-        }
-        // East edge
-        if (gx < width - 1 && grid[gy][gx + 1] === 1) {
-          segments.push({ x1: cx + half, y1: cy - half, x2: cx + half, y2: cy + half });
-        }
-      }
+    // Full cell-size wall bodies
+    const wallH=0.6, cellSize=1.0;
+    const N=data.size;
+    const wallShape=new CANNON.Box(new CANNON.Vec3(cellSize/2, wallH/2, cellSize/2));
+    for (let y=0;y<N;y++) for (let x=0;x<N;x++){
+      if (data.maze[y][x]!==1) continue;
+      const wx = x - (N-1)/2;
+      const wz = y - (N-1)/2;
+      const body=new CANNON.Body({ mass:0, material:this.matWall });
+      body.addShape(wallShape);
+      body.position.set(wx, wallH/2, wz);
+      this.world.addBody(body);
     }
 
-    // Outer boundary segments
-    const halfW = (width * CELL_SIZE) / 2;
-    const halfH = (height * CELL_SIZE) / 2;
-    segments.push({ x1: -halfW, y1: -halfH, x2: halfW, y2: -halfH }); // North
-    segments.push({ x1: -halfW, y1: halfH, x2: halfW, y2: halfH });   // South
-    segments.push({ x1: -halfW, y1: -halfH, x2: -halfW, y2: halfH }); // West
-    segments.push({ x1: halfW, y1: -halfH, x2: halfW, y2: halfH });   // East
-
-    return segments;
-  }
-
-  /** Send current positions to the ray tracer worker */
-  sendRayUpdate() {
-    if (this.paused || !this.started || !this.mazeData) return;
-
-    const ballPos = this.physics.getBallPosition();
-    const { end, width, height } = this.mazeData;
-    const goalX = (end.x - width / 2 + 0.5) * CELL_SIZE;
-    const goalZ = (end.y - height / 2 + 0.5) * CELL_SIZE;
-
-    // Worker operates in 2D: map world XZ to worker XY
-    this.worker.postMessage({
-      type: 'update',
-      listener: { x: ballPos.x, y: ballPos.z },
-      source: { x: goalX, y: goalZ },
+    const r=0.25;
+    this.ballBody=new CANNON.Body({
+      mass:0.3,
+      shape:new CANNON.Sphere(r),
+      position:new CANNON.Vec3(data.start.x, r+0.1, data.start.z),
+      material:this.matBall,
+      linearDamping:0.35,
+      angularDamping:0.35
     });
+    this.world.addBody(this.ballBody);
   }
 
-  /** Handle ball falling into a hole */
-  onHoleFall() {
-    this.audio.playHoleFall();
-    this.haptics.holeFall();
-    this.showBanner('Fell into a hole!', 'lose');
-    this.announce('Ball fell into a hole. Resetting position.');
-
-    // Brief pause then reset ball
-    setTimeout(() => {
-      this.physics.resetBall(this.mazeData);
-      this.showBanner('', '');
-    }, 1200);
+  onCollide(cb){
+    if (this.ballBody) {
+      this.ballBody.addEventListener('collide', (e)=>{
+        const fn = e.contact && typeof e.contact.getImpactVelocityAlongNormal === 'function'
+          ? e.contact.getImpactVelocityAlongNormal()
+          : 0.5;
+        const v = Math.abs(fn || 0);
+        cb(v);
+      });
+    }
   }
 
-  /** Handle ball reaching the goal */
-  onGoalReached() {
-    if (this.goalReachedLock) return; // Prevent re-entry during transition
-    this.goalReachedLock = true;
-
-    this.audio.playGoalReached();
-    this.haptics.goalCapture();
-    this.showBanner('Level Complete!', 'win');
-    this.announce(`Level ${this.level} complete in ${this.formatTime(this.elapsed)}!`);
-
-    this.level++;
-
-    // Transition to next level after celebration
-    setTimeout(() => {
-      this.newLevel();
-    }, 1500);
+  updateGravity(tx,tz){
+    const maxTilt=Math.PI/10, g=9.82;
+    const gx=tx*maxTilt*g*2.0, gz=tz*maxTilt*g*2.0;
+    this.lastTilt={x:tx,z:tz}; this.world.gravity.set(gx,-9.82,gz);
   }
 
-  /** Show/hide the centered banner */
-  showBanner(text, type) {
-    if (!text) {
-      this.banner.style.display = 'none';
+  step(dt){
+    this.world.step(1/180, dt, 10);
+    const v = this.ballBody.velocity;
+    const av = this.ballBody.angularVelocity;
+    const sp = Math.hypot(v.x, v.z);
+    const asp = Math.hypot(av.x, av.y, av.z);
+    const noInput = Math.abs(this.lastTilt.x) < 0.01 && Math.abs(this.lastTilt.z) < 0.01;
+
+    if (noInput) {
+      v.x *= 0.72; v.z *= 0.72;
+      av.x *= 0.60; av.y *= 0.60; av.z *= 0.60;
+      if (sp < 0.05) { v.x = 0; v.z = 0; }
+      if (asp < 0.2) { av.set(0,0,0); }
+    }
+
+    // Fall detection handled by App.checkWin() which regenerates the maze
+  }
+}
+
+/* ============================================================
+   Maze — 10×10
+============================================================ */
+class PerfectMaze {
+  constructor(size=11){ this.size=size; this.grid=[]; }
+  worldFromGrid(x,y){ return { x: x - (this.size - 1)/2, z: y - (this.size - 1)/2 }; }
+
+  generate(){
+    const N=this.size;
+    this.grid=Array.from({length:N},()=>Array(N).fill(1));
+    const corners=[ {x:1,y:1}, {x:(N-2)|1,y:1}, {x:1,y:(N-2)|1}, {x:(N-2)|1,y:(N-2)|1} ];
+    const sIdx=(Math.random()*4)|0, eIdx=(sIdx+2)%4;
+    const start=corners[sIdx], exit=corners[eIdx];
+
+    const stack=[{...start}]; this.grid[start.y][start.x]=0;
+    const dirs=[{dx:0,dy:-2,wx:0,wy:-1},{dx:2,dy:0,wx:1,wy:0},{dx:0,dy:2,wx:0,wy:1},{dx:-2,dy:0,wx:-1,wy:0}];
+    while(stack.length){
+      const cur=stack[stack.length-1]; const cand=[];
+      for (const d of dirs){
+        const nx=cur.x+d.dx, ny=cur.y+d.dy;
+        if(nx>0&&ny>0&&nx<N-1&&ny<N-1&&this.grid[ny][nx]===1) cand.push({nx,ny,wx:cur.x+d.wx,wy:cur.y+d.wy});
+      }
+      if (!cand.length){ stack.pop(); continue; }
+      const next=cand[(Math.random()*cand.length)|0];
+      this.grid[next.wy][next.wx]=0; this.grid[next.ny][next.nx]=0; stack.push({x:next.nx,y:next.ny});
+    }
+    this.grid[exit.y][exit.x]=0;
+
+    const segments=[];
+    const add=(x1,z1,x2,z2)=>segments.push({x1,z1,x2,z2});
+    for(let y=0;y<N;y++) for(let x=0;x<N;x++) if (this.grid[y][x]===0){
+      const c=this.worldFromGrid(x,y);
+      const left  = (x===0   || this.grid[y][x-1]===1);
+      const right = (x===N-1 || this.grid[y][x+1]===1);
+      const up    = (y===0   || this.grid[y-1][x]===1);
+      const down  = (y===N-1 || this.grid[y+1][x]===1);
+      if (left)  add(c.x-0.5,c.z-0.5, c.x-0.5,c.z+0.5);
+      if (right) add(c.x+0.5,c.z-0.5, c.x+0.5,c.z+0.5);
+      if (up)    add(c.x-0.5,c.z-0.5, c.x+0.5,c.z-0.5);
+      if (down)  add(c.x-0.5,c.z+0.5, c.x+0.5,c.z+0.5);
+    }
+
+    const startW=this.worldFromGrid(start.x,start.y);
+    const exitW =this.worldFromGrid(exit.x,exit.y);
+    return { maze:this.grid, size:N, start:startW, exit:exitW, segments };
+  }
+}
+
+/* ============================================================
+   Input
+============================================================ */
+class Input {
+  constructor(){
+    this.tilt={x:0,z:0};
+    this.target={x:0,z:0};
+    this.keys={ArrowUp:false,ArrowDown:false,ArrowLeft:false,ArrowRight:false};
+    this.accelSmooth=0.18;   // smoothing when accelerating
+    this.decelSmooth=0.40;   // faster return to zero on release
+    this.maxTilt=0.8;        // reduced sensitivity
+    this.usingDeviceOrientation = false;
+    this.init();
+  }
+
+  init(){
+    document.addEventListener('keydown',(e)=>{
+      if(e.key in this.keys){
+        e.preventDefault();
+        this.keys[e.key]=true;
+      }
+    }, { passive:false });
+
+    document.addEventListener('keyup',(e)=>{
+      if(e.key in this.keys){
+        this.keys[e.key]=false;
+        // Immediately zero the target for released axis
+        if (e.key==='ArrowLeft'||e.key==='ArrowRight'){
+          if (!this.keys['ArrowLeft']&&!this.keys['ArrowRight']) this.target.x=0;
+        }
+        if (e.key==='ArrowUp'||e.key==='ArrowDown'){
+          if (!this.keys['ArrowUp']&&!this.keys['ArrowDown']) this.target.z=0;
+        }
+      }
+    });
+
+    if (window.DeviceOrientationEvent){
+      const ask=async()=>{
+        try{
+          if(typeof DeviceOrientationEvent.requestPermission==='function'){
+            const s=await DeviceOrientationEvent.requestPermission();
+            if(s!=='granted') return;
+          }
+        }catch{}
+      };
+      window.addEventListener('pointerdown', ask, { once:true });
+      window.addEventListener('deviceorientation', (e)=>{
+        if(e.beta!=null&&e.gamma!=null){
+          this.usingDeviceOrientation = true;
+          this.target.x=clamp(e.gamma/18,-1,1)*this.maxTilt;
+          this.target.z=clamp((e.beta-45)/18,-1,1)*this.maxTilt;
+        }
+      });
+    }
+  }
+
+  getTilt(){
+    // Keyboard: set target directly from key state
+    const kx = (this.keys['ArrowLeft']?-1:0) + (this.keys['ArrowRight']?1:0);
+    const kz = (this.keys['ArrowUp']?-1:0) + (this.keys['ArrowDown']?1:0);
+    const keyboardActive = kx!==0||kz!==0;
+
+    if (keyboardActive) {
+      this.target.x = kx * this.maxTilt;
+      this.target.z = kz * this.maxTilt;
+    } else if (!this.usingDeviceOrientation) {
+      this.target.x = 0;
+      this.target.z = 0;
+    }
+
+    // Asymmetric smoothing: faster decel when returning to center
+    const sx = (Math.abs(this.target.x) < Math.abs(this.tilt.x)) ? this.decelSmooth : this.accelSmooth;
+    const sz = (Math.abs(this.target.z) < Math.abs(this.tilt.z)) ? this.decelSmooth : this.accelSmooth;
+    this.tilt.x += (this.target.x - this.tilt.x) * sx;
+    this.tilt.z += (this.target.z - this.tilt.z) * sz;
+
+    // Hard zero when close to prevent drift
+    if (Math.abs(this.tilt.x) < 0.005 && this.target.x===0) this.tilt.x = 0;
+    if (Math.abs(this.tilt.z) < 0.005 && this.target.z===0) this.tilt.z = 0;
+
+    return this.tilt;
+  }
+}
+
+/* ============================================================
+   App
+============================================================ */
+class App {
+  constructor(){
+    this.audio=new PerfectRayAudio();
+    this.physics=new Physics();
+    this.renderer=new Renderer();
+    this.input=new Input();
+    this.haptics=new Haptics();
+    this.maze=null;
+    this.last=performance.now(); this.fpsLast=performance.now(); this.fpsCount=0; this.fpsEl=document.getElementById('fps');
+    this.regenerating=false;
+    this.init();
+  }
+
+  async init(){
+    await this.audio.init();
+    this.newMaze();
+    this.loop();
+    // ensure worker receives walls as soon as audio actually starts (first user gesture)
+    const ensureWalls = () => {
+      if (this.audio.initialized && this.maze) {
+        this.audio.setWalls(this.maze.segments);
+        return;
+      }
+      requestAnimationFrame(ensureWalls);
+    };
+    ensureWalls();
+  }
+
+  newMaze(){
+    this.regenerating=true;
+    const gen=new PerfectMaze(11);
+    this.maze=gen.generate();
+    this.renderer.createMaze(this.maze);
+    this.physics.createMaze(this.maze);
+    this.physics.onCollide((v)=>{ const p=this.physics.ballBody.position; if(this.audio.initialized) this.audio.playCollision(v,{x:p.x,z:p.z}); if (navigator.vibrate) this.haptics.impact(v); });
+
+    if(this.audio.initialized) {
+        this.audio.reset();
+    }
+    this.audio.setWalls(this.maze.segments);
+    this.regenerating=false;
+  }
+
+  checkWin(){
+    if(!this.physics.ballBody||!this.maze||this.regenerating) return;
+    const p=this.physics.ballBody.position, e=this.maze.exit;
+    // Reached exit
+    if (Math.hypot(p.x-e.x,p.z-e.z) < 0.45){
+      this.newMaze();
       return;
     }
-    this.banner.textContent = text;
-    this.banner.className = type;
-    this.banner.style.display = 'block';
-  }
-
-  /** Toggle pause state */
-  togglePause() {
-    this.paused = !this.paused;
-    document.getElementById('btn-pause').textContent = this.paused ? 'Resume' : 'Pause';
-    if (this.paused) {
-      this.audio.suspend();
-      this.announce('Game paused');
-    } else {
-      this.audio.resume();
-      this.lastTime = performance.now();
-      this.announce('Game resumed');
+    // Fell off / fell in hole
+    if (p.y < -1){
+      this.newMaze();
     }
   }
 
-  /** Reset ball to start without regenerating maze */
-  restart() {
-    this.physics.resetBall(this.mazeData);
-    this.elapsed = 0;
-    this.goalReachedLock = false;
-    this.showBanner('', '');
-    this.announce('Level restarted');
-  }
+  loop(){
+    requestAnimationFrame(()=>this.loop());
+    const now=performance.now(), dt=Math.min((now-this.last)/1000, 0.05); this.last=now;
 
-  /** Format seconds as M:SS */
-  formatTime(seconds) {
-    const m = Math.floor(seconds / 60);
-    const s = Math.floor(seconds % 60);
-    return `${m}:${s.toString().padStart(2, '0')}`;
-  }
-
-  /** Main game loop - called every frame via requestAnimationFrame */
-  loop() {
-    requestAnimationFrame(() => this.loop());
-
-    const now = performance.now();
-    const dt = Math.min((now - this.lastTime) / 1000, 0.1); // Cap at 100ms
-    this.lastTime = now;
-
-    if (this.paused || !this.started) return;
-
-    this.elapsed += dt;
-
-    // --- Input ---
-    this.input.update();
-    this.physics.setTilt(this.input.tiltX, this.input.tiltZ);
-
-    // --- Physics ---
+    const t=this.input.getTilt();
+    this.physics.updateGravity(t.x,t.z);
     this.physics.step(dt);
 
-    // --- Get ball state ---
-    const ballPos = this.physics.getBallPosition();
-    const ballQuat = this.physics.getBallQuaternion();
-    const ballSpeed = this.physics.getBallSpeed();
+    const ball = this.physics.ballBody && this.physics.ballBody.position;
+    if (ball){
+      this.renderer.updateBall(this.physics.ballBody.position, this.physics.ballBody.quaternion);
+      if (this.audio.initialized){
+        const bp={ x:ball.x, z:ball.z };
+        this.audio.setListener(bp);
+        this.audio.updateDirectPath(bp, this.maze.exit);
+        this.audio.updateBallRolling(this.physics.ballBody.velocity, bp, this.physics.ballBody.angularVelocity);
 
-    // --- Rendering ---
-    this.renderer.updateBall(ballPos, ballQuat);
-    this.renderer.animateGoal(this.elapsed);
+        const speed = Math.hypot(this.physics.ballBody.velocity.x, this.physics.ballBody.velocity.z);
+        this.haptics.update(this.audio.lastProximity, this.audio.M_t, speed);
+      }
+    }
+
+    this.checkWin();
+    this.renderer.update(now/1000, this.audio.lastProximity);
     this.renderer.render();
 
-    // --- Audio updates ---
-    if (this.audio.initialized) {
-      const boardWidth = this.mazeData.width * CELL_SIZE;
-
-      // Rolling sound
-      this.audio.updateRolling(ballSpeed, ballPos, boardWidth);
-
-      // Wall scrape detection and sound
-      const isScraping = this.physics.isScrapingWall();
-      this.audio.updateScrape(isScraping, ballSpeed);
-      if (isScraping && ballSpeed > 2) {
-        this.haptics.wallScrape();
-      }
-
-      // Hole proximity rumble
-      const holeDist = this.physics.getNearestHoleDistance();
-      this.audio.updateRumble(holeDist);
-
-      // Ray tracer results -> audio spatialization
-      if (this.rayResult) {
-        const { end, width, height } = this.mazeData;
-        const goalPos = {
-          x: (end.x - width / 2 + 0.5) * CELL_SIZE,
-          z: (end.y - height / 2 + 0.5) * CELL_SIZE,
-        };
-        this.audio.updateFromRayTracer(this.rayResult, ballPos, goalPos);
-      }
-    }
-
-    // --- Haptics: hole proximity vibration ---
-    if (this.mazeData) {
-      const holeDist = this.physics.getNearestHoleDistance();
-      if (holeDist < CELL_SIZE * 1.2 && holeDist > CELL_SIZE * 0.35) {
-        this.haptics.holeProximity();
-      }
-    }
-
-    // --- HUD update ---
-    this.hudTime.textContent = this.formatTime(this.elapsed);
-
-    // --- Debug overlay ---
-    if (this.debugVisible) {
-      document.getElementById('dbg-rays').textContent = RAY_COUNT;
-      document.getElementById('dbg-los').textContent =
-        this.rayResult ? this.rayResult.los.toFixed(3) : '---';
-      document.getElementById('dbg-taps').textContent =
-        this.audio.echoTaps ? this.audio.echoTaps.filter(t => t.active).length : 0;
-      document.getElementById('dbg-speed').textContent = ballSpeed.toFixed(2);
-      document.getElementById('dbg-occ').textContent =
-        this.audio.losSmoothed !== undefined ? (1 - this.audio.losSmoothed).toFixed(3) : '---';
-      document.getElementById('dbg-fps').textContent = Math.round(1 / Math.max(dt, 0.001));
+    this.fpsCount++;
+    if (now - this.fpsLast > 1000){
+      this.fpsEl.textContent = `${Math.round(this.fpsCount*1000/(now-this.fpsLast))} fps`;
+      this.fpsCount=0;
+      this.fpsLast=now;
     }
   }
 }
 
-// ===========================================================================
-// BOOT - Create the App instance on page load
-// ===========================================================================
-const app = new App();
-
-</script>
+// Start
+new App();
+  </script>
 </body>
 </html>
