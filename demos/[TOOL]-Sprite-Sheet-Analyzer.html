@@ -2059,19 +2059,6 @@ img.onload = () => requestAnimationFrame(loop);
 
                 animId = requestAnimationFrame(gameLoop);
 
-                // Resize handler
-                const PIXEL_SCALE = 0.25;
-                const handleResize = () => {
-                  const r = container.getBoundingClientRect();
-                  const rw = Math.max(1, Math.floor(r.width * PIXEL_SCALE));
-                  const rh = Math.max(1, Math.floor(r.height * PIXEL_SCALE));
-                  renderer.setSize(rw, rh);
-                  camera.aspect = r.width / r.height;
-                  camera.updateProjectionMatrix();
-                };
-                const resizeObs = new ResizeObserver(handleResize);
-                resizeObs.observe(container);
-
                 // Cleanup function
                 gameCleanupRef.current = () => {
                   if (animId) cancelAnimationFrame(animId);
