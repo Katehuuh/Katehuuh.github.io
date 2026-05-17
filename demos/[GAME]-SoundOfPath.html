@@ -1,49 +1,34 @@
 <!--
-  Prompt: Senior Web Audio + WebGL dev. Blind-playable Labyrinth (tilt maze) with physically
-  plausible 2D ray-traced spatial audio + haptics. Single self-contained HTML, inline CSS/JS.
-  - three.js rendering, cannon-es physics, Web Audio API spatial audio, Web Worker ray tracer
-  - Maze: recursive backtracker (odd grid, step=2), configurable difficulty, holes as triggers
-  - Physics: tilt board via gravity.x/z, linearDamping ~0.35, fixed timestep 1/180, clamp speed
-  - Audio ray tracer (Worker, 15Hz): 3-band energy (Low/Mid/High), material model
-    alpha_eff = 1-(1-alpha)^th, E_refl = E_in*rho*(1-alpha_eff), E_trans = E_in*tau*(1-alpha_eff)
-  - Occlusion: N rays listener->source, LOS ratio via EMA smoothing, drives 3-band EQ
-  - Reflections: 64 rays, 5 bounces, 16-tap delay pool, HRTF panning, per-band EQ
-  - Beacon: warm pad (pink noise + triangle harmonics + vibrato), proximity brightens tone
-  - Rolling: continuous bandpass noise, gain ~ ball speed (EMA smoothed), angular velocity blend
-  - Collisions: 80Hz sine + filtered noise burst, intensity-proportional, HRTF panned
-  - Haptics: navigator.vibrate patterns (wall scrape, collision jolt, hole rumble, goal burst)
-  - Controls: arrow/WASD (desktop), DeviceOrientation with iOS permission (mobile), gamepad
-  - Visuals: volumetric ray-marched clouds (FBM + HG phase + god-rays), procedural starfield,
-    MeshPhysical floor with clearcoat + envMap, bloom post-processing, full-block maze walls
-  - Equation: S(t) = (1-M_t)*G_dir(theta)*EQ(E_dir)*A_dir*delta(t-d/c) + sum[reflections]
-  - URL params: ?difficulty=easy|medium|hard&groove=1&audioRays=128
-  - Fix: ball was out of map due fake isometric view. Orientation did not give velocity to
-    ball with left/right movement and up/down went clipping underground or above wall due
-    sudden jump.
-  - Background: visually stunning nebula with volumetric fog/cloud effects featuring lighting
-    passthrough refraction/ray casting light from advanced rendering techniques for realistic
-    and believable moving sci-fi effects, fog for atmospheric depth, multiple lights (ambient,
-    directional, colored point lights) to achieve cosmic glow, semi-transparent smoke particles
-    that slowly rotate. Starry sky with glowing ethereal effects. Renderer resizes dynamically.
-    Deep space aesthetics with floating elements and starfield, performance acceptable for mobile.
-  - Exit sound softer and quieter, letting the rolling ball sound be more noticeable.
-  - Acoustic model: discrete energy packets (rays) across 3 frequency bands, not sound waves.
-    Ray state tuple: (Origin vec2, Direction vec2, Energy vec3(E_low,E_mid,E_high)).
-    Ray-segment intersection: R(t)=O+t*D, W(u)=A+u*(B-A), solve for t>0 and 0<=u<=1.
-    Reflection: D_refl = D_in - 2*N*dot(D_in,N). Occlusion: LOS_ratio = (N-occluded)/N,
-    EMA smoothed. Echo: cast N rays from source, MAX_BOUNCES, listener-circle intersection,
-    distance falloff 1/d^2. Muffling->EQ: high-shelf -18dB*muffle, mid -8dB, low +4dB.
-    Echo->Delay: delayTime=distance/speedOfSound, energy->dB: 20*log10(E).
-    Panning: stereo pan=sin(angle), HRTF 5.1 virtual via trig channel gains.
-    Transmission: accumulate in-material path length, apply tau^T per band.
-  - Inspired by BRIO 34000 Labyrinth Game (wooden box, glass top, metal ball, gravity tilt).
-    Blind play approaches: (1) grooved path mode (channelized guide), (2) magnetic stylus
-    (tactile tracking), (3) electronic haptic feedback with ray-traced 3D spatial audio.
-    Sound encodes X via stereo pan, Y via pitch. Goal=calm beacon, holes=low rumble+ticking,
-    rolling=soft whoosh (sidechain ducked), collisions=transient click.
-  - Verification: S(t) = (1-M_t)*G_dir(theta)*EQ(E_dir)*A_dir*delta(t-d_dir/c)
-    + sum_r sum_j H_{r,j}*E_{r,j}*(1/d_{r,j}^2)*G_pan(theta_{r,j})*EQ(E_{r,j})*delta(t-d_{r,j}/c)
-  - [v12 -> v30 RT sound, v73 sky-stars, v102 combined + bugfixes]
+  Prompt: Blind-playable Labyrinth with 2D ray-traced spatial audio + haptics.
+  Inspired by BRIO 34000 (wooden box, glass top, metal ball, gravity tilt).
+  Navigate blindly: sound volume = distance to exit (close=hot, far=cold).
+  S(t) = (1-M_t)*G_dir*EQ(E_dir)*A_dir*delta(t-d/c) + sum[reflections]
+
+  Aesthetic direction:
+  - Visually stunning nebula with volumetric fog/cloud effects, lighting passthrough
+    refraction/ray casting for realistic and believable moving sci-fi effects.
+    Fog for atmospheric depth, cosmic glow, semi-transparent smoke particles slowly
+    rotating. Starry sky with glowing, ethereal effects. Deep space aesthetics with
+    floating elements. Nice and fascinating. Performance acceptable for mobile.
+  - Exit beacon: soft, warm, never whiny. Rolling ball sound more noticeable than exit.
+  - Walls feel solid like office room, not thin prototype lines.
+
+  Mistakes to avoid (things that broke and were fixed):
+  - Ball escapes map with fake isometric view. Orientation must give velocity to ball
+    for left/right, not clip underground or jump above walls.
+  - Maze grid MUST be odd-sized (11 not 10) or step=2 carve creates unreachable exits.
+  - Start/exit coords must land on odd cells (carve lattice), use (N-2)|1.
+  - Do NOT create oscillators per frame. Node pooling, reuse, EMA smoothing everywhere.
+  - Do NOT run ray tracing on main thread (Worker only, 15Hz).
+  - Key release must immediately zero force (key state map, not cumulative).
+  - On win/respawn: one clean rebuild only, guard with regenerating flag.
+  - Collision callback: Math.abs(fn||0) not Math.abs(fn||0.5) - zero-force contacts
+    must not trigger phantom sounds.
+  - Reflection tap attenuation: apply proxGate once (per-band OR mix), not both.
+  - Stars render BEHIND clouds (multiply by transmittance T), not on top.
+  - No constant background drone when far from exit. Beacon proximity-gated.
+
+  [v12 -> v30 (high-tech RT sound) -> v73 (sky-stars) -> v102 (combined + bugfixes)]
 -->
 <!DOCTYPE html>
 <html lang="en">
