@@ -1523,8 +1523,8 @@ const img = new Image();
 img.src = 'spritesheet.png';
 
 const keys = {};
-addEventListener('keydown', e => { keys[e.code] = true; e.preventDefault(); });
-addEventListener('keyup', e => { keys[e.code] = false; });
+addEventListener('keydown', e => { if (window._gamePreviewActive) return; keys[e.code] = true; e.preventDefault(); });
+addEventListener('keyup', e => { if (window._gamePreviewActive) return; keys[e.code] = false; });
 
 function resize() { canvas.width = innerWidth; canvas.height = innerHeight; }
 resize();
@@ -2263,12 +2263,13 @@ void main(){
               };
             }, [gamePreviewActive]);
 
-            const handleStartGamePreview = () => { setGamePreviewActive(true); };
+            const handleStartGamePreview = () => { window._gamePreviewActive = true; setGamePreviewActive(true); };
             const handleStopGamePreview = () => {
               if (gameCleanupRef.current) {
                 gameCleanupRef.current();
                 gameCleanupRef.current = null;
               }
+              window._gamePreviewActive = false;
               setGamePreviewActive(false);
             };
 
