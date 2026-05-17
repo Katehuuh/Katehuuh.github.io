@@ -1839,8 +1839,9 @@ img.onload = () => requestAnimationFrame(loop);
                     map: spriteTex,
                     transparent: true,
                     alphaTest: 0.5,
-                    side: THREE.DoubleSide,
+                    side: THREE.FrontSide,
                     roughness: 1, metalness: 0,
+                    depthWrite: false,
                   });
                   // Custom depth material so shadow map respects alpha/transparency
                   const spriteDepthMat = new THREE.MeshDepthMaterial({
@@ -2192,6 +2193,8 @@ void main(){
                     spriteMesh.position.x = player.x;
                     spriteMesh.position.y = meshH / 2 + player.y * 10;
                     spriteMesh.position.z = player.z;
+                    // Billboard: always face camera so plane edge is never visible
+                    spriteMesh.quaternion.copy(camera.quaternion);
                     spriteMesh.scale.x = player.facing;
 
                     // Update shadow position to follow character on ground
