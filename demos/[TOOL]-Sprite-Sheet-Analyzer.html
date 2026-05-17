@@ -260,15 +260,21 @@
                   if (ctx) {
                     ctx.clearRect(0, 0, canvas.width, canvas.height);
                     if (sprite.trim) {
-                      // Draw the trimmed sprite centered in the preview
+                      // Draw the trimmed sprite centered, inset 1px to avoid edge bleed
                       const t = sprite.trim;
-                      const sx = sprite.x + t.x, sy = sprite.y + t.y;
-                      const scale = Math.min(canvas.width / t.w, canvas.height / t.h, 1);
-                      const dw = t.w * scale, dh = t.h * scale;
+                      const inset = 1;
+                      const sx = sprite.x + t.x + inset, sy = sprite.y + t.y + inset;
+                      const sw = Math.max(1, t.w - inset * 2), sh = Math.max(1, t.h - inset * 2);
+                      const scale = Math.min(canvas.width / sw, canvas.height / sh, 1);
+                      const dw = sw * scale, dh = sh * scale;
                       const dx = (canvas.width - dw) / 2, dy = (canvas.height - dh) / 2;
-                      ctx.drawImage(image, sx, sy, t.w, t.h, dx, dy, dw, dh);
+                      ctx.drawImage(image, sx, sy, sw, sh, dx, dy, dw, dh);
                     } else {
-                      ctx.drawImage(image, sprite.x, sprite.y, sprite.w, sprite.h, 0, 0, canvas.width, canvas.height);
+                      // Inset 1px on each edge to clip bleeding border pixels
+                      const inset = 1;
+                      const sx = sprite.x + inset, sy = sprite.y + inset;
+                      const sw = Math.max(1, sprite.w - inset * 2), sh = Math.max(1, sprite.h - inset * 2);
+                      ctx.drawImage(image, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
                     }
                   }
                 }
