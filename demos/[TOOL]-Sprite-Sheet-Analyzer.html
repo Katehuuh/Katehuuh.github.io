@@ -2094,7 +2094,7 @@ img.onload = () => requestAnimationFrame(loop);
                 accumulatedLight = floor(accumulatedLight * fogBands) / fogBands;
 
                 vec3 sunColor = vec3(0.9, 0.8, 0.5); // Warm yellow
-                vec3 finalRays = sunColor * accumulatedLight * 1.5;
+                vec3 finalRays = sunColor * accumulatedLight * 0.5;
 
                 // Additive Blending
                 gl_FragColor = vec4(baseColor.rgb + finalRays, 1.0);
