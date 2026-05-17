@@ -1,8 +1,12 @@
 <!--
   Prompt: Blind-playable Labyrinth with 2D ray-traced spatial audio + haptics.
+  Single self-contained HTML, inline CSS/JS. three.js + cannon-es + Web Audio.
   Inspired by BRIO 34000 (wooden box, glass top, metal ball, gravity tilt).
   Navigate blindly: sound volume = distance to exit (close=hot, far=cold).
   S(t) = (1-M_t)*G_dir*EQ(E_dir)*A_dir*delta(t-d/c) + sum[reflections]
+
+  Vibe: next-level 3D physics showcase, pleasing/relaxing, always self-indicate
+  in realistic way WHERE you are via spatial audio. Satisfaction, pure fire.
 
   Aesthetic direction:
   - Visually stunning nebula with volumetric fog/cloud effects, lighting passthrough
@@ -10,8 +14,14 @@
     Fog for atmospheric depth, cosmic glow, semi-transparent smoke particles slowly
     rotating. Starry sky with glowing, ethereal effects. Deep space aesthetics with
     floating elements. Nice and fascinating. Performance acceptable for mobile.
-  - Exit beacon: soft, warm, never whiny. Rolling ball sound more noticeable than exit.
+  - Exit beacon: soft, warm, never whiny. Rolling ball more noticeable than exit.
+    Rolling never masks alerts (sidechain ducking).
   - Walls feel solid like office room, not thin prototype lines.
+  - Holes emit low rumble + intermittent ticking as you cross risk thresholds.
+  - Grooved path mode toggle for channelized blind-friendly experience.
+  - Debug overlay (D key): show rays, LOS ratio, tap count.
+  - URL params: ?difficulty=easy|medium|hard&groove=1&audioRays=128
+  - Permissions flow: Enable Audio + Enable Motion gate before gameplay starts.
 
   Mistakes to avoid:
   - Ball escapes map with fake isometric view. Orientation must give velocity to ball
