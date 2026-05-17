@@ -135,9 +135,14 @@ function gitLastCommitISO(path) {
 // source's last change. This stops Playwright pixel jitter from producing
 // a "new" thumb on every CI run when nothing meaningful changed.
 function shouldSkipShot(target) {
-  // Custom thumbnail sentinel: if assets/thumbs/<name>.nothumb exists, never
-  // re-screenshot this demo (the thumbnail was placed manually).
-  if (existsSync(join(ROOT, `assets/thumbs/${target.name}.nothumb`))) return true;
+  // Custom thumbnail: if the HTML contains <meta name="thumbnail" content="custom">,
+  // never re-screenshot (the thumbnail was placed manually).
+  if (target.source) {
+    try {
+      const head = readFileSync(join(ROOT, target.source), 'utf-8').slice(0, 4096);
+      if (/meta\s+name\s*=\s*["']thumbnail["']\s+content\s*=\s*["']custom["']/i.test(head)) return true;
+    } catch {}
+  }
 
   // Look at whichever thumb extension already exists (jpg is current default,
   // legacy .png entries are still respected).
