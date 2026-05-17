@@ -27,6 +27,22 @@
     that slowly rotate. Starry sky with glowing ethereal effects. Renderer resizes dynamically.
     Deep space aesthetics with floating elements and starfield, performance acceptable for mobile.
   - Exit sound softer and quieter, letting the rolling ball sound be more noticeable.
+  - Acoustic model: discrete energy packets (rays) across 3 frequency bands, not sound waves.
+    Ray state tuple: (Origin vec2, Direction vec2, Energy vec3(E_low,E_mid,E_high)).
+    Ray-segment intersection: R(t)=O+t*D, W(u)=A+u*(B-A), solve for t>0 and 0<=u<=1.
+    Reflection: D_refl = D_in - 2*N*dot(D_in,N). Occlusion: LOS_ratio = (N-occluded)/N,
+    EMA smoothed. Echo: cast N rays from source, MAX_BOUNCES, listener-circle intersection,
+    distance falloff 1/d^2. Muffling->EQ: high-shelf -18dB*muffle, mid -8dB, low +4dB.
+    Echo->Delay: delayTime=distance/speedOfSound, energy->dB: 20*log10(E).
+    Panning: stereo pan=sin(angle), HRTF 5.1 virtual via trig channel gains.
+    Transmission: accumulate in-material path length, apply tau^T per band.
+  - Inspired by BRIO 34000 Labyrinth Game (wooden box, glass top, metal ball, gravity tilt).
+    Blind play approaches: (1) grooved path mode (channelized guide), (2) magnetic stylus
+    (tactile tracking), (3) electronic haptic feedback with ray-traced 3D spatial audio.
+    Sound encodes X via stereo pan, Y via pitch. Goal=calm beacon, holes=low rumble+ticking,
+    rolling=soft whoosh (sidechain ducked), collisions=transient click.
+  - Verification: S(t) = (1-M_t)*G_dir(theta)*EQ(E_dir)*A_dir*delta(t-d_dir/c)
+    + sum_r sum_j H_{r,j}*E_{r,j}*(1/d_{r,j}^2)*G_pan(theta_{r,j})*EQ(E_{r,j})*delta(t-d_{r,j}/c)
   - [v12 -> v30 RT sound, v73 sky-stars, v102 combined + bugfixes]
 -->
 <!DOCTYPE html>
