@@ -1,6 +1,21 @@
 {
   "demos": [
     {
+      "name": "Text-to-ASCII-QR",
+      "type": "file",
+      "filename": "Text-to-ASCII-QR.html"
+    },
+    {
+      "name": "[GAME]-Procedural-Earth-exploration",
+      "type": "file",
+      "filename": "[GAME]-Procedural-Earth-exploration.html"
+    },
+    {
+      "name": "[TOOL]-Prompt-Library",
+      "type": "file",
+      "filename": "[TOOL]-Prompt-Library.html"
+    },
+    {
       "name": "[GAME]-Labyrinth-Audio-Ray-Traced",
       "type": "file",
       "filename": "[GAME]-Labyrinth-Audio-Ray-Traced.html"
@@ -9,11 +24,6 @@
       "name": "[GAME]-Map2Mask-exploration",
       "type": "file",
       "filename": "[GAME]-Map2Mask-exploration.html"
-    },
-    {
-      "name": "[TOOL]-Auto-Prompt-Improver",
-      "type": "file",
-      "filename": "[TOOL]-Auto-Prompt-Improver.html"
     },
     {
       "name": "[SHOW]-LLM-Dungeon-Generator",
