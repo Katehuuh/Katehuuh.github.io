@@ -1642,12 +1642,12 @@ img.onload = () => requestAnimationFrame(loop);
                 // Scene
                 const scene = new THREE.Scene();
                 scene.background = new THREE.Color(0x0a0a12);
-                scene.fog = new THREE.FogExp2(0x0a0a12, 0.035);
+                scene.fog = new THREE.FogExp2(0x0a0a12, 0.018);
 
                 // Camera (static)
-                const camera = new THREE.PerspectiveCamera(35, (container.offsetWidth || 400) / (container.offsetHeight || 300), 0.1, 200);
-                camera.position.set(0, 14, 22);
-                camera.lookAt(0, 0, 0);
+                const camera = new THREE.PerspectiveCamera(30, (container.offsetWidth || 400) / (container.offsetHeight || 300), 0.1, 300);
+                camera.position.set(0, 22, 32);
+                camera.lookAt(0, 0, -4);
 
                 // Lights
                 const ambientLight = new THREE.AmbientLight(0x404060, 1.2);
@@ -1760,6 +1760,14 @@ img.onload = () => requestAnimationFrame(loop);
                   texCanvas.height = imgSrc.height || imgSrc.naturalHeight || 1024;
                   const tCtx = texCanvas.getContext('2d');
                   tCtx.drawImage(imgSrc, 0, 0);
+                  // Strip near-white border pixels: set alpha to 0 for pixels where
+                  // RGB are all > 240 (grid lines / sheet background bleed)
+                  const imgData = tCtx.getImageData(0, 0, texCanvas.width, texCanvas.height);
+                  const px = imgData.data;
+                  for (let i = 0; i < px.length; i += 4) {
+                    if (px[i] > 240 && px[i+1] > 240 && px[i+2] > 240) px[i+3] = 0;
+                  }
+                  tCtx.putImageData(imgData, 0, 0);
                   spriteTex = new THREE.CanvasTexture(texCanvas);
                   spriteTex.magFilter = THREE.NearestFilter;
                   spriteTex.minFilter = THREE.NearestFilter;
@@ -1851,8 +1859,9 @@ img.onload = () => requestAnimationFrame(loop);
                 let lastTap = 0;
                 let touchMoveDir = 0;
 
-                const onKeyDown = (e) => { keys[e.code] = true; };
-                const onKeyUp = (e) => { keys[e.code] = false; };
+                const gameKeys = new Set(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','KeyW','KeyA','KeyS','KeyD','Space','KeyZ','KeyJ','KeyE','KeyK']);
+                const onKeyDown = (e) => { keys[e.code] = true; if (gameKeys.has(e.code)) e.preventDefault(); };
+                const onKeyUp = (e) => { keys[e.code] = false; if (gameKeys.has(e.code)) e.preventDefault(); };
                 const onMouseDown = (e) => {
                   if (e.button === 0) { player.state = 'attack'; player.attackTimer = 500; player.frame = 0; player.frameTimer = 0; }
                   if (e.button === 2) { player.state = 'defend'; player.defendTimer = 600; player.frame = 0; player.frameTimer = 0; }
