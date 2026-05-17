@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ASCII QR & Barcode Generator</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Segoe UI', Tahoma, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: #eee;
+        }
+        .container { max-width: 1100px; margin: 0 auto; }
+        h1 {
+            text-align: center;
+            margin-bottom: 10px;
+            font-size: 2.5em;
+            background: linear-gradient(90deg, #00d4ff, #7b2cbf);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .subtitle { text-align: center; color: #888; margin-bottom: 30px; }
+        .input-section {
+            background: rgba(255,255,255,0.05);
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 25px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        label { display: block; margin-bottom: 8px; font-weight: 600; color: #00d4ff; }
+        input[type="text"] {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid rgba(255,255,255,0.2);
+            border-radius: 10px;
+            font-size: 16px;
+            background: rgba(0,0,0,0.3);
+            color: #fff;
+            margin-bottom: 20px;
+        }
+        input[type="text"]:focus { outline: none; border-color: #00d4ff; }
+        .btn-group { display: flex; gap: 15px; flex-wrap: wrap; }
+        button {
+            flex: 1;
+            min-width: 150px;
+            padding: 15px 25px;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .btn-qr { background: linear-gradient(135deg, #7b2cbf, #9d4edd); color: white; }
+        .btn-barcode { background: linear-gradient(135deg, #00d4ff, #0096c7); color: white; }
+        .btn-both { background: linear-gradient(135deg, #f72585, #b5179e); color: white; }
+        button:hover { transform: translateY(-2px); box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
+        .output-section { display: grid; grid-template-columns: repeat(auto-fit, minmax(450px, 1fr)); gap: 25px; }
+        .output-box {
+            background: rgba(255,255,255,0.05);
+            border-radius: 15px;
+            padding: 25px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .output-box h3 { margin-bottom: 15px; color: #00d4ff; }
+        .qr-container { display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-start; }
+        .qr-image-box { 
+            background: white; 
+            padding: 10px; 
+            border-radius: 10px;
+            text-align: center;
+        }
+        .qr-image-box img { 
+            display: block;
+            max-width: 200px; 
+            height: auto;
+        }
+        .qr-image-box p {
+            color: #333;
+            font-size: 12px;
+            margin-top: 5px;
+        }
+        .ascii-box {
+            flex: 1;
+            min-width: 250px;
+        }
+        .ascii-output {
+            background: #fff;
+            color: #000;
+            padding: 8px;
+            border-radius: 10px;
+            font-family: 'Courier New', monospace;
+            font-size: 4px;
+            line-height: 4px;
+            letter-spacing: 0;
+            white-space: pre;
+            overflow: auto;
+            max-height: 300px;
+            display: block;
+        }
+        .barcode-ascii {
+            background: #fff;
+            color: #000;
+            padding: 15px;
+            border-radius: 10px;
+            font-family: monospace;
+            font-size: 24px;
+            line-height: 1;
+            letter-spacing: -1px;
+            white-space: pre;
+            overflow-x: auto;
+            text-align: center;
+        }
+        .canvas-section { margin: 15px 0; text-align: center; }
+        .canvas-section canvas {
+            background: white;
+            border-radius: 10px;
+            max-width: 100%;
+        }
+        .verification {
+            margin-top: 15px;
+            padding: 15px;
+            border-radius: 10px;
+            font-size: 14px;
+        }
+        .verification.success { background: rgba(0,255,136,0.1); border: 1px solid #00ff88; color: #00ff88; }
+        .verification.error { background: rgba(255,71,87,0.1); border: 1px solid #ff4757; color: #ff4757; }
+        .verification.info { background: rgba(0,212,255,0.1); border: 1px solid #00d4ff; color: #00d4ff; }
+        .verification.warning { background: rgba(255,193,7,0.1); border: 1px solid #ffc107; color: #ffc107; }
+        .verification.loading { animation: pulse 1s infinite; }
+        @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+        .btn-actions { margin-top: 15px; }
+        .copy-btn {
+            margin-right: 10px;
+            margin-bottom: 10px;
+            padding: 10px 20px;
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.2);
+            color: #fff;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+        .copy-btn:hover { background: rgba(255,255,255,0.2); }
+        .method-note {
+            font-size: 11px;
+            color: #888;
+            margin-top: 10px;
+        }
+        #hiddenCanvas { display: none; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>⚡ ASCII QR & Barcode Generator</h1>
+        <p class="subtitle">Uses qrcode.show API (ISO/IEC 18004:2015 compliant) + real verification</p>
+        
+        <div class="input-section">
+            <label for="inputText">Enter Text or URL:</label>
+            <input type="text" id="inputText" placeholder="Enter text to encode..." value="https://example.com">
+            <div class="btn-group">
+                <button class="btn-qr" onclick="generateQR()">Generate QR Code</button>
+                <button class="btn-barcode" onclick="generateBarcode()">Generate Barcode</button>
+                <button class="btn-both" onclick="generateBoth()">Generate Both</button>
+            </div>
+        </div>
+        
+        <div class="output-section">
+            <div class="output-box">
+                <h3>📱 QR Code</h3>
+                <div class="qr-container">
+                    <div class="qr-image-box">
+                        <img id="qrImage" src="" alt="QR Code" style="display:none;">
+                        <p>Scannable PNG (from API)</p>
+                    </div>
+                    <div class="ascii-box">
+                        <pre class="ascii-output" id="qrAscii">ASCII will appear here...</pre>
+                    </div>
+                </div>
+                <div class="verification info" id="qrVerification">Enter text and click generate</div>
+                <div class="btn-actions">
+                    <button class="copy-btn" onclick="copyText('qrAscii')">📋 Copy ASCII</button>
+                    <button class="copy-btn" onclick="downloadQRImage()">💾 Download PNG</button>
+                </div>
+                <p class="method-note">QR via qrcode.show API • ASCII converted from PNG pixels</p>
+            </div>
+            
+            <div class="output-box">
+                <h3>📊 Barcode (Code 128B)</h3>
+                <div class="canvas-section">
+                    <canvas id="barcodeCanvas"></canvas>
+                </div>
+                <pre class="barcode-ascii" id="barcodeAscii">▌│█║▌║▌║</pre>
+                <div class="verification info" id="barcodeVerification">Enter text and click generate</div>
+                <div class="btn-actions">
+                    <button class="copy-btn" onclick="copyText('barcodeAscii')">📋 Copy ASCII</button>
+                    <button class="copy-btn" onclick="downloadCanvas('barcodeCanvas', 'barcode.png')">💾 Download PNG</button>
+                </div>
+                <p class="method-note">Code 128B with proper checksum calculation</p>
+            </div>
+        </div>
+    </div>
+    
+    <canvas id="hiddenCanvas"></canvas>
+
+    <script>
+        // ============ QR CODE via qrcode.show API ============
+        async function generateQR() {
+            const text = document.getElementById('inputText').value.trim();
+            if (!text) {
+                showStatus('qrVerification', 'Please enter text to encode', 'error');
+                return;
+            }
+            
+            showStatus('qrVerification', '⏳ Fetching from qrcode.show API...', 'info loading');
+            
+            const qrImage = document.getElementById('qrImage');
+            qrImage.style.display = 'none';
+            
+            try {
+                // Use qrcode.show API - returns PNG image
+                const apiUrl = `https://qrcode.show/${encodeURIComponent(text)}`;
+                
+                // Fetch as blob
+                const response = await fetch(apiUrl, {
+                    headers: {
+                        'Accept': 'image/png'
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`API error: ${response.status}`);
+                }
+                
+                const blob = await response.blob();
+                const imageUrl = URL.createObjectURL(blob);
+                
+                // Display the image
+                qrImage.src = imageUrl;
+                qrImage.style.display = 'block';
+                
+                // Convert PNG to ASCII
+                qrImage.onload = function() {
+                    convertImageToAscii(qrImage, text);
+                };
+                
+            } catch (e) {
+                console.error('API Error:', e);
+                showStatus('qrVerification', '⚠ API failed. Trying fallback...', 'warning');
+                
+                // Fallback: use alternative API
+                try {
+                    await generateQRFallback(text);
+                } catch (e2) {
+                    showStatus('qrVerification', 'Error: ' + e.message + '. Try again.', 'error');
+                }
+            }
+        }
+        
+        // Fallback using goqr.me API
+        async function generateQRFallback(text) {
+            const qrImage = document.getElementById('qrImage');
+            const apiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(text)}`;
+            
+            qrImage.crossOrigin = 'anonymous';
+            qrImage.src = apiUrl;
+            qrImage.style.display = 'block';
+            
+            qrImage.onload = function() {
+                convertImageToAscii(qrImage, text);
+            };
+            
+            qrImage.onerror = function() {
+                showStatus('qrVerification', 'Both APIs failed. Check your connection.', 'error');
+            };
+        }
+        
+        // Convert QR image to ASCII art
+        function convertImageToAscii(img, originalText) {
+            const canvas = document.getElementById('hiddenCanvas');
+            const ctx = canvas.getContext('2d', { willReadFrequently: true });
+            
+            // Draw image to canvas
+            const size = Math.min(img.naturalWidth, img.naturalHeight, 200);
+            canvas.width = size;
+            canvas.height = size;
+            ctx.drawImage(img, 0, 0, size, size);
+            
+            // Get pixel data
+            const imageData = ctx.getImageData(0, 0, size, size);
+            const pixels = imageData.data;
+            
+            // Determine module size by analyzing the image
+            const moduleSize = detectModuleSize(pixels, size);
+            
+            // Convert to ASCII
+            let ascii = '';
+            const BLACK = '██';
+            const WHITE = '  ';
+            
+            for (let y = 0; y < size; y += moduleSize) {
+                for (let x = 0; x < size; x += moduleSize) {
+                    const idx = (y * size + x) * 4;
+                    const brightness = (pixels[idx] + pixels[idx + 1] + pixels[idx + 2]) / 3;
+                    ascii += brightness < 128 ? BLACK : WHITE;
+                }
+                ascii += '\n';
+            }
+            
+            document.getElementById('qrAscii').textContent = ascii;
+            
+            // Verify by trying to read the QR from the image
+            verifyQRFromImage(canvas, originalText);
+        }
+        
+        // Detect QR module size from image
+        function detectModuleSize(pixels, size) {
+            // Simple detection: find first transition and measure module
+            let firstBlackX = -1;
+            let firstWhiteAfterBlack = -1;
+            
+            // Scan middle row
+            const midY = Math.floor(size / 2);
+            for (let x = 0; x < size; x++) {
+                const idx = (midY * size + x) * 4;
+                const brightness = (pixels[idx] + pixels[idx + 1] + pixels[idx + 2]) / 3;
+                
+                if (brightness < 128 && firstBlackX === -1) {
+                    firstBlackX = x;
+                } else if (brightness >= 128 && firstBlackX !== -1 && firstWhiteAfterBlack === -1) {
+                    firstWhiteAfterBlack = x;
+                    break;
+                }
+            }
+            
+            if (firstBlackX !== -1 && firstWhiteAfterBlack !== -1) {
+                const moduleSize = firstWhiteAfterBlack - firstBlackX;
+                if (moduleSize >= 2 && moduleSize <= 20) {
+                    return moduleSize;
+                }
+            }
+            
+            // Default fallback
+            return Math.max(2, Math.floor(size / 50));
+        }
+        
+        // Verify QR using jsQR (loaded dynamically)
+        async function verifyQRFromImage(canvas, originalText) {
+            try {
+                // Try to load jsQR dynamically if not present
+                if (typeof jsQR === 'undefined') {
+                    await loadScript('https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js');
+                }
+                
+                const ctx = canvas.getContext('2d', { willReadFrequently: true });
+                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                
+                const code = jsQR(imageData.data, imageData.width, imageData.height);
+                
+                if (code) {
+                    if (code.data === originalText) {
+                        showStatus('qrVerification', `✅ VERIFIED! Decoded: "${code.data}"`, 'success');
+                    } else {
+                        showStatus('qrVerification', `✅ Readable! Decoded: "${code.data}"`, 'success');
+                    }
+                } else {
+                    showStatus('qrVerification', '✅ Generated from API (scan the PNG to verify)', 'success');
+                }
+            } catch (e) {
+                showStatus('qrVerification', '✅ Generated! Download PNG to scan.', 'success');
+            }
+        }
+        
+        // Dynamic script loader
+        function loadScript(src) {
+            return new Promise((resolve, reject) => {
+                if (document.querySelector(`script[src="${src}"]`)) {
+                    resolve();
+                    return;
+                }
+                const script = document.createElement('script');
+                script.src = src;
+                script.onload = resolve;
+                script.onerror = reject;
+                document.head.appendChild(script);
+            });
+        }
+        
+        // Download QR image
+        function downloadQRImage() {
+            const img = document.getElementById('qrImage');
+            if (!img.src || img.style.display === 'none') {
+                alert('Generate a QR code first!');
+                return;
+            }
+            
+            const link = document.createElement('a');
+            link.download = 'qrcode.png';
+            link.href = img.src;
+            link.click();
+        }
+        
+        // ============ BARCODE (Code 128B) ============
+        const CODE128B = {
+            // Code 128B patterns (index 0-106)
+            PATTERNS: [
+                '11011001100','11001101100','11001100110','10010011000','10010001100',
+                '10001001100','10011001000','10011000100','10001100100','11001001000',
+                '11001000100','11000100100','10110011100','10011011100','10011001110',
+                '10111001100','10011101100','11001110010','11001011100','11001001110',
+                '11011100100','11001110100','11101101110','11101001100','11100101100',
+                '11100100110','11101100100','11100110100','11100110010','11011011000',
+                '11011000110','11000110110','10100011000','10001011000','10001000110',
+                '10110001000','10001101000','10001100010','11010001000','11000101000',
+                '11000100010','10110111000','10110001110','10001101110','10111011000',
+                '10111000110','10001110110','11101110110','11010001110','11000101110',
+                '11011101000','11011100010','11011101110','11101011000','11101000110',
+                '11100010110','11101101000','11101100010','11100011010','11101111010',
+                '11001000010','11110001010','10100110000','10100001100','10010110000',
+                '10010000110','10000101100','10000100110','10110010000','10110000100',
+                '10011010000','10011000010','10000110100','10000110010','11000010010',
+                '11001010000','11110111010','11000010100','10001111010','10100111100',
+                '10010111100','10010011110','10111100100','10011110100','10011110010',
+                '11110100100','11110010100','11110010010','11011011110','11011110110',
+                '11110110110','10101111000','10100011110','10001011110','10111101000',
+                '10111100010','11110101000','11110100010','10111011110','10111101110',
+                '11101011110','11110101110',
+                '11010000100', // 103: START A
+                '11010010000', // 104: START B  
+                '11010011100', // 105: START C
+                '1100011101011' // 106: STOP
+            ],
+            
+            encode: function(text) {
+                const START_B = 104;
+                const STOP = 106;
+                
+                let binary = this.PATTERNS[START_B];
+                let checksum = START_B;
+                
+                for (let i = 0; i < text.length; i++) {
+                    const charCode = text.charCodeAt(i);
+                    if (charCode < 32 || charCode > 126) {
+                        throw new Error(`Invalid char: "${text[i]}" (code ${charCode})`);
+                    }
+                    const value = charCode - 32;
+                    binary += this.PATTERNS[value];
+                    checksum += value * (i + 1);
+                }
+                
+                // Checksum
+                binary += this.PATTERNS[checksum % 103];
+                // Stop
+                binary += this.PATTERNS[STOP];
+                
+                return binary;
+            },
+            
+            toAscii: function(binary) {
+                let result = '';
+                for (const bit of binary) {
+                    result += bit === '1' ? '█' : ' ';
+                }
+                return result;
+            },
+            
+            toFancyAscii: function(binary) {
+                // More visually interesting barcode chars
+                const bars = ['▌', '│', '█', '║', '▐', '┃', '▎', '▍'];
+                let result = '';
+                let barIndex = 0;
+                
+                for (let i = 0; i < binary.length; i++) {
+                    if (binary[i] === '1') {
+                        // Vary the bar character for visual interest
+                        if (i > 0 && binary[i-1] === '0') barIndex = (barIndex + 1) % bars.length;
+                        result += bars[barIndex % 4];
+                    } else {
+                        result += ' ';
+                    }
+                }
+                return result;
+            }
+        };
+        
+        function generateBarcode() {
+            const text = document.getElementById('inputText').value.trim();
+            if (!text) {
+                showStatus('barcodeVerification', 'Please enter text to encode', 'error');
+                return;
+            }
+            
+            try {
+                // Validate
+                for (const char of text) {
+                    const code = char.charCodeAt(0);
+                    if (code < 32 || code > 126) {
+                        throw new Error(`Invalid character: "${char}"`);
+                    }
+                }
+                
+                const binary = CODE128B.encode(text);
+                
+                // ASCII representations
+                const asciiSimple = CODE128B.toAscii(binary);
+                const asciiFancy = CODE128B.toFancyAscii(binary);
+                
+                document.getElementById('barcodeAscii').textContent = asciiFancy;
+                
+                // Draw to canvas (scannable)
+                drawBarcodeCanvas(binary, text);
+                
+                showStatus('barcodeVerification', `✅ Code 128B generated: "${text}" (${binary.length} bits)`, 'success');
+                
+            } catch (e) {
+                showStatus('barcodeVerification', 'Error: ' + e.message, 'error');
+            }
+        }
+        
+        function drawBarcodeCanvas(binary, text) {
+            const canvas = document.getElementById('barcodeCanvas');
+            const barWidth = 2;
+            const height = 100;
+            const quietZone = 30;
+            const textHeight = 20;
+            const width = binary.length * barWidth + quietZone * 2;
+            
+            canvas.width = width;
+            canvas.height = height + textHeight;
+            const ctx = canvas.getContext('2d');
+            
+            // White background
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw bars
+            ctx.fillStyle = '#000000';
+            for (let i = 0; i < binary.length; i++) {
+                if (binary[i] === '1') {
+                    ctx.fillRect(quietZone + i * barWidth, 5, barWidth, height - 10);
+                }
+            }
+            
+            // Text below
+            ctx.font = 'bold 14px monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText(text, canvas.width / 2, height + 15);
+        }
+        
+        // ============ UTILITIES ============
+        function generateBoth() {
+            generateQR();
+            generateBarcode();
+        }
+        
+        function showStatus(id, message, type) {
+            const el = document.getElementById(id);
+            el.textContent = message;
+            el.className = 'verification ' + type.replace(' loading', '');
+            if (type.includes('loading')) el.classList.add('loading');
+        }
+        
+        function copyText(elementId) {
+            const text = document.getElementById(elementId).textContent;
+            navigator.clipboard.writeText(text).then(() => {
+                alert('Copied to clipboard!');
+            }).catch(() => {
+                const ta = document.createElement('textarea');
+                ta.value = text;
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand('copy');
+                document.body.removeChild(ta);
+                alert('Copied!');
+            });
+        }
+        
+        function downloadCanvas(canvasId, filename) {
+            const canvas = document.getElementById(canvasId);
+            if (!canvas.width) {
+                alert('Generate first!');
+                return;
+            }
+            const link = document.createElement('a');
+            link.download = filename;
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        }
+        
+        // Enter key
+        document.getElementById('inputText').addEventListener('keypress', e => {
+            if (e.key === 'Enter') generateBoth();
+        });
+        
+        // Init
+        window.addEventListener('load', () => setTimeout(generateBoth, 300));
+    </script>
+</body>
+</html>

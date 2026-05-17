@@ -1,0 +1,1594 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Planet Rover - COMPLETE with Atmosphere</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { overflow: hidden; background: #000; font-family: monospace; }
+        canvas { display: block; }
+
+        #debug {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: #0f0;
+            background: rgba(0,0,0,0.8);
+            padding: 10px;
+            font-size: 11px;
+            line-height: 1.6;
+            border-radius: 4px;
+        }
+
+        #panel {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(0,0,0,0.8);
+            padding: 10px;
+            border-radius: 6px;
+            color: #fff;
+            font-size: 10px;
+            width: 150px;
+        }
+
+        #panel h4 { margin: 0 0 6px; color: #4af; font-size: 11px; }
+        #panel label { display: block; margin: 4px 0 2px; color: #aaa; }
+        #panel input { width: 100%; }
+        #panel .v { float: right; color: #4af; }
+
+        #boost-bar {
+            position: absolute;
+            top: 120px;
+            left: 10px;
+            width: 100px;
+            height: 10px;
+            background: rgba(0,0,0,0.6);
+            border-radius: 5px;
+            overflow: hidden;
+        }
+
+        #boost-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #0c6, #0ea);
+            width: 100%;
+            transition: width 0.1s;
+        }
+
+        #boost-label {
+            position: absolute;
+            top: 102px;
+            left: 10px;
+            color: #0ea;
+            font-size: 10px;
+            text-shadow: 0 1px 3px rgba(0,0,0,0.9);
+        }
+
+        #controls {
+            position: absolute;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #fff;
+            background: rgba(0,0,0,0.8);
+            padding: 8px 16px;
+            border-radius: 4px;
+            font-size: 11px;
+        }
+    </style>
+</head>
+<body>
+<div id="debug">
+    <div>FPS: <span id="fps">0</span></div>
+    <div>Speed: <span id="speed">0</span> m/s</div>
+    <div>Altitude: <span id="altitude">0</span> m</div>
+    <div>Biome: <span id="biome">-</span></div>
+    <div>Wheels: <span id="wheels">0/4</span></div>
+    <div>Roll: <span id="roll">0</span>°</div>
+    <div>💎 <span id="collected">0</span>/<span id="total">0</span></div>
+</div>
+
+<div id="boost-label">BOOST</div>
+<div id="boost-bar"><div id="boost-fill"></div></div>
+
+<div id="panel">
+    <h4>⚙️ Settings <button id="copyPrompt" style="float:right;background:#222;color:#4af;border:1px solid #4af;border-radius:3px;cursor:pointer;font-size:9px;padding:1px 5px;" onclick="navigator.clipboard.writeText(this.dataset.prompt).then(()=>{this.textContent='Copied!';setTimeout(()=>this.textContent='Copy Prompt',1500)});" data-prompt="You expert frontend web game dev. Output only **one single HTML** file that renders a 3D procedurally generated earth-like planet. It should have 3D displaced terrain with different biomes, ocean layer with waves, ice caps, aurora, clouds, and realistic earth like atmosphere. Make it aesthetic pleasing, detailed, and realistic. Use Three.js and any other lib you need for HDRP UE5 RAY TRACING RTX ON ULTRA QUALITY SETTING LOOKING, with stunning 3D volumetric clouds shader and light scattered tought volumetric ray and orbit controls. Don&apos;t include stars.">Copy Prompt</button></h4>
+    <label>Time <span class="v" id="vT">0.6</span></label>
+    <input type="range" id="sT" min="0" max="1" step="0.01" value="0.6">
+    <label>Clouds <span class="v" id="vC">0.8</span></label>
+    <input type="range" id="sC" min="0" max="4" step="0.1" value="0.8">
+</div>
+
+<div id="controls">
+    <b>↑↓</b> Gas/Brake  <b>←→</b> Steer  <b>SPACE</b> Handbrake  <b>SHIFT</b> Boost  <b>R</b> Reset
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// ============================================
+// CONFIG
+// ============================================
+const PLANET_RADIUS = 50;
+const PLANET_MASS = 1000000;
+const G = 6.674e-11 * 5e9;
+const ATMO_HEIGHT = 12;
+const CLOUD_BASE = 8;
+const CLOUD_THICK = 4;
+
+// ============================================
+// NOISE
+// ============================================
+class Noise {
+    constructor(seed = 12345) {
+        this.p = new Uint8Array(256);
+        for (let i = 0; i < 256; i++) this.p[i] = i;
+        let s = seed;
+        for (let i = 255; i > 0; i--) {
+            s = (s * 16807) % 2147483647;
+            const j = s % (i + 1);
+            [this.p[i], this.p[j]] = [this.p[j], this.p[i]];
+        }
+        this.perm = new Uint8Array(512);
+        for (let i = 0; i < 512; i++) this.perm[i] = this.p[i & 255];
+    }
+
+    noise3D(x, y, z) {
+        const F3 = 1/3, G3 = 1/6;
+        let s = (x + y + z) * F3;
+        let i = Math.floor(x + s), j = Math.floor(y + s), k = Math.floor(z + s);
+        let t = (i + j + k) * G3;
+        let x0 = x - (i - t), y0 = y - (j - t), z0 = z - (k - t);
+        let i1, j1, k1, i2, j2, k2;
+        if (x0 >= y0) {
+            if (y0 >= z0) { i1=1;j1=0;k1=0;i2=1;j2=1;k2=0; }
+            else if (x0 >= z0) { i1=1;j1=0;k1=0;i2=1;j2=0;k2=1; }
+            else { i1=0;j1=0;k1=1;i2=1;j2=0;k2=1; }
+        } else {
+            if (y0 < z0) { i1=0;j1=0;k1=1;i2=0;j2=1;k2=1; }
+            else if (x0 < z0) { i1=0;j1=1;k1=0;i2=0;j2=1;k2=1; }
+            else { i1=0;j1=1;k1=0;i2=1;j2=1;k2=0; }
+        }
+        let x1=x0-i1+G3,y1=y0-j1+G3,z1=z0-k1+G3;
+        let x2=x0-i2+2*G3,y2=y0-j2+2*G3,z2=z0-k2+2*G3;
+        let x3=x0-1+3*G3,y3=y0-1+3*G3,z3=z0-1+3*G3;
+        let ii=i&255,jj=j&255,kk=k&255;
+        const grad=(h,x,y,z)=>{h&=15;let u=h<8?x:y,v=h<4?y:(h===12||h===14?x:z);return((h&1)?-u:u)+((h&2)?-v:v);};
+        let n0=0,n1=0,n2=0,n3=0;
+        let t0=0.6-x0*x0-y0*y0-z0*z0;if(t0>0){t0*=t0;n0=t0*t0*grad(this.perm[ii+this.perm[jj+this.perm[kk]]],x0,y0,z0);}
+        let t1=0.6-x1*x1-y1*y1-z1*z1;if(t1>0){t1*=t1;n1=t1*t1*grad(this.perm[ii+i1+this.perm[jj+j1+this.perm[kk+k1]]],x1,y1,z1);}
+        let t2=0.6-x2*x2-y2*y2-z2*z2;if(t2>0){t2*=t2;n2=t2*t2*grad(this.perm[ii+i2+this.perm[jj+j2+this.perm[kk+k2]]],x2,y2,z2);}
+        let t3=0.6-x3*x3-y3*y3-z3*z3;if(t3>0){t3*=t3;n3=t3*t3*grad(this.perm[ii+1+this.perm[jj+1+this.perm[kk+1]]],x3,y3,z3);}
+        return 32*(n0+n1+n2+n3);
+    }
+
+    fbm(x, y, z, oct = 5) {
+        let v = 0, a = 0.5, f = 1;
+        for (let i = 0; i < oct; i++) { v += a * this.noise3D(x*f, y*f, z*f); a *= 0.5; f *= 2; }
+        return v;
+    }
+}
+
+const noise = new Noise(42);
+
+const GLSL_NOISE = `
+vec4 permute(vec4 x){return mod(((x*34.0)+1.0)*x,289.0);}
+vec4 taylorInvSqrt(vec4 r){return 1.79284291400159-0.85373472095314*r;}
+float snoise(vec3 v){
+    const vec2 C=vec2(1.0/6.0,1.0/3.0);
+    const vec4 D=vec4(0.0,0.5,1.0,2.0);
+    vec3 i=floor(v+dot(v,C.yyy)),x0=v-i+dot(i,C.xxx);
+    vec3 g=step(x0.yzx,x0.xyz),l=1.0-g,i1=min(g,l.zxy),i2=max(g,l.zxy);
+    vec3 x1=x0-i1+C.xxx,x2=x0-i2+C.yyy,x3=x0-D.yyy;
+    i=mod(i,289.0);
+    vec4 p=permute(permute(permute(i.z+vec4(0,i1.z,i2.z,1))+i.y+vec4(0,i1.y,i2.y,1))+i.x+vec4(0,i1.x,i2.x,1));
+    float n_=.142857142857;vec3 ns=n_*D.wyz-D.xzx;
+    vec4 j=p-49.0*floor(p*ns.z*ns.z);
+    vec4 x_=floor(j*ns.z),y_=floor(j-7.0*x_);
+    vec4 x=x_*ns.x+ns.yyyy,y=y_*ns.x+ns.yyyy,h=1.0-abs(x)-abs(y);
+    vec4 b0=vec4(x.xy,y.xy),b1=vec4(x.zw,y.zw);
+    vec4 s0=floor(b0)*2.0+1.0,s1=floor(b1)*2.0+1.0,sh=-step(h,vec4(0));
+    vec4 a0=b0.xzyw+s0.xzyw*sh.xxyy,a1=b1.xzyw+s1.xzyw*sh.zzww;
+    vec3 p0=vec3(a0.xy,h.x),p1=vec3(a0.zw,h.y),p2=vec3(a1.xy,h.z),p3=vec3(a1.zw,h.w);
+    vec4 norm=taylorInvSqrt(vec4(dot(p0,p0),dot(p1,p1),dot(p2,p2),dot(p3,p3)));
+    p0*=norm.x;p1*=norm.y;p2*=norm.z;p3*=norm.w;
+    vec4 m=max(0.6-vec4(dot(x0,x0),dot(x1,x1),dot(x2,x2),dot(x3,x3)),0.0);
+    m=m*m;
+    return 42.0*dot(m*m,vec4(dot(p0,x0),dot(p1,x1),dot(p2,x2),dot(p3,x3)));
+}
+float fbm(vec3 p,int o){float v=0.0,a=0.5;for(int i=0;i<6;i++){if(i>=o)break;v+=a*snoise(p);p*=2.0;a*=0.5;}return v;}
+`;
+
+// ============================================
+// TERRAIN
+// ============================================
+function terrainElev(dir) {
+    const p = dir.clone().multiplyScalar(3);
+    let e = noise.fbm(p.x * 0.8, p.y * 0.8, p.z * 0.8, 5) * 0.5;
+    const m = noise.fbm(p.x * 1.5 + 10, p.y * 1.5 + 10, p.z * 1.5 + 10, 6);
+    e += Math.pow(Math.max(0, m), 2.5) * 1.2;
+    e += noise.fbm(p.x * 3, p.y * 3, p.z * 3, 4) * 0.15;
+    return Math.max(0, e) * 4;
+}
+
+function terrainHeight(pos) {
+    return PLANET_RADIUS + terrainElev(pos.clone().normalize());
+}
+
+function terrainNormal(pos) {
+    const eps = 0.05;
+    const dir = pos.clone().normalize();
+    let t1 = new THREE.Vector3(0, 1, 0).cross(dir);
+    if (t1.lengthSq() < 0.001) t1 = new THREE.Vector3(1, 0, 0).cross(dir);
+    t1.normalize();
+    const t2 = dir.clone().cross(t1).normalize();
+    const h0 = terrainHeight(pos);
+    const h1 = terrainHeight(pos.clone().add(t1.clone().multiplyScalar(eps)));
+    const h2 = terrainHeight(pos.clone().add(t2.clone().multiplyScalar(eps)));
+    const v1 = t1.clone().multiplyScalar(eps).add(dir.clone().multiplyScalar(h1 - h0));
+    const v2 = t2.clone().multiplyScalar(eps).add(dir.clone().multiplyScalar(h2 - h0));
+    return v2.cross(v1).normalize();
+}
+
+function getBiome(pos) {
+    const dir = pos.clone().normalize();
+    const lat = Math.abs(dir.y);
+    const elev = terrainElev(dir);
+    const moist = noise.fbm(dir.x * 3 + 50, dir.y * 3 + 50, dir.z * 3 + 50, 4) * 0.5 + 0.5;
+    if (lat > 0.75) return 'Ice';
+    if (elev < 0.3) return 'Ocean';
+    if (elev > 3) return 'Mountain';
+    if (moist < 0.3) return 'Desert';
+    if (moist < 0.6) return 'Grassland';
+    return 'Forest';
+}
+
+// ============================================
+// SCENE
+// ============================================
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x000510);
+
+const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+document.body.appendChild(renderer.domElement);
+
+// ============================================
+// LIGHTING
+// ============================================
+const ambientLight = new THREE.AmbientLight(0x404060, 0.6);
+scene.add(ambientLight);
+
+const sunDir = new THREE.Vector3(0.6, 0.3, 0.75).normalize();
+const sunLight = new THREE.DirectionalLight(0xffffee, 1.2);
+sunLight.position.copy(sunDir.clone().multiplyScalar(100));
+sunLight.castShadow = true;
+sunLight.shadow.mapSize.width = 2048;
+sunLight.shadow.mapSize.height = 2048;
+sunLight.shadow.camera.near = 1;
+sunLight.shadow.camera.far = 120;
+sunLight.shadow.camera.left = -40;
+sunLight.shadow.camera.right = 40;
+sunLight.shadow.camera.top = 40;
+sunLight.shadow.camera.bottom = -40;
+scene.add(sunLight);
+scene.add(sunLight.target); // Required for shadow camera to follow target
+
+function scatterCoeffs(strength) {
+    return new THREE.Vector3(
+        Math.pow(400 / 700, 4) * strength,
+        Math.pow(400 / 530, 4) * strength,
+        Math.pow(400 / 440, 4) * strength
+    );
+}
+const scatter = scatterCoeffs(18);
+
+// ============================================
+// TERRAIN PLANET
+// ============================================
+const terrainGeo = new THREE.IcosahedronGeometry(PLANET_RADIUS, 80);
+const positions = terrainGeo.attributes.position;
+const colors = new Float32Array(positions.count * 3);
+
+for (let i = 0; i < positions.count; i++) {
+    const v = new THREE.Vector3(positions.getX(i), positions.getY(i), positions.getZ(i));
+    const dir = v.clone().normalize();
+    const elev = terrainElev(dir);
+
+    v.normalize().multiplyScalar(PLANET_RADIUS + elev);
+    positions.setXYZ(i, v.x, v.y, v.z);
+
+    const biome = getBiome(v);
+    let col = new THREE.Color();
+    if (biome === 'Ice') col.setStyle('#e8f4f8');
+    else if (biome === 'Ocean') col.setStyle('#0a3050');
+    else if (biome === 'Mountain') col.setStyle('#808080');
+    else if (biome === 'Desert') col.setStyle('#d4a050');
+    else if (biome === 'Grassland') col.setStyle('#4a8020');
+    else col.setStyle('#2a6020');
+
+    colors[i * 3] = col.r;
+    colors[i * 3 + 1] = col.g;
+    colors[i * 3 + 2] = col.b;
+}
+
+terrainGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+terrainGeo.computeVertexNormals();
+
+const terrainMat = new THREE.MeshStandardMaterial({
+    vertexColors: true,
+    roughness: 0.9,
+    metalness: 0.1
+});
+
+const planet = new THREE.Mesh(terrainGeo, terrainMat);
+planet.receiveShadow = true;
+scene.add(planet);
+
+// ============================================
+// OCEAN
+// ============================================
+const oceanGeo = new THREE.IcosahedronGeometry(PLANET_RADIUS - 0.4, 48);
+const oceanMat = new THREE.ShaderMaterial({
+    vertexShader: `
+        ${GLSL_NOISE}
+        uniform float uTime;
+        varying vec3 vNorm, vWorld;
+        void main() {
+            vec3 dir = normalize(position);
+            float w = sin(dir.x*30.0+uTime*1.5)*0.012 + sin(dir.z*25.0+uTime)*0.01 + snoise(dir*25.0+uTime*0.3)*0.015;
+            vec3 pos = dir * (${PLANET_RADIUS.toFixed(1)} - 0.4 + w);
+            vNorm = dir;
+            vWorld = (modelMatrix * vec4(pos, 1.0)).xyz;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
+        }
+    `,
+    fragmentShader: `
+        uniform vec3 uSun;
+        varying vec3 vNorm, vWorld;
+        void main() {
+            vec3 n = normalize(vNorm);
+            vec3 v = normalize(cameraPosition - vWorld);
+            vec3 deep = vec3(0.01, 0.05, 0.15);
+            vec3 shallow = vec3(0.04, 0.2, 0.35);
+            float fresnel = pow(1.0 - max(0.0, dot(v, n)), 4.0);
+            vec3 col = mix(deep, shallow, fresnel * 0.5);
+            float diff = max(0.0, dot(n, uSun));
+            vec3 refl = reflect(-uSun, n);
+            float spec = pow(max(0.0, dot(v, refl)), 128.0);
+            col = col * (0.1 + diff * 0.9) + vec3(1,0.95,0.85) * spec * 0.5;
+            col = mix(col, vec3(0.35,0.55,0.85), fresnel * 0.2);
+            gl_FragColor = vec4(col, 0.9);
+        }
+    `,
+    uniforms: { uSun: { value: sunDir }, uTime: { value: 0 } },
+    transparent: true,
+    depthWrite: true
+});
+scene.add(new THREE.Mesh(oceanGeo, oceanMat));
+
+// ============================================
+// CLOUD LAYER RADII (defined early for atmosphere god rays)
+// ============================================
+const cloudInnerR = PLANET_RADIUS + CLOUD_BASE;
+const cloudOuterR = PLANET_RADIUS + CLOUD_BASE + CLOUD_THICK;
+
+// ============================================
+// ATMOSPHERE
+// ============================================
+const atmoGeo = new THREE.IcosahedronGeometry(PLANET_RADIUS + ATMO_HEIGHT, 48);
+const atmoMat = new THREE.ShaderMaterial({
+    vertexShader: `
+        varying vec3 vWorld;
+        void main() {
+            vWorld = (modelMatrix * vec4(position, 1.0)).xyz;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+    `,
+    fragmentShader: `
+        uniform vec3 uSun, uCam, uScatter;
+        uniform float uPlanetR, uAtmoR, uFalloff;
+        varying vec3 vWorld;
+
+        #define STEPS 8
+
+        vec2 raySphere(float r, vec3 ro, vec3 rd) {
+            float b = dot(ro, rd);
+            float c = dot(ro, ro) - r * r;
+            float d = b * b - c;
+            if(d < 0.0) return vec2(1e10, 0.0);
+            float s = sqrt(d);
+            return vec2(max(0.0, -b - s), max(0.0, -b + s) - max(0.0, -b - s));
+        }
+
+        float density(vec3 p) {
+            float h = (length(p) - uPlanetR) / (uAtmoR - uPlanetR);
+            return exp(-h * uFalloff) * (1.0 - h);
+        }
+
+        float optDepth(vec3 ro, vec3 rd, float len) {
+            float step = len / float(STEPS);
+            float d = 0.0;
+            for(int i = 0; i < STEPS; i++) {
+                d += density(ro + rd * (float(i) + 0.5) * step) * step;
+            }
+            return d;
+        }
+
+        void main() {
+            vec3 ro = uCam;
+            vec3 rd = normalize(vWorld - uCam);
+
+            vec2 atmoHit = raySphere(uAtmoR, ro, rd);
+            if(atmoHit.y <= 0.0) discard;
+
+            float dstTo = atmoHit.x;
+            float dstThru = atmoHit.y;
+
+            vec2 planetHit = raySphere(uPlanetR, ro, rd);
+            if(planetHit.x > 0.0 && planetHit.x < dstTo + dstThru) {
+                dstThru = planetHit.x - dstTo;
+            }
+
+            if(dstThru <= 0.0) discard;
+
+            vec3 start = ro + rd * (dstTo + 0.01);
+            float step = dstThru / float(STEPS);
+            vec3 light = vec3(0.0);
+
+            for(int i = 0; i < STEPS; i++) {
+                vec3 p = start + rd * (float(i) + 0.5) * step;
+
+                float sunLen = raySphere(uAtmoR, p, uSun).y;
+                float sunDepth = optDepth(p, uSun, sunLen);
+
+                vec2 shadowHit = raySphere(uPlanetR, p, uSun);
+                if(shadowHit.x > 0.0 && shadowHit.x < sunLen) continue;
+
+                float viewDepth = optDepth(start, rd, float(i) * step);
+                vec3 trans = exp(-(sunDepth + viewDepth) * uScatter);
+                float dens = density(p);
+                light += dens * trans * uScatter * step;
+            }
+
+            float alpha = 1.0 - exp(-dstThru * 0.05);
+            gl_FragColor = vec4(light, alpha);
+        }
+    `,
+    uniforms: {
+        uSun: { value: sunDir },
+        uCam: { value: camera.position },
+        uScatter: { value: scatter },
+        uPlanetR: { value: PLANET_RADIUS },
+        uAtmoR: { value: PLANET_RADIUS + ATMO_HEIGHT },
+        uFalloff: { value: 6 }
+    },
+    transparent: true,
+    side: THREE.BackSide,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending
+});
+scene.add(new THREE.Mesh(atmoGeo, atmoMat));
+
+// ============================================
+// CLOUDS
+// ============================================
+const cloudGeo = new THREE.SphereGeometry(cloudOuterR + 1, 64, 64);
+const cloudMat = new THREE.ShaderMaterial({
+    vertexShader: `
+        varying vec3 vWorld, vRayO, vRayD;
+        void main() {
+            vWorld = (modelMatrix * vec4(position, 1.0)).xyz;
+            vRayO = cameraPosition;
+            vRayD = vWorld - cameraPosition;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+    `,
+    fragmentShader: `
+        ${GLSL_NOISE}
+        uniform vec3 uSun;
+        uniform float uTime, uPlanetR, uInnerR, uOuterR, uDensity;
+        varying vec3 vWorld, vRayO, vRayD;
+
+        #define STEPS 24
+        #define LSTEPS 5
+
+        vec2 raySphere(float r, vec3 ro, vec3 rd) {
+            float b = dot(ro, rd);
+            float c = dot(ro, ro) - r * r;
+            float d = b * b - c;
+            if(d < 0.0) return vec2(-1.0, -1.0);
+            float s = sqrt(d);
+            return vec2(-b - s, -b + s);
+        }
+
+        float sampleCloud(vec3 p) {
+            vec3 sp = normalize(p);
+            float alt = length(p) - uPlanetR;
+            float cloudBase = uInnerR - uPlanetR;
+            float cloudTop = uOuterR - uPlanetR;
+            float hFrac = clamp((alt - cloudBase) / (cloudTop - cloudBase), 0.0, 1.0);
+
+            // Height falloff - dense in middle, fade at edges
+            float hFall = smoothstep(0.0, 0.25, hFrac) * smoothstep(1.0, 0.75, hFrac);
+
+            // Less clouds at poles
+            float latMask = smoothstep(0.8, 0.4, abs(sp.y));
+
+            // Simple FBM noise for cloud shape
+            vec3 pos = sp * 4.0 + vec3(uTime * 0.012, 0.0, uTime * 0.008);
+            float n = fbm(pos, 5);
+            n = smoothstep(0.0, 0.6, n); // Coverage control
+
+            return n * hFall * latMask * uDensity;
+        }
+
+        float lightMarch(vec3 position) {
+            // Sebastian Lague's light march with darkness threshold
+            float totalDensity = 0.0;
+            float stepSize = 2.0; // Fixed step towards sun
+            float lightAbsorptionTowardSun = 1.5;
+            float darknessThreshold = 0.2;
+
+            for(int i = 0; i < LSTEPS; i++) {
+                position += uSun * stepSize;
+                float alt = length(position) - uPlanetR;
+                float cloudBase = uInnerR - uPlanetR;
+                float cloudTop = uOuterR - uPlanetR;
+                if(alt < cloudBase || alt > cloudTop) break;
+                totalDensity += max(0.0, sampleCloud(position) * stepSize);
+            }
+
+            float transmittance = exp(-totalDensity * lightAbsorptionTowardSun);
+            // Never fully dark (Sebastian's trick)
+            return darknessThreshold + transmittance * (1.0 - darknessThreshold);
+        }
+
+        void main() {
+            vec3 rd = normalize(vRayD);
+            vec3 ro = vRayO;
+
+            vec2 inner = raySphere(uInnerR, ro, rd);
+            vec2 outer = raySphere(uOuterR, ro, rd);
+
+            if(outer.y < 0.0) discard;
+
+            float camR = length(ro);
+            float start, end;
+
+            if(camR > uOuterR) {
+                if(outer.x < 0.0) discard;
+                start = outer.x;
+                end = (inner.x > 0.0) ? inner.x : outer.y;
+            }
+            else if(camR > uInnerR) {
+                start = 0.0;
+                end = (inner.x > 0.0) ? inner.x : outer.y;
+            }
+            else {
+                if(inner.y < 0.0) discard;
+                start = inner.y;
+                end = outer.y;
+            }
+
+            if(start >= end) discard;
+
+            vec2 planet = raySphere(uPlanetR, ro, rd);
+            if(planet.x > 0.0 && planet.x < end) {
+                end = planet.x;
+            }
+
+            // Sebastian Lague's approach
+            float stepSize = (end - start) / float(STEPS);
+            float transmittance = 1.0;
+            float lightEnergy = 0.0;
+
+            // Constants
+            float lightAbsorptionThroughCloud = 0.8;
+            float lightAbsorptionTowardSun = 1.2;
+            float darknessThreshold = 0.15;
+
+            // Sun color
+            vec3 sunCol = mix(vec3(1.0,0.6,0.4), vec3(1.0,0.98,0.95), smoothstep(-0.1, 0.3, uSun.y));
+
+            // Phase function (forward scattering)
+            float cosAngle = dot(rd, uSun);
+            float phaseVal = 0.5 + 0.5 * cosAngle * cosAngle;
+
+            float dstTravelled = 0.0;
+            for(int i = 0; i < STEPS; i++) {
+                if(transmittance < 0.01) break;
+
+                vec3 rayPos = ro + rd * (start + dstTravelled);
+                float density = sampleCloud(rayPos);
+
+                if(density > 0.0) {
+                    // Light march towards sun
+                    float lightTransmittance = lightMarch(rayPos);
+
+                    // Accumulate light energy (Sebastian's formula)
+                    lightEnergy += density * stepSize * transmittance * lightTransmittance * phaseVal;
+
+                    // Beer's law for view ray
+                    transmittance *= exp(-density * stepSize * lightAbsorptionThroughCloud);
+                }
+
+                dstTravelled += stepSize;
+            }
+
+            if(transmittance > 0.99) discard;
+
+            // Final cloud color (Sebastian's blend)
+            vec3 cloudCol = lightEnergy * sunCol;
+
+            // Output clouds blend over background via transmittance
+            gl_FragColor = vec4(cloudCol, 1.0 - transmittance);
+        }
+    `,
+    uniforms: {
+        uSun: { value: sunDir },
+        uTime: { value: 0 },
+        uPlanetR: { value: PLANET_RADIUS },
+        uInnerR: { value: cloudInnerR },
+        uOuterR: { value: cloudOuterR },
+        uDensity: { value: 0.8 }
+    },
+    transparent: true,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+    depthTest: true
+});
+const cloudMesh = new THREE.Mesh(cloudGeo, cloudMat);
+cloudMesh.renderOrder = 100;
+scene.add(cloudMesh);
+
+// ============================================
+// GOD RAYS POST-PROCESSING (Sebastian Lague style)
+// ============================================
+let godRaysEnabled = true; // Re-enabled with fixed shader
+const sceneRT = new THREE.WebGLRenderTarget(window.innerWidth, window.innerHeight);
+const occlusionRT = new THREE.WebGLRenderTarget(window.innerWidth / 2, window.innerHeight / 2); // Half res for perf
+
+// Black material for occlusion pass (everything except sun)
+const occlusionMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
+
+// Cloud occlusion material - renders black where clouds exist, transparent where holes
+const cloudOcclusionMat = new THREE.ShaderMaterial({
+    vertexShader: cloudMat.vertexShader,
+    fragmentShader: `
+        ${GLSL_NOISE}
+        uniform float uTime, uPlanetR, uInnerR, uOuterR, uDensity;
+        varying vec3 vWorld, vRayO, vRayD;
+
+        // Simplified cloud sampling for occlusion (fast)
+        vec2 raySphere(float r, vec3 ro, vec3 rd) {
+            float b = dot(ro, rd);
+            float c = dot(ro, ro) - r * r;
+            float d = b * b - c;
+            if(d < 0.0) return vec2(-1.0, -1.0);
+            float s = sqrt(d);
+            return vec2(-b - s, -b + s);
+        }
+
+        void main() {
+            vec3 rd = normalize(vRayD);
+            vec3 ro = vRayO;
+
+            vec2 inner = raySphere(uInnerR, ro, rd);
+            vec2 outer = raySphere(uOuterR, ro, rd);
+
+            if(outer.y < 0.0) discard;
+
+            float camR = length(ro);
+            float start, end;
+
+            if(camR > uOuterR) {
+                if(outer.x < 0.0) discard;
+                start = outer.x;
+                end = (inner.x > 0.0) ? inner.x : outer.y;
+            } else if(camR > uInnerR) {
+                start = 0.0;
+                end = (inner.x > 0.0) ? inner.x : outer.y;
+            } else {
+                start = inner.y;
+                end = outer.y;
+            }
+
+            if(start >= end) discard;
+
+            // Quick density estimation (fewer samples for occlusion)
+            float totalDensity = 0.0;
+            float stepSize = (end - start) / 8.0;
+            vec3 windOffset = vec3(uTime * 0.12, uTime * 0.04, uTime * 0.08);
+
+            for(int i = 0; i < 8; i++) {
+                float t = start + (float(i) + 0.5) * stepSize;
+                vec3 p = ro + rd * t;
+                float r = length(p);
+                float alt = r - uPlanetR;
+                float cloudBase = uInnerR - uPlanetR;
+                float cloudTop = uOuterR - uPlanetR;
+                float hFrac = clamp((alt - cloudBase) / (cloudTop - cloudBase), 0.0, 1.0);
+                float hFall = smoothstep(0.0, 0.3, hFrac) * smoothstep(1.0, 0.65, hFrac);
+
+                vec3 basePos = p * 0.04 + windOffset;
+                float coverage = fbm(basePos, 2) * 0.5 + 0.5;
+                coverage = smoothstep(0.4, 0.6, coverage);
+
+                totalDensity += coverage * hFall * stepSize * uDensity;
+            }
+
+            float alpha = 1.0 - exp(-totalDensity * 2.0);
+            if(alpha < 0.05) discard;
+
+            // Black where clouds, transparent where holes
+            gl_FragColor = vec4(0.0, 0.0, 0.0, alpha);
+        }
+    `,
+    uniforms: {
+        uTime: { value: 0 },
+        uPlanetR: { value: PLANET_RADIUS },
+        uInnerR: { value: cloudInnerR },
+        uOuterR: { value: cloudOuterR },
+        uDensity: { value: 3.0 }
+    },
+    transparent: true,
+    side: THREE.BackSide,
+    depthWrite: false
+});
+
+// God rays shader - radial blur from sun position
+const godRaysShader = {
+    uniforms: {
+        tDiffuse: { value: null },
+        tOcclusion: { value: null },
+        uSunScreenPos: { value: new THREE.Vector2(0.5, 0.5) },
+        uExposure: { value: 0.35 },
+        uDecay: { value: 0.96 },
+        uDensity: { value: 0.85 },
+        uWeight: { value: 0.45 },
+        uSunVisible: { value: 1.0 }
+    },
+    vertexShader: `
+        varying vec2 vUv;
+        void main() {
+            vUv = uv;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+    `,
+    fragmentShader: `
+        uniform sampler2D tDiffuse;
+        uniform sampler2D tOcclusion;
+        uniform vec2 uSunScreenPos;
+        uniform float uExposure, uDecay, uDensity, uWeight, uSunVisible;
+        varying vec2 vUv;
+
+        #define NUM_SAMPLES 50
+
+        void main() {
+            // Base scene color
+            vec4 sceneColor = texture2D(tDiffuse, vUv);
+
+            // God rays from occlusion map
+            vec2 uv = vUv;
+            vec2 delta = (uv - uSunScreenPos) * uDensity / float(NUM_SAMPLES);
+
+            float illumination = 1.0;
+            vec3 godRays = vec3(0.0);
+
+            for(int i = 0; i < NUM_SAMPLES; i++) {
+                uv -= delta;
+                if(uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) break;
+                vec3 samp = texture2D(tOcclusion, uv).rgb;
+                samp *= illumination * uWeight;
+                godRays += samp;
+                illumination *= uDecay;
+            }
+
+            // Sun color (warm)
+            vec3 sunColor = vec3(1.0, 0.9, 0.7);
+            godRays *= sunColor * uExposure * uSunVisible;
+
+            gl_FragColor = vec4(sceneColor.rgb + godRays, 1.0);
+        }
+    `
+};
+
+const godRaysMaterial = new THREE.ShaderMaterial({
+    uniforms: godRaysShader.uniforms,
+    vertexShader: godRaysShader.vertexShader,
+    fragmentShader: godRaysShader.fragmentShader
+});
+
+// Fullscreen quad for post-processing
+const godRaysQuad = new THREE.Mesh(
+    new THREE.PlaneBufferGeometry(2, 2),
+    godRaysMaterial
+);
+godRaysQuad.frustumCulled = false;
+const godRaysScene = new THREE.Scene();
+godRaysScene.add(godRaysQuad);
+const godRaysCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+
+// Helper to compute sun screen position
+function getSunScreenPos() {
+    const sunWorldPos = sunMesh.position.clone();
+    sunWorldPos.project(camera);
+
+    // Check if sun is in front of camera
+    const sunDir3D = sunMesh.position.clone().sub(camera.position).normalize();
+    const camForward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+    const dotProduct = sunDir3D.dot(camForward);
+
+    return {
+        x: (sunWorldPos.x + 1) / 2,
+        y: (sunWorldPos.y + 1) / 2,
+        visible: dotProduct > 0 && sunWorldPos.x > -1 && sunWorldPos.x < 1 && sunWorldPos.y > -1 && sunWorldPos.y < 1
+    };
+}
+
+// ============================================
+// SUN MESH
+// ============================================
+const sunGeo = new THREE.SphereGeometry(8, 32, 32);
+const sunMat = new THREE.MeshBasicMaterial({ color: 0xffffee });
+const sunMesh = new THREE.Mesh(sunGeo, sunMat);
+sunMesh.position.copy(sunDir.clone().multiplyScalar(250));
+scene.add(sunMesh);
+
+// ============================================
+// COLLECTIBLES
+// ============================================
+const crystals = [];
+let collected = 0;
+
+for (let i = 0; i < 15; i++) {
+    const theta = Math.random() * Math.PI * 2;
+    const phi = Math.acos(2 * Math.random() - 1);
+    const dir = new THREE.Vector3(
+        Math.sin(phi) * Math.cos(theta),
+        Math.cos(phi),
+        Math.sin(phi) * Math.sin(theta)
+    );
+    const h = terrainHeight(dir.clone().multiplyScalar(PLANET_RADIUS));
+    if (h > PLANET_RADIUS + 0.4) {
+        const crystalGeo = new THREE.OctahedronGeometry(0.35, 0);
+        const crystalMat = new THREE.MeshStandardMaterial({
+            color: 0x4fc3f7,
+            emissive: 0x4fc3f7,
+            emissiveIntensity: 0.5,
+            metalness: 0.8,
+            roughness: 0.2
+        });
+        const crystal = new THREE.Mesh(crystalGeo, crystalMat);
+        crystal.position.copy(dir.multiplyScalar(h + 1));
+        crystal.userData = { baseH: h + 1, got: false };
+        crystal.castShadow = true;
+        crystals.push(crystal);
+        scene.add(crystal);
+    } else {
+        i--;
+    }
+}
+document.getElementById('total').textContent = crystals.length;
+
+function updateCrystals(dt) {
+    const t = performance.now() * 0.001;
+    crystals.forEach((c, i) => {
+        if (c.userData.got) return;
+        c.rotation.y += dt * 2;
+        const d = c.position.clone().normalize();
+        c.position.copy(d.multiplyScalar(c.userData.baseH + Math.sin(t * 2 + i) * 0.2));
+        if (rover.mesh.position.distanceTo(c.position) < 1.2) {
+            c.userData.got = true;
+            c.visible = false;
+            collected++;
+            document.getElementById('collected').textContent = collected;
+        }
+    });
+}
+
+// ============================================
+// ROVER (COMPLETELY FIXED!)
+// ============================================
+class Rover {
+    constructor() {
+        this.position = new THREE.Vector3();
+        this.velocity = new THREE.Vector3();
+        this.angularVelocity = new THREE.Vector3();
+        this.quaternion = new THREE.Quaternion();
+
+        this.mass = 800; // Heavier = more stable
+        this.inertia = 2500; // Higher rotational inertia = resists rolling
+
+        this.wheelRadius = 0.35;
+        this.wheelWidth = 0.25;
+        this.wheelbase = 1.8;
+        this.trackWidth = 1.4;
+
+        // REALISTIC SUSPENSION
+        this.suspensionTravel = 0.4;
+        this.suspensionRestLength = 0.6;
+        this.suspensionStiffness = 8000; // Softer for bumps
+        this.suspensionDamping = 2000; // More damping for stability
+
+        // CENTER OF MASS (lower = more stable)
+        this.centerOfMass = new THREE.Vector3(0, -0.2, 0); // Low COM
+
+        // ANTI-ROLL (prevents tipping)
+        this.antiRollStiffness = 5000;
+
+        this.enginePower = 40000; // Increased to compensate for traction control
+        this.maxRPM = 6000;
+        this.rpm = 0;
+        this.throttle = 0;
+        this.brake = 0;
+        this.steerAngle = 0;
+        this.maxSteerAngle = 0.6;
+        this.speed = 0;
+
+        this.boost = 1.0;
+
+        this.tireFriction = 1.8;
+        this.rollingResistance = 0.01; // FIXED: Less rolling resistance
+
+        this.wheels = [
+            { pos: new THREE.Vector3(-this.trackWidth/2, 0.1, this.wheelbase/2), compression: 0, prevCompression: 0, grounded: false, steer: true },
+            { pos: new THREE.Vector3(this.trackWidth/2, 0.1, this.wheelbase/2), compression: 0, prevCompression: 0, grounded: false, steer: true },
+            { pos: new THREE.Vector3(-this.trackWidth/2, 0.1, -this.wheelbase/2), compression: 0, prevCompression: 0, grounded: false, steer: false },
+            { pos: new THREE.Vector3(this.trackWidth/2, 0.1, -this.wheelbase/2), compression: 0, prevCompression: 0, grounded: false, steer: false }
+        ];
+
+        this.createMesh();
+        this.spawn();
+        scene.add(this.mesh);
+    }
+
+    createMesh() {
+        this.mesh = new THREE.Group();
+
+        const bodyGeo = new THREE.BoxGeometry(1.2, 0.5, 1.6);
+        const bodyMat = new THREE.MeshStandardMaterial({ color: 0xff4400, roughness: 0.5, metalness: 0.4 });
+        const body = new THREE.Mesh(bodyGeo, bodyMat);
+        body.position.y = 0.6;
+        body.castShadow = true;
+        body.receiveShadow = true;
+        this.mesh.add(body);
+
+        const cabinGeo = new THREE.BoxGeometry(1.0, 0.5, 0.85);
+        const cabinMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.4, metalness: 0.6 });
+        const cabin = new THREE.Mesh(cabinGeo, cabinMat);
+        cabin.position.set(0, 1.05, -0.1);
+        cabin.castShadow = true;
+        cabin.receiveShadow = true;
+        this.mesh.add(cabin);
+
+        this.wheelMeshes = [];
+        const wheelGeo = new THREE.CylinderGeometry(this.wheelRadius, this.wheelRadius, this.wheelWidth, 32);
+        const wheelMat = new THREE.MeshStandardMaterial({ color: 0x0a0a0a, roughness: 0.9 });
+
+        this.wheels.forEach(() => {
+            const wheelGroup = new THREE.Group();
+            const tire = new THREE.Mesh(wheelGeo, wheelMat);
+            tire.rotation.z = Math.PI / 2;
+            tire.castShadow = true;
+            wheelGroup.add(tire);
+            this.wheelMeshes.push(wheelGroup);
+            this.mesh.add(wheelGroup);
+        });
+
+        const lightGeo = new THREE.CircleGeometry(0.09, 16);
+        const lightMat = new THREE.MeshStandardMaterial({ color: 0xffffee, emissive: 0xffffee, emissiveIntensity: 2.5 });
+        [-0.42, 0.42].forEach(x => {
+            const light = new THREE.Mesh(lightGeo, lightMat);
+            light.position.set(x, 0.4, 0.85);
+            this.mesh.add(light);
+        });
+    }
+
+    spawn() {
+        console.log('Spawning rover...');
+
+        // FIXED: Find a spot on LAND, not ocean!
+        let spawnDir, h, attempts = 0;
+
+        do {
+            const theta = Math.random() * Math.PI * 2;
+            const phi = Math.acos(2 * Math.random() - 1);
+            spawnDir = new THREE.Vector3(
+                Math.sin(phi) * Math.cos(theta),
+                Math.cos(phi),
+                Math.sin(phi) * Math.sin(theta)
+            );
+
+            const testPos = spawnDir.clone().multiplyScalar(PLANET_RADIUS);
+            h = terrainHeight(testPos);
+
+            // Safety check
+            if (isNaN(h)) {
+                console.warn('terrainHeight returned NaN, trying different position');
+                attempts++;
+                continue;
+            }
+
+            const biome = getBiome(testPos);
+
+            // Keep trying until we find land (not ocean)
+            if (biome !== 'Ocean' && h > PLANET_RADIUS + 0.5) {
+                break;
+            }
+            attempts++;
+        } while (attempts < 50);
+
+        // If no good spot found, use a safe default
+        if (attempts >= 50 || isNaN(h)) {
+            console.warn('Could not find good spawn, using default');
+            spawnDir = new THREE.Vector3(1, 0, 0).normalize();
+            h = PLANET_RADIUS + 3;
+        }
+
+        // Place rover just above ground (not too high!)
+        this.position.copy(spawnDir.multiplyScalar(h + 0.8));
+
+        // Verify position is valid
+        if (isNaN(this.position.x)) {
+            console.error('Spawn position is NaN! Using emergency position');
+            this.position.set(PLANET_RADIUS + 5, 0, 0);
+        }
+
+        this.velocity.set(0, 0, 0);
+        this.angularVelocity.set(0, 0, 0);
+
+        const up = this.position.clone().normalize();
+        const forward = new THREE.Vector3(1, 0, 0).cross(up).normalize();
+
+        // If forward is zero vector, use a different seed
+        if (forward.lengthSq() < 0.01) {
+            forward.set(0, 1, 0).cross(up).normalize();
+        }
+
+        const right = up.clone().cross(forward).normalize();
+
+        const rotMat = new THREE.Matrix4();
+        rotMat.makeBasis(right, up, forward);
+        this.quaternion.setFromRotationMatrix(rotMat);
+
+        // Verify quaternion
+        if (isNaN(this.quaternion.x)) {
+            console.error('Quaternion is NaN! Using identity');
+            this.quaternion.identity();
+        }
+
+        this.rpm = 0;
+        this.boost = 1.0;
+
+        console.log('Spawned at altitude:', (this.position.length() - h).toFixed(2), 'm');
+    }
+
+    update(dt, input) {
+        dt = Math.min(dt, 1/30); // Cap dt for stability
+
+        // DEBUG counter
+        if (!this.debugCounter) this.debugCounter = 0;
+        this.debugCounter++;
+
+        // === GRAVITY-BASED RIGIDBODY PHYSICS ===
+        // Car can jump off mountains and feel weight!
+
+        const GRAVITY = 10; // m/s² - Earth-like gravity
+        const GROUND_OFFSET = 0.5; // Car center height above ground when grounded
+
+        // Direction toward planet center (gravity direction)
+        const planetUp = this.position.clone().normalize();
+        const gravityDir = planetUp.clone().negate(); // Points DOWN toward planet
+
+        // Current car axes
+        const carForward = new THREE.Vector3(0, 0, 1).applyQuaternion(this.quaternion);
+        const carRight = new THREE.Vector3(1, 0, 0).applyQuaternion(this.quaternion);
+        const carUp = new THREE.Vector3(0, 1, 0).applyQuaternion(this.quaternion);
+
+        // DEBUG: Print every 60 frames (~1 second)
+        if (this.debugCounter % 60 === 0) {
+            console.log('=== CAR DEBUG ===');
+            console.log('Position length:', this.position.length().toFixed(2));
+            console.log('planetUp (should point away from planet):', planetUp.x.toFixed(3), planetUp.y.toFixed(3), planetUp.z.toFixed(3));
+            console.log('carUp (local Y, should match planetUp for upright car):', carUp.x.toFixed(3), carUp.y.toFixed(3), carUp.z.toFixed(3));
+            console.log('carUp · planetUp (1=upright, -1=upside down):', carUp.dot(planetUp).toFixed(3));
+            console.log('carForward:', carForward.x.toFixed(3), carForward.y.toFixed(3), carForward.z.toFixed(3));
+        }
+
+        // Check ground contact
+        const terrainH = terrainHeight(this.position);
+        const altitude = this.position.length() - terrainH;
+        const grounded = altitude < GROUND_OFFSET + 0.1; // Small tolerance
+
+        // Count grounded wheels for HUD
+        let groundedWheels = grounded ? 4 : 0;
+
+        // === APPLY GRAVITY (always) ===
+        this.velocity.addScaledVector(gravityDir, GRAVITY * dt);
+
+        // === GROUND COLLISION ===
+        if (altitude < GROUND_OFFSET) {
+            // Push car up to ground level
+            this.position.normalize().multiplyScalar(terrainH + GROUND_OFFSET);
+
+            // Cancel velocity into ground
+            const velIntoGround = -this.velocity.dot(planetUp);
+            if (velIntoGround > 0) {
+                this.velocity.addScaledVector(planetUp, velIntoGround);
+            }
+        }
+
+        // === INPUT ===
+        this.throttle = input.up ? 1.0 : 0;
+        this.brake = input.down ? 1.0 : (input.space ? 2.0 : 0);
+        const targetSteer = input.left ? this.maxSteerAngle : (input.right ? -this.maxSteerAngle : 0);
+        this.steerAngle += (targetSteer - this.steerAngle) * dt * 8;
+
+        // === GROUNDED PHYSICS ===
+        if (grounded) {
+            // Get terrain normal for alignment
+            const terrainNorm = terrainNormal(this.position);
+
+            // Build target orientation from terrain + current heading
+            let surfaceForward = carForward.clone().sub(
+                terrainNorm.clone().multiplyScalar(carForward.dot(terrainNorm))
+            );
+            if (surfaceForward.lengthSq() < 0.01) {
+                surfaceForward.set(1, 0, 0).cross(terrainNorm);
+            }
+            surfaceForward.normalize();
+
+            // Car's local Y should point UP (away from planet)
+            // Mesh has wheels at Y=0.1, body at Y=0.6, cabin at Y=1.05
+            // So +Y = up means wheels are lowest, cabin is highest = correct!
+            // NOTE: terrainNormal() returns INWARD normal, so we negate to get OUTWARD
+            const carUp = terrainNorm.clone().negate(); // Flip to point away from planet
+
+            // Right-hand rule: up × forward = right (not forward × up which gives left!)
+            const surfaceRight = carUp.clone().cross(surfaceForward).normalize();
+
+            // Build quaternion: X=right, Y=up (away from planet), Z=forward
+            const targetMatrix = new THREE.Matrix4().makeBasis(surfaceRight, carUp, surfaceForward);
+            const targetQuat = new THREE.Quaternion().setFromRotationMatrix(targetMatrix);
+
+            // Smooth alignment to terrain
+            this.quaternion.slerp(targetQuat, Math.min(1, dt * 8));
+            this.quaternion.normalize();
+
+            // === REALISTIC TIRE PHYSICS ===
+
+            // Update car axes
+            const newForward = new THREE.Vector3(0, 0, 1).applyQuaternion(this.quaternion);
+            const newRight = new THREE.Vector3(1, 0, 0).applyQuaternion(this.quaternion);
+
+            // Decompose velocity into forward/lateral components
+            const forwardSpeed = this.velocity.dot(newForward);
+            const lateralSpeed = this.velocity.dot(newRight);
+
+            // === SLIP ANGLE TIRE MODEL ===
+            // Slip angle = angle between tire direction and velocity direction
+            // Tires generate lateral force based on slip angle
+            let slipAngle = 0;
+            if (this.speed > 0.5) {
+                slipAngle = Math.atan2(lateralSpeed, Math.abs(forwardSpeed));
+            }
+
+            // Tire grip curve peaks around 8-12 degrees, then falls off (sliding)
+            // Simplified Pacejka-like curve
+            const maxGrip = 60; // Maximum lateral acceleration - HIGH for sticky tires
+            const peakSlip = 0.12; // ~7 degrees - quicker grip response
+            const slipRatio = Math.abs(slipAngle) / peakSlip;
+
+            // Grip multiplier: 1.0 at peak, falls off beyond
+            let gripMult;
+            if (slipRatio < 1.0) {
+                gripMult = slipRatio; // Linear rise to peak
+            } else {
+                gripMult = 1.0 / slipRatio; // Falls off when sliding
+            }
+
+            // Apply lateral tire force (corrects slip)
+            const lateralForce = -Math.sign(lateralSpeed) * maxGrip * gripMult * dt;
+            this.velocity.addScaledVector(newRight, lateralForce);
+
+            // === SPEED-DEPENDENT STEERING ===
+            // Less steering authority at high speed (realistic)
+            // Minimal speed penalty for steering
+            const steerAuthority = 1.0 / (1.0 + this.speed * 0.015);
+
+            if (Math.abs(this.steerAngle) > 0.01 && this.speed > 0.3) {
+                // Much stronger turning
+                const yawAmount = this.steerAngle * this.speed * 0.25 * steerAuthority * dt;
+                const yawQuat = new THREE.Quaternion().setFromAxisAngle(carUp, yawAmount);
+                this.quaternion.premultiply(yawQuat);
+                this.quaternion.normalize();
+            }
+
+            // === ENGINE / THROTTLE ===
+            let boostMult = 1.0;
+            if (input.shift && this.boost > 0) {
+                boostMult = 1.6;
+                this.boost = Math.max(0, this.boost - dt * 0.35);
+            } else {
+                this.boost = Math.min(1, this.boost + dt * 0.15);
+            }
+
+            if (this.throttle > 0) {
+                // Acceleration decreases at high speed (air resistance + power limit)
+                const powerFactor = Math.max(0.2, 1.0 - this.speed / 50);
+                this.velocity.addScaledVector(newForward, 18 * boostMult * powerFactor * dt);
+            }
+
+            // === BRAKING ===
+            if (this.brake > 0) {
+                const brakePower = this.brake * 35 * dt; // Strong brakes
+                const brakeForce = Math.min(brakePower, this.speed);
+                if (this.speed > 0.1) {
+                    this.velocity.addScaledVector(this.velocity.clone().normalize(), -brakeForce);
+                }
+            }
+
+            // === ROLLING RESISTANCE + ENGINE BRAKING ===
+            // Much stronger when not accelerating!
+            if (this.throttle === 0 && this.brake === 0) {
+                // Engine braking + rolling resistance = significant slowdown
+                const drag = Math.min(8 * dt, this.speed); // Stronger deceleration
+                if (this.speed > 0.1) {
+                    this.velocity.addScaledVector(this.velocity.clone().normalize(), -drag);
+                } else {
+                    this.velocity.set(0, 0, 0); // Stop completely at low speed
+                }
+            } else {
+                // Light rolling resistance when driving
+                this.velocity.multiplyScalar(1 - 0.5 * dt);
+            }
+        } else {
+            // AIRBORNE: slower rotation, no friction
+            this.boost = Math.min(1, this.boost + dt * 0.1);
+            groundedWheels = 0;
+
+            // Air resistance only
+            this.velocity.multiplyScalar(1 - 0.1 * dt);
+        }
+
+        // Update wheel grounded status for HUD
+        this.wheels.forEach(w => w.grounded = grounded);
+
+        // === INTEGRATE POSITION ===
+        this.position.addScaledVector(this.velocity, dt);
+
+        // Speed for HUD
+        this.speed = this.velocity.length();
+
+        // Speed limit
+        if (this.speed > 40) {
+            this.velocity.normalize().multiplyScalar(40);
+            this.speed = 40;
+        }
+
+        // Safety respawn if fell through planet or NaN
+        if (this.position.length() < terrainH - 5 || isNaN(this.position.x)) {
+            this.spawn();
+            return;
+        }
+
+        // STEP 7: Update visuals
+        this.mesh.position.copy(this.position);
+        this.mesh.quaternion.copy(this.quaternion);
+
+        // Animate wheels
+        this.wheels.forEach((wheel, i) => {
+            const wheelMesh = this.wheelMeshes[i];
+            wheelMesh.position.copy(wheel.pos);
+            if (this.speed > 0.1) {
+                wheelMesh.children.forEach(child => {
+                    child.rotation.x += this.speed * dt * 3;
+                });
+            }
+            if (wheel.steer) {
+                wheelMesh.rotation.y = this.steerAngle;
+            }
+        });
+
+        // Update HUD
+        const biome = getBiome(this.position);
+        const currentTerrainH = terrainHeight(this.position);
+        const displayAltitude = this.position.length() - currentTerrainH;
+        const currentUp = new THREE.Vector3(0, 1, 0).applyQuaternion(this.quaternion);
+        const currentPlanetUp = this.position.clone().normalize();
+        const rollAngle = Math.acos(Math.max(-1, Math.min(1, currentUp.dot(currentPlanetUp)))) * 180 / Math.PI;
+        const groundedCount = this.wheels.filter(w => w.grounded).length;
+
+        document.getElementById('speed').textContent = this.speed.toFixed(1);
+        document.getElementById('altitude').textContent = displayAltitude.toFixed(2);
+        document.getElementById('biome').textContent = biome;
+        document.getElementById('wheels').textContent = `${groundedCount}/4`;
+        document.getElementById('roll').textContent = rollAngle.toFixed(1);
+        document.getElementById('boost-fill').style.width = (this.boost * 100) + '%';
+    }
+
+    reset() { this.spawn(); }
+}
+
+// ============================================
+// CAMERA (FIXED: Uses planetUp for stable horizon)
+// ============================================
+class CameraController {
+    constructor(target) {
+        this.target = target;
+        this.smoothLookDir = null;
+    }
+
+    update(dt) {
+        // Safety check
+        if (isNaN(this.target.position.x) || isNaN(this.target.quaternion.x)) {
+            console.error('Camera target has NaN!');
+            return;
+        }
+
+        // KEY FIX: Use planet up, not car up
+        const planetUp = this.target.position.clone().normalize();
+        const carForward = new THREE.Vector3(0, 0, 1).applyQuaternion(this.target.quaternion);
+
+        // Project car forward onto planet surface plane (remove any pitch/roll)
+        let surfaceForward = carForward.clone()
+            .sub(planetUp.clone().multiplyScalar(carForward.dot(planetUp)));
+        if (surfaceForward.lengthSq() > 0.01) {
+            surfaceForward.normalize();
+        } else {
+            // Fallback if car pointing straight up/down
+            surfaceForward = new THREE.Vector3(1, 0, 0).cross(planetUp).normalize();
+        }
+
+        // For Mario Kart feel: blend toward velocity direction when moving
+        let lookDir = surfaceForward;
+        if (this.target.speed > 2) {
+            const velDir = this.target.velocity.clone();
+            // Project velocity onto surface plane
+            const surfaceVel = velDir.clone()
+                .sub(planetUp.clone().multiplyScalar(velDir.dot(planetUp)));
+            if (surfaceVel.lengthSq() > 0.5) {
+                lookDir = surfaceVel.normalize();
+            }
+        }
+
+        // Smooth look direction (slower for smooth turning)
+        if (!this.smoothLookDir) this.smoothLookDir = lookDir.clone();
+        this.smoothLookDir.lerp(lookDir, dt * 3);
+        if (this.smoothLookDir.lengthSq() > 0.01) {
+            this.smoothLookDir.normalize();
+        }
+
+        // Camera position behind and above (relative to planet surface)
+        let idealPos = this.target.position.clone()
+            .add(this.smoothLookDir.clone().multiplyScalar(-16))  // Behind
+            .add(planetUp.clone().multiplyScalar(6));             // Above (still below clouds at alt 60)
+
+        // Ensure camera doesn't go below terrain
+        const camTerrainH = terrainHeight(idealPos);
+        if (idealPos.length() < camTerrainH + 2.0) {
+            idealPos.normalize().multiplyScalar(camTerrainH + 2.0);
+        }
+
+        // If camera too far from ideal, snap immediately (fixes startup)
+        const distToIdeal = camera.position.distanceTo(idealPos);
+        if (distToIdeal > 50) {
+            camera.position.copy(idealPos);
+        } else {
+            camera.position.lerp(idealPos, dt * 4);
+        }
+
+        // Look at car
+        camera.lookAt(this.target.position);
+
+        // KEY FIX: Camera up = planet up (fast lerp for stable horizon)
+        camera.up.lerp(planetUp, dt * 8);
+        camera.up.normalize();
+    }
+}
+
+// ============================================
+// INPUT
+// ============================================
+const input = { up: false, down: false, left: false, right: false, space: false, shift: false };
+
+window.addEventListener('keydown', (e) => {
+    if (e.code === 'ArrowUp') input.up = true;
+    if (e.code === 'ArrowDown') input.down = true;
+    if (e.code === 'ArrowLeft') input.left = true;
+    if (e.code === 'ArrowRight') input.right = true;
+    if (e.code === 'Space') { input.space = true; e.preventDefault(); }
+    if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') input.shift = true;
+    if (e.code === 'KeyR') rover.reset();
+});
+
+window.addEventListener('keyup', (e) => {
+    if (e.code === 'ArrowUp') input.up = false;
+    if (e.code === 'ArrowDown') input.down = false;
+    if (e.code === 'ArrowLeft') input.left = false;
+    if (e.code === 'ArrowRight') input.right = false;
+    if (e.code === 'Space') input.space = false;
+    if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') input.shift = false;
+});
+
+// ============================================
+// INIT & LOOP
+// ============================================
+const rover = new Rover();
+const cameraController = new CameraController(rover);
+
+// FIXED: Position camera immediately on startup!
+function initCamera() {
+    const carUp = new THREE.Vector3(0, 1, 0).applyQuaternion(rover.quaternion);
+    const carBack = new THREE.Vector3(0, 0, -1).applyQuaternion(rover.quaternion);
+
+    const camPos = rover.position.clone()
+        .add(carBack.clone().multiplyScalar(18))
+        .add(carUp.clone().multiplyScalar(10));
+
+    camera.position.copy(camPos);
+    camera.lookAt(rover.position);
+    camera.up.copy(carUp);
+
+    console.log('Camera initial position:', camera.position.length().toFixed(2), 'm from center');
+    console.log('Rover position:', rover.position.length().toFixed(2), 'm from center');
+}
+
+initCamera();
+
+// Render immediately to avoid blue screen
+renderer.render(scene, camera);
+
+let timeOfDay = 0.6;
+let cloudDensity = 0.8; // Lighter, more transparent clouds
+let autoTimeEnabled = true; // Animated day/night cycle
+const DAY_CYCLE_SPEED = 0.015; // Full day in ~67 seconds
+
+function updateSun(t) {
+    timeOfDay = t;
+    const a = t * Math.PI * 2;
+    // Proper circular orbit with 23° axial tilt
+    const tilt = 0.4; // ~23 degrees
+    sunDir.set(
+        Math.cos(a),
+        Math.sin(a) * Math.sin(tilt),
+        Math.sin(a) * Math.cos(tilt)
+    ).normalize();
+    sunMesh.position.copy(sunDir.clone().multiplyScalar(250));
+}
+
+// Shadow camera follows car for proper shadows on spherical planet
+function updateShadows() {
+    // Position light relative to car, pointing toward it from sun direction
+    sunLight.target.position.copy(rover.position);
+    sunLight.position.copy(rover.position).add(sunDir.clone().multiplyScalar(60));
+    sunLight.shadow.camera.updateProjectionMatrix();
+}
+
+document.getElementById('sT').addEventListener('input', (e) => {
+    const v = parseFloat(e.target.value);
+    document.getElementById('vT').textContent = v.toFixed(2);
+    timeOfDay = v;
+    updateSun(v);
+    autoTimeEnabled = false; // Pause auto cycle when manually adjusting
+});
+
+// Double-click slider to resume auto cycle
+document.getElementById('sT').addEventListener('dblclick', () => {
+    autoTimeEnabled = true;
+});
+
+document.getElementById('sC').addEventListener('input', (e) => {
+    const v = parseFloat(e.target.value);
+    document.getElementById('vC').textContent = v.toFixed(1);
+    cloudDensity = v;
+    cloudMesh.material.uniforms.uDensity.value = v;
+});
+
+let lastTime = performance.now();
+let frameCount = 0;
+let fpsTime = 0;
+let currentFps = 0;
+
+function animate() {
+    requestAnimationFrame(animate);
+
+    const now = performance.now();
+    const dt = (now - lastTime) / 1000;
+    lastTime = now;
+
+    // FPS counter
+    frameCount++;
+    fpsTime += dt;
+    if (fpsTime >= 0.5) {
+        currentFps = Math.round(frameCount / fpsTime);
+        document.getElementById('fps').textContent = currentFps;
+        frameCount = 0;
+        fpsTime = 0;
+    }
+
+    // Animated day/night cycle (planet orbits sun)
+    if (autoTimeEnabled) {
+        timeOfDay = (timeOfDay + dt * DAY_CYCLE_SPEED) % 1.0;
+        updateSun(timeOfDay);
+        document.getElementById('sT').value = timeOfDay;
+        document.getElementById('vT').textContent = timeOfDay.toFixed(2);
+    }
+
+    rover.update(dt, input);
+    updateCrystals(dt);
+    cameraController.update(dt);
+    updateShadows(); // Shadow camera follows car
+
+    oceanMat.uniforms.uTime.value = now * 0.001;
+    oceanMat.uniforms.uSun.value = sunDir;
+    atmoMat.uniforms.uCam.value.copy(camera.position);
+    atmoMat.uniforms.uSun.value = sunDir;
+    cloudMesh.material.uniforms.uTime.value = now * 0.001;
+    cloudMesh.material.uniforms.uSun.value = sunDir;
+
+    if (godRaysEnabled) {
+        // Get sun screen position
+        const sunScreen = getSunScreenPos();
+        godRaysMaterial.uniforms.uSunScreenPos.value.set(sunScreen.x, sunScreen.y);
+        godRaysMaterial.uniforms.uSunVisible.value = sunScreen.visible ? 1.0 : 0.0;
+
+        // Pass 1: Render scene normally
+        renderer.setRenderTarget(sceneRT);
+        renderer.render(scene, camera);
+
+        // Pass 2: Render occlusion (sun bright, clouds with holes, rest black)
+        // Temporarily swap materials
+        const originalMaterials = new Map();
+        scene.traverse(obj => {
+            if (obj.isMesh && obj !== sunMesh) {
+                originalMaterials.set(obj, obj.material);
+                // Cloud mesh uses special occlusion material with transparency
+                if (obj === cloudMesh) {
+                    cloudOcclusionMat.uniforms.uTime.value = cloudMesh.material.uniforms.uTime.value;
+                    cloudOcclusionMat.uniforms.uDensity.value = cloudMesh.material.uniforms.uDensity.value;
+                    obj.material = cloudOcclusionMat;
+                } else {
+                    obj.material = occlusionMat;
+                }
+            }
+        });
+
+        renderer.setRenderTarget(occlusionRT);
+        renderer.render(scene, camera);
+
+        // Restore materials
+        originalMaterials.forEach((mat, obj) => {
+            obj.material = mat;
+        });
+
+        // Pass 3: Apply god rays and composite
+        godRaysMaterial.uniforms.tDiffuse.value = sceneRT.texture;
+        godRaysMaterial.uniforms.tOcclusion.value = occlusionRT.texture;
+
+        renderer.setRenderTarget(null);
+        renderer.render(godRaysScene, godRaysCamera);
+    } else {
+        renderer.render(scene, camera);
+    }
+}
+
+window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    // Resize god rays render targets
+    sceneRT.setSize(window.innerWidth, window.innerHeight);
+    occlusionRT.setSize(window.innerWidth / 2, window.innerHeight / 2);
+});
+
+animate();
+</script>
+</body>
+</html>
