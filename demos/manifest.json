@@ -1,6 +1,11 @@
 {
   "demos": [
     {
+      "name": "[GAME]-Labyrinth-Audio-Ray-Traced",
+      "type": "file",
+      "filename": "[GAME]-Labyrinth-Audio-Ray-Traced.html"
+    },
+    {
       "name": "[GAME]-Map2Mask-exploration",
       "type": "file",
       "filename": "[GAME]-Map2Mask-exploration.html"
