@@ -1631,13 +1631,8 @@ img.onload = () => requestAnimationFrame(loop);
                 renderer.shadowMap.enabled = true;
                 renderer.shadowMap.type = THREE.BasicShadowMap;
                 const cvs = renderer.domElement;
-                cvs.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;image-rendering:pixelated;display:block;';
-                container.style.position = 'relative';
+                cvs.style.cssText = 'width:100%;height:100%;image-rendering:pixelated;display:block;';
                 container.appendChild(cvs);
-                // Size after append so offsetWidth/Height are valid
-                const w = container.offsetWidth || 400;
-                const h = container.offsetHeight || 300;
-                renderer.setSize(Math.floor(w * 0.25), Math.floor(h * 0.25), false);
 
                 // Scene
                 const scene = new THREE.Scene();
@@ -1645,9 +1640,22 @@ img.onload = () => requestAnimationFrame(loop);
                 scene.fog = new THREE.FogExp2(0x0a0a12, 0.018);
 
                 // Camera (static)
-                const camera = new THREE.PerspectiveCamera(30, (container.offsetWidth || 400) / (container.offsetHeight || 300), 0.1, 300);
+                const camera = new THREE.PerspectiveCamera(30, 4/3, 0.1, 300);
                 camera.position.set(0, 22, 32);
                 camera.lookAt(0, 0, -4);
+
+                // Resize renderer to match container - use ResizeObserver for reliable sizing
+                const PIXEL_SCALE = 0.25;
+                const resizeRenderer = () => {
+                  const w = container.clientWidth || 400;
+                  const h = container.clientHeight || 300;
+                  renderer.setSize(Math.floor(w * PIXEL_SCALE), Math.floor(h * PIXEL_SCALE), false);
+                  camera.aspect = w / h;
+                  camera.updateProjectionMatrix();
+                };
+                const resObs = new ResizeObserver(resizeRenderer);
+                resObs.observe(container);
+                resizeRenderer();
 
                 // Lights
                 const ambientLight = new THREE.AmbientLight(0x404060, 1.2);
@@ -2073,7 +2081,7 @@ img.onload = () => requestAnimationFrame(loop);
                   renderer.domElement.removeEventListener('contextmenu', onContextMenu);
                   renderer.domElement.removeEventListener('touchstart', onTouchStart);
                   renderer.domElement.removeEventListener('touchend', onTouchEnd);
-                  resizeObs.disconnect();
+                  resObs.disconnect();
                   renderer.dispose();
                   if (spriteTex) spriteTex.dispose();
                   if (container.contains(renderer.domElement)) {
