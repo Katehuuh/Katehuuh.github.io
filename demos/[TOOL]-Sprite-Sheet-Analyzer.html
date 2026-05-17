@@ -1827,18 +1827,29 @@ img.onload = () => requestAnimationFrame(loop);
                   spriteTex = new THREE.CanvasTexture(texCanvas);
                   spriteTex.magFilter = THREE.NearestFilter;
                   spriteTex.minFilter = THREE.NearestFilter;
+                  spriteTex.wrapS = THREE.ClampToEdgeWrapping;
+                  spriteTex.wrapT = THREE.ClampToEdgeWrapping;
+                  spriteTex.generateMipmaps = false;
 
                   const aspect = charW / charH;
                   const meshH = 3;
                   const meshW = meshH * aspect;
                   const spriteGeo = new THREE.PlaneGeometry(meshW, meshH);
-                  const spriteMat = new THREE.MeshBasicMaterial({
+                  const spriteMat = new THREE.MeshStandardMaterial({
                     map: spriteTex,
                     transparent: true,
                     alphaTest: 0.5,
                     side: THREE.DoubleSide,
+                    roughness: 1, metalness: 0,
+                  });
+                  // Custom depth material so shadow map respects alpha/transparency
+                  const spriteDepthMat = new THREE.MeshDepthMaterial({
+                    depthPacking: THREE.RGBADepthPacking,
+                    map: spriteTex,
+                    alphaTest: 0.5,
                   });
                   spriteMesh = new THREE.Mesh(spriteGeo, spriteMat);
+                  spriteMesh.customDepthMaterial = spriteDepthMat;
                   spriteMesh.position.set(0, meshH / 2, 0);
                   spriteMesh.castShadow = true;
                   scene.add(spriteMesh);
