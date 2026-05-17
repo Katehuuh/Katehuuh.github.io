@@ -1,9 +1,23 @@
 <!--
-  Prompt: Accessible labyrinth for fully blind. [v12 -> v30 (high-tech RT sound) - 73 sky-stars]
-  Control key: arrow keys or mobile gyroscope and found exit.
-  Features: 2D ray-traced spatial audio engine (occlusion, early reflections, material absorption),
-  cannon-es physics, Three.js volumetric clouds + procedural starfield, haptic feedback,
-  recursive backtracker maze generation, Web Worker audio ray tracer.
+  Prompt: Senior Web Audio + WebGL dev. Blind-playable Labyrinth (tilt maze) with physically
+  plausible 2D ray-traced spatial audio + haptics. Single self-contained HTML, inline CSS/JS.
+  - three.js rendering, cannon-es physics, Web Audio API spatial audio, Web Worker ray tracer
+  - Maze: recursive backtracker (odd grid, step=2), configurable difficulty, holes as triggers
+  - Physics: tilt board via gravity.x/z, linearDamping ~0.35, fixed timestep 1/180, clamp speed
+  - Audio ray tracer (Worker, 15Hz): 3-band energy (Low/Mid/High), material model
+    alpha_eff = 1-(1-alpha)^th, E_refl = E_in*rho*(1-alpha_eff), E_trans = E_in*tau*(1-alpha_eff)
+  - Occlusion: N rays listener->source, LOS ratio via EMA smoothing, drives 3-band EQ
+  - Reflections: 64 rays, 5 bounces, 16-tap delay pool, HRTF panning, per-band EQ
+  - Beacon: warm pad (pink noise + triangle harmonics + vibrato), proximity brightens tone
+  - Rolling: continuous bandpass noise, gain ~ ball speed (EMA smoothed), angular velocity blend
+  - Collisions: 80Hz sine + filtered noise burst, intensity-proportional, HRTF panned
+  - Haptics: navigator.vibrate patterns (wall scrape, collision jolt, hole rumble, goal burst)
+  - Controls: arrow/WASD (desktop), DeviceOrientation with iOS permission (mobile), gamepad
+  - Visuals: volumetric ray-marched clouds (FBM + HG phase + god-rays), procedural starfield,
+    MeshPhysical floor with clearcoat + envMap, bloom post-processing, full-block maze walls
+  - Equation: S(t) = (1-M_t)*G_dir(theta)*EQ(E_dir)*A_dir*delta(t-d/c) + sum[reflections]
+  - URL params: ?difficulty=easy|medium|hard&groove=1&audioRays=128
+  - [v12 -> v30 RT sound, v73 sky-stars, v102 combined + bugfixes]
 -->
 <!DOCTYPE html>
 <html lang="en">
