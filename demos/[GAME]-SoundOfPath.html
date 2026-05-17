@@ -27,8 +27,12 @@
   - Reflection tap attenuation: apply proxGate once (per-band OR mix), not both.
   - Stars render BEHIND clouds (multiply by transmittance T), not on top.
   - No constant background drone when far from exit. Beacon proximity-gated.
-
-  [v12 -> v30 (high-tech RT sound) -> v73 (sky-stars) -> v102 (combined + bugfixes)]
+  - Ray trace bounces must not self-intersect: offset origin by small epsilon along
+    reflection vector after each bounce, or rays re-hit the same wall instantly.
+  - Listener is the hearer - rays from source must not count the source position
+    itself as a "hit". Check listener-circle intersection on path segments only.
+  - PannerNode rolloffFactor must be 0 when doing manual distance attenuation,
+    or you get double falloff (once in panner, once in gain math).
 -->
 <!DOCTYPE html>
 <html lang="en">
