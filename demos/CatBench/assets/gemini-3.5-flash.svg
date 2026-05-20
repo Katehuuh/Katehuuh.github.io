@@ -1,0 +1,244 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" width="100%" height="100%">
+  <defs>
+    <!-- Background Gradient -->
+    <radialGradient id="bgGrad" cx="50%" cy="50%" r="70%">
+      <stop offset="0%" stop-color="#FFF5F5" />
+      <stop offset="60%" stop-color="#FFE3E3" />
+      <stop offset="100%" stop-color="#FFD1D1" />
+    </radialGradient>
+
+    <!-- Fur Orange Gradient -->
+    <linearGradient id="furOrange" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#F9A03F" />
+      <stop offset="50%" stop-color="#F27A18" />
+      <stop offset="100%" stop-color="#D25400" />
+    </linearGradient>
+
+    <!-- Fur Cream Gradient -->
+    <linearGradient id="furCream" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFFDF9" />
+      <stop offset="100%" stop-color="#F3E1C3" />
+    </linearGradient>
+
+    <!-- Inner Ear Pink Gradient -->
+    <linearGradient id="innerEar" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFCDCD" />
+      <stop offset="100%" stop-color="#F39C9C" />
+    </linearGradient>
+
+    <!-- Eye Gradient (Deep Hazel/Aqua Blue) -->
+    <radialGradient id="eyeIris" cx="50%" cy="40%" r="50%">
+      <stop offset="0%" stop-color="#00F2FE" />
+      <stop offset="40%" stop-color="#0072B5" />
+      <stop offset="85%" stop-color="#011831" />
+      <stop offset="100%" stop-color="#000000" />
+    </radialGradient>
+
+    <!-- Eye Shadow/Gloss Overlay -->
+    <linearGradient id="eyeGloss" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.6" />
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0" />
+    </linearGradient>
+
+    <!-- Soft Shadow Filter for depth -->
+    <filter id="softShadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="8" stdDeviation="6" flood-color="#803000" flood-opacity="0.15" />
+    </filter>
+
+    <filter id="floorShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="8" result="blur" />
+    </filter>
+
+    <!-- Cheek Blush Radial Gradient -->
+    <radialGradient id="blush" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#FF8A8A" stop-opacity="0.5" />
+      <stop offset="100%" stop-color="#FF8A8A" stop-opacity="0" />
+    </radialGradient>
+  </defs>
+
+  <!-- Background Decorative Circle -->
+  <circle cx="250" cy="250" r="230" fill="url(#bgGrad)" />
+  <circle cx="250" cy="250" r="215" fill="none" stroke="#FFFFFF" stroke-width="4" stroke-dasharray="12, 12" opacity="0.6" />
+
+  <!-- Floor Shadow -->
+  <ellipse cx="250" cy="440" rx="130" ry="15" fill="#DF9898" filter="url(#floorShadow)" />
+
+  <!-- TAIL -->
+  <g filter="url(#softShadow)">
+    <path d="M 320 380 
+             C 380 390, 440 370, 430 290 
+             C 420 220, 360 210, 375 260 
+             C 385 295, 360 330, 320 335 Z" 
+          fill="url(#furOrange)" />
+    <!-- Tail Tip (Cream) -->
+    <path d="M 398 238 
+             C 382 225, 364 220, 375 260 
+             C 381 280, 395 285, 412 270 
+             C 419 256, 410 245, 398 238 Z" 
+          fill="url(#furCream)" />
+  </g>
+
+  <!-- BODY -->
+  <g filter="url(#softShadow)">
+    <!-- Back legs / Thighs -->
+    <path d="M 135 410 C 135 340, 185 320, 200 370 Q 185 415, 145 415 Z" fill="url(#furOrange)" />
+    <path d="M 365 410 C 365 340, 315 320, 300 370 Q 315 415, 355 415 Z" fill="url(#furOrange)" />
+    
+    <!-- Main Body Shape -->
+    <path d="M 160 380 Q 250 290, 340 380 C 350 430, 150 430, 160 380 Z" fill="url(#furOrange)" />
+    
+    <!-- Fluffy Chest Bib (Cream) -->
+    <path d="M 190 320 
+             C 170 340, 180 380, 210 390 
+             C 230 400, 270 400, 290 390 
+             C 320 380, 330 340, 310 320 
+             C 290 350, 210 350, 190 320 Z" 
+          fill="url(#furCream)" />
+  </g>
+
+  <!-- FRONT PAWS -->
+  <g>
+    <!-- Left Paw -->
+    <ellipse cx="215" cy="425" rx="22" ry="15" fill="url(#furCream)" filter="url(#softShadow)" />
+    <path d="M 203 415 L 203 432 M 215 412 L 215 434 M 227 415 L 227 432" stroke="#D25400" stroke-width="2.5" stroke-linecap="round" />
+
+    <!-- Right Paw -->
+    <ellipse cx="285" cy="425" rx="22" ry="15" fill="url(#furCream)" filter="url(#softShadow)" />
+    <path d="M 273 415 L 273 432 M 285 412 L 285 434 M 297 415 L 297 432" stroke="#D25400" stroke-width="2.5" stroke-linecap="round" />
+  </g>
+
+  <!-- HEAD -->
+  <g filter="url(#softShadow)">
+    <!-- Ears Background / Outer Ear -->
+    <!-- Left Ear -->
+    <path d="M 120 180 L 95 65 C 90 45, 120 45, 145 75 L 195 140 Z" fill="url(#furOrange)" />
+    <!-- Right Ear -->
+    <path d="M 380 180 L 405 65 C 410 45, 380 45, 355 75 L 305 140 Z" fill="url(#furOrange)" />
+
+    <!-- Inner Ears -->
+    <!-- Inner Left -->
+    <path d="M 125 165 L 105 75 C 102 63, 118 63, 135 83 L 175 135 Z" fill="url(#innerEar)" />
+    <!-- Inner Right -->
+    <path d="M 375 165 L 395 75 C 398 63, 382 63, 365 83 L 325 135 Z" fill="url(#innerEar)" />
+    
+    <!-- Ear Tufts (Fluff inside ears) -->
+    <path d="M 115 105 Q 130 110, 135 100 Q 138 115, 148 110" fill="none" stroke="#FFFDF9" stroke-width="3.5" stroke-linecap="round" />
+    <path d="M 385 105 Q 370 110, 365 100 Q 362 115, 352 110" fill="none" stroke="#FFFDF9" stroke-width="3.5" stroke-linecap="round" />
+
+    <!-- Main Head Shape -->
+    <path d="M 120 220 
+             C 100 280, 140 330, 250 330 
+             C 360 330, 400 280, 380 220 
+             C 365 130, 135 130, 120 220 Z" 
+          fill="url(#furOrange)" />
+          
+    <!-- Cheeks Fluff (Cream) -->
+    <path d="M 122 235 C 110 270, 145 315, 185 315 C 160 290, 145 260, 150 235 Z" fill="url(#furCream)" opacity="0.9"/>
+    <path d="M 378 235 C 390 270, 355 315, 315 315 C 340 290, 355 260, 350 235 Z" fill="url(#furCream)" opacity="0.9"/>
+    
+    <!-- Face Center Snout (Cream Muzzle) -->
+    <path d="M 210 270 
+             C 210 240, 290 240, 290 270 
+             C 290 298, 210 298, 210 270 Z" 
+          fill="url(#furCream)" />
+  </g>
+
+  <!-- TABBY STRIPES (HEAD/FACE) -->
+  <g opacity="0.85">
+    <!-- Forehead Center Stripe -->
+    <path d="M 244 135 Q 250 165, 246 175 Q 254 165, 256 135 Z" fill="#B44B00" />
+    <!-- Forehead Left Stripe -->
+    <path d="M 215 142 Q 225 165, 218 180 Q 230 165, 227 142 Z" fill="#B44B00" />
+    <!-- Forehead Right Stripe -->
+    <path d="M 285 142 Q 275 165, 282 180 Q 270 165, 273 142 Z" fill="#B44B00" />
+
+    <!-- Left Cheek Stripes -->
+    <path d="M 130 225 Q 165 230, 175 225 Q 160 238, 132 237 Z" fill="#B44B00" />
+    <path d="M 128 245 Q 160 248, 170 243 Q 155 256, 128 255 Z" fill="#B44B00" />
+
+    <!-- Right Cheek Stripes -->
+    <path d="M 370 225 Q 335 230, 325 225 Q 340 238, 368 237 Z" fill="#B44B00" />
+    <path d="M 372 245 Q 340 248, 330 243 Q 345 256, 372 255 Z" fill="#B44B00" />
+  </g>
+
+  <!-- EYES (BIG ANIME-STYLE KITTEN EYES) -->
+  <g>
+    <!-- Left Eye Shadow/Eyelash Background -->
+    <ellipse cx="180" cy="220" rx="34" ry="36" fill="#110A05" />
+    <!-- Left Iris -->
+    <ellipse cx="181" cy="221" rx="29" ry="31" fill="url(#eyeIris)" />
+    
+    <!-- Right Eye Shadow/Eyelash Background -->
+    <ellipse cx="320" cy="220" rx="34" ry="36" fill="#110A05" />
+    <!-- Right Iris -->
+    <ellipse cx="319" cy="221" rx="29" ry="31" fill="url(#eyeIris)" />
+
+    <!-- Pupils (Black) -->
+    <ellipse cx="184" cy="221" rx="16" ry="20" fill="#050508" />
+    <ellipse cx="316" cy="221" rx="16" ry="20" fill="#050508" />
+
+    <!-- Light Reflections / Sparkles (Left Eye) -->
+    <!-- Primary Big Highlight -->
+    <ellipse cx="174" cy="210" rx="9" ry="11" fill="#FFFFFF" transform="rotate(-15, 174, 210)" />
+    <!-- Secondary Highlight -->
+    <circle cx="194" cy="232" r="5" fill="#FFFFFF" />
+    <!-- Extra Tiny Sparkle -->
+    <circle cx="192" cy="214" r="2.5" fill="#FFFFFF" opacity="0.8" />
+    <circle cx="174" cy="228" r="2" fill="#FFFFFF" opacity="0.6" />
+
+    <!-- Light Reflections / Sparkles (Right Eye) -->
+    <!-- Primary Big Highlight -->
+    <ellipse cx="306" cy="210" rx="9" ry="11" fill="#FFFFFF" transform="rotate(-15, 306, 210)" />
+    <!-- Secondary Highlight -->
+    <circle cx="326" cy="232" r="5" fill="#FFFFFF" />
+    <!-- Extra Tiny Sparkle -->
+    <circle cx="324" cy="214" r="2.5" fill="#FFFFFF" opacity="0.8" />
+    <circle cx="306" cy="228" r="2" fill="#FFFFFF" opacity="0.6" />
+
+    <!-- Eye Gloss Overlay -->
+    <path d="M 154 210 Q 180 188, 208 210 Q 180 200, 154 210 Z" fill="url(#eyeGloss)" opacity="0.4" />
+    <path d="M 292 210 Q 318 188, 346 210 Q 318 200, 292 210 Z" fill="url(#eyeGloss)" opacity="0.4" />
+
+    <!-- Upper Eyelashes / Eyelids (Thick Cute Outlines) -->
+    <path d="M 144 216 Q 180 176, 216 216" fill="none" stroke="#1D0E03" stroke-width="5" stroke-linecap="round" />
+    <path d="M 284 216 Q 320 176, 356 216" fill="none" stroke="#1D0E03" stroke-width="5" stroke-linecap="round" />
+    
+    <!-- Cute side eyelashes -->
+    <path d="M 148 202 Q 138 194, 134 200" fill="none" stroke="#1D0E03" stroke-width="3" stroke-linecap="round" />
+    <path d="M 352 202 Q 362 194, 366 200" fill="none" stroke="#1D0E03" stroke-width="3" stroke-linecap="round" />
+  </g>
+
+  <!-- CHEEK BLUSH -->
+  <circle cx="145" cy="255" r="18" fill="url(#blush)" />
+  <circle cx="355" cy="255" r="18" fill="url(#blush)" />
+
+  <!-- NOSE & MOUTH -->
+  <g>
+    <!-- Tiny Pink Nose -->
+    <path d="M 244 262 Q 250 258, 256 262 Q 256 266, 250 269 Q 244 266, 244 262 Z" fill="#F39C9C" />
+    <path d="M 246 261 Q 250 259, 254 261" fill="none" stroke="#FFF" stroke-width="1" stroke-linecap="round" />
+
+    <!-- Mouth (Cute ':3' curve) -->
+    <path d="M 230 274 Q 242 284, 250 274 Q 258 284, 270 274" fill="none" stroke="#1D0E03" stroke-width="3" stroke-linecap="round" />
+    
+    <!-- Tiny under-lip/chin line -->
+    <path d="M 246 286 Q 250 289, 254 286" fill="none" stroke="#D25400" stroke-width="2" stroke-linecap="round" />
+  </g>
+
+  <!-- WHISKERS -->
+  <g opacity="0.85">
+    <!-- Left Whiskers -->
+    <path d="M 135 265 C 100 265, 75 272, 60 285" fill="none" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round" />
+    <path d="M 132 277 C 95 282, 70 295, 55 315" fill="none" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round" />
+    <path d="M 135 289 C 100 300, 75 320, 65 340" fill="none" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round" />
+
+    <!-- Right Whiskers -->
+    <path d="M 365 265 C 400 265, 425 272, 440 285" fill="none" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round" />
+    <path d="M 368 277 C 405 282, 430 295, 445 315" fill="none" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round" />
+    <path d="M 365 289 C 400 300, 425 320, 435 340" fill="none" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round" />
+  </g>
+
+  <!-- HIGHLIGHTS / SHINES (To give that polished vector look) -->
+  <!-- Head highlight -->
+  <path d="M 180 145 Q 250 135, 320 145 Q 250 152, 180 145" fill="#FFFFFF" opacity="0.25" />
+</svg>
