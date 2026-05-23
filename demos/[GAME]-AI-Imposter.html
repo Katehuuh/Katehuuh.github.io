@@ -1,0 +1,917 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="dark">
+    <title>AI Imposter</title>
+    <style>
+* { margin: 0; padding: 0; box-sizing: border-box;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+body { background: #0a0a0a; color: #efeff1; height: 100vh; overflow: hidden;
+    padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px));
+    -webkit-text-size-adjust: 100%; touch-action: manipulation; }
+.game-container { display: flex; height: 100vh; gap: 1px; background: rgba(31,31,53,0.85); }
+.left-panel { flex: 1; min-width: 280px; max-width: 400px; background: rgba(24,24,27,0.85);
+    display: flex; flex-direction: column; }
+.right-panel { flex: 2; background: rgba(14,14,16,0.85); display: flex; flex-direction: column; }
+.lobby-section { padding: 10px 12px; border-bottom: 1px solid #2f2f35; }
+.lobby-header { display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 16px; gap: 12px; }
+.game-title { font-size: 18px; font-weight: 700; color: #fff; flex-grow: 1; }
+.timer { font-size: 14px; color: #efeff1; font-weight: 600; background: rgba(255,255,255,0.06);
+    padding: 4px 8px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.12); }
+.timer.big { font-size: 18px; font-weight: 800; color: #fff; background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.18); padding: 6px 10px; border-radius: 6px; }
+.ready-button { background: #00f5c4; color: #0f0f23; border: none; padding: 8px 16px;
+    border-radius: 6px; font-weight: 600; font-size: 14px; cursor: pointer;
+    transition: all 0.2s; min-height: 44px; }
+.ready-button:hover { background: #00d4a3; transform: translateY(-1px); }
+.ready-button:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+.start-button { width: 100%; font-size: 16px; padding: 14px; margin-bottom: 16px; }
+.lobby-info { color: #adadb8; font-size: 14px; line-height: 1.6; margin-bottom: 16px;
+    padding: 12px; background: rgba(47,47,53,0.3); border-radius: 6px; }
+.lobby-info p { margin-bottom: 8px; }
+.lobby-info p:last-child { margin-bottom: 0; }
+.players-list { margin-bottom: 12px; }
+.players-title { font-size: 14px; font-weight: 600; color: #adadb8; margin-bottom: 8px; }
+.player-item { display: flex; align-items: center; gap: 6px; padding: 4px 0; font-size: 15px; }
+.player-avatar { width: 24px; height: 24px; border-radius: 50%; background: #9147ff;
+    border: 1px solid rgba(255,255,255,0.1); }
+.player-status { margin-left: auto; font-size: 12px; padding: 2px 6px;
+    border-radius: 12px; font-weight: 500; }
+.player-status.ready { background: rgba(0,245,196,0.2); color: #00f5c4; }
+.player-status.human-status { background: rgba(0,245,196,0.2); color: #00f5c4; }
+.player-status.ai-status { background: rgba(235,4,0,0.2); color: #eb0400; }
+.you-tag { color: #00f5c4; font-size: 12px; font-weight: 500; }
+.ai-tag { color: #eb0400; font-size: 11px; margin-left: 4px;
+    background: rgba(235,4,0,0.15); padding: 1px 5px; border-radius: 3px; }
+.your-alias-reminder { font-size: 13px; color: #adadb8; padding: 8px 0 0;
+    border-top: 1px solid #2f2f35; margin-top: 8px; }
+.your-alias-reminder strong { color: #00f5c4; }
+.message-counter-panel { font-size: 13px; color: #adadb8; padding: 8px 0;
+    text-align: center; border-top: 1px solid #2f2f35; margin-top: 8px; }
+.leaderboard { flex: 1; padding: 16px; }
+.leaderboard-title { font-size: 14px; font-weight: 600; color: #adadb8; margin-bottom: 12px; }
+.stats-row { display: flex; gap: 16px; font-size: 14px; }
+.stat-win { color: #00f5c4; font-weight: 500; }
+.stat-lose { color: #eb0400; font-weight: 500; }
+.chat-container { display: flex; flex-direction: column; height: 100%; }
+.chat-header { padding: 8px 12px; border-bottom: 1px solid #1f1f23; background: #18181b; }
+.chat-header-info { display: flex; justify-content: space-between; align-items: center; }
+.chat-title { font-size: 16px; font-weight: 600; color: #fff; margin-right: 16px; }
+.chat-title.lobby { font-size: 14px; }
+.chat-messages { flex: 1; overflow-y: auto; padding: 8px 12px; display: flex;
+    flex-direction: column; gap: 6px; }
+.chat-messages::-webkit-scrollbar { width: 6px; }
+.chat-messages::-webkit-scrollbar-track { background: #1f1f23; }
+.chat-messages::-webkit-scrollbar-thumb { background: #4a4a4a; border-radius: 3px; }
+.message { display: flex; flex-direction: column; gap: 2px; }
+.message-header { display: flex; align-items: center; gap: 6px; }
+.message-avatar { width: 22px; height: 22px; border-radius: 50%;
+    border: 1px solid rgba(255,255,255,0.1); }
+.message-username { font-weight: 600; font-size: 15px; color: #9147ff; }
+.gen-stats { font-weight: 400; font-size: 12px; color: #adadb8; margin-left: 4px; }
+.streaming-dot { color: #00f5c4; animation: blink 0.8s infinite; font-weight: 400; }
+@keyframes blink { 0%,100%{opacity:1;} 50%{opacity:0.3;} }
+.think-toggle { font-size: 11px; color: #6b6b7b; cursor: pointer; margin-left: 4px;
+    background: rgba(107,107,123,0.15); padding: 1px 5px; border-radius: 3px;
+    user-select: none; transition: color 0.2s, background 0.2s; border: none; font-family: inherit; }
+.think-toggle:hover { color: #adadb8; background: rgba(107,107,123,0.3); }
+.think-toggle.open { color: #9147ff; background: rgba(145,71,255,0.15); }
+.think-content { margin-left: 28px; margin-top: 4px; padding: 8px 10px; font-size: 12px;
+    line-height: 1.5; color: #6b6b7b; background: rgba(47,47,53,0.4); border-radius: 4px;
+    border-left: 2px solid #3a3a4a; white-space: pre-wrap; word-wrap: break-word;
+    max-height: 200px; overflow-y: auto; animation: thinkReveal 0.2s ease-out; }
+.think-content::-webkit-scrollbar { width: 4px; }
+.think-content::-webkit-scrollbar-thumb { background: #3a3a4a; border-radius: 2px; }
+@keyframes thinkReveal { from { opacity: 0; max-height: 0; } to { opacity: 1; max-height: 200px; } }
+.message-text { font-size: 17px; line-height: 1.4; color: #efeff1;
+    margin-left: 28px; word-wrap: break-word; }
+.system-message { text-align: center; color: #adadb8; font-style: italic; font-size: 13px;
+    background: rgba(47,47,53,0.5); padding: 8px 12px; border-radius: 6px;
+    margin: 8px 0; white-space: pre-wrap; }
+.system-message.vote-reveal { animation: voteSlideIn 0.5s ease-out;
+    border-left: 3px solid #9147ff; text-align: left; font-style: normal; font-weight: 500; }
+@keyframes voteSlideIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); } }
+.system-message.result-win { background: rgba(0,245,196,0.1);
+    border: 1px solid rgba(0,245,196,0.3); color: #00f5c4;
+    font-weight: 600; font-style: normal; text-align: left; padding: 16px; }
+.system-message.result-lose { background: rgba(235,4,0,0.1);
+    border: 1px solid rgba(235,4,0,0.3); color: #eb0400;
+    font-weight: 600; font-style: normal; text-align: left; padding: 16px; }
+.chat-disabled { text-align: center; color: #adadb8; font-size: 13px; padding: 20px;
+    background: rgba(47,47,53,0.3); border-radius: 6px; margin: 20px; }
+.chat-input-container { padding: 8px 12px; border-top: 1px solid #1f1f23; background: #18181b;
+    padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px)); }
+.message-counter { font-size: 12px; color: #adadb8; margin-bottom: 8px; text-align: center; }
+.chat-input { width: 100%; background: #0e0e10; border: 1px solid #2f2f35; border-radius: 6px;
+    padding: 10px 12px; color: #efeff1; font-size: 14px; resize: none;
+    min-height: 48px; max-height: 80px; }
+.chat-input:focus { outline: none; border-color: #9147ff; }
+.chat-input:disabled { opacity: 0.5; cursor: not-allowed; }
+.result-actions { text-align: center; }
+.info-footer { position: fixed; left: 0; right: 0; bottom: 0; background: #111116;
+    border-top: 1px solid #2f2f35; color: #efeff1; z-index: 1001;
+    padding: 10px 12px; text-align: center; font-size: 12px; line-height: 1.2;
+    backdrop-filter: saturate(120%) blur(6px); -webkit-backdrop-filter: saturate(120%) blur(6px); }
+/* Loading screen */
+.loading-screen { display: flex; flex-direction: column; align-items: center;
+    justify-content: center; height: 100vh; padding: 24px; text-align: center; }
+.loading-title { font-size: 32px; font-weight: 800; color: #fff; margin-bottom: 8px; }
+.loading-subtitle { font-size: 15px; color: #adadb8; margin-bottom: 32px; }
+.loading-status { font-size: 16px; color: #efeff1; margin-bottom: 12px; font-weight: 600; }
+.loading-detail { font-size: 13px; color: #666; margin-bottom: 16px; }
+.progress-bar { width: 320px; max-width: 80%; height: 8px; background: #1f1f23;
+    border-radius: 4px; overflow: hidden; margin-bottom: 20px; }
+.progress-fill { height: 100%; background: #00f5c4; border-radius: 4px;
+    transition: width 0.3s ease; }
+.loading-hint { font-size: 12px; color: #555; margin-top: 8px; }
+.loading-error { color: #eb0400; font-size: 14px; margin-top: 16px; max-width: 400px; }
+.skip-btn { background: transparent; border: 1px solid #2f2f35; color: #adadb8;
+    padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 13px;
+    margin-top: 16px; transition: all 0.2s; }
+.skip-btn:hover { border-color: #9147ff; color: #efeff1; }
+/* Analyzing spinner */
+.analyzing-spinner { display: inline-block; width: 16px; height: 16px;
+    border: 2px solid rgba(145,71,255,0.3); border-top: 2px solid #9147ff;
+    border-radius: 50%; animation: spin 1s linear infinite; margin-right: 8px;
+    vertical-align: middle; }
+@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+@media (max-width: 768px) {
+    .game-container { flex-direction: column; gap: 0; }
+    .left-panel { max-width: none; min-width: auto; max-height: 35vh; overflow-y: auto; }
+    .right-panel { flex: 1; min-height: 65vh; }
+    .lobby-section { padding: 12px; }
+    .leaderboard { padding: 12px; }
+    .chat-messages { padding: 6px 10px; gap: 8px; }
+    .chat-input-container { padding: 12px; }
+    .chat-input { min-height: 52px; font-size: 18px; }
+    .info-footer { font-size: 14px; padding: 14px 16px; }
+    .game-title { font-size: 20px; }
+    .timer.big { font-size: 22px; padding: 8px 14px; }
+    .message-text { font-size: 20px; line-height: 1.4; margin-left: 34px; }
+    .message-username { font-size: 17px; }
+    .message-avatar { width: 28px; height: 28px; }
+    .message-header { gap: 10px; }
+    .gen-stats { font-size: 12px; }
+    .think-toggle { font-size: 12px; padding: 2px 6px; }
+    .think-content { font-size: 14px; margin-left: 36px; }
+    .system-message { font-size: 15px; padding: 12px 16px; }
+    .player-item { font-size: 16px; padding: 8px 0; }
+    .player-avatar { width: 28px; height: 28px; }
+    .players-title { font-size: 16px; }
+    .message-counter { font-size: 14px; }
+    .chat-title { font-size: 18px; }
+    .timer { font-size: 16px; }
+    .ready-button { font-size: 16px; padding: 14px 20px; min-height: 50px; }
+    .start-button { font-size: 18px; padding: 16px; }
+    .your-alias-reminder { font-size: 15px; }
+    .stats-row { font-size: 16px; }
+    .leaderboard-title { font-size: 16px; }
+    .loading-title { font-size: 28px; }
+    .loading-status { font-size: 18px; }
+    .loading-subtitle { font-size: 16px; } }
+@media (max-width: 480px) {
+    .message-text { font-size: 16px; }
+    .left-panel { max-height: 30vh; } }
+@media (pointer: coarse) { .ready-button { padding: 14px 20px; }
+    .chat-input { font-size: 18px; } }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.6.0/p5.min.js"></script>
+    <script type="importmap">
+    {
+        "imports": {
+            "react": "https://esm.sh/react@18",
+            "react/jsx-runtime": "https://esm.sh/react@18/jsx-runtime",
+            "react-dom/client": "https://esm.sh/react-dom@18/client"
+        }
+    }
+    </script>
+    <script type="module">
+import React, { useState, useEffect, useRef, useCallback, Component } from 'react';
+import { createRoot } from 'react-dom/client';
+import htm from 'https://esm.sh/htm@3';
+
+const html = htm.bind(React.createElement);
+
+/* ===== WLLAMA IMPORTS ===== */
+let WllamaClass = null;
+let WasmPaths = null;
+const WLLAMA_CDN = 'https://cdn.jsdelivr.net/npm/@wllama/wllama@3.1.1';
+const { Wllama } = await import(WLLAMA_CDN + '/esm/index.js');
+WllamaClass = Wllama;
+WasmPaths = { 'single-thread/wllama.wasm': WLLAMA_CDN + '/esm/wasm/wllama.wasm' };
+console.log('[wllama] Loaded v3.1.1');
+
+/* ===== CONSTANTS ===== */
+const PHASES = {
+    LOADING: 'loading', LOBBY: 'lobby', ROUND: 'round',
+    ANALYZING: 'analyzing', VOTING: 'voting', RESULTS: 'results'
+};
+const ROUND_DURATION = 90;
+const VOTING_DURATION = 15;
+const MIN_MESSAGES = 3;
+const HF_REPO = 'unsloth/Qwen3.5-2B-MTP-GGUF';
+const HF_FILE = 'Qwen3.5-2B-MTP-UD-Q4_K_XL.gguf';
+
+const ANONYMOUS_NAMES = [
+    'Marcus','Elena','Kai','Nadia','Remy',
+    'Sasha','Tomek','Yuki','Dante','Mira',
+    'Oscar','Lena','Hugo','Zara','Felix',
+    'Ines','Ruben','Anja','Cole','Priya',
+    'Axel','Dina','Juno','Leon','Noor',
+    'Theo','Rosa','Ivan','Vera','Sam'
+];
+
+/* ===== AI PERSONA (same for all 3 AIs -- no personality differentiation) ===== */
+const AI_PERSONA = {
+    systemPrompt: 'You are a person chatting in a group chat with 3 other people. One of you is secretly a robot. Chat naturally and try to figure out who the robot is. Very short messages under 15 words. Never use emojis or emoticons. Sound like a real human. Reply directly with just your message, no quotes or asterisks.',
+};
+
+/* ===== UTILITIES ===== */
+function shuffleArray(arr) {
+    const r = [...arr];
+    for (let i = r.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [r[i], r[j]] = [r[j], r[i]];
+    }
+    return r;
+}
+
+function cleanAIOutput(text, persona) {
+    let c = text.replace(/<think>[\s\S]*?<\/think>/g, '');
+    c = c.replace(/\*[^*]*\*/g, '');
+    c = c.replace(/^["'\s]+|["'\s]+$/g, '');
+    c = c.replace(/[\u{1F300}-\u{1FAFF}\u{1F900}-\u{1F9FF}\u{2600}-\u{27BF}\u{FE00}-\u{FE0F}\u{200D}\u{20E3}]/gu, '');
+    c = c.split('\n')[0].trim();
+    const words = c.split(/\s+/).filter(w => w.length > 0);
+    if (words.length > 15) c = words.slice(0, 15).join(' ');
+    c = c.trim();
+    if (!c && persona) {
+        c = '...';
+    }
+    return c || '[inference failed]';
+}
+
+function parseVote(text, candidates) {
+    const c = text.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+    for (const name of candidates) {
+        if (c.includes(name)) return name;
+    }
+    for (const name of candidates) {
+        if (c.toLowerCase().includes(name.toLowerCase())) return name;
+    }
+    return candidates[Math.floor(Math.random() * candidates.length)];
+}
+
+/* ===== LLM MESSAGE GENERATION (streaming with t/s tracking) ===== */
+async function generateAIMessage(wllama, aiId, context, onStream) {
+    const { persona, recentMessages, nameMap, messagesSent } = context;
+
+    if (wllama) {
+        try {
+            const history = recentMessages
+                .filter(m => !m.isSystem).slice(-8)
+                .map(m => (nameMap[m.senderId] || '?') + ': ' + m.text)
+                .join('\n');
+
+            const userContent = history
+                ? 'Recent chat:\n' + history + '\n\nWrite your next chat message:'
+                : 'The chat just started. Say something casual to break the ice:';
+
+            const t0 = performance.now();
+            let tokenCount = 0;
+            let accumulated = '';
+
+            const result = await wllama.createChatCompletion({
+                messages: [
+                    { role: 'system', content: persona.systemPrompt },
+                    { role: 'user', content: userContent },
+                ],
+                nPredict: 32768,
+                sampling: { temp: 1.0, top_p: 0.95, top_k: 20, min_p: 0.0, penalty_repeat: 1.0, penalty_present: 1.5 },
+                onNewToken: (token, piece, currentText) => {
+                    tokenCount++;
+                    accumulated = currentText;
+                    if (tokenCount % 5 !== 0) return;
+                    const elapsed = (performance.now() - t0) / 1000;
+                    const tps = elapsed > 0 ? (tokenCount / elapsed).toFixed(1) : '0';
+                    const mins = Math.floor(elapsed / 60);
+                    const secs = Math.floor(elapsed % 60);
+                    const timeStr = `${String(mins).padStart(2,'0')}m${String(secs).padStart(2,'0')}s`;
+                    /* Extract thinking content and visible text separately */
+                    const thinkMatch = currentText.match(/<think>([\s\S]*?)<\/think>/);
+                    const isStillThinking = currentText.includes('<think>') && !currentText.includes('</think>');
+                    const thinkText = thinkMatch ? thinkMatch[1].trim() : (isStillThinking ? currentText.replace('<think>', '').trim() : '');
+                    const displayText = isStillThinking ? '(thinking...)' : currentText.replace(/<think>[\s\S]*?<\/think>/g, '').trim() || '(thinking...)';
+                    if (onStream) onStream({ text: displayText, tps, timeStr, tokenCount, thinkText, done: false });
+                },
+            });
+
+            const elapsed = (performance.now() - t0) / 1000;
+            const finalTps = elapsed > 0 ? (tokenCount / elapsed).toFixed(1) : '0';
+            const mins = Math.floor(elapsed / 60);
+            const secs = Math.floor(elapsed % 60);
+            const finalTimeStr = `${String(mins).padStart(2,'0')}m${String(secs).padStart(2,'0')}s`;
+
+            const raw = result.choices[0].message.content;
+            const cleaned = cleanAIOutput(raw, persona);
+            /* Extract final thinking content */
+            const finalThinkMatch = raw.match(/<think>([\s\S]*?)<\/think>/);
+            const finalThinkText = finalThinkMatch ? finalThinkMatch[1].trim() : '';
+            if (onStream) onStream({ text: cleaned, tps: finalTps, timeStr: finalTimeStr, tokenCount, thinkText: finalThinkText, done: true });
+            return { text: cleaned, tps: finalTps, timeStr: finalTimeStr, tokenCount, thinkText: finalThinkText };
+        } catch (e) {
+            console.error('LLM inference failed, using fallback:', e);
+        }
+    }
+    return { text: '[LLM not loaded]', tps: '0', timeStr: '00m00s', tokenCount: 0 };
+}
+
+/* ===== LLM VOTE GENERATION ===== */
+async function generateAIVote(wllama, aiId, context) {
+    const { persona, recentMessages, nameMap, allPlayers } = context;
+    const candidates = allPlayers.filter(p => p.id !== aiId).map(p => nameMap[p.id]);
+
+    if (wllama) {
+        try {
+            const history = recentMessages
+                .filter(m => !m.isSystem)
+                .map(m => (nameMap[m.senderId] || '?') + ': ' + m.text)
+                .join('\n');
+
+            const result = await wllama.createChatCompletion({
+                messages: [
+                    { role: 'system', content: 'You are analyzing a group chat to find who is a robot pretending to be human. Read the conversation carefully. Pick the player whose messages feel the most artificial, repetitive, or formulaic. Respond with ONLY the player name, nothing else.' },
+                    { role: 'user', content: 'Chat log:\n' + history + '\n\nWhich of these players is most likely a robot: ' + candidates.join(', ') + '\nRespond with just one name:' },
+                ],
+                nPredict: 32768,
+                sampling: { temp: 1.0, top_p: 0.95, top_k: 20, min_p: 0.0, penalty_repeat: 1.0, penalty_present: 1.5 },
+            });
+            const raw = result.choices[0].message.content;
+            return parseVote(raw, candidates);
+        } catch (e) {
+            console.error('Vote inference failed, using fallback:', e);
+        }
+    }
+    return candidates[Math.floor(Math.random() * candidates.length)];
+}
+
+/* ===== MAIN GAME COMPONENT ===== */
+function AIImposterGame() {
+    const [phase, setPhase] = useState(WllamaClass ? PHASES.LOADING : PHASES.LOBBY);
+    const [timer, setTimer] = useState(0);
+    const [messages, setMessages] = useState([]);
+    const [humanMsgCount, setHumanMsgCount] = useState(0);
+    const [setup, setSetup] = useState(null);
+    const [revealCount, setRevealCount] = useState(0);
+    const [result, setResult] = useState(null);
+    const [stats, setStats] = useState({ wins: 0, losses: 0 });
+    const [openThinks, setOpenThinks] = useState(new Set());
+    const toggleThink = useCallback((msgId) => {
+        setOpenThinks(prev => {
+            const next = new Set(prev);
+            if (next.has(msgId)) next.delete(msgId); else next.add(msgId);
+            return next;
+        });
+    }, []);
+    const [loadPct, setLoadPct] = useState(0);
+    const [loadError, setLoadError] = useState(null);
+    const [loadElapsed, setLoadElapsed] = useState(0);
+
+    const chatRef = useRef(null);
+    const inputRef = useRef(null);
+    const phaseRef = useRef(WllamaClass ? PHASES.LOADING : PHASES.LOBBY);
+    const messagesRef = useRef([]);
+    const setupRef = useRef(null);
+    const roundEndRef = useRef(0);
+    const aiStatesRef = useRef([]);
+    const votesRef = useRef([]);
+    const announcedVotesRef = useRef(0);
+    const humanMsgCountRef = useRef(0);
+    const votingStartRef = useRef(0);
+    const roundDoneRef = useRef(false);
+    const votingDoneRef = useRef(false);
+    const wllamaRef = useRef(null);
+
+    const updatePhase = useCallback((p) => { phaseRef.current = p; setPhase(p); }, []);
+    const addMessage = useCallback((msg) => {
+        setMessages(prev => [...prev, msg]);
+    }, []);
+    /* Keep messagesRef in sync when streaming updates setMessages directly */
+    useEffect(() => { messagesRef.current = messages; }, [messages]);
+    const fmtTime = useCallback((s) => Math.floor(s/60) + ':' + (s%60).toString().padStart(2,'0'), []);
+    const avUrl = useCallback((a) => 'https://api.dicebear.com/7.x/bottts-neutral/svg?seed=' + encodeURIComponent(a||'x'), []);
+
+    /* ---- Model Loading ---- */
+    useEffect(() => {
+        if (!WllamaClass || phaseRef.current !== PHASES.LOADING) return;
+        let cancelled = false;
+        const t0 = Date.now();
+        const elapsedId = setInterval(() => {
+            if (!cancelled) setLoadElapsed(Math.floor((Date.now() - t0) / 1000));
+        }, 1000);
+
+        (async () => {
+            try {
+                const w = new WllamaClass(WasmPaths);
+                await w.loadModelFromHF(
+                    { repo: HF_REPO, file: HF_FILE },
+                    {
+                        progressCallback: ({ loaded, total }) => {
+                            if (!cancelled && total > 0) setLoadPct(Math.round(loaded / total * 100));
+                        },
+                    },
+                );
+                if (!cancelled) {
+                    wllamaRef.current = w;
+                    /* Skip lobby, auto-start game on load */
+                    setTimeout(() => { if (!cancelled) startGameRef.current(); }, 100);
+                }
+            } catch (e) {
+                console.error('Model load failed:', e);
+                if (!cancelled) setLoadError(String(e.message || e));
+            }
+        })();
+        return () => { cancelled = true; clearInterval(elapsedId); };
+    }, [updatePhase]);
+
+    /* Auto-scroll */
+    useEffect(() => { if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight; }, [messages]);
+    /* Auto-focus */
+    useEffect(() => { if (phase === PHASES.ROUND && inputRef.current) inputRef.current.focus(); }, [phase]);
+
+    /* ---- Start Game ---- */
+    const startGame = useCallback(() => {
+        const humanId = 'human';
+        const aiConfigs = [
+            { id: 'ai-1', persona: AI_PERSONA },
+            { id: 'ai-2', persona: AI_PERSONA },
+            { id: 'ai-3', persona: AI_PERSONA },
+        ];
+        const allIds = shuffleArray([humanId, ...aiConfigs.map(a => a.id)]);
+        const aliases = shuffleArray(ANONYMOUS_NAMES).slice(0, 4);
+        const nameMap = {};
+        allIds.forEach((id, i) => { nameMap[id] = aliases[i]; });
+        const gs = {
+            humanId, humanAlias: nameMap[humanId],
+            ais: aiConfigs.map(a => ({ ...a, alias: nameMap[a.id] })),
+            allPlayers: allIds.map(id => ({ id, alias: nameMap[id], isHuman: id === humanId })),
+            nameMap,
+        };
+        setSetup(gs); setupRef.current = gs;
+        messagesRef.current = [{
+            id: 'sys-start', isSystem: true, timestamp: Date.now(),
+            text: 'Round started! Chat naturally and try to blend in. Send at least ' + MIN_MESSAGES + ' messages.',
+        }];
+        setMessages([...messagesRef.current]);
+        setHumanMsgCount(0); humanMsgCountRef.current = 0;
+        votesRef.current = []; setRevealCount(0); announcedVotesRef.current = 0;
+        setResult(null); roundDoneRef.current = false; votingDoneRef.current = false;
+        roundEndRef.current = Date.now() + ROUND_DURATION * 1000;
+        setTimer(ROUND_DURATION);
+        aiStatesRef.current = aiConfigs.map(a => ({
+            id: a.id, persona: a.persona, messagesSent: 0,
+            totalMessages: 3 + Math.floor(Math.random() * 2),
+            nextMessageTime: Date.now() + 5000 + Math.random() * 10000,
+            isSending: false,
+        }));
+        updatePhase(PHASES.ROUND);
+    }, [updatePhase]);
+    const startGameRef = useRef(startGame);
+    useEffect(() => { startGameRef.current = startGame; }, [startGame]);
+
+    /* LLM required -- no mock mode */
+
+    /* ---- Send Human Message ---- */
+    const sendMessage = useCallback((text) => {
+        if (!text.trim() || phaseRef.current !== PHASES.ROUND) return;
+        humanMsgCountRef.current++;
+        setHumanMsgCount(humanMsgCountRef.current);
+        addMessage({ id: 'human-' + Date.now(), senderId: 'human',
+            text: text.trim(), timestamp: Date.now(), isSystem: false });
+        if (inputRef.current) inputRef.current.value = '';
+    }, [addMessage]);
+
+    const handleKeyDown = useCallback((e) => {
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(e.target.value); }
+    }, [sendMessage]);
+
+    /* ---- Show Results ---- */
+    const showResults = useCallback(() => {
+        const s = setupRef.current; const v = votesRef.current;
+        const hv = v.filter(x => x.votedForId === s.humanId).length;
+        const caught = hv >= 2; const gr = caught ? 'lose' : 'win';
+        setResult(gr);
+        setStats(prev => ({ wins: prev.wins + (gr==='win'?1:0), losses: prev.losses + (gr==='lose'?1:0) }));
+        let t = caught ? 'YOU WERE CAUGHT!\nThe AIs identified you as the human impostor.\n'
+                       : 'YOU SURVIVED!\nThe AIs failed to identify you as the human.\n';
+        t += '\nVote Breakdown:\n';
+        const counts = {};
+        v.forEach(x => { counts[x.votedForId] = (counts[x.votedForId]||0) + 1; });
+        Object.entries(counts).forEach(([pid,c]) => {
+            t += '  ' + s.nameMap[pid] + ': ' + c + ' vote' + (c!==1?'s':'') + '\n'; });
+        t += '\nTrue Identities:\n';
+        s.allPlayers.forEach(p => {
+            if (p.isHuman) { t += '  ' + s.nameMap[p.id] + ': YOU (Human)\n'; }
+            else { const ai = s.ais.find(a => a.id === p.id);
+                t += '  ' + s.nameMap[p.id] + ': AI\n'; }
+        });
+        addMessage({ id: 'sys-results', isSystem: true, isResult: true,
+            gameResult: gr, text: t, timestamp: Date.now() });
+        updatePhase(PHASES.RESULTS);
+    }, [addMessage, updatePhase]);
+
+    /* ---- Timer display (independent, never blocks) ---- */
+    useEffect(() => {
+        if (phase !== PHASES.ROUND && phase !== PHASES.VOTING) return;
+        const id = setInterval(() => {
+            setTimer(Math.max(0, Math.ceil((roundEndRef.current - Date.now()) / 1000)));
+        }, 250);
+        return () => clearInterval(id);
+    }, [phase]);
+
+    /* ---- Round end detection ---- */
+    useEffect(() => {
+        if (phase !== PHASES.ROUND) return;
+        const id = setInterval(() => {
+            if (Date.now() >= roundEndRef.current && !roundDoneRef.current) {
+                roundDoneRef.current = true;
+                const met = humanMsgCountRef.current >= MIN_MESSAGES;
+                addMessage({ id: 'sys-analyze', isSystem: true, timestamp: Date.now(),
+                    text: met ? 'Time is up! The AIs are analyzing the conversation...'
+                        : 'Time is up! You only sent ' + humanMsgCountRef.current + ' messages (minimum ' + MIN_MESSAGES + '). The AIs are very suspicious...' });
+                updatePhase(PHASES.ANALYZING);
+            }
+        }, 500);
+        return () => clearInterval(id);
+    }, [phase, addMessage, updatePhase]);
+
+    /* ---- AI message generation (async, non-blocking) ---- */
+    useEffect(() => {
+        if (phase !== PHASES.ROUND) return;
+        const busy = { current: false };
+        const id = setInterval(async () => {
+            if (busy.current || phaseRef.current !== PHASES.ROUND) return;
+            const now = Date.now();
+            for (const ai of aiStatesRef.current) {
+                if (now >= ai.nextMessageTime && ai.messagesSent < ai.totalMessages && !ai.isSending) {
+                    busy.current = true; ai.isSending = true;
+                    try {
+                        const msgId = ai.id+'-'+ai.messagesSent+'-'+now;
+                        const result = await generateAIMessage(wllamaRef.current, ai.id, {
+                            persona: ai.persona, recentMessages: messagesRef.current,
+                            nameMap: setupRef.current.nameMap, messagesSent: ai.messagesSent,
+                        }, (streamData) => {
+                            /* Update or create the streaming message in-place */
+                            if (phaseRef.current === PHASES.ROUND) {
+                                setMessages(prev => {
+                                    const exists = prev.some(m => m.id === msgId);
+                                    if (!exists) {
+                                        return [...prev, { id: msgId, senderId: ai.id, text: streamData.text || '(thinking...)', timestamp: Date.now(), isSystem: false, streaming: !streamData.done, tps: streamData.tps, genTime: streamData.timeStr, thinkText: streamData.thinkText || '' }];
+                                    }
+                                    return prev.map(m => m.id === msgId
+                                        ? { ...m, text: streamData.done ? streamData.text : (streamData.text || '(thinking...)'), tps: streamData.tps, genTime: streamData.timeStr, thinkText: streamData.thinkText || '', streaming: !streamData.done }
+                                        : m);
+                                });
+                            }
+                        });
+                        if (phaseRef.current === PHASES.ROUND) {
+                            const finalText = typeof result === 'object' ? result.text : result;
+                            const tps = typeof result === 'object' ? result.tps : '0';
+                            const genTime = typeof result === 'object' ? result.timeStr : '00m00s';
+                            const thinkText = typeof result === 'object' ? (result.thinkText || '') : '';
+                            setMessages(prev => {
+                                const exists = prev.some(m => m.id === msgId);
+                                const final = { id: msgId, senderId: ai.id, text: finalText, timestamp: Date.now(), isSystem: false, streaming: false, tps, genTime, thinkText };
+                                if (!exists) return [...prev, final];
+                                return prev.map(m => m.id === msgId ? { ...m, ...final } : m);
+                            });
+                            ai.messagesSent++;
+                            const tl = roundEndRef.current - Date.now();
+                            const ml = ai.totalMessages - ai.messagesSent;
+                            if (ml > 0 && tl > 5000) {
+                                const base = tl / (ml + 1);
+                                ai.nextMessageTime = Date.now() + Math.max(5000, base + (Math.random()-0.5)*base*0.4);
+                            }
+                        }
+                    } catch (e) { console.error('AI msg err:', e); }
+                    finally { ai.isSending = false; busy.current = false; }
+                    break;
+                }
+            }
+        }, 2000);
+        return () => clearInterval(id);
+    }, [phase, addMessage]);
+
+    /* ---- Analyzing phase: generate all AI votes ---- */
+    useEffect(() => {
+        if (phase !== PHASES.ANALYZING) return;
+        let cancelled = false;
+        (async () => {
+            const s = setupRef.current;
+            const w = wllamaRef.current;
+            const allVotes = [];
+            for (const ai of s.ais) {
+                if (cancelled) return;
+                const votedAlias = await generateAIVote(w, ai.id, {
+                    persona: ai.persona, recentMessages: messagesRef.current,
+                    nameMap: s.nameMap, allPlayers: s.allPlayers,
+                });
+                const votedPlayer = s.allPlayers.find(p => s.nameMap[p.id] === votedAlias);
+                const votedForId = votedPlayer ? votedPlayer.id
+                    : s.allPlayers.filter(p => p.id !== ai.id)[Math.floor(Math.random()*2)].id;
+                allVotes.push({
+                    voterId: ai.id, voterAlias: s.nameMap[ai.id],
+                    votedForId, votedForAlias: s.nameMap[votedForId],
+                });
+            }
+            if (cancelled) return;
+            votesRef.current = allVotes;
+            announcedVotesRef.current = 0; setRevealCount(0);
+            votingStartRef.current = Date.now();
+            roundEndRef.current = Date.now() + VOTING_DURATION * 1000;
+            setTimer(VOTING_DURATION);
+            updatePhase(PHASES.VOTING);
+        })();
+        return () => { cancelled = true; };
+    }, [phase, updatePhase]);
+
+    /* ---- Vote reveal during VOTING ---- */
+    useEffect(() => {
+        if (phase !== PHASES.VOTING) return;
+        const id = setInterval(() => {
+            const now = Date.now();
+            const elapsed = (now - votingStartRef.current) / 1000;
+            const revealAt = [3, 7, 11];
+            let should = 0;
+            for (const t of revealAt) { if (elapsed >= t) should++; }
+            if (should > announcedVotesRef.current && announcedVotesRef.current < votesRef.current.length) {
+                for (let i = announcedVotesRef.current; i < should && i < votesRef.current.length; i++) {
+                    const v = votesRef.current[i];
+                    addMessage({ id: 'vote-'+i, isSystem: true, isVoteReveal: true, timestamp: Date.now(),
+                        text: v.voterAlias + ' suspects "' + v.votedForAlias + '" is the impostor' });
+                }
+                announcedVotesRef.current = should;
+                setRevealCount(should);
+            }
+            const remaining = Math.max(0, Math.ceil((roundEndRef.current - now) / 1000));
+            if (remaining <= 0 && !votingDoneRef.current) {
+                votingDoneRef.current = true;
+                for (let i = announcedVotesRef.current; i < votesRef.current.length; i++) {
+                    const v = votesRef.current[i];
+                    addMessage({ id: 'vote-'+i, isSystem: true, isVoteReveal: true, timestamp: Date.now(),
+                        text: v.voterAlias + ' suspects "' + v.votedForAlias + '" is the impostor' });
+                }
+                setTimeout(() => showResults(), 1500);
+            }
+        }, 500);
+        return () => clearInterval(id);
+    }, [phase, addMessage, showResults]);
+
+    /* No skip -- LLM is required */
+
+    /* ---- Render ---- */
+    const counterText = humanMsgCount < MIN_MESSAGES
+        ? 'Messages: ' + humanMsgCount + '/3+ (' + MIN_MESSAGES + ' minimum required)'
+        : 'Messages: ' + humanMsgCount + '/3+ (minimum met)';
+
+    /* LOADING SCREEN */
+    if (phase === PHASES.LOADING) {
+        const loadedMB = (loadPct / 100 * 1400).toFixed(0);
+        return html`
+            <div className="loading-screen">
+                <div className="loading-title">AI Imposter</div>
+                <div className="loading-subtitle">Single-player Turing test game</div>
+                <div className="loading-status">Loading AI brain... ${loadPct}%</div>
+                <div className="progress-bar">
+                    <div className="progress-fill" style=${{ width: loadPct + '%' }} />
+                </div>
+                <div className="loading-detail">${loadedMB} / ~1400 MB${loadElapsed > 0 ? ' -- ' + loadElapsed + 's elapsed' : ''}</div>
+                <div className="loading-hint">First load downloads ~1.4 GB model. Cached for future games.</div>
+                ${loadError && html`
+                    <div className="loading-error">Load failed: ${loadError}</div>
+                    <div className="loading-hint" style=${{ marginTop: 8 }}>Make sure you're serving via HTTP (not file://). Try: python -m http.server 8080</div>
+                `}
+            </div>
+            <footer className="info-footer">Downloading Qwen3.5-2B-MTP for in-browser AI inference</footer>
+        `;
+    }
+
+    const isActive = phase === PHASES.ROUND || phase === PHASES.VOTING || phase === PHASES.ANALYZING;
+    const footerText = phase === PHASES.LOBBY
+        ? 'Chat with AI players and try to blend in. The AIs will vote on who they think is the impostor.'
+        : phase === PHASES.ROUND ? 'Chat naturally and blend in. ' + counterText
+        : phase === PHASES.ANALYZING ? 'The AIs are analyzing the conversation...'
+        : phase === PHASES.VOTING ? 'The AIs are deliberating on who is the impostor...'
+        : result === 'win' ? 'You survived! The AIs could not identify you.'
+        : 'You were caught! The AIs identified you as the human.';
+
+    const headerTitle = phase === PHASES.ROUND ? 'Round in Progress'
+        : phase === PHASES.ANALYZING ? 'AIs Analyzing...'
+        : phase === PHASES.VOTING ? 'AI Deliberation'
+        : 'Round Over';
+
+    return html`
+        <div className="game-container">
+            <div className="left-panel">
+                <div className="lobby-section">
+                    <div className="lobby-header">
+                        <h1 className="game-title">AI Imposter</h1>
+                        ${isActive && html`<div className="timer big">${fmtTime(timer)}</div>`}
+                    </div>
+                    ${phase === PHASES.LOBBY && html`
+                        <div className="lobby-info">
+                            <p>You are the only human in a room of AIs.</p>
+                            <p>Chat naturally for 90 seconds. 3 AI players will try to figure out who is human.</p>
+                            <p>At the end, they vote. If 2+ AIs identify you, you lose.</p>
+                        </div>
+                        <button className="ready-button start-button" onClick=${startGame}>Start Game</button>
+                    `}
+                    ${phase !== PHASES.LOBBY && setup && html`
+                        <div className="players-list">
+                            <div className="players-title">Players (4)</div>
+                            ${setup.allPlayers.map(p => html`
+                                <div key=${p.id} className="player-item">
+                                    <img src=${avUrl(p.alias)} alt="" className="player-avatar" />
+                                    <span>
+                                        ${p.alias}
+                                        ${p.id === setup.humanId && html`<span className="you-tag"> (You)</span>`}
+                                        ${phase === PHASES.RESULTS && !p.isHuman && html`<span className="ai-tag">AI</span>`}
+                                    </span>
+                                    <span className=${'player-status ' + (
+                                        phase === PHASES.RESULTS ? (p.isHuman ? 'human-status' : 'ai-status') : 'ready'
+                                    )}>
+                                        ${phase === PHASES.ROUND ? 'Chatting'
+                                            : phase === PHASES.ANALYZING ? (p.isHuman ? 'Waiting' : 'Thinking')
+                                            : phase === PHASES.VOTING ? (p.isHuman ? 'Awaiting' : 'Deliberating')
+                                            : (p.isHuman ? 'Human' : 'AI')}
+                                    </span>
+                                </div>
+                            `)}
+                            ${phase === PHASES.ROUND && html`
+                                <div className="your-alias-reminder">You are: <strong>${setup.humanAlias}</strong></div>
+                            `}
+                        </div>
+                        ${phase === PHASES.ROUND && html`<div className="message-counter-panel">${counterText}</div>`}
+                    `}
+                </div>
+                <div className="leaderboard">
+                    <div className="leaderboard-title">Session Stats</div>
+                    <div className="stats-row">
+                        <span className="stat-win">Wins: ${stats.wins}</span>
+                        <span className="stat-lose">Losses: ${stats.losses}</span>
+                    </div>
+                </div>
+            </div>
+            <div className="right-panel">
+                <div className="chat-container">
+                    <div className="chat-header">
+                        ${phase === PHASES.LOBBY && html`<h2 className="chat-title lobby">Game Lobby</h2>`}
+                        ${phase !== PHASES.LOBBY && html`
+                            <div className="chat-header-info">
+                                <h2 className="chat-title">
+                                    ${phase === PHASES.ANALYZING && html`<span className="analyzing-spinner" />`}
+                                    ${headerTitle}
+                                </h2>
+                                ${(phase === PHASES.ROUND || phase === PHASES.VOTING) && html`
+                                    <div className="timer">${fmtTime(timer)}</div>
+                                `}
+                            </div>
+                        `}
+                    </div>
+                    <div className="chat-messages" ref=${chatRef}>
+                        ${phase === PHASES.LOBBY && html`
+                            <div className="chat-disabled">
+                                Ready to test your disguise? Press "Start Game" to begin chatting with 3 AI players.
+                            </div>
+                        `}
+                        ${messages.map(msg => html`
+                            <div key=${msg.id} className="message">
+                                ${msg.isSystem ? html`
+                                    <div className=${[
+                                        'system-message',
+                                        msg.isVoteReveal ? 'vote-reveal' : '',
+                                        msg.isResult ? (msg.gameResult==='win' ? 'result-win' : 'result-lose') : '',
+                                    ].filter(Boolean).join(' ')}>${msg.text}</div>
+                                ` : html`
+                                    <div>
+                                        <div className="message-header">
+                                            <img src=${avUrl(setup && setup.nameMap[msg.senderId])}
+                                                 alt="" className="message-avatar" />
+                                            <span className="message-username">
+                                                ${setup ? setup.nameMap[msg.senderId] : 'Unknown'}
+                                                ${msg.tps && msg.senderId !== 'human' ? html`<span className="gen-stats"> - ${msg.tps}t/s +${msg.genTime}</span>` : null}
+                                                ${msg.thinkText && msg.thinkText.trim().length > 3 && msg.senderId !== 'human' ? html`<button className=${`think-toggle ${openThinks.has(msg.id) ? 'open' : ''}`} onClick=${() => toggleThink(msg.id)}>${'<think>'}</button>` : null}
+                                                ${msg.streaming ? html`<span className="streaming-dot"> ...</span>` : null}
+                                            </span>
+                                        </div>
+                                        <div className="message-text">${msg.text}</div>
+                                        ${openThinks.has(msg.id) && msg.thinkText ? html`<div className="think-content">${msg.thinkText}</div>` : null}
+                                    </div>
+                                `}
+                            </div>
+                        `)}
+                    </div>
+                    ${phase === PHASES.ROUND && html`
+                        <div className="chat-input-container">
+                            <div className="message-counter">${counterText}</div>
+                            <textarea ref=${inputRef} className="chat-input"
+                                placeholder="Type your message and press Enter..."
+                                onKeyDown=${handleKeyDown} maxLength=${150} />
+                        </div>
+                    `}
+                    ${phase === PHASES.RESULTS && html`
+                        <div className="chat-input-container result-actions">
+                            <button className="ready-button start-button" onClick=${startGame}>Play Again</button>
+                        </div>
+                    `}
+                </div>
+            </div>
+        </div>
+        <footer className="info-footer">${footerText}</footer>
+    `;
+}
+
+/* ===== ERROR BOUNDARY ===== */
+class ErrorBoundary extends Component {
+    constructor(props) { super(props); this.state = { hasError: false }; }
+    static getDerivedStateFromError() { return { hasError: true }; }
+    componentDidCatch(err, info) { console.error('ErrorBoundary:', err, info); }
+    render() {
+        if (this.state.hasError) {
+            return html`<div style=${{ padding: 24, textAlign: 'center' }}>
+                <h2>Something went wrong</h2>
+                <button className="ready-button" style=${{ marginTop: 16 }}
+                    onClick=${() => this.setState({ hasError: false })}>Try Again</button>
+            </div>`;
+        }
+        return this.props.children;
+    }
+}
+
+createRoot(document.getElementById('root')).render(
+    html`<${ErrorBoundary}><${AIImposterGame} /></${ErrorBoundary}>`
+);
+    </script>
+
+    <!-- P5.js Matrix Green Hover Grid Effect -->
+    <script>
+(function initMatrixGrid() {
+    if (!window.p5) return;
+    if (window.__hoverGridInstance) { try { window.__hoverGridInstance.remove(); } catch(e){} }
+    var C = { LAYER_MODE:'over', CELL_SIZE:40, STARTING_ALPHA:160, TRAIL_MAX_ALPHA:160,
+        CURRENT_CELL_ALPHA:180, PROB_OF_NEIGHBOR:0.35, AMT_FADE_PER_FRAME:7,
+        STROKE_WEIGHT:1, CURRENT_STROKE_WEIGHT:2, GLOBAL_OPACITY:0.22,
+        MAX_TRAIL_CELLS:600, IDLE_MS:1500, FRAME_RATE:45,
+        FADE_RATE_REDUCED_MULTIPLIER:2, PROB_OF_NEIGHBOR_REDUCED_MULTIPLIER:0.25 };
+    var isReduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var mx=-1, my=-1, lastMoveAt=0, lastCell={i:-9999,j:-9999}, trail=new Map();
+    var sketch = function(p) {
+        var paused=false;
+        var key=function(i,j){return i+','+j;};
+        var addCell=function(i,j,ba,d){ba=ba||C.STARTING_ALPHA;d=d||0;var k=key(i,j);
+            trail.set(k,{i:i,j:j,alpha:Math.min(ba,C.TRAIL_MAX_ALPHA),baseAlpha:ba,activationAt:performance.now()+d});
+            if(trail.size>C.MAX_TRAIL_CELLS)trail.delete(trail.keys().next().value);};
+        var neighbors=function(i,j){var a=[];for(var di=-1;di<=1;di++)for(var dj=-1;dj<=1;dj++){
+            if(di===0&&dj===0)continue;a.push({i:i+di,j:j+dj});}return a;};
+        p.setup=function(){var cnv=p.createCanvas(p.windowWidth,p.windowHeight);
+            cnv.position(0,0);cnv.style('position','fixed');cnv.style('inset','0');
+            cnv.style('z-index',C.LAYER_MODE==='over'?'0':'-1');cnv.style('pointer-events','none');
+            cnv.style('opacity',String(C.GLOBAL_OPACITY));
+            if(C.LAYER_MODE==='over')cnv.style('mix-blend-mode','screen');
+            p.noFill();p.rectMode(p.CORNER);p.pixelDensity(1);p.frameRate(C.FRAME_RATE);};
+        p.windowResized=function(){p.resizeCanvas(p.windowWidth,p.windowHeight);};
+        document.addEventListener('visibilitychange',function(){paused=document.hidden;});
+        var onPointer=function(x,y){mx=x;my=y;lastMoveAt=performance.now();};
+        window.addEventListener('pointermove',function(e){onPointer(e.clientX,e.clientY);},{passive:true});
+        window.addEventListener('touchmove',function(e){var t=e.touches&&e.touches[0];if(!t)return;onPointer(t.clientX,t.clientY);},{passive:true});
+        p.draw=function(){if(paused)return;var now=performance.now();var idle=now-lastMoveAt>C.IDLE_MS;
+            p.clear();p.strokeWeight(C.STROKE_WEIGHT);p.drawingContext.shadowBlur=6;
+            p.drawingContext.shadowColor='rgba(0,255,65,0.15)';
+            trail.forEach(function(cell,k){var fade=C.AMT_FADE_PER_FRAME*(isReduced?C.FADE_RATE_REDUCED_MULTIPLIER:1);
+                cell.alpha=Math.max(0,cell.alpha-fade);if(cell.alpha<=0){trail.delete(k);return;}
+                var cx=cell.i*C.CELL_SIZE+C.CELL_SIZE/2,cy=cell.j*C.CELL_SIZE+C.CELL_SIZE/2;
+                var dx=mx-cx,dy=my-cy;var df=Math.max(0.25,1-(Math.hypot(dx,dy)/500));
+                var pf=0.9+0.1*Math.sin(now/800+(cell.i+cell.j));var a=cell.alpha*df*pf;
+                p.stroke(0,226,74,a);p.rect(cell.i*C.CELL_SIZE+0.5,cell.j*C.CELL_SIZE+0.5,C.CELL_SIZE-1,C.CELL_SIZE-1);});
+            var inside=mx>=0&&my>=0&&mx<=p.width&&my<=p.height;
+            if(inside){var ci=Math.floor(mx/C.CELL_SIZE),cj=Math.floor(my/C.CELL_SIZE);
+                p.strokeWeight(C.CURRENT_STROKE_WEIGHT);p.stroke(0,226,74,C.CURRENT_CELL_ALPHA);
+                p.rect(ci*C.CELL_SIZE+0.5,cj*C.CELL_SIZE+0.5,C.CELL_SIZE-1,C.CELL_SIZE-1);
+                p.strokeWeight(C.STROKE_WEIGHT);var canSeed=!idle&&(ci!==lastCell.i||cj!==lastCell.j);
+                if(canSeed){var prob=isReduced?C.PROB_OF_NEIGHBOR*C.PROB_OF_NEIGHBOR_REDUCED_MULTIPLIER:C.PROB_OF_NEIGHBOR;
+                    addCell(ci,cj,C.CURRENT_CELL_ALPHA,0);var ns=neighbors(ci,cj);
+                    for(var ni=0;ni<ns.length;ni++){if(Math.random()<prob)addCell(ns[ni].i,ns[ni].j,C.STARTING_ALPHA*0.7,Math.random()*120+40);}
+                    lastCell={i:ci,j:cj};}}};};
+    window.__hoverGridInstance=new p5(sketch);
+})();
+    </script>
+</body>
+</html>
