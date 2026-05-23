@@ -2,10 +2,10 @@
   "models": {
     "gemini-3.5-flash": {
       "display_name": "gemini-3.5-flash",
+      "python_render": "assets/gemini-3.5-flash-python.jpg",
       "python_source": "assets/gemini-3.5-flash.py",
       "svg": "assets/gemini-3.5-flash.svg",
-      "python_render": "assets/gemini-3.5-flash-python.jpg",
-      "_first_seen": "2026-05-20T13:56:58+00:00"
+      "_first_seen": "2026-05-20T13:57:08Z"
     },
     "gpt-5.5-pro": {
       "display_name": "GPT-5.5-Pro",

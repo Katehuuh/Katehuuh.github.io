@@ -1,6 +1,11 @@
 {
   "demos": [
     {
+      "name": "[GAME]-AI-Imposter",
+      "type": "file",
+      "filename": "[GAME]-AI-Imposter.html"
+    },
+    {
       "name": "[GAME]-SoundOfPath",
       "type": "file",
       "filename": "[GAME]-SoundOfPath.html",
