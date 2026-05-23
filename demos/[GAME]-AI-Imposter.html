@@ -9,9 +9,10 @@
 * { margin: 0; padding: 0; box-sizing: border-box;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
 body { background: #0a0a0a; color: #efeff1; height: 100vh; overflow: hidden;
-    padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px));
+    padding-bottom: calc(40px + env(safe-area-inset-bottom, 0px));
     -webkit-text-size-adjust: 100%; touch-action: manipulation; }
-.game-container { display: flex; height: 100vh; gap: 1px; background: rgba(31,31,53,0.85); }
+.game-container { height: calc(100vh - 40px); }
+.game-container { display: flex; gap: 1px; background: rgba(31,31,53,0.85); }
 .left-panel { flex: 1; min-width: 280px; max-width: 400px; background: rgba(24,24,27,0.85);
     display: flex; flex-direction: column; }
 .right-panel { flex: 2; background: rgba(14,14,16,0.85); display: flex; flex-direction: column; }
@@ -49,8 +50,6 @@ body { background: #0a0a0a; color: #efeff1; height: 100vh; overflow: hidden;
 .your-alias-reminder { font-size: 13px; color: #adadb8; padding: 8px 0 0;
     border-top: 1px solid #2f2f35; margin-top: 8px; }
 .your-alias-reminder strong { color: #00f5c4; }
-.message-counter-panel { font-size: 13px; color: #adadb8; padding: 8px 0;
-    text-align: center; border-top: 1px solid #2f2f35; margin-top: 8px; }
 .leaderboard { flex: 1; padding: 16px; }
 .leaderboard-title { font-size: 14px; font-weight: 600; color: #adadb8; margin-bottom: 12px; }
 .stats-row { display: flex; gap: 16px; font-size: 14px; }
@@ -106,7 +105,6 @@ body { background: #0a0a0a; color: #efeff1; height: 100vh; overflow: hidden;
     background: rgba(47,47,53,0.3); border-radius: 6px; margin: 20px; }
 .chat-input-container { padding: 8px 12px; border-top: 1px solid #1f1f23; background: #18181b;
     padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px)); }
-.message-counter { font-size: 12px; color: #adadb8; margin-bottom: 8px; text-align: center; }
 .chat-input { width: 100%; background: #0e0e10; border: 1px solid #2f2f35; border-radius: 6px;
     padding: 10px 12px; color: #efeff1; font-size: 14px; resize: none;
     min-height: 48px; max-height: 80px; }
@@ -130,10 +128,6 @@ body { background: #0a0a0a; color: #efeff1; height: 100vh; overflow: hidden;
     transition: width 0.3s ease; }
 .loading-hint { font-size: 12px; color: #555; margin-top: 8px; }
 .loading-error { color: #eb0400; font-size: 14px; margin-top: 16px; max-width: 400px; }
-.skip-btn { background: transparent; border: 1px solid #2f2f35; color: #adadb8;
-    padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 13px;
-    margin-top: 16px; transition: all 0.2s; }
-.skip-btn:hover { border-color: #9147ff; color: #efeff1; }
 /* Analyzing spinner */
 .analyzing-spinner { display: inline-block; width: 16px; height: 16px;
     border: 2px solid rgba(145,71,255,0.3); border-top: 2px solid #9147ff;
@@ -163,7 +157,6 @@ body { background: #0a0a0a; color: #efeff1; height: 100vh; overflow: hidden;
     .player-item { font-size: 16px; padding: 8px 0; }
     .player-avatar { width: 28px; height: 28px; }
     .players-title { font-size: 16px; }
-    .message-counter { font-size: 14px; }
     .chat-title { font-size: 18px; }
     .timer { font-size: 16px; }
     .ready-button { font-size: 16px; padding: 14px 20px; min-height: 50px; }
@@ -206,7 +199,7 @@ let WasmPaths = null;
 const WLLAMA_CDN = 'https://cdn.jsdelivr.net/npm/@wllama/wllama@3.1.1';
 const { Wllama } = await import(WLLAMA_CDN + '/esm/index.js');
 WllamaClass = Wllama;
-WasmPaths = { 'single-thread/wllama.wasm': WLLAMA_CDN + '/esm/wasm/wllama.wasm' };
+WasmPaths = { 'default': WLLAMA_CDN + '/esm/wasm/wllama.wasm' };
 console.log('[wllama] Loaded v3.1.1');
 
 /* ===== CONSTANTS ===== */
@@ -214,11 +207,12 @@ const PHASES = {
     LOADING: 'loading', LOBBY: 'lobby', ROUND: 'round',
     ANALYZING: 'analyzing', VOTING: 'voting', RESULTS: 'results'
 };
-const ROUND_DURATION = 90;
+const ROUND_DURATION = 120;
 const VOTING_DURATION = 15;
 const MIN_MESSAGES = 3;
-const HF_REPO = 'unsloth/Qwen3.5-2B-MTP-GGUF';
-const HF_FILE = 'Qwen3.5-2B-MTP-UD-Q4_K_XL.gguf';
+const HF_REPO = 'unsloth/gemma-4-E2B-it-GGUF';
+const HF_FILE = 'gemma-4-E2B-it-UD-Q3_K_XL.gguf';
+// NOTE: Switching to a pure transformer GGUF (no Mamba/SSM hybrid) would eliminate 'forcing full prompt re-processing'. Qwen3.5 hybrid forces full prefill every call. Consider Qwen2.5-1.5B-Instruct-Q4_K_M or similar pure-attention model.
 
 const ANONYMOUS_NAMES = [
     'Marcus','Elena','Kai','Nadia','Remy',
@@ -231,7 +225,7 @@ const ANONYMOUS_NAMES = [
 
 /* ===== AI PERSONA (same for all 3 AIs -- no personality differentiation) ===== */
 const AI_PERSONA = {
-    systemPrompt: 'You are a person chatting in a group chat with 3 other people. One of you is secretly a robot. Chat naturally and try to figure out who the robot is. Very short messages under 15 words. Never use emojis or emoticons. Sound like a real human. Reply directly with just your message, no quotes or asterisks.',
+    systemPrompt: 'Chat casually in under 15 words. No emojis. Be messy, use lowercase. Reply with ONLY your message.',
 };
 
 /* ===== UTILITIES ===== */
@@ -253,10 +247,8 @@ function cleanAIOutput(text, persona) {
     const words = c.split(/\s+/).filter(w => w.length > 0);
     if (words.length > 15) c = words.slice(0, 15).join(' ');
     c = c.trim();
-    if (!c && persona) {
-        c = '...';
-    }
-    return c || '[inference failed]';
+    console.log('[AI cleaned]', JSON.stringify(c), 'from', JSON.stringify(text.slice(0, 200)));
+    return c || '[empty response]';
 }
 
 function parseVote(text, candidates) {
@@ -273,71 +265,106 @@ function parseVote(text, candidates) {
 /* ===== LLM MESSAGE GENERATION (streaming with t/s tracking) ===== */
 async function generateAIMessage(wllama, aiId, context, onStream) {
     const { persona, recentMessages, nameMap, messagesSent } = context;
+    if (!wllama) return { text: '[LLM not loaded]', tps: '0', timeStr: '00m00s', tokenCount: 0 };
 
-    if (wllama) {
-        try {
-            const history = recentMessages
-                .filter(m => !m.isSystem).slice(-8)
-                .map(m => (nameMap[m.senderId] || '?') + ': ' + m.text)
-                .join('\n');
+    const myName = nameMap[aiId] || 'Player';
+    const history = recentMessages
+        .filter(m => !m.isSystem).slice(-4)
+        .map(m => (nameMap[m.senderId] || '?') + ': ' + m.text)
+        .join('\n');
+    const userContent = history
+        ? history + '\n' + myName + ':'
+        : myName + ' says something casual to start the chat:';
 
-            const userContent = history
-                ? 'Recent chat:\n' + history + '\n\nWrite your next chat message:'
-                : 'The chat just started. Say something casual to break the ice:';
+    if (onStream) onStream({ text: '(generating...)', tps: '0', timeStr: '00m00s', tokenCount: 0, thinkText: '', done: false });
 
-            const t0 = performance.now();
-            let tokenCount = 0;
-            let accumulated = '';
+    const t0 = performance.now();
+    try {
+        const result = await wllama.createChatCompletion({
+            messages: [
+                { role: 'system', content: persona.systemPrompt },
+                { role: 'user', content: userContent },
+            ],
+            nPredict: 64,
+            cache_prompt: true,
+            seed: Math.floor(Math.random() * 999999),
+            sampling: { temp: 1.0, top_p: 0.95, top_k: 64 },
+        });
 
-            const result = await wllama.createChatCompletion({
-                messages: [
-                    { role: 'system', content: persona.systemPrompt },
-                    { role: 'user', content: userContent },
-                ],
-                nPredict: 32768,
-                sampling: { temp: 1.0, top_p: 0.95, top_k: 20, min_p: 0.0, penalty_repeat: 1.0, penalty_present: 1.5 },
-                onNewToken: (token, piece, currentText) => {
-                    tokenCount++;
-                    accumulated = currentText;
-                    if (tokenCount % 5 !== 0) return;
-                    const elapsed = (performance.now() - t0) / 1000;
-                    const tps = elapsed > 0 ? (tokenCount / elapsed).toFixed(1) : '0';
-                    const mins = Math.floor(elapsed / 60);
-                    const secs = Math.floor(elapsed % 60);
-                    const timeStr = `${String(mins).padStart(2,'0')}m${String(secs).padStart(2,'0')}s`;
-                    /* Extract thinking content and visible text separately */
-                    const thinkMatch = currentText.match(/<think>([\s\S]*?)<\/think>/);
-                    const isStillThinking = currentText.includes('<think>') && !currentText.includes('</think>');
-                    const thinkText = thinkMatch ? thinkMatch[1].trim() : (isStillThinking ? currentText.replace('<think>', '').trim() : '');
-                    const displayText = isStillThinking ? '(thinking...)' : currentText.replace(/<think>[\s\S]*?<\/think>/g, '').trim() || '(thinking...)';
-                    if (onStream) onStream({ text: displayText, tps, timeStr, tokenCount, thinkText, done: false });
-                },
-            });
-
-            const elapsed = (performance.now() - t0) / 1000;
-            const finalTps = elapsed > 0 ? (tokenCount / elapsed).toFixed(1) : '0';
-            const mins = Math.floor(elapsed / 60);
-            const secs = Math.floor(elapsed % 60);
-            const finalTimeStr = `${String(mins).padStart(2,'0')}m${String(secs).padStart(2,'0')}s`;
-
-            const raw = result.choices[0].message.content;
-            const cleaned = cleanAIOutput(raw, persona);
-            /* Extract final thinking content */
-            const finalThinkMatch = raw.match(/<think>([\s\S]*?)<\/think>/);
-            const finalThinkText = finalThinkMatch ? finalThinkMatch[1].trim() : '';
-            if (onStream) onStream({ text: cleaned, tps: finalTps, timeStr: finalTimeStr, tokenCount, thinkText: finalThinkText, done: true });
-            return { text: cleaned, tps: finalTps, timeStr: finalTimeStr, tokenCount, thinkText: finalThinkText };
-        } catch (e) {
-            console.error('LLM inference failed, using fallback:', e);
+        const elapsed = (performance.now() - t0) / 1000;
+        if (!result || !result.choices) {
+            console.error('[AI] null response from wllama');
+            const fallback = { text: '[no response]', tps: '0', timeStr: '00m00s', tokenCount: 0, thinkText: '' };
+            if (onStream) onStream({ ...fallback, done: true });
+            return fallback;
         }
+        const raw = result.choices[0]?.message?.content || '';
+        console.log('[AI raw]', JSON.stringify(raw.slice(0, 500)));
+        if (!raw.trim()) console.warn('[AI] EMPTY raw output - model generated nothing');
+
+        const thinkMatch = raw.match(/<think>([\s\S]*?)<\/think>/);
+        const thinkText = thinkMatch ? thinkMatch[1].trim() : '';
+        const cleaned = cleanAIOutput(raw, persona);
+
+        const usage = result.usage || {};
+        const tokenCount = (usage.completion_tokens || 0) || Math.max(1, Math.ceil(raw.length / 4));
+        const tps = elapsed > 0 ? (tokenCount / elapsed).toFixed(1) : '0';
+        const mins = Math.floor(elapsed / 60);
+        const secs = Math.floor(elapsed % 60);
+        const timeStr = `${String(mins).padStart(2,'0')}m${String(secs).padStart(2,'0')}s`;
+
+        if (onStream) onStream({ text: cleaned, tps, timeStr, tokenCount, thinkText, done: true });
+        return { text: cleaned, tps, timeStr, tokenCount, thinkText };
+    } catch (e) {
+        console.error('LLM inference error:', e);
+        return { text: '[inference failed]', tps: '0', timeStr: '00m00s', tokenCount: 0 };
     }
-    return { text: '[LLM not loaded]', tps: '0', timeStr: '00m00s', tokenCount: 0 };
 }
 
 /* ===== LLM VOTE GENERATION ===== */
-async function generateAIVote(wllama, aiId, context) {
-    const { persona, recentMessages, nameMap, allPlayers } = context;
-    const candidates = allPlayers.filter(p => p.id !== aiId).map(p => nameMap[p.id]);
+function parseBatchVotes(text, voteSpecs) {
+    const clean = text
+        .replace(/<think>[\s\S]*?<\/think>/g, '')
+        .replace(/```(?:json)?/gi, '')
+        .replace(/```/g, '')
+        .trim();
+    const jsonText = (clean.match(/\[[\s\S]*\]/) || [clean])[0];
+    let parsed = null;
+    try { parsed = JSON.parse(jsonText); } catch (e) { parsed = null; }
+
+    const votesByVoter = new Map();
+    if (Array.isArray(parsed)) {
+        parsed.forEach((item, idx) => {
+            if (!item || typeof item !== 'object') return;
+            const voterText = String(item.voter || item.voterAlias || item.voter_alias || '').trim();
+            const spec = voteSpecs.find(v => voterText === v.voterAlias || voterText === v.voterId) || voteSpecs[idx];
+            if (!spec || votesByVoter.has(spec.voterId)) return;
+            const voteText = String(item.vote || item.votedFor || item.voted_for || item.votedForAlias || item.suspect || item.choice || '').trim();
+            votesByVoter.set(spec.voterId, parseVote(voteText, spec.candidates));
+        });
+    } else {
+        const lines = clean.split('\n');
+        voteSpecs.forEach(spec => {
+            const line = lines.find(l => l.includes(spec.voterAlias)) || clean;
+            votesByVoter.set(spec.voterId, parseVote(line, spec.candidates));
+        });
+    }
+
+    return voteSpecs.map(spec => ({
+        voterId: spec.voterId,
+        voterAlias: spec.voterAlias,
+        votedForAlias: votesByVoter.get(spec.voterId)
+            || spec.candidates[Math.floor(Math.random() * spec.candidates.length)],
+    }));
+}
+
+async function generateAIVotes(wllama, aiPlayers, context) {
+    const { recentMessages, nameMap, allPlayers } = context;
+    const voteSpecs = aiPlayers.map(ai => ({
+        voterId: ai.id,
+        voterAlias: nameMap[ai.id],
+        candidates: allPlayers.filter(p => p.id !== ai.id).map(p => nameMap[p.id]),
+    }));
 
     if (wllama) {
         try {
@@ -345,22 +372,32 @@ async function generateAIVote(wllama, aiId, context) {
                 .filter(m => !m.isSystem)
                 .map(m => (nameMap[m.senderId] || '?') + ': ' + m.text)
                 .join('\n');
+            const voterLines = voteSpecs
+                .map(v => v.voterAlias + ' may vote for: ' + v.candidates.join(', '))
+                .join('\n');
 
             const result = await wllama.createChatCompletion({
                 messages: [
-                    { role: 'system', content: 'You are analyzing a group chat to find who is a robot pretending to be human. Read the conversation carefully. Pick the player whose messages feel the most artificial, repetitive, or formulaic. Respond with ONLY the player name, nothing else.' },
-                    { role: 'user', content: 'Chat log:\n' + history + '\n\nWhich of these players is most likely a robot: ' + candidates.join(', ') + '\nRespond with just one name:' },
+                    { role: 'system', content: 'Pick which player each AI voter thinks is most likely a robot. Respond with ONLY a JSON array.' },
+                    { role: 'user', content: 'Chat:\n' + history + '\n\nFor each voter below, choose exactly one candidate from that voter list.\n' + voterLines + '\n\nReturn exactly this shape: [{"voter":"Name","vote":"Name"}]' },
                 ],
-                nPredict: 32768,
-                sampling: { temp: 1.0, top_p: 0.95, top_k: 20, min_p: 0.0, penalty_repeat: 1.0, penalty_present: 1.5 },
+                nPredict: 128,
+                // wllama v3.1.1 completion cache field is ambiguous; try both llama.cpp and wrapper spellings.
+                cache_prompt: true,
+                useCache: true,
+                sampling: { temp: 0.5, top_k: 20 },
             });
-            const raw = result.choices[0].message.content;
-            return parseVote(raw, candidates);
+            const raw = result.choices[0]?.message?.content || '';
+            return parseBatchVotes(raw, voteSpecs);
         } catch (e) {
-            console.error('Vote inference failed, using fallback:', e);
+            console.error('Batch vote inference failed, using fallback:', e);
         }
     }
-    return candidates[Math.floor(Math.random() * candidates.length)];
+    return voteSpecs.map(spec => ({
+        voterId: spec.voterId,
+        voterAlias: spec.voterAlias,
+        votedForAlias: spec.candidates[Math.floor(Math.random() * spec.candidates.length)],
+    }));
 }
 
 /* ===== MAIN GAME COMPONENT ===== */
@@ -370,7 +407,6 @@ function AIImposterGame() {
     const [messages, setMessages] = useState([]);
     const [humanMsgCount, setHumanMsgCount] = useState(0);
     const [setup, setSetup] = useState(null);
-    const [revealCount, setRevealCount] = useState(0);
     const [result, setResult] = useState(null);
     const [stats, setStats] = useState({ wins: 0, losses: 0 });
     const [openThinks, setOpenThinks] = useState(new Set());
@@ -424,6 +460,12 @@ function AIImposterGame() {
                 await w.loadModelFromHF(
                     { repo: HF_REPO, file: HF_FILE },
                     {
+                        n_ctx: 2048,
+                        flash_attn: true,
+                        swa_full: true,
+                        offload_kqv: true,
+                        n_batch: 2048,
+                        // TODO: n_ubatch not forwarded by wllama v3.1.1 JS wrapper yet; set to 512 when supported
                         progressCallback: ({ loaded, total }) => {
                             if (!cancelled && total > 0) setLoadPct(Math.round(loaded / total * 100));
                         },
@@ -472,7 +514,7 @@ function AIImposterGame() {
         }];
         setMessages([...messagesRef.current]);
         setHumanMsgCount(0); humanMsgCountRef.current = 0;
-        votesRef.current = []; setRevealCount(0); announcedVotesRef.current = 0;
+        votesRef.current = []; announcedVotesRef.current = 0;
         setResult(null); roundDoneRef.current = false; votingDoneRef.current = false;
         roundEndRef.current = Date.now() + ROUND_DURATION * 1000;
         setTimer(ROUND_DURATION);
@@ -558,7 +600,7 @@ function AIImposterGame() {
         if (phase !== PHASES.ROUND) return;
         const busy = { current: false };
         const id = setInterval(async () => {
-            if (busy.current || phaseRef.current !== PHASES.ROUND) return;
+            if (busy.current || phaseRef.current !== PHASES.ROUND || !wllamaRef.current) return;
             const now = Date.now();
             for (const ai of aiStatesRef.current) {
                 if (now >= ai.nextMessageTime && ai.messagesSent < ai.totalMessages && !ai.isSending) {
@@ -584,15 +626,10 @@ function AIImposterGame() {
                         });
                         if (phaseRef.current === PHASES.ROUND) {
                             const finalText = typeof result === 'object' ? result.text : result;
-                            const tps = typeof result === 'object' ? result.tps : '0';
-                            const genTime = typeof result === 'object' ? result.timeStr : '00m00s';
-                            const thinkText = typeof result === 'object' ? (result.thinkText || '') : '';
-                            setMessages(prev => {
-                                const exists = prev.some(m => m.id === msgId);
-                                const final = { id: msgId, senderId: ai.id, text: finalText, timestamp: Date.now(), isSystem: false, streaming: false, tps, genTime, thinkText };
-                                if (!exists) return [...prev, final];
-                                return prev.map(m => m.id === msgId ? { ...m, ...final } : m);
-                            });
+                            if (finalText === '[LLM not loaded]' || finalText === '[inference failed]') {
+                                setMessages(prev => prev.filter(m => m.id !== msgId));
+                                break;
+                            }
                             ai.messagesSent++;
                             const tl = roundEndRef.current - Date.now();
                             const ml = ai.totalMessages - ai.messagesSent;
@@ -617,24 +654,23 @@ function AIImposterGame() {
         (async () => {
             const s = setupRef.current;
             const w = wllamaRef.current;
-            const allVotes = [];
-            for (const ai of s.ais) {
-                if (cancelled) return;
-                const votedAlias = await generateAIVote(w, ai.id, {
-                    persona: ai.persona, recentMessages: messagesRef.current,
-                    nameMap: s.nameMap, allPlayers: s.allPlayers,
-                });
-                const votedPlayer = s.allPlayers.find(p => s.nameMap[p.id] === votedAlias);
-                const votedForId = votedPlayer ? votedPlayer.id
-                    : s.allPlayers.filter(p => p.id !== ai.id)[Math.floor(Math.random()*2)].id;
-                allVotes.push({
-                    voterId: ai.id, voterAlias: s.nameMap[ai.id],
-                    votedForId, votedForAlias: s.nameMap[votedForId],
-                });
-            }
+            const aiVotes = await generateAIVotes(w, s.ais, {
+                recentMessages: messagesRef.current,
+                nameMap: s.nameMap, allPlayers: s.allPlayers,
+            });
             if (cancelled) return;
+            const allVotes = aiVotes.map(vote => {
+                const votedPlayer = s.allPlayers.find(p => s.nameMap[p.id] === vote.votedForAlias);
+                const fallbackCandidates = s.allPlayers.filter(p => p.id !== vote.voterId);
+                const votedForId = votedPlayer ? votedPlayer.id
+                    : fallbackCandidates[Math.floor(Math.random() * fallbackCandidates.length)].id;
+                return {
+                    voterId: vote.voterId, voterAlias: vote.voterAlias,
+                    votedForId, votedForAlias: s.nameMap[votedForId],
+                };
+            });
             votesRef.current = allVotes;
-            announcedVotesRef.current = 0; setRevealCount(0);
+            announcedVotesRef.current = 0;
             votingStartRef.current = Date.now();
             roundEndRef.current = Date.now() + VOTING_DURATION * 1000;
             setTimer(VOTING_DURATION);
@@ -659,7 +695,6 @@ function AIImposterGame() {
                         text: v.voterAlias + ' suspects "' + v.votedForAlias + '" is the impostor' });
                 }
                 announcedVotesRef.current = should;
-                setRevealCount(should);
             }
             const remaining = Math.max(0, Math.ceil((roundEndRef.current - now) / 1000));
             if (remaining <= 0 && !votingDoneRef.current) {
@@ -689,7 +724,7 @@ function AIImposterGame() {
             <div className="loading-screen">
                 <div className="loading-title">AI Imposter</div>
                 <div className="loading-subtitle">Single-player Turing test game</div>
-                <div className="loading-status">Loading AI brain... ${loadPct}%</div>
+                <div className="loading-status">Loading LLM [${HF_FILE}]... ${loadPct}%</div>
                 <div className="progress-bar">
                     <div className="progress-fill" style=${{ width: loadPct + '%' }} />
                 </div>
@@ -697,17 +732,15 @@ function AIImposterGame() {
                 <div className="loading-hint">First load downloads ~1.4 GB model. Cached for future games.</div>
                 ${loadError && html`
                     <div className="loading-error">Load failed: ${loadError}</div>
-                    <div className="loading-hint" style=${{ marginTop: 8 }}>Make sure you're serving via HTTP (not file://). Try: python -m http.server 8080</div>
                 `}
             </div>
-            <footer className="info-footer">Downloading Qwen3.5-2B-MTP for in-browser AI inference</footer>
+            <footer className="info-footer">Downloading ${HF_FILE} for in-browser AI inference</footer>
         `;
     }
 
-    const isActive = phase === PHASES.ROUND || phase === PHASES.VOTING || phase === PHASES.ANALYZING;
     const footerText = phase === PHASES.LOBBY
         ? 'Chat with AI players and try to blend in. The AIs will vote on who they think is the impostor.'
-        : phase === PHASES.ROUND ? 'Chat naturally and blend in. ' + counterText
+        : phase === PHASES.ROUND ? 'Round in progress'
         : phase === PHASES.ANALYZING ? 'The AIs are analyzing the conversation...'
         : phase === PHASES.VOTING ? 'The AIs are deliberating on who is the impostor...'
         : result === 'win' ? 'You survived! The AIs could not identify you.'
@@ -724,7 +757,8 @@ function AIImposterGame() {
                 <div className="lobby-section">
                     <div className="lobby-header">
                         <h1 className="game-title">AI Imposter</h1>
-                        ${isActive && html`<div className="timer big">${fmtTime(timer)}</div>`}
+                        ${(phase === PHASES.ROUND || phase === PHASES.VOTING) && html`<div className="timer big">${fmtTime(timer)}</div>`}
+                        ${phase === PHASES.ANALYZING && html`<div className="timer big">...</div>`}
                     </div>
                     ${phase === PHASES.LOBBY && html`
                         <div className="lobby-info">
@@ -759,7 +793,6 @@ function AIImposterGame() {
                                 <div className="your-alias-reminder">You are: <strong>${setup.humanAlias}</strong></div>
                             `}
                         </div>
-                        ${phase === PHASES.ROUND && html`<div className="message-counter-panel">${counterText}</div>`}
                     `}
                 </div>
                 <div className="leaderboard">
@@ -821,9 +854,8 @@ function AIImposterGame() {
                     </div>
                     ${phase === PHASES.ROUND && html`
                         <div className="chat-input-container">
-                            <div className="message-counter">${counterText}</div>
                             <textarea ref=${inputRef} className="chat-input"
-                                placeholder="Type your message and press Enter..."
+                                placeholder=${counterText + ' | You are: ' + (setup ? setup.humanAlias : '?') + ' | Chat naturally and blend in'}
                                 onKeyDown=${handleKeyDown} maxLength=${150} />
                         </div>
                     `}
