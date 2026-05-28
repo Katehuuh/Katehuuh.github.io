@@ -2,9 +2,10 @@
   "models": {
     "claude-opus-4.8": {
       "display_name": "claude-opus-4.8",
-      "python_source": "assets/claude-opus-4.8.py",
       "python_render": "assets/claude-opus-4.8-python.jpg",
-      "_first_seen": "2026-05-28T19:36:29+00:00"
+      "python_source": "assets/claude-opus-4.8.py",
+      "svg": "assets/claude-opus-4.8.svg",
+      "_first_seen": "2026-05-28T19:36:40Z"
     },
     "gemini-3.5-flash": {
       "display_name": "gemini-3.5-flash",
