@@ -110,6 +110,7 @@ body { background: #0a0a0a; color: #efeff1; height: 100vh; overflow: hidden;
     min-height: 48px; max-height: 80px; }
 .chat-input:focus { outline: none; border-color: #9147ff; }
 .chat-input:disabled { opacity: 0.5; cursor: not-allowed; }
+.chat-input.urgent::placeholder { color: #eb0400; font-weight: 600; }
 .result-actions { text-align: center; }
 .info-footer { position: fixed; left: 0; right: 0; bottom: 0; background: #111116;
     border-top: 1px solid #2f2f35; color: #efeff1; z-index: 1001;
@@ -207,12 +208,16 @@ const PHASES = {
     LOADING: 'loading', LOBBY: 'lobby', ROUND: 'round',
     ANALYZING: 'analyzing', VOTING: 'voting', RESULTS: 'results'
 };
-const ROUND_DURATION = 120;
+const ROUND_DURATION = 180;
 const VOTING_DURATION = 15;
 const MIN_MESSAGES = 3;
-const HF_REPO = 'unsloth/gemma-4-E2B-it-GGUF';
-const HF_FILE = 'gemma-4-E2B-it-UD-Q3_K_XL.gguf';
-// NOTE: Switching to a pure transformer GGUF (no Mamba/SSM hybrid) would eliminate 'forcing full prompt re-processing'. Qwen3.5 hybrid forces full prefill every call. Consider Qwen2.5-1.5B-Instruct-Q4_K_M or similar pure-attention model.
+const CHAT_HISTORY_MESSAGES = 4;
+const CHAT_N_PREDICT = 32;
+const MODEL_CHAIN = [
+    { repo: 'TrevorJS/gemma-4-E2B-it-uncensored-GGUF', file: 'gemma-4-E2B-it-uncensored-Q4_K_M.gguf' },
+    { repo: 'deucebucket/Gemma-4-E2B-it-Cerebellum-v2-GGUF', file: 'Gemma-4-E2B-it-Cerebellum-v2.gguf' },
+    { repo: 'unsloth/gemma-4-E2B-it-GGUF', file: 'gemma-4-E2B-it-UD-Q3_K_XL.gguf' },
+];
 
 const ANONYMOUS_NAMES = [
     'Marcus','Elena','Kai','Nadia','Remy',
@@ -223,10 +228,14 @@ const ANONYMOUS_NAMES = [
     'Theo','Rosa','Ivan','Vera','Sam'
 ];
 
-/* ===== AI PERSONA (same for all 3 AIs -- no personality differentiation) ===== */
+/* ===== AI PERSONA (neutral — no personality steering, no examples) ===== */
 const AI_PERSONA = {
-    systemPrompt: 'Chat casually in under 15 words. No emojis. Be messy, use lowercase. Reply with ONLY your message.',
+    systemPrompt: 'You are in a group chat. Reply with ONE short casual message under 15 words. lowercase only. Reply with ONLY your message.',
 };
+
+/* ===== SLOP BAN LIST (658 words — tokenized at load time for logit_bias) ===== */
+const SLOP_WORDS = ["abodes","abundantly","abuzz","accolade","accusingly","acumen","adorned","adorning","adornments","aether","affectionately","agape","airlock","allegories","amulet","antiseptic","appreciatively","archmage","arduous","ashen","attuned","basking","bated","beckoning","belongingness","benevolence","bestowing","billowing","bioluminescent","blissfully","blossomed","bolstered","boundless","bountiful","breathtakingly","brimming","burgeoning","bustling","cacophony","cadence","candor","captivate","captivated","captivates","captivating","captivatingly","cascaded","cascading","cavernous","ceaseless","cerulean","championed","chasms","chiaroscuro","chitinous","clandestine","cloying","coalesced","coalescing","coiling","colossal","commendable","considerately","conspiratorial","conspiratorially","contemplation","contemplative","contemplatively","contentment","contorting","copious","coursing","coveted","cradled","cradling","craftsmanship","crescendo","crescendoed","crestfallen","culminated","cultists","cultivates","curated","curdled","dais","dappled","decadent","deftly","delectable","delicately","delve","delved","delves","delving","denizens","desolate","devoid","discerning","discordant","disheartened","disorienting","disquietude","donned","dreamlike","dreamscape","dreamscapes","echelons","eclectic","edifice","edifices","effectuate","effortlessly","elation","eldritch","elegance","elicited","eliciting","elixirs","eloquence","elven","emanate","emanated","emanating","embark","embarking","embellishments","embers","emblazoned","embodied","embodiments","embodying","emboldened","emboldening","empathetically","empathizing","emphatically","encapsulate","encapsulated","encapsulates","encapsulating","enchanted","enchanting","enchantingly","enchantment","enchantments","endeavored","endeavors","endlessness","engrossed","engulfed","engulfing","enigmas","enigmatically","enrapture","enraptured","enriched","ensconced","enshrouding","ensnare","ensnared","enthrall","enthralled","enthralling","entranced","entrusting","entwine","entwined","entwining","enveloped","enveloping","envisioned","ephemerality","epiphanies","epochs","equanimity","esoteric","ethereal","ethereally","everchanging","evoking","exhilaration","expanse","expanses","exquisiteness","extolling","exuberance","exuded","exuding","fabled","fantastical","fervent","fervently","fervor","festered","feverishly","firelight","fledgling","fleeting","flickered","flickering","flickers","flourished","fluttered","fluttering","foreignness","foretelling","fortitude","fortuitous","frenetic","frenetically","fulfillment","furrowed","gingerly","gleamed","gleaming","glided","glimmered","glimmering","glimmers","glint","glinted","glinting","glints","glistened","glistening","glowed","glyphs","gnawing","gossamer","graciously","grandeur","grandiose","gravitated","grimoire","grizzled","guttural","hallowed","harbinger","harmonious","harmoniously","harnessed","harrowing","hauntingly","heartfelt","heartrending","heartstrings","heralding","holistic","hollowing","humorless","idyllic","illuminated","illuminating","imbued","immeasurable","immeasurably","immemorial","impart","imparted","imparting","impeccably","impenetrable","imperceptible","imperceptibly","impermanence","implored","impossibly","incantations","indefinably","indelible","indelibly","indescribable","indispensable","indomitable","ingenuity","innermost","insatiable","insightfulness","interconnectedness","interjected","interlopers","intermingled","interplay","interspersed","intertwine","intertwined","intertwines","intertwining","interweaving","interwoven","intoned","intoxicating","intrepid","intricacies","intricacy","intricately","intriguingly","invigorating","iridescent","irrevocably","kaleidoscope","kaleidoscopic","kindled","labyrinth","labyrinthian","labyrinthine","labyrinths","lackluster","lamenting","lamplight","libations","lightheartedness","lilting","lingered","lingering","longingly","loomed","luminescence","luminescent","machinations","maelstrom","majestically","malevolence","malevolent","manicured","marveled","marveling","masterfully","materialized","meandered","meandering","melancholic","mellifluous","melodious","mesmerized","mesmerizing","mesmerizingly","metamorphosis","meticulously","meticulousness","microcosm","ministration","ministrations","minutiae","mirth","misdirections","missives","monikers","monolith","monoliths","monumental","moonlit","morsels","motes","multifaceted","murmured","mused","musings","naturedly","nebulae","necromancer","nestled","newfound","nightshade","nondescript","nuances","nurtured","nurturing","obsidian","ominously","opulence","opulent","otherworldliness","otherworldly","outpouring","painstakingly","palpable","palpably","parchment","partake","passionately","pattered","penchant","pensive","perceptible","perilous","permeate","permeated","permeating","perplexed","perplexing","perseverance","perusing","pervaded","picturesque","piqued","pivotal","plaintively","poignantly","poise","poised","pondered","precariously","precariousness","precipice","prevails","pristine","pristinely","proffered","profundity","pronouncements","propriety","prowess","pulsating","punctilious","quickened","quietude","quivering","radiant","rasping","reassuringly","regale","regaled","regally","rekindled","rekindling","relished","repast","resilient","resolute","resolutely","resonate","resonated","resonating","resounding","respite","resplendent","resplendently","revelatory","reverberate","reverberated","reverberates","reverberating","revered","reverence","reverentially","reverently","reverie","revitalizing","rippling","rivulets","roiling","roughspun","sacredness","sagacious","sagacity","sagely","sanctity","sartorial","sartorially","scathingly","seamless","seamlessly","seeped","semblance","serenaded","serenades","serenading","serendipitous","serendipitously","serendipity","serenely","serenity","sesquipedalian","shimmering","shrouded","sigil","silhouette","silhouetted","slithery","smoldering","sojourns","solemnity","solemnly","soliloquies","solitude","somberly","somberness","sonorous","soothingly","sorceress","soulfulness","soundscapes","spaciousness","specters","spellbinding","spellbound","spiraled","splendor","splendorous","splendors","sprawled","sprawling","steadfast","steadfastly","steadfastness","stealthily","steeds","steeped","steepled","steepling","stoically","storied","succumbing","suffusing","sulfurous","sunlit","surmount","surmounted","surmounting","sustenance","swirled","symbiotic","symbiotically","synergistically","tableau","tantalizing","tantalizingly","tapestries","tapestry","teetering","tempests","tempestuous","tenacious","tenderly","tendril","tendrils","thenceforth","threadbare","throes","throng","throngs","thrum","thrummed","thrumming","thrums","timelessness","tinged","tireless","tirelessly","torchlight","tousled","tranquil","tranquility","transcend","transcending","transfixed","transformative","transience","traversing","trembled","trepidation","trepidations","tribulations","trickled","triumphant","triumphantly","trove","tumultuous","tutelage","twinkled","unadulterated","unbeknownst","unbidden","unblinking","unburdened","uncharted","undeniable","underbrush","undercurrent","undergrowth","understandingly","undertones","undeterred","undiminished","undulating","undying","unearth","unearthed","unearthly","unfurl","unfurled","unfurling","unmistakable","unnervingly","unparalleled","unperturbed","unquenchable","unravel","unraveled","unreadable","unsettlingly","unshed","unspoiled","unspoken","unsung","untainted","untamed","unwavering","unwaveringly","unyielding","uuwu","valiantly","vanquishing","vastness","velvety","verdant","verdure","verdurous","vestiges","vibrancy","vibrantly","viewscreen","visage","viscous","visionary","vistas","vivacious","voracious","voraciously","wafted","wafting","waned","warily","wavered","weariness","weightiness","welled","wellspring","whimsical","whimsy","windswept","wisps","wistful","wistfully","wistfulness","wizened","wonderment","woodsmoke","writhe","writhed","writhing","yearned","yearning","yesteryear","yesteryears","zealousness","zephyr"];
+let SLOP_BIAS = [];
 
 /* ===== UTILITIES ===== */
 function shuffleArray(arr) {
@@ -259,7 +268,39 @@ function parseVote(text, candidates) {
     for (const name of candidates) {
         if (c.toLowerCase().includes(name.toLowerCase())) return name;
     }
-    return candidates[Math.floor(Math.random() * candidates.length)];
+    return null;
+}
+
+const wllamaInferenceLocks = new WeakMap();
+
+function waitForWllamaGpuSettle() {
+    return new Promise(resolve => {
+        const finish = () => setTimeout(resolve, 0);
+        if (typeof requestAnimationFrame === 'function') {
+            requestAnimationFrame(() => requestAnimationFrame(finish));
+        } else {
+            finish();
+        }
+    });
+}
+
+async function runWllamaInference(wllama, task) {
+    const previous = wllamaInferenceLocks.get(wllama) || Promise.resolve();
+    let releaseLock;
+    const lock = new Promise(resolve => { releaseLock = resolve; });
+    const queued = previous.catch(() => {}).then(() => lock);
+    wllamaInferenceLocks.set(wllama, queued);
+
+    await previous.catch(() => {});
+    try {
+        return await task();
+    } finally {
+        await waitForWllamaGpuSettle();
+        releaseLock();
+        if (wllamaInferenceLocks.get(wllama) === queued) {
+            wllamaInferenceLocks.delete(wllama);
+        }
+    }
 }
 
 /* ===== LLM MESSAGE GENERATION (streaming with t/s tracking) ===== */
@@ -269,27 +310,29 @@ async function generateAIMessage(wllama, aiId, context, onStream) {
 
     const myName = nameMap[aiId] || 'Player';
     const history = recentMessages
-        .filter(m => !m.isSystem).slice(-4)
+        .filter(m => !m.isSystem).slice(-CHAT_HISTORY_MESSAGES)
         .map(m => (nameMap[m.senderId] || '?') + ': ' + m.text)
         .join('\n');
     const userContent = history
-        ? history + '\n' + myName + ':'
-        : myName + ' says something casual to start the chat:';
+        ? 'Group chat transcript:\n' + history + '\n\nReply as ' + myName + ' with one short casual message:'
+        : 'Group chat transcript is empty.\n\nReply as ' + myName + ' with one short casual message:';
 
     if (onStream) onStream({ text: '(generating...)', tps: '0', timeStr: '00m00s', tokenCount: 0, thinkText: '', done: false });
 
     const t0 = performance.now();
     try {
-        const result = await wllama.createChatCompletion({
+        const result = await runWllamaInference(wllama, () => wllama.createChatCompletion({
             messages: [
                 { role: 'system', content: persona.systemPrompt },
                 { role: 'user', content: userContent },
             ],
-            nPredict: 64,
-            cache_prompt: true,
+            nPredict: CHAT_N_PREDICT,
+            // Gemma-4 hybrid cache misses can force very slow full prompt re-processing.
+            cache_prompt: false,
+            useCache: false,
             seed: Math.floor(Math.random() * 999999),
-            sampling: { temp: 1.0, top_p: 0.95, top_k: 64 },
-        });
+            sampling: { temp: 1.0, top_p: 0.95, top_k: 64, min_p: 0.05, penalty_repeat: 1.3, penalty_present: 0.4, logit_bias: SLOP_BIAS },
+        }));
 
         const elapsed = (performance.now() - t0) / 1000;
         if (!result || !result.choices) {
@@ -321,6 +364,37 @@ async function generateAIMessage(wllama, aiId, context, onStream) {
     }
 }
 
+/* ===== PLAYER STATS (pre-computed heuristics for vote prompt) ===== */
+function computePlayerStats(messages, nameMap, allPlayers) {
+    const stats = {};
+    for (const p of allPlayers) {
+        const pName = nameMap[p.id];
+        const pMsgs = messages.filter(m => !m.isSystem && m.senderId === p.id);
+        const wordCounts = pMsgs.map(m => m.text.split(/\s+/).filter(w => w.length > 0).length);
+        const avgLen = wordCounts.length > 0
+            ? (wordCounts.reduce((s, w) => s + w, 0) / wordCounts.length).toFixed(1) : '0';
+        const lenVariance = wordCounts.length > 1
+            ? (wordCounts.reduce((s, w) => s + Math.pow(w - parseFloat(avgLen), 2), 0) / wordCounts.length).toFixed(1) : '0';
+        const times = pMsgs.map(m => m.timestamp).sort((a, b) => a - b);
+        const gaps = [];
+        for (let i = 1; i < times.length; i++) gaps.push((times[i] - times[i - 1]) / 1000);
+        const avgGap = gaps.length > 0 ? (gaps.reduce((a, b) => a + b, 0) / gaps.length).toFixed(1) : 'N/A';
+        const gapVariance = gaps.length > 1
+            ? gaps.reduce((s, g) => s + Math.pow(g - parseFloat(avgGap), 2), 0) / gaps.length : 0;
+        const allText = pMsgs.map(m => m.text).join(' ');
+        const hasQuestion = pMsgs.some(m => m.text.includes('?'));
+        const usesSlang = /\b(lol|lmao|bruh|ngl|tbh|idk|imo|fr|smh|omg|btw|rn)\b/i.test(allText);
+        const usesPunctuation = /[.!,;:]/.test(allText);
+        const usesCapitals = /[A-Z]/.test(allText);
+        stats[pName] = {
+            msgCount: pMsgs.length, avgWordLen: avgLen, lenVariance,
+            avgGapSec: avgGap, gapVariance,
+            hasQuestion, usesSlang, usesPunctuation, usesCapitals,
+        };
+    }
+    return stats;
+}
+
 /* ===== LLM VOTE GENERATION ===== */
 function parseBatchVotes(text, voteSpecs) {
     const clean = text
@@ -350,54 +424,71 @@ function parseBatchVotes(text, voteSpecs) {
         });
     }
 
-    return voteSpecs.map(spec => ({
+    const votes = voteSpecs.map(spec => ({
         voterId: spec.voterId,
         voterAlias: spec.voterAlias,
-        votedForAlias: votesByVoter.get(spec.voterId)
-            || spec.candidates[Math.floor(Math.random() * spec.candidates.length)],
+        votedForAlias: votesByVoter.get(spec.voterId),
     }));
+    const missing = votes.filter(v => !v.votedForAlias).map(v => v.voterAlias);
+    if (missing.length > 0) {
+        throw new Error('Vote inference did not identify a valid candidate for: ' + missing.join(', '));
+    }
+    return votes;
 }
 
 async function generateAIVotes(wllama, aiPlayers, context) {
     const { recentMessages, nameMap, allPlayers } = context;
+    const playerStats = computePlayerStats(recentMessages, nameMap, allPlayers);
+    console.log('[vote] Player stats:', JSON.stringify(playerStats));
+
     const voteSpecs = aiPlayers.map(ai => ({
         voterId: ai.id,
         voterAlias: nameMap[ai.id],
         candidates: allPlayers.filter(p => p.id !== ai.id).map(p => nameMap[p.id]),
     }));
 
-    if (wllama) {
-        try {
-            const history = recentMessages
-                .filter(m => !m.isSystem)
-                .map(m => (nameMap[m.senderId] || '?') + ': ' + m.text)
-                .join('\n');
-            const voterLines = voteSpecs
-                .map(v => v.voterAlias + ' may vote for: ' + v.candidates.join(', '))
-                .join('\n');
+    if (!wllama) throw new Error('Cannot generate AI votes before WLLAMA is loaded');
 
-            const result = await wllama.createChatCompletion({
-                messages: [
-                    { role: 'system', content: 'Pick which player each AI voter thinks is most likely a robot. Respond with ONLY a JSON array.' },
-                    { role: 'user', content: 'Chat:\n' + history + '\n\nFor each voter below, choose exactly one candidate from that voter list.\n' + voterLines + '\n\nReturn exactly this shape: [{"voter":"Name","vote":"Name"}]' },
-                ],
-                nPredict: 128,
-                // wllama v3.1.1 completion cache field is ambiguous; try both llama.cpp and wrapper spellings.
-                cache_prompt: true,
-                useCache: true,
-                sampling: { temp: 0.5, top_k: 20 },
-            });
-            const raw = result.choices[0]?.message?.content || '';
-            return parseBatchVotes(raw, voteSpecs);
-        } catch (e) {
-            console.error('Batch vote inference failed, using fallback:', e);
-        }
-    }
-    return voteSpecs.map(spec => ({
-        voterId: spec.voterId,
-        voterAlias: spec.voterAlias,
-        votedForAlias: spec.candidates[Math.floor(Math.random() * spec.candidates.length)],
+    const history = recentMessages
+        .filter(m => !m.isSystem)
+        .map(m => (nameMap[m.senderId] || '?') + ': ' + m.text)
+        .join('\n');
+    const statsBlock = Object.entries(playerStats)
+        .map(([name, s]) => `${name}: ${s.msgCount} msgs, avg ${s.avgWordLen} words, timing gap ${s.avgGapSec}s, questions=${s.hasQuestion}, slang=${s.usesSlang}, punctuation=${s.usesPunctuation}, capitals=${s.usesCapitals}`)
+        .join('\n');
+    const voterLines = voteSpecs
+        .map(v => v.voterAlias + ' picks from: ' + v.candidates.join(', '))
+        .join('\n');
+
+    const sysPrompt = `You are judging a chat game. 4 players chatted: 3 are AI bots, 1 is a real human. Find the HUMAN.
+Humans tend to: type at irregular speeds, use slang/abbreviations, ask questions, vary message length, use punctuation and capitals, respond specifically to what others said.
+AI bots tend to: respond at regular intervals, have consistent message length, give generic short replies, avoid questions and punctuation.
+Respond with ONLY a JSON array.`;
+
+    const userPrompt = `Chat log:
+${history}
+
+Player stats:
+${statsBlock}
+
+For each voter below, pick the ONE player they think is the HUMAN impostor.
+${voterLines}
+
+Return JSON: [{"voter":"Name","vote":"Name"}]`;
+
+    const result = await runWllamaInference(wllama, () => wllama.createChatCompletion({
+        messages: [
+            { role: 'system', content: sysPrompt },
+            { role: 'user', content: userPrompt },
+        ],
+        nPredict: 192,
+        cache_prompt: false,
+        useCache: false,
+        sampling: { temp: 0.4, top_k: 20, logit_bias: SLOP_BIAS },
     }));
+    const raw = result.choices[0]?.message?.content || '';
+    console.log('[vote] Raw LLM output:', JSON.stringify(raw.slice(0, 500)));
+    return parseBatchVotes(raw, voteSpecs);
 }
 
 /* ===== MAIN GAME COMPONENT ===== */
@@ -455,31 +546,48 @@ function AIImposterGame() {
         }, 1000);
 
         (async () => {
-            try {
-                const w = new WllamaClass(WasmPaths);
-                await w.loadModelFromHF(
-                    { repo: HF_REPO, file: HF_FILE },
-                    {
-                        n_ctx: 2048,
-                        flash_attn: true,
-                        swa_full: true,
-                        offload_kqv: true,
-                        n_batch: 2048,
-                        // TODO: n_ubatch not forwarded by wllama v3.1.1 JS wrapper yet; set to 512 when supported
-                        progressCallback: ({ loaded, total }) => {
-                            if (!cancelled && total > 0) setLoadPct(Math.round(loaded / total * 100));
+            for (const model of MODEL_CHAIN) {
+                if (cancelled) return;
+                try {
+                    console.log('[model] Trying', model.repo, model.file);
+                    if (!cancelled) { setLoadPct(0); setLoadError(null); }
+                    const w = new WllamaClass(WasmPaths);
+                    await w.loadModelFromHF(
+                        { repo: model.repo, file: model.file },
+                        {
+                            n_ctx: 2048,
+                            flash_attn: true,
+                            swa_full: true,
+                            offload_kqv: true,
+                            n_batch: 2048,
+                            progressCallback: ({ loaded, total }) => {
+                                if (!cancelled && total > 0) setLoadPct(Math.round(loaded / total * 100));
+                            },
                         },
-                    },
-                );
-                if (!cancelled) {
-                    wllamaRef.current = w;
-                    /* Skip lobby, auto-start game on load */
-                    setTimeout(() => { if (!cancelled) startGameRef.current(); }, 100);
+                    );
+                    if (!cancelled) {
+                        console.log('[model] Loaded', model.repo);
+                        wllamaRef.current = w;
+                        console.log('[slop] Tokenizing', SLOP_WORDS.length, 'ban words...');
+                        const biasSet = new Set();
+                        for (const word of SLOP_WORDS) {
+                            try {
+                                const tokens = await w.tokenize(word);
+                                for (const t of tokens) {
+                                    if (!biasSet.has(t)) { biasSet.add(t); SLOP_BIAS.push({ token: t, bias: -100 }); }
+                                }
+                            } catch (e) {}
+                        }
+                        console.log('[slop] Built logit_bias with', SLOP_BIAS.length, 'token bans');
+                        setTimeout(() => { if (!cancelled) startGameRef.current(); }, 100);
+                    }
+                    return;
+                } catch (e) {
+                    console.warn('[model] Failed to download', model.file, e.message || e);
+                    if (!cancelled) setLoadError('Failed ' + model.file + ', trying next...');
                 }
-            } catch (e) {
-                console.error('Model load failed:', e);
-                if (!cancelled) setLoadError(String(e.message || e));
             }
+            if (!cancelled) setLoadError('All models failed to download.');
         })();
         return () => { cancelled = true; clearInterval(elapsedId); };
     }, [updatePhase]);
@@ -520,7 +628,7 @@ function AIImposterGame() {
         setTimer(ROUND_DURATION);
         aiStatesRef.current = aiConfigs.map(a => ({
             id: a.id, persona: a.persona, messagesSent: 0,
-            totalMessages: 3 + Math.floor(Math.random() * 2),
+            totalMessages: 3,
             nextMessageTime: Date.now() + 5000 + Math.random() * 10000,
             isSending: false,
         }));
@@ -534,11 +642,18 @@ function AIImposterGame() {
     /* ---- Send Human Message ---- */
     const sendMessage = useCallback((text) => {
         if (!text.trim() || phaseRef.current !== PHASES.ROUND) return;
+        if (humanMsgCountRef.current >= MIN_MESSAGES) return;
         humanMsgCountRef.current++;
         setHumanMsgCount(humanMsgCountRef.current);
         addMessage({ id: 'human-' + Date.now(), senderId: 'human',
             text: text.trim(), timestamp: Date.now(), isSystem: false });
         if (inputRef.current) inputRef.current.value = '';
+
+        const available = aiStatesRef.current.filter(a => a.messagesSent < a.totalMessages && !a.isSending);
+        if (available.length > 0) {
+            const responder = available[Math.floor(Math.random() * available.length)];
+            responder.nextMessageTime = Math.min(responder.nextMessageTime, Date.now() + 3000 + Math.random() * 5000);
+        }
     }, [addMessage]);
 
     const handleKeyDown = useCallback((e) => {
@@ -548,22 +663,28 @@ function AIImposterGame() {
     /* ---- Show Results ---- */
     const showResults = useCallback(() => {
         const s = setupRef.current; const v = votesRef.current;
+        const tooFew = humanMsgCountRef.current < MIN_MESSAGES;
         const hv = v.filter(x => x.votedForId === s.humanId).length;
-        const caught = hv >= 2; const gr = caught ? 'lose' : 'win';
+        const caught = tooFew || hv >= 2;
+        const gr = caught ? 'lose' : 'win';
         setResult(gr);
         setStats(prev => ({ wins: prev.wins + (gr==='win'?1:0), losses: prev.losses + (gr==='lose'?1:0) }));
-        let t = caught ? 'YOU WERE CAUGHT!\nThe AIs identified you as the human impostor.\n'
-                       : 'YOU SURVIVED!\nThe AIs failed to identify you as the human.\n';
-        t += '\nVote Breakdown:\n';
+
         const counts = {};
         v.forEach(x => { counts[x.votedForId] = (counts[x.votedForId]||0) + 1; });
-        Object.entries(counts).forEach(([pid,c]) => {
-            t += '  ' + s.nameMap[pid] + ': ' + c + ' vote' + (c!==1?'s':'') + '\n'; });
-        t += '\nTrue Identities:\n';
+
+        let t = tooFew
+            ? 'GAME OVER! - You only sent ' + humanMsgCountRef.current + '/' + MIN_MESSAGES + ' messages.'
+            : caught
+                ? 'YOU WERE CAUGHT! - The AIs identified you as the human.'
+                : 'YOU SURVIVED! - The AIs failed to identify you.';
+        t += '\n\n';
         s.allPlayers.forEach(p => {
-            if (p.isHuman) { t += '  ' + s.nameMap[p.id] + ': YOU (Human)\n'; }
-            else { const ai = s.ais.find(a => a.id === p.id);
-                t += '  ' + s.nameMap[p.id] + ': AI\n'; }
+            const name = s.nameMap[p.id];
+            const vc = counts[p.id] || 0;
+            const voteTag = vc > 0 ? ', ' + vc + ' vote' + (vc !== 1 ? 's' : '') : '';
+            if (p.isHuman) { t += '  ' + name + ': YOU (Human' + voteTag + ')\n'; }
+            else { t += '  ' + name + ': AI' + (voteTag ? ' (' + vc + ' vote' + (vc !== 1 ? 's' : '') + ')' : '') + '\n'; }
         });
         addMessage({ id: 'sys-results', isSystem: true, isResult: true,
             gameResult: gr, text: t, timestamp: Date.now() });
@@ -579,11 +700,13 @@ function AIImposterGame() {
         return () => clearInterval(id);
     }, [phase]);
 
-    /* ---- Round end detection ---- */
+    /* ---- Round end detection (waits for in-flight generation to finish) ---- */
     useEffect(() => {
         if (phase !== PHASES.ROUND) return;
         const id = setInterval(() => {
             if (Date.now() >= roundEndRef.current && !roundDoneRef.current) {
+                const anyBusy = aiStatesRef.current.some(a => a.isSending);
+                if (anyBusy) return;
                 roundDoneRef.current = true;
                 const met = humanMsgCountRef.current >= MIN_MESSAGES;
                 addMessage({ id: 'sys-analyze', isSystem: true, timestamp: Date.now(),
@@ -602,7 +725,14 @@ function AIImposterGame() {
         const id = setInterval(async () => {
             if (busy.current || phaseRef.current !== PHASES.ROUND || !wllamaRef.current) return;
             const now = Date.now();
-            for (const ai of aiStatesRef.current) {
+            const timeLeft = roundEndRef.current - now;
+            if (timeLeft <= 20000) {
+                for (const ai of aiStatesRef.current) {
+                    if (ai.messagesSent < ai.totalMessages && !ai.isSending) ai.nextMessageTime = now;
+                }
+            }
+            const shuffled = shuffleArray(aiStatesRef.current);
+            for (const ai of shuffled) {
                 if (now >= ai.nextMessageTime && ai.messagesSent < ai.totalMessages && !ai.isSending) {
                     busy.current = true; ai.isSending = true;
                     try {
@@ -611,8 +741,8 @@ function AIImposterGame() {
                             persona: ai.persona, recentMessages: messagesRef.current,
                             nameMap: setupRef.current.nameMap, messagesSent: ai.messagesSent,
                         }, (streamData) => {
-                            /* Update or create the streaming message in-place */
-                            if (phaseRef.current === PHASES.ROUND) {
+                            /* Update or create the streaming message in-place (also works during grace period after timer) */
+                            if (phaseRef.current === PHASES.ROUND || !roundDoneRef.current) {
                                 setMessages(prev => {
                                     const exists = prev.some(m => m.id === msgId);
                                     if (!exists) {
@@ -624,7 +754,7 @@ function AIImposterGame() {
                                 });
                             }
                         });
-                        if (phaseRef.current === PHASES.ROUND) {
+                        if (phaseRef.current === PHASES.ROUND || !roundDoneRef.current) {
                             const finalText = typeof result === 'object' ? result.text : result;
                             if (finalText === '[LLM not loaded]' || finalText === '[inference failed]') {
                                 setMessages(prev => prev.filter(m => m.id !== msgId));
@@ -633,9 +763,11 @@ function AIImposterGame() {
                             ai.messagesSent++;
                             const tl = roundEndRef.current - Date.now();
                             const ml = ai.totalMessages - ai.messagesSent;
-                            if (ml > 0 && tl > 5000) {
+                            if (ml > 0 && tl > 20000) {
                                 const base = tl / (ml + 1);
                                 ai.nextMessageTime = Date.now() + Math.max(5000, base + (Math.random()-0.5)*base*0.4);
+                            } else if (ml > 0) {
+                                ai.nextMessageTime = Date.now();
                             }
                         }
                     } catch (e) { console.error('AI msg err:', e); }
@@ -652,32 +784,40 @@ function AIImposterGame() {
         if (phase !== PHASES.ANALYZING) return;
         let cancelled = false;
         (async () => {
-            const s = setupRef.current;
-            const w = wllamaRef.current;
-            const aiVotes = await generateAIVotes(w, s.ais, {
-                recentMessages: messagesRef.current,
-                nameMap: s.nameMap, allPlayers: s.allPlayers,
-            });
-            if (cancelled) return;
-            const allVotes = aiVotes.map(vote => {
-                const votedPlayer = s.allPlayers.find(p => s.nameMap[p.id] === vote.votedForAlias);
-                const fallbackCandidates = s.allPlayers.filter(p => p.id !== vote.voterId);
-                const votedForId = votedPlayer ? votedPlayer.id
-                    : fallbackCandidates[Math.floor(Math.random() * fallbackCandidates.length)].id;
-                return {
-                    voterId: vote.voterId, voterAlias: vote.voterAlias,
-                    votedForId, votedForAlias: s.nameMap[votedForId],
-                };
-            });
-            votesRef.current = allVotes;
-            announcedVotesRef.current = 0;
-            votingStartRef.current = Date.now();
-            roundEndRef.current = Date.now() + VOTING_DURATION * 1000;
-            setTimer(VOTING_DURATION);
-            updatePhase(PHASES.VOTING);
+            try {
+                const s = setupRef.current;
+                const w = wllamaRef.current;
+                const aiVotes = await generateAIVotes(w, s.ais, {
+                    recentMessages: messagesRef.current,
+                    nameMap: s.nameMap, allPlayers: s.allPlayers,
+                });
+                if (cancelled) return;
+                const allVotes = aiVotes.map(vote => {
+                    const votedPlayer = s.allPlayers.find(p => s.nameMap[p.id] === vote.votedForAlias);
+                    if (!votedPlayer) {
+                        throw new Error('Vote inference returned unknown player: ' + vote.votedForAlias);
+                    }
+                    return {
+                        voterId: vote.voterId, voterAlias: vote.voterAlias,
+                        votedForId: votedPlayer.id, votedForAlias: s.nameMap[votedPlayer.id],
+                    };
+                });
+                votesRef.current = allVotes;
+                announcedVotesRef.current = 0;
+                votingStartRef.current = Date.now();
+                roundEndRef.current = Date.now() + VOTING_DURATION * 1000;
+                setTimer(VOTING_DURATION);
+                updatePhase(PHASES.VOTING);
+            } catch (e) {
+                console.error('AI vote inference failed:', e);
+                if (!cancelled) {
+                    addMessage({ id: 'sys-vote-error', isSystem: true, timestamp: Date.now(),
+                        text: 'AI vote inference failed. Check the console for details.' });
+                }
+            }
         })();
         return () => { cancelled = true; };
-    }, [phase, updatePhase]);
+    }, [phase, addMessage, updatePhase]);
 
     /* ---- Vote reveal during VOTING ---- */
     useEffect(() => {
@@ -713,9 +853,8 @@ function AIImposterGame() {
     /* No skip -- LLM is required */
 
     /* ---- Render ---- */
-    const counterText = humanMsgCount < MIN_MESSAGES
-        ? 'Messages: ' + humanMsgCount + '/3+ (' + MIN_MESSAGES + ' minimum required)'
-        : 'Messages: ' + humanMsgCount + '/3+ (minimum met)';
+    const msgsLeft = MIN_MESSAGES - humanMsgCount;
+    const counterText = msgsLeft + ' message' + (msgsLeft !== 1 ? 's' : '') + ' left to send before ' + fmtTime(timer);
 
     /* LOADING SCREEN */
     if (phase === PHASES.LOADING) {
@@ -724,7 +863,7 @@ function AIImposterGame() {
             <div className="loading-screen">
                 <div className="loading-title">AI Imposter</div>
                 <div className="loading-subtitle">Single-player Turing test game</div>
-                <div className="loading-status">Loading LLM [${HF_FILE}]... ${loadPct}%</div>
+                <div className="loading-status">Loading LLM [${MODEL_CHAIN[0].file}]... ${loadPct}%</div>
                 <div className="progress-bar">
                     <div className="progress-fill" style=${{ width: loadPct + '%' }} />
                 </div>
@@ -734,7 +873,7 @@ function AIImposterGame() {
                     <div className="loading-error">Load failed: ${loadError}</div>
                 `}
             </div>
-            <footer className="info-footer">Downloading ${HF_FILE} for in-browser AI inference</footer>
+            <footer className="info-footer">Downloading ${MODEL_CHAIN[0].file} for in-browser AI inference</footer>
         `;
     }
 
@@ -854,14 +993,17 @@ function AIImposterGame() {
                     </div>
                     ${phase === PHASES.ROUND && html`
                         <div className="chat-input-container">
-                            <textarea ref=${inputRef} className="chat-input"
-                                placeholder=${counterText + ' | You are: ' + (setup ? setup.humanAlias : '?') + ' | Chat naturally and blend in'}
+                            <textarea ref=${inputRef} className=${'chat-input' + (msgsLeft > 0 && timer <= 10 ? ' urgent' : '')}
+                                disabled=${humanMsgCount >= MIN_MESSAGES}
+                                placeholder=${humanMsgCount >= MIN_MESSAGES
+                                    ? 'All ' + MIN_MESSAGES + ' messages sent. Wait for the AIs to analyze...'
+                                    : counterText + ' | You are: ' + (setup ? setup.humanAlias : '?') + ' | Chat naturally and blend in'}
                                 onKeyDown=${handleKeyDown} maxLength=${150} />
                         </div>
                     `}
                     ${phase === PHASES.RESULTS && html`
                         <div className="chat-input-container result-actions">
-                            <button className="ready-button start-button" onClick=${startGame}>Play Again</button>
+                            <button className="ready-button start-button" onClick=${() => location.reload()}>Play Again</button>
                         </div>
                     `}
                 </div>
