@@ -1,0 +1,142 @@
+<svg viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Background -->
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#EAF6F8"/>
+      <stop offset="1" stop-color="#D4ECF2"/>
+    </linearGradient>
+    <radialGradient id="halo" cx="50%" cy="48%" r="55%">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.9"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+    <!-- Fur -->
+    <radialGradient id="headGrad" cx="40%" cy="35%" r="70%">
+      <stop offset="0" stop-color="#FBB46A"/>
+      <stop offset="1" stop-color="#EF9038"/>
+    </radialGradient>
+    <radialGradient id="bodyGrad" cx="42%" cy="30%" r="75%">
+      <stop offset="0" stop-color="#FAAE60"/>
+      <stop offset="1" stop-color="#E8852E"/>
+    </radialGradient>
+    <radialGradient id="earGrad" cx="50%" cy="40%" r="65%">
+      <stop offset="0" stop-color="#F9C8D3"/>
+      <stop offset="1" stop-color="#EDA0B2"/>
+    </radialGradient>
+    <!-- Eyes -->
+    <radialGradient id="iris" cx="50%" cy="40%" r="60%">
+      <stop offset="0" stop-color="#9CCC4F"/>
+      <stop offset="0.7" stop-color="#7CB342"/>
+      <stop offset="1" stop-color="#558B2F"/>
+    </radialGradient>
+    <radialGradient id="blush" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="#F7A6B5" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#F7A6B5" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="400" height="400" rx="32" fill="url(#bgGrad)"/>
+  <circle cx="200" cy="195" r="180" fill="url(#halo)"/>
+  <!-- Ground shadow -->
+  <ellipse cx="200" cy="390" rx="112" ry="18" fill="#3A5560" opacity="0.10"/>
+
+  <!-- ===== BODY ===== -->
+  <path d="M200 248 C138 248,116 305,122 350 C125 378,160 392,200 392 C240 392,275 378,278 350 C284 305,262 248,200 248 Z"
+        fill="url(#bodyGrad)" stroke="#D9802F" stroke-width="2"/>
+  <!-- Body stripes -->
+  <g stroke="#CE6F23" stroke-width="6" stroke-linecap="round" fill="none" opacity="0.8">
+    <path d="M132 282 Q124 306 131 330"/>
+    <path d="M150 270 Q142 300 147 332"/>
+    <path d="M268 282 Q276 306 269 330"/>
+    <path d="M250 270 Q258 300 253 332"/>
+  </g>
+  <!-- Chest fluff -->
+  <path d="M200 255 C172 260,162 315,172 355 C180 380,220 380,228 355 C238 315,228 260,200 255 Z"
+        fill="#FFF3E0"/>
+  <!-- Paws -->
+  <ellipse cx="172" cy="384" rx="23" ry="15" fill="#FFF3E0" stroke="#EAD9C0" stroke-width="1.5"/>
+  <ellipse cx="228" cy="384" rx="23" ry="15" fill="#FFF3E0" stroke="#EAD9C0" stroke-width="1.5"/>
+  <g stroke="#E3CCAd" stroke-width="1.5" stroke-linecap="round">
+    <path d="M166 378 L166 390"/><path d="M178 378 L178 390"/>
+    <path d="M222 378 L222 390"/><path d="M234 378 L234 390"/>
+  </g>
+
+  <!-- ===== TAIL (wrapping in front) ===== -->
+  <path d="M270 360 C322 360,350 320,337 285 C330 266,305 267,305 288 C305 313,318 342,276 350 Z"
+        fill="url(#bodyGrad)" stroke="#D9802F" stroke-width="2"/>
+  <g stroke="#CE6F23" stroke-width="6" stroke-linecap="round" fill="none" opacity="0.85">
+    <path d="M300 300 Q318 300 328 292"/>
+    <path d="M298 318 Q314 322 326 318"/>
+    <path d="M286 336 Q300 344 312 342"/>
+  </g>
+
+  <!-- Cheek fur tufts -->
+  <g fill="url(#headGrad)">
+    <path d="M114 196 L97 189 L110 205 Z"/>
+    <path d="M111 212 L94 215 L108 224 Z"/>
+    <path d="M286 196 L303 189 L290 205 Z"/>
+    <path d="M289 212 L306 215 L292 224 Z"/>
+  </g>
+
+  <!-- ===== EARS ===== -->
+  <g stroke="#D9802F" stroke-width="2" stroke-linejoin="round">
+    <path d="M138 105 L112 32 L196 80 Z" fill="url(#headGrad)"/>
+    <path d="M262 105 L288 32 L204 80 Z" fill="url(#headGrad)"/>
+  </g>
+  <path d="M147 99 L124 49 L184 81 Z" fill="url(#earGrad)"/>
+  <path d="M253 99 L276 49 L216 81 Z" fill="url(#earGrad)"/>
+
+  <!-- ===== HEAD ===== -->
+  <ellipse cx="200" cy="170" rx="95" ry="88" fill="url(#headGrad)" stroke="#D9802F" stroke-width="2"/>
+
+  <!-- Forehead "M" tabby markings -->
+  <g stroke="#CE6F23" stroke-width="5" stroke-linecap="round" fill="none" opacity="0.85">
+    <path d="M200 92 L196 128"/>
+    <path d="M184 96 L177 130"/>
+    <path d="M216 96 L223 130"/>
+    <path d="M170 105 L162 133"/>
+    <path d="M230 105 L238 133"/>
+  </g>
+
+  <!-- Blush -->
+  <ellipse cx="150" cy="194" rx="20" ry="13" fill="url(#blush)"/>
+  <ellipse cx="250" cy="194" rx="20" ry="13" fill="url(#blush)"/>
+
+  <!-- ===== EYES ===== -->
+  <g>
+    <!-- left -->
+    <ellipse cx="168" cy="166" rx="22" ry="26" fill="url(#iris)" stroke="#456D24" stroke-width="1.5"/>
+    <ellipse cx="168" cy="168" rx="13" ry="18" fill="#241A14"/>
+    <circle cx="162" cy="158" r="6" fill="#FFFFFF"/>
+    <circle cx="173" cy="173" r="3" fill="#FFFFFF" opacity="0.85"/>
+    <!-- right -->
+    <ellipse cx="232" cy="166" rx="22" ry="26" fill="url(#iris)" stroke="#456D24" stroke-width="1.5"/>
+    <ellipse cx="232" cy="168" rx="13" ry="18" fill="#241A14"/>
+    <circle cx="226" cy="158" r="6" fill="#FFFFFF"/>
+    <circle cx="237" cy="173" r="3" fill="#FFFFFF" opacity="0.85"/>
+  </g>
+
+  <!-- ===== MUZZLE ===== -->
+  <ellipse cx="184" cy="216" rx="19" ry="15" fill="#FFF3E0"/>
+  <ellipse cx="216" cy="216" rx="19" ry="15" fill="#FFF3E0"/>
+  <!-- Nose -->
+  <path d="M190 196 Q200 194 210 196 Q207 207 200 210 Q193 207 190 196 Z"
+        fill="#EC8B9C" stroke="#D9748A" stroke-width="1"/>
+  <ellipse cx="196" cy="199" rx="2.5" ry="1.5" fill="#FFFFFF" opacity="0.7"/>
+  <!-- Mouth -->
+  <g stroke="#C76A2A" stroke-width="2.2" stroke-linecap="round" fill="none">
+    <path d="M200 210 L200 223"/>
+    <path d="M200 223 C193 233,180 231,176 224"/>
+    <path d="M200 223 C207 233,220 231,224 224"/>
+  </g>
+
+  <!-- ===== WHISKERS ===== -->
+  <g stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" fill="none" opacity="0.9">
+    <path d="M168 208 C132 200,112 199,96 201"/>
+    <path d="M167 214 C130 213,107 215,92 219"/>
+    <path d="M169 221 C134 225,114 231,101 237"/>
+    <path d="M232 208 C268 200,288 199,304 201"/>
+    <path d="M233 214 C270 213,293 215,308 219"/>
+    <path d="M231 221 C266 225,286 231,299 237"/>
+  </g>
+</svg>
