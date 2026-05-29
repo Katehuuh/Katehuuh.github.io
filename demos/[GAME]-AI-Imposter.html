@@ -704,14 +704,21 @@ function AIImposterGame() {
     useEffect(() => {
         if (phase !== PHASES.ROUND) return;
         const id = setInterval(() => {
-            if (Date.now() >= roundEndRef.current && !roundDoneRef.current) {
+            if (roundDoneRef.current) return;
+            const timeUp = Date.now() >= roundEndRef.current;
+            const allBotsDone = aiStatesRef.current.length > 0
+                && aiStatesRef.current.every(a => a.messagesSent >= a.totalMessages);
+            const humanDone = humanMsgCountRef.current >= MIN_MESSAGES;
+            const everyoneDone = allBotsDone && humanDone;   // all 3 bots AND you each sent 3 -> skip the wait
+            if (timeUp || everyoneDone) {
                 const anyBusy = aiStatesRef.current.some(a => a.isSending);
-                if (anyBusy) return;
+                if (anyBusy) return;   // let an in-flight message finish first
                 roundDoneRef.current = true;
                 const met = humanMsgCountRef.current >= MIN_MESSAGES;
                 addMessage({ id: 'sys-analyze', isSystem: true, timestamp: Date.now(),
-                    text: met ? 'Time is up! The AIs are analyzing the conversation...'
-                        : 'Time is up! You only sent ' + humanMsgCountRef.current + ' messages (minimum ' + MIN_MESSAGES + '). The AIs are very suspicious...' });
+                    text: !met ? 'Time is up! You only sent ' + humanMsgCountRef.current + ' messages (minimum ' + MIN_MESSAGES + '). The AIs are very suspicious...'
+                        : (everyoneDone && !timeUp) ? 'Everyone has spoken. The AIs are analyzing the conversation...'
+                        : 'Time is up! The AIs are analyzing the conversation...' });
                 updatePhase(PHASES.ANALYZING);
             }
         }, 500);
