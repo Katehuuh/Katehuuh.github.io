@@ -443,6 +443,31 @@ function parseBatchVotes(text, voteSpecs) {
     return votes;
 }
 
+// Deterministic fallback when the LLM won't emit clean vote JSON (it's under-baked at the vote task).
+// Scores each candidate by human-ish signals from the pre-computed stats; each voter picks the top one.
+function heuristicVotes(voteSpecs, playerStats) {
+    const score = (name) => {
+        const s = playerStats[name];
+        if (!s) return 0;
+        let sc = 0;
+        if (s.usesCapitals) sc += 2;
+        if (s.hasQuestion) sc += 2;
+        if (!s.usesSlang) sc += 1;
+        if (s.usesPunctuation) sc += 1;
+        const w = parseFloat(s.avgWordLen);
+        if (!isNaN(w) && (w < 2.5 || w > 11)) sc += 1;   // very short / very long reads human
+        return sc;
+    };
+    return voteSpecs.map(spec => {
+        let best = spec.candidates[0], bestScore = -1;
+        for (const c of spec.candidates) {
+            const sc = score(c);
+            if (sc > bestScore) { bestScore = sc; best = c; }
+        }
+        return { voterId: spec.voterId, voterAlias: spec.voterAlias, votedForAlias: best };
+    });
+}
+
 async function generateAIVotes(wllama, aiPlayers, context) {
     const { recentMessages, nameMap, allPlayers } = context;
     const playerStats = computePlayerStats(recentMessages, nameMap, allPlayers);
@@ -483,19 +508,32 @@ ${voterLines}
 
 Return JSON: [{"voter":"Name","vote":"Name"}]`;
 
-    const result = await runWllamaInference(wllama, () => wllama.createChatCompletion({
-        messages: [
-            { role: 'system', content: sysPrompt },
-            { role: 'user', content: userPrompt },
-        ],
-        max_tokens: 192,            // was `nPredict` (ignored)
-        cache_prompt: false,
-        temp: 0.4, top_k: 20,       // flat sampling (was nested under `sampling:{}` and ignored)
-        logit_bias: SLOP_BIAS,
-    }));
-    const raw = result.choices[0]?.message?.content || '';
-    console.log('[vote] Raw LLM output:', JSON.stringify(raw.slice(0, 500)));
-    return parseBatchVotes(raw, voteSpecs);
+    // The model is under-baked at voting (few vote examples) so it often rambles instead of emitting JSON.
+    // Retry with escalating temperature, then fall back to the stats heuristic so the round always finishes.
+    // NOTE: no logit_bias on the vote — the slop ban can blank the JSON / force empty output here.
+    const strictUser = userPrompt + '\n\nReply with ONLY the JSON array (begin your reply with "["). No analysis, no extra text.';
+    const temps = [0.4, 0.6, 0.85];
+    for (let attempt = 0; attempt < temps.length; attempt++) {
+        try {
+            const result = await runWllamaInference(wllama, () => wllama.createChatCompletion({
+                messages: [
+                    { role: 'system', content: sysPrompt },
+                    { role: 'user', content: strictUser },
+                ],
+                max_tokens: 192,
+                cache_prompt: false,
+                seed: Math.floor(Math.random() * 999999),
+                temp: temps[attempt], top_k: 40, top_p: 0.95, min_p: 0.05,
+            }));
+            const raw = result.choices[0]?.message?.content || '';
+            console.log('[vote] Raw LLM output' + (attempt ? ' (retry ' + attempt + ')' : '') + ':', JSON.stringify(raw.slice(0, 500)));
+            return parseBatchVotes(raw, voteSpecs);
+        } catch (e) {
+            console.warn('[vote] attempt ' + attempt + ' failed:', e.message);
+        }
+    }
+    console.warn('[vote] LLM did not return valid JSON; using stats heuristic fallback');
+    return heuristicVotes(voteSpecs, playerStats);
 }
 
 /* ===== MAIN GAME COMPONENT ===== */
