@@ -197,11 +197,11 @@ const html = htm.bind(React.createElement);
 /* ===== WLLAMA IMPORTS ===== */
 let WllamaClass = null;
 let WasmPaths = null;
-const WLLAMA_CDN = 'https://cdn.jsdelivr.net/npm/@wllama/wllama@3.1.1';
-const { Wllama } = await import(WLLAMA_CDN + '/esm/index.js');
+const WLLAMA_CDN = 'https://cdn.jsdelivr.net/npm/@wllama/wllama@3.4.0';
+const { Wllama } = await import(WLLAMA_CDN + '/esm/index.js');   // Wllama is a NAMED export (not default)
 WllamaClass = Wllama;
-WasmPaths = { 'default': WLLAMA_CDN + '/esm/wasm/wllama.wasm' };
-console.log('[wllama] Loaded v3.1.1');
+WasmPaths = { 'default': WLLAMA_CDN + '/esm/wasm/wllama.wasm' };  // 3.4.0 ships a single wasm (no thread split)
+console.log('[wllama] Loaded v3.4.0');
 
 /* ===== CONSTANTS ===== */
 const PHASES = {
@@ -214,6 +214,7 @@ const MIN_MESSAGES = 3;
 const CHAT_HISTORY_MESSAGES = 4;
 const CHAT_N_PREDICT = 32;
 const MODEL_CHAIN = [
+    { repo: 'Luminia/Gemma4E2BloraTestGame', file: 'gemma4-E2B-it-game-Q4_K_M.gguf' },   // fine-tuned LoRA merge (TEST) — tried first
     { repo: 'TrevorJS/gemma-4-E2B-it-uncensored-GGUF', file: 'gemma-4-E2B-it-uncensored-Q4_K_M.gguf' },
     { repo: 'deucebucket/Gemma-4-E2B-it-Cerebellum-v2-GGUF', file: 'Gemma-4-E2B-it-Cerebellum-v2.gguf' },
     { repo: 'unsloth/gemma-4-E2B-it-GGUF', file: 'gemma-4-E2B-it-UD-Q3_K_XL.gguf' },
@@ -233,7 +234,8 @@ const AI_PERSONA = {
     systemPrompt: 'You are in a group chat. Reply with ONE short casual message under 15 words. lowercase only. Reply with ONLY your message.',
 };
 
-/* ===== SLOP BAN LIST (658 words — tokenized at load time for logit_bias) ===== */
+/* ===== SLOP BAN LIST (658 curated words) — currently INERT: wllama 3.4.0 has no tokenizer,
+        so SLOP_BIAS stays []. Revive by precomputing Gemma-4-E2B token IDs offline (see model-load note). ===== */
 const SLOP_WORDS = ["abodes","abundantly","abuzz","accolade","accusingly","acumen","adorned","adorning","adornments","aether","affectionately","agape","airlock","allegories","amulet","antiseptic","appreciatively","archmage","arduous","ashen","attuned","basking","bated","beckoning","belongingness","benevolence","bestowing","billowing","bioluminescent","blissfully","blossomed","bolstered","boundless","bountiful","breathtakingly","brimming","burgeoning","bustling","cacophony","cadence","candor","captivate","captivated","captivates","captivating","captivatingly","cascaded","cascading","cavernous","ceaseless","cerulean","championed","chasms","chiaroscuro","chitinous","clandestine","cloying","coalesced","coalescing","coiling","colossal","commendable","considerately","conspiratorial","conspiratorially","contemplation","contemplative","contemplatively","contentment","contorting","copious","coursing","coveted","cradled","cradling","craftsmanship","crescendo","crescendoed","crestfallen","culminated","cultists","cultivates","curated","curdled","dais","dappled","decadent","deftly","delectable","delicately","delve","delved","delves","delving","denizens","desolate","devoid","discerning","discordant","disheartened","disorienting","disquietude","donned","dreamlike","dreamscape","dreamscapes","echelons","eclectic","edifice","edifices","effectuate","effortlessly","elation","eldritch","elegance","elicited","eliciting","elixirs","eloquence","elven","emanate","emanated","emanating","embark","embarking","embellishments","embers","emblazoned","embodied","embodiments","embodying","emboldened","emboldening","empathetically","empathizing","emphatically","encapsulate","encapsulated","encapsulates","encapsulating","enchanted","enchanting","enchantingly","enchantment","enchantments","endeavored","endeavors","endlessness","engrossed","engulfed","engulfing","enigmas","enigmatically","enrapture","enraptured","enriched","ensconced","enshrouding","ensnare","ensnared","enthrall","enthralled","enthralling","entranced","entrusting","entwine","entwined","entwining","enveloped","enveloping","envisioned","ephemerality","epiphanies","epochs","equanimity","esoteric","ethereal","ethereally","everchanging","evoking","exhilaration","expanse","expanses","exquisiteness","extolling","exuberance","exuded","exuding","fabled","fantastical","fervent","fervently","fervor","festered","feverishly","firelight","fledgling","fleeting","flickered","flickering","flickers","flourished","fluttered","fluttering","foreignness","foretelling","fortitude","fortuitous","frenetic","frenetically","fulfillment","furrowed","gingerly","gleamed","gleaming","glided","glimmered","glimmering","glimmers","glint","glinted","glinting","glints","glistened","glistening","glowed","glyphs","gnawing","gossamer","graciously","grandeur","grandiose","gravitated","grimoire","grizzled","guttural","hallowed","harbinger","harmonious","harmoniously","harnessed","harrowing","hauntingly","heartfelt","heartrending","heartstrings","heralding","holistic","hollowing","humorless","idyllic","illuminated","illuminating","imbued","immeasurable","immeasurably","immemorial","impart","imparted","imparting","impeccably","impenetrable","imperceptible","imperceptibly","impermanence","implored","impossibly","incantations","indefinably","indelible","indelibly","indescribable","indispensable","indomitable","ingenuity","innermost","insatiable","insightfulness","interconnectedness","interjected","interlopers","intermingled","interplay","interspersed","intertwine","intertwined","intertwines","intertwining","interweaving","interwoven","intoned","intoxicating","intrepid","intricacies","intricacy","intricately","intriguingly","invigorating","iridescent","irrevocably","kaleidoscope","kaleidoscopic","kindled","labyrinth","labyrinthian","labyrinthine","labyrinths","lackluster","lamenting","lamplight","libations","lightheartedness","lilting","lingered","lingering","longingly","loomed","luminescence","luminescent","machinations","maelstrom","majestically","malevolence","malevolent","manicured","marveled","marveling","masterfully","materialized","meandered","meandering","melancholic","mellifluous","melodious","mesmerized","mesmerizing","mesmerizingly","metamorphosis","meticulously","meticulousness","microcosm","ministration","ministrations","minutiae","mirth","misdirections","missives","monikers","monolith","monoliths","monumental","moonlit","morsels","motes","multifaceted","murmured","mused","musings","naturedly","nebulae","necromancer","nestled","newfound","nightshade","nondescript","nuances","nurtured","nurturing","obsidian","ominously","opulence","opulent","otherworldliness","otherworldly","outpouring","painstakingly","palpable","palpably","parchment","partake","passionately","pattered","penchant","pensive","perceptible","perilous","permeate","permeated","permeating","perplexed","perplexing","perseverance","perusing","pervaded","picturesque","piqued","pivotal","plaintively","poignantly","poise","poised","pondered","precariously","precariousness","precipice","prevails","pristine","pristinely","proffered","profundity","pronouncements","propriety","prowess","pulsating","punctilious","quickened","quietude","quivering","radiant","rasping","reassuringly","regale","regaled","regally","rekindled","rekindling","relished","repast","resilient","resolute","resolutely","resonate","resonated","resonating","resounding","respite","resplendent","resplendently","revelatory","reverberate","reverberated","reverberates","reverberating","revered","reverence","reverentially","reverently","reverie","revitalizing","rippling","rivulets","roiling","roughspun","sacredness","sagacious","sagacity","sagely","sanctity","sartorial","sartorially","scathingly","seamless","seamlessly","seeped","semblance","serenaded","serenades","serenading","serendipitous","serendipitously","serendipity","serenely","serenity","sesquipedalian","shimmering","shrouded","sigil","silhouette","silhouetted","slithery","smoldering","sojourns","solemnity","solemnly","soliloquies","solitude","somberly","somberness","sonorous","soothingly","sorceress","soulfulness","soundscapes","spaciousness","specters","spellbinding","spellbound","spiraled","splendor","splendorous","splendors","sprawled","sprawling","steadfast","steadfastly","steadfastness","stealthily","steeds","steeped","steepled","steepling","stoically","storied","succumbing","suffusing","sulfurous","sunlit","surmount","surmounted","surmounting","sustenance","swirled","symbiotic","symbiotically","synergistically","tableau","tantalizing","tantalizingly","tapestries","tapestry","teetering","tempests","tempestuous","tenacious","tenderly","tendril","tendrils","thenceforth","threadbare","throes","throng","throngs","thrum","thrummed","thrumming","thrums","timelessness","tinged","tireless","tirelessly","torchlight","tousled","tranquil","tranquility","transcend","transcending","transfixed","transformative","transience","traversing","trembled","trepidation","trepidations","tribulations","trickled","triumphant","triumphantly","trove","tumultuous","tutelage","twinkled","unadulterated","unbeknownst","unbidden","unblinking","unburdened","uncharted","undeniable","underbrush","undercurrent","undergrowth","understandingly","undertones","undeterred","undiminished","undulating","undying","unearth","unearthed","unearthly","unfurl","unfurled","unfurling","unmistakable","unnervingly","unparalleled","unperturbed","unquenchable","unravel","unraveled","unreadable","unsettlingly","unshed","unspoiled","unspoken","unsung","untainted","untamed","unwavering","unwaveringly","unyielding","uuwu","valiantly","vanquishing","vastness","velvety","verdant","verdure","verdurous","vestiges","vibrancy","vibrantly","viewscreen","visage","viscous","visionary","vistas","vivacious","voracious","voraciously","wafted","wafting","waned","warily","wavered","weariness","weightiness","welled","wellspring","whimsical","whimsy","windswept","wisps","wistful","wistfully","wistfulness","wizened","wonderment","woodsmoke","writhe","writhed","writhing","yearned","yearning","yesteryear","yesteryears","zealousness","zephyr"];
 let SLOP_BIAS = [];
 
@@ -326,12 +328,14 @@ async function generateAIMessage(wllama, aiId, context, onStream) {
                 { role: 'system', content: persona.systemPrompt },
                 { role: 'user', content: userContent },
             ],
-            nPredict: CHAT_N_PREDICT,
+            max_tokens: CHAT_N_PREDICT,                 // was `nPredict` (not a real field — silently ignored)
             // Gemma-4 hybrid cache misses can force very slow full prompt re-processing.
-            cache_prompt: false,
-            useCache: false,
+            cache_prompt: false,                        // now actually honored in 3.4.0 (was ignored in 3.1.1)
             seed: Math.floor(Math.random() * 999999),
-            sampling: { temp: 1.0, top_p: 0.95, top_k: 64, min_p: 0.05, penalty_repeat: 1.3, penalty_present: 0.4, logit_bias: SLOP_BIAS },
+            // wllama 3.x sampling params are FLAT — the old `sampling:{...}` wrapper was dropped entirely,
+            // so temp/top_p/etc. never applied until now. logit_bias is harmless while SLOP_BIAS is empty.
+            temp: 1.0, top_p: 0.95, top_k: 64, min_p: 0.05, penalty_repeat: 1.3, penalty_present: 0.4,
+            logit_bias: SLOP_BIAS,
         }));
 
         const elapsed = (performance.now() - t0) / 1000;
@@ -481,10 +485,10 @@ Return JSON: [{"voter":"Name","vote":"Name"}]`;
             { role: 'system', content: sysPrompt },
             { role: 'user', content: userPrompt },
         ],
-        nPredict: 192,
+        max_tokens: 192,            // was `nPredict` (ignored)
         cache_prompt: false,
-        useCache: false,
-        sampling: { temp: 0.4, top_k: 20, logit_bias: SLOP_BIAS },
+        temp: 0.4, top_k: 20,       // flat sampling (was nested under `sampling:{}` and ignored)
+        logit_bias: SLOP_BIAS,
     }));
     const raw = result.choices[0]?.message?.content || '';
     console.log('[vote] Raw LLM output:', JSON.stringify(raw.slice(0, 500)));
@@ -526,6 +530,25 @@ function AIImposterGame() {
     const roundDoneRef = useRef(false);
     const votingDoneRef = useRef(false);
     const wllamaRef = useRef(null);
+    const pausedRef = useRef(false);
+    const hiddenAtRef = useRef(0);
+    /* ---- Safety: pause everything while the tab is hidden (stop generating when you leave) ---- */
+    useEffect(() => {
+        const onVis = () => {
+            if (document.hidden) {
+                pausedRef.current = true;
+                hiddenAtRef.current = Date.now();
+            } else {
+                if (pausedRef.current && hiddenAtRef.current && roundEndRef.current) {
+                    roundEndRef.current += Date.now() - hiddenAtRef.current;  // extend deadline by time away
+                }
+                pausedRef.current = false;
+                hiddenAtRef.current = 0;
+            }
+        };
+        document.addEventListener('visibilitychange', onVis);
+        return () => document.removeEventListener('visibilitychange', onVis);
+    }, []);
 
     const updatePhase = useCallback((p) => { phaseRef.current = p; setPhase(p); }, []);
     const addMessage = useCallback((msg) => {
@@ -568,17 +591,10 @@ function AIImposterGame() {
                     if (!cancelled) {
                         console.log('[model] Loaded', model.repo);
                         wllamaRef.current = w;
-                        console.log('[slop] Tokenizing', SLOP_WORDS.length, 'ban words...');
-                        const biasSet = new Set();
-                        for (const word of SLOP_WORDS) {
-                            try {
-                                const tokens = await w.tokenize(word);
-                                for (const t of tokens) {
-                                    if (!biasSet.has(t)) { biasSet.add(t); SLOP_BIAS.push({ token: t, bias: -100 }); }
-                                }
-                            } catch (e) {}
-                        }
-                        console.log('[slop] Built logit_bias with', SLOP_BIAS.length, 'token bans');
+                        // REMOVED dead code: wllama 3.4.0 exposes no tokenize(), so the old per-word tokenize
+                        // loop always threw (swallowed by catch) and SLOP_BIAS stayed empty — the slop ban never
+                        // applied. To revive: precompute Gemma-4-E2B token IDs for SLOP_WORDS OFFLINE and fill
+                        // SLOP_BIAS = [{token, bias:-100}, ...]; logit_bias is now passed correctly (flat) to the sampler.
                         setTimeout(() => { if (!cancelled) startGameRef.current(); }, 100);
                     }
                     return;
@@ -704,7 +720,7 @@ function AIImposterGame() {
     useEffect(() => {
         if (phase !== PHASES.ROUND) return;
         const id = setInterval(() => {
-            if (roundDoneRef.current) return;
+            if (roundDoneRef.current || pausedRef.current) return;
             const timeUp = Date.now() >= roundEndRef.current;
             const allBotsDone = aiStatesRef.current.length > 0
                 && aiStatesRef.current.every(a => a.messagesSent >= a.totalMessages);
@@ -730,7 +746,7 @@ function AIImposterGame() {
         if (phase !== PHASES.ROUND) return;
         const busy = { current: false };
         const id = setInterval(async () => {
-            if (busy.current || phaseRef.current !== PHASES.ROUND || !wllamaRef.current) return;
+            if (busy.current || phaseRef.current !== PHASES.ROUND || !wllamaRef.current || pausedRef.current) return;
             const now = Date.now();
             const timeLeft = roundEndRef.current - now;
             if (timeLeft <= 20000) {
