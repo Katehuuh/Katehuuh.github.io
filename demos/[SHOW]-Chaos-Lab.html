@@ -14,6 +14,14 @@
   select,button{background:var(--panel);color:var(--fg);border:1px solid #2a2a3a;border-radius:5px;padding:5px 7px;font:inherit;width:100%;margin-top:5px;}
   button{cursor:pointer;width:auto;}
   button:hover,select:hover{border-color:var(--accent);}
+  #cycle{position:absolute;top:9px;right:10px;width:auto;padding:3px 9px;font-size:15px;line-height:1;border-radius:6px;}
+  #cycle.on{color:var(--accent);border-color:var(--accent);}
+  /* conic-gradient cooldown ring around the edge, fills over 5s each cycle */
+  #cycle::after{content:'';position:absolute;inset:-4px;border-radius:9px;padding:3px;
+    background:conic-gradient(var(--accent) calc(var(--p,0)*360deg), rgba(255,255,255,.10) 0);
+    -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+    -webkit-mask-composite:xor;mask-composite:exclude;pointer-events:none;opacity:0;transition:opacity .25s;}
+  #cycle.on::after{opacity:1;}
   #params{margin-top:8px;}
   .row{display:flex;align-items:center;gap:6px;margin:4px 0;}
   .row label{flex:0 0 96px;color:#9a9ab0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
@@ -26,6 +34,7 @@
 <body>
 <canvas id="gl"></canvas>
 <div id="ui">
+  <button id="cycle" title="Auto-cycle modes + palette every 2s (on by default; stops at the last mode)">&#x21bb;</button>
   <h1>Mini-VoC <small style="color:#778"></small></h1>
   <select id="mode" title="mode"></select>
   <select id="palette" title="palette"></select>
@@ -386,6 +395,7 @@ function setMode(i){
 function nextFrame(cb){ if(document.hidden) setTimeout(cb,16); else requestAnimationFrame(cb); }
 function step(){
   resize();
+  updateCycleRing();
   if(!current) return;
   try{
     if(current.type==='frag'){
@@ -487,6 +497,40 @@ async function loadAssets(){
     if(r.ok){ const j=await r.json(); if(Array.isArray(j)&&j.length){ PALETTES=j.map(p=>({name:p.name,stops:p.stops||p.colors})); paletteIndex=0; setPaletteStops(PALETTES[0].stops); } }
   }catch(e){ /* keep default */ }
 }
+//------------------------------------------------------------------ auto-cycle
+// Slideshow: every 2s advance to the next mode AND the next palette. Palette
+// loops forever; modes run once through the list then stop (no infinite loop).
+// On by default at load. A conic-gradient ring around the button shows cooldown.
+let cycleOn=false, cycleTimer=null, cycleStart=0, cyBtn=null;
+const CYCLE_MS=2000;
+function updateCycleRing(){ if(cycleOn && cyBtn){ const pr=Math.min(1,(performance.now()-cycleStart)/CYCLE_MS); cyBtn.style.setProperty('--p', pr.toFixed(3)); } }
+function setCycle(on){
+  cycleOn=on;
+  if(cyBtn){ cyBtn.classList.toggle('on', on); if(!on) cyBtn.style.setProperty('--p','0'); }
+  if(cycleTimer){ clearInterval(cycleTimer); cycleTimer=null; }
+  if(on){ cycleStart=performance.now(); cycleTimer=setInterval(cycleStep, CYCLE_MS); }
+}
+function cycleStep(){
+  cycleStart=performance.now();                                       // reset cooldown ring
+  const sel=document.getElementById('mode'); const idx=sel?(+sel.value):0;
+  if(idx+1 >= MODES.length){ setCycle(false); return; }               // modes run once through, then stop
+  setMode(idx+1);
+  // pick the next palette that keeps THIS mode visible — ~20% of palettes are
+  // black at low t and many modes sit there, so a blind loop would show black.
+  if(PALETTES.length>1){
+    let best=paletteIndex, bestB=-1;
+    for(let t=0;t<PALETTES.length;t++){
+      paletteIndex=(paletteIndex+1)%PALETTES.length;
+      setPaletteStops(PALETTES[paletteIndex].stops);
+      for(let k=0;k<4;k++) step();
+      const b=sampleBrightness();
+      if(b>bestB){ bestB=b; best=paletteIndex; }
+      if(b>0.03) break;                                               // bright enough — keep it
+    }
+    if(bestB<=0.03){ paletteIndex=best; setPaletteStops(PALETTES[best].stops); } // fallback: brightest tried
+    const ps=document.getElementById('palette'); if(ps) ps.value=paletteIndex;
+  }
+}
 async function boot(){
   hud=document.getElementById('hud');
   await loadAssets();
@@ -494,11 +538,14 @@ async function boot(){
   const rst=document.getElementById('reset');
   if(rst) rst.addEventListener('click', ()=>{ frame=0; startT=performance.now(); if(current&&current.type==='custom'&&current.reset&&state) try{current.reset(api,state);}catch(e){} });
   if(MODES.length) setMode(0);
+  cyBtn=document.getElementById('cycle');
+  if(cyBtn) cyBtn.addEventListener('click', ()=>setCycle(!cycleOn));
+  setCycle(true);                       // auto-cycle ON by default
   render();
 }
 window.addEventListener('load', boot);
 
-const __voc = { MODES, setMode, params, selfTest, selfTestSync, step, sampleBrightness, results:null, register, setPaletteStops, get beeps(){return _beeps;} };
+const __voc = { MODES, setMode, params, selfTest, selfTestSync, step, sampleBrightness, results:null, register, setPaletteStops, setCycle, cycleStep, get beeps(){return _beeps;} };
 window.__voc = __voc;
 return { register, MODES, setPaletteStops, get gl(){return gl;} };
 })();
