@@ -1,6 +1,11 @@
 {
   "demos": [
     {
+      "name": "[SHOW]-Chaos-Lab",
+      "type": "file",
+      "filename": "[SHOW]-Chaos-Lab.html"
+    },
+    {
       "name": "[GAME]-AI-Imposter",
       "type": "file",
       "filename": "[GAME]-AI-Imposter.html"
