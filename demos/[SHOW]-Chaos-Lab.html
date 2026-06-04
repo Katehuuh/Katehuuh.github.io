@@ -1,115 +1,1447 @@
-# Visions of Chaos — Full Mode Catalog (no AI)
-Legend for build tier (filled in during classification, task #5): - **A** = direct GLSL port  · **B** = reimplement (standard algo)  · **C** = low ROI  · **D** = excluded
+### Visions of Chaos — Master Mode Tree with Complete Parameter Specifications
 
-Format: `Category > Submenu > Mode` — [tier] notes
+```text
+Visions of Chaos/
+├── Favorites/
+├── What's New/
+├── Search/
+├── Agent-Based Modelling/
+│   ├── 2D/
+│   │   ├── 2D Huegene/
+│   │   │   └── [Settings Window: Huegene Settings]
+│   │   │       ├── Initial plant population %: [Input: 50]
+│   │   │       ├── Initial fill %: [Input: 50]
+│   │   │       ├── Plant hue change: [Input: 0.1]
+│   │   │       ├── Plant propogate age: [Input: 2] *UI Typo: propogate
+│   │   │       ├── Herbivore hue change: [Input: 0.001]
+│   │   │       ├── Herbivore breed age: [Input: 1]
+│   │   │       ├── Herbivore starve time: [Input: 5]
+│   │   │       ├── Herbivore eat probability factor: [Input: 1]
+│   │   │       ├── Show plants: [Checkbox: Checked]
+│   │   │       ├── Show herbivores: [Checkbox: Checked]
+│   │   │       ├── Herbivores move randomly: [Checkbox: Unchecked]
+│   │   │       ├── Plants randomly propagate: [Checkbox: Unchecked]
+│   │   │       ├── Use diagonal neighbors: [Checkbox: Unchecked]
+│   │   │       ├── Initial layout: [Dropdown: Central circle]
+│   │   │       ├── Genetics colors: [Dropdown: Hue]
+│   │   │       ├── Cell size: [Dropdown: 5]
+│   │   │       ├── Zoom algorithm: [Dropdown: Nearest]
+│   │   │       ├── Create movie frames: [Checkbox: Unchecked]
+│   │   │       └── Buttons: [Open, Save, OK, Cancel]
+│   │   ├── 2D Particle Life/
+│   │   │   └── [Settings Window: 2D Particle Life Settings]
+│   │   │       ├── Particles display radius: [Input: 10]
+│   │   │       ├── World size: [Dropdown: 500]
+│   │   │       ├── Number of particles: [Input: 500]
+│   │   │       ├── Particle types: [Input: 5]
+│   │   │       ├── Particle colors: [Dropdown: Random]
+│   │   │       ├── Random seed: [Input: 1303695570, Button: Randomize Seed]
+│   │   │       ├── Skip displaying initial: [Input: 0] frames
+│   │   │       ├── Hide particles with <=: [Input: 1] neighbor particles
+│   │   │       ├── Minimum attraction: [Input: -0.557]
+│   │   │       ├── Min radius lower: [Input: 13]
+│   │   │       ├── Max radius lower: [Input: 32]
+│   │   │       ├── Friction: [Input: 0.05]
+│   │   │       ├── Display rendering engine: [Dropdown: OpenGL Software, Button: Options]
+│   │   │       ├── Metaballs: [Checkbox: Unchecked]
+│   │   │       ├── Maximum attraction: [Input: 0.770]
+│   │   │       ├── Min radius upper: [Input: 32]
+│   │   │       ├── Max radius upper: [Input: 35]
+│   │   │       ├── Flat force: [Checkbox: Checked]
+│   │   │       ├── Wraparound edges: [Checkbox: Checked]
+│   │   │       ├── Bounding box: [Checkbox: Checked]
+│   │   │       ├── Fade-trace particles: [Checkbox: Checked]
+│   │   │       ├── Hide solo particles: [Checkbox: Checked]
+│   │   │       ├── Create movie frames: [Checkbox: Unchecked]
+│   │   │       └── Buttons: [Random, Open, Save, OK, Cancel]
+│   │   ├── 2D Wa-Tor/
+│   │   │   └── [Settings Window: Wa-Tor Settings]
+│   │   │       ├── 95% initial fish population: [Slider]
+│   │   │       ├── 10% initial world filled: [Slider]
+│   │   │       ├── Fish breed age: [Input: 3]
+│   │   │       ├── Shark breed age: [Input: 15]
+│   │   │       ├── Shark starve time: [Input: 12]
+│   │   │       ├── Cell size: [Dropdown: 10]
+│   │   │       ├── Zoom algorithm: [Dropdown: Nearest]
+│   │   │       ├── Fish move randomly: [Checkbox: Unchecked]
+│   │   │       ├── Sharks move randomly: [Checkbox: Unchecked]
+│   │   │       ├── Color fish genes: [Checkbox: Unchecked]
+│   │   │       ├── Diagonal neighbors: [Checkbox: Unchecked]
+│   │   │       ├── Graph populations: [Checkbox: Checked]
+│   │   │       ├── Show fish: [Checkbox: Checked]
+│   │   │       ├── Show sharks: [Checkbox: Checked]
+│   │   │       ├── Create movie frames: [Checkbox: Unchecked]
+│   │   │       ├── Colors:
+│   │   │       │   ├── Fish color: [Color picker: Light Green]
+│   │   │       │   ├── Healthy shark color: [Color picker: Red]
+│   │   │       │   ├── Normal shark color: [Color picker: Blue]
+│   │   │       │   ├── Starving shark color: [Color picker: Gray]
+│   │   │       │   └── Ocean color: [Color picker: Black]
+│   │   │       └── Buttons: [Open, Save, OK, Cancel]
+│   │   ├── Ant Colony/
+│   │   │   └── [Settings Window: Ant Colony Settings]
+│   │   │       ├── Ants:
+│   │   │       │   ├── Total ants: [Dropdown: 500]
+│   │   │       │   ├── Turn angle: [Input: 25]
+│   │   │       │   ├── Sense angle: [Input: 45]
+│   │   │       │   ├── Sense distance: [Input: 3]
+│   │   │       │   ├── Move speed: [Input: 0.5]
+│   │   │       │   └── New ant every: [Input: 3] steps
+│   │   │       ├── Display Checkboxes:
+│   │   │       │   ├── Ants: [Checkbox: Checked, Color: White]
+│   │   │       │   ├── Carrying ants: [Checkbox: Checked, Color: Yellow]
+│   │   │       │   ├── Food: [Checkbox: Checked, Color: Green]
+│   │   │       │   ├── Pheromones: [Checkbox: Checked, Color: Red]
+│   │   │       │   ├── Nest: [Checkbox: Checked, Color: Blue]
+│   │   │       │   └── Obstacles: [Checkbox: Checked, Color: Brown]
+│   │   │       ├── Pheromones:
+│   │   │       │   ├── Drop rate: [Input: 100]
+│   │   │       │   ├── Evaporation rate: [Input: 1] every [Input: 2] steps
+│   │   │       │   └── Pheromones disperse: [Checkbox: Unchecked]
+│   │   │       ├── Food distribution: [Dropdown: One large pile]
+│   │   │       ├── Zoom algorithm: [Dropdown: Nearest]
+│   │   │       ├── Steps per update: [Dropdown: 1]
+│   │   │       ├── Pixel size: [Dropdown: 5]
+│   │   │       ├── Create movie frames: [Checkbox: Unchecked]
+│   │   │       └── Buttons: [OK, Cancel]
+│   │   ├── Ant Colony 2/
+│   │   │   └── [Settings Window: Ant Colony 2 Settings]
+│   │   │       ├── Ants:
+│   │   │       │   ├── Total ants: [Dropdown: 500]
+│   │   │       │   ├── Turn angle: [Input: 25]
+│   │   │       │   ├── Sense angle: [Input: 45]
+│   │   │       │   ├── Sense distance: [Input: 3]
+│   │   │       │   ├── Move speed: [Input: 0.5]
+│   │   │       │   └── New ant every: [Input: 3] steps
+│   │   │       ├── Display Checkboxes:
+│   │   │       │   ├── Ants: [Checkbox: Checked, Color: White]
+│   │   │       │   ├── Carrying ants: [Checkbox: Checked, Color: Yellow]
+│   │   │       │   ├── Food: [Checkbox: Checked, Color: Green]
+│   │   │       │   ├── Pheromones: [Checkbox: Checked, Color: Red]
+│   │   │       │   ├── Foraging: [Checkbox: Checked, Color: Blue]
+│   │   │       │   ├── Nest: [Checkbox: Checked, Color: Brown]
+│   │   │       │   └── Obstacles: [Checkbox: Checked, Color: Dark Brown]
+│   │   │       ├── Pheromones:
+│   │   │       │   ├── Drop rate: [Input: 100]
+│   │   │       │   ├── Evaporation rate: [Input: 1] every [Input: 2] steps
+│   │   │       │   └── Pheromones disperse every: [Checkbox: Checked] [Input: 5] steps
+│   │   │       ├── Pixel size: [Dropdown: 5]
+│   │   │       ├── Zoom algorithm: [Dropdown: Nearest]
+│   │   │       ├── Steps per update: [Dropdown: 1]
+│   │   │       ├── World setup: [Dropdown: Obstacles]
+│   │   │       ├── Custom world bitmap: [Input: "", Button: ...]
+│   │   │       ├── Create movie frames: [Checkbox: Unchecked]
+│   │   │       └── Buttons: [OK, Cancel]
+│   │   ├── Pandemic/
+│   │   │   └── [Settings Window: Pandemic Settings]
+│   │   │       ├── People:
+│   │   │       │   ├── Population: [Input: 1500]
+│   │   │       │   ├── Person radius: [Input: 5]
+│   │   │       │   ├── World width: [Input: 2000]
+│   │   │       │   ├── Move speed: [Input: 2]
+│   │   │       │   ├── Move probability %: [Input: 100]
+│   │   │       │   └── Minimum display radius: [Input: 2]
+│   │   │       ├── Infection:
+│   │   │       │   ├── Infection radius: [Input: 15]
+│   │   │       │   ├── Infection probability %: [Input: 100]
+│   │   │       │   ├── Recovery probability %: [Input: 50]
+│   │   │       │   └── Death time: [Input: 300]
+│   │   │       ├── Display colors:
+│   │   │       │   ├── Healthy: [Color picker: Green]
+│   │   │       │   ├── Infected: [Color picker: Red]
+│   │   │       │   ├── Recovered: [Color picker: Blue]
+│   │   │       │   └── Dead: [Color picker: Gray]
+│   │   │       ├── Show graph: [Checkbox: Unchecked]
+│   │   │       ├── Create movie frames: [Checkbox: Unchecked]
+│   │   │       └── Buttons: [Open, Save, OK, Cancel]
+│   │   ├── Pandemic 2/
+│   │   │   └── [Settings Window: Pandemic 2 Settings]
+│   │   │       ├── Population density %: [Input: 30]
+│   │   │       ├── Move probability %: [Input: 30]
+│   │   │       ├── Infection probability %: [Input: 30]
+│   │   │       ├── Recovery probability %: [Input: 50]
+│   │   │       ├── Death time: [Input: 100]
+│   │   │       ├── Cell size: [Dropdown: 10]
+│   │   │       ├── Zoom algorithm: [Dropdown: Nearest]
+│   │   │       ├── Diagonal neighbors: [Checkbox: Unchecked]
+│   │   │       ├── Show graph: [Checkbox: Unchecked]
+│   │   │       ├── Create movie frames: [Checkbox: Unchecked]
+│   │   │       ├── Colors:
+│   │   │       │   ├── Healthy: [Color picker: Green]
+│   │   │       │   ├── Infected: [Color picker: Red]
+│   │   │       │   ├── Recovered: [Color picker: Blue]
+│   │   │       │   └── Dead: [Color picker: Gray]
+│   │   │       └── Buttons: [Open, Save, OK, Cancel]
+│   │   ├── Physarum/
+│   │   │   └── [Settings Window: Physarum Simulation Settings]
+│   │   │       ├── Sense angle: [Input: 10]
+│   │   │       ├── Sense distance: [Input: 8]
+│   │   │       ├── Turn angle: [Input: 47]
+│   │   │       ├── Pheromone drop: [Input: 10]
+│   │   │       ├── Move distance: [Input: 1]
+│   │   │       ├── Deposit amount: [Input: 2.520]
+│   │   │       ├── Evaporation rate: [Input: 0.036]
+│   │   │       ├── Pheromone blur radius: [Dropdown: 1]
+│   │   │       ├── Correct turn angles: [Checkbox: Unchecked]
+│   │   │       ├── Particle start: [Dropdown: Whole screen]
+│   │   │       ├── Particles move to: [Dropdown: Highest pheromone location]
+│   │   │       ├── Display: [Dropdown: Pheromones]
+│   │   │       ├── Pheromone display: [Dropdown: Gray scale]
+│   │   │       ├── Blur particles: [Checkbox: Checked]
+│   │   │       ├── Embossed: [Checkbox: Unchecked]
+│   │   │       ├── Particle color: [Color picker: Yellow]
+│   │   │       ├── Zoom In / Zoom Out: [Buttons]
+│   │   │       ├── Create movie frames: [Checkbox: Unchecked]
+│   │   │       └── Buttons: [Random, Open, Save, OK, Cancel]
+│   │   ├── Physarum 2/
+│   │   │   └── [Settings Window: Physarum Simulation 2 Settings]
+│   │   │       ├── Red Particles / Green Particles / Blue Particles Columns:
+│   │   │       │   ├── Sense angle: [Inputs: 274 / 144 / 274]
+│   │   │       │   ├── Sense distance: [Inputs: 5.990 / 7.940 / 5.990]
+│   │   │       │   ├── Turn angle: [Inputs: 40 / 22 / 40]
+│   │   │       │   ├── Move distance: [Inputs: 4.480 / 5.530 / 4.480]
+│   │   │       │   ├── Deposit amount: [Inputs: 0.12 / 0.238 / 0.12]
+│   │   │       │   ├── Evaporation rate: [Inputs: 0.525 / 0.072 / 0.525]
+│   │   │       │   └── Blur radius: [Inputs: 3 / 3 / 3]
+│   │   │       ├── Display gamma: [Input: 1.3]
+│   │   │       ├── Correct turn angles: [Checkbox: Unchecked]
+│   │   │       ├── Particle start: [Dropdown: Whole screen]
+│   │   │       ├── Particles move to: [Dropdown: Lowest pheromones]
+│   │   │       ├── Zoom In / Zoom Out: [Buttons]
+│   │   │       ├── Create movie frames: [Checkbox: Unchecked]
+│   │   │       └── Buttons: [Random, Open, Save, OK, Cancel]
+│   │   ├── Primordial Particle Systems/
+│   │   │   └── [Settings Window: Primordial Particle Systems Settings]
+│   │   │       ├── Particle count: [Input: 800]
+│   │   │       ├── Radius: [Input: 100]
+│   │   │       ├── Velocity: [Input: 10]
+│   │   │       ├── Fixed rotation: [Input: 47]
+│   │   │       ├── Proportional rotation: [Input: 1]
+│   │   │       ├── World width: [Input: 1000]
+│   │   │       ├── Particle display radius: [Input: 4]
+│   │   │       ├── Metaballs: [Checkbox: Unchecked]
+│   │   │       ├── Blend frames: [Checkbox: Unchecked]
+│   │   │       ├── Create movie frames: [Checkbox: Unchecked]
+│   │   │       └── Buttons: [Random, Open, Save, OK, Cancel]
+│   │   ├── Species/
+│   │   │   └── [Settings Window: Species Settings (Not explicitly opened in video)]
+│   │   └── Termites/
+│   │       └── [Settings Window: Termites Simulation Settings]
+│   │           ├── Woodchip percentage: [Input: 25]
+│   │           ├── Termites percentage: [Input: 50]
+│   │           ├── Pickup threshold <=: [Input: 16]
+│   │           ├── Drop threshold >=: [Input: 11]
+│   │           ├── Search radius: [Dropdown: 3]
+│   │           ├── Pixel size: [Dropdown: 5]
+│   │           ├── Zoom algorithm: [Dropdown: Nearest]
+│   │           ├── Show termites: [Checkbox: Unchecked]
+│   │           ├── Save every [Input: 10] nth frame as movie frames: [Checkbox: Unchecked]
+│   │           ├── Colors:
+│   │           │   ├── Background color: [Color picker: Black]
+│   │           │   ├── Woodchip color: [Color picker: Yellow]
+│   │           │   ├── Termite color: [Color picker: Red]
+│   │           │   └── Carrying color: [Color picker: Orange]
+│   │           └── Buttons: [OK, Cancel]
+│   └── 3D/
+│       ├── 3D Huegene/
+│       │   └── [Settings Window: Huegene 3D Settings]
+│       │       ├── Initial plant population %: [Input: 50]
+│       │       ├── Initial fill %: [Input: 50]
+│       │       ├── Plant hue change: [Input: 0.015]
+│       │       ├── Plant propagate age: [Input: 3]
+│       │       ├── Herbivore hue change: [Input: 0.05]
+│       │       ├── Herbivore breed age: [Input: 5]
+│       │       ├── Herbivore starve time: [Input: 5]
+│       │       ├── Herbivore eat probability factor: [Input: 1]
+│       │       ├── Show plants: [Checkbox: Checked]
+│       │       ├── Show herbivores: [Checkbox: Checked]
+│       │       ├── Herbivores move randomly: [Checkbox: Unchecked]
+│       │       ├── Plants randomly propagate: [Checkbox: Checked]
+│       │       ├── Use diagonal neighbors: [Checkbox: Checked]
+│       │       ├── Initial layout: [Dropdown: Central sphere]
+│       │       ├── Genetics colors: [Dropdown: Hue]
+│       │       ├── Renderer: [Dropdown: OpenGL Software]
+│       │       ├── Cells shape: [Dropdown: Cubes]
+│       │       ├── Grid size: [Dropdown: 100]
+│       │       ├── Hide cells: [Dropdown: None]
+│       │       ├── Average cell colors: [Checkbox: Unchecked]
+│       │       ├── Auto-rotate: [Checkbox: Unchecked]
+│       │       ├── Show bounding box: [Checkbox: Checked]
+│       │       ├── Export to Wavefront OBJ file: [Checkbox: Unchecked]
+│       │       ├── Create movie frames: [Checkbox: Unchecked]
+│       │       └── Buttons: [Open, Save, OK, Cancel]
+│       │       └── Note: *Launches Shared 3D Settings Dialog on execution*
+│       ├── 3D Particle Life/
+│       │   └── [Settings Window: 3D Particle Life Settings]
+│       │       ├── Particles display radius: [Input: 10]
+│       │       ├── World size: [Dropdown: 500]
+│       │       ├── Number of particles: [Input: 500]
+│       │       ├── Particle types: [Input: 5]
+│       │       ├── Particle colors: [Dropdown: Random]
+│       │       ├── Random seed: [Input: 1303695570, Button: Randomize Seed, Button: Options]
+│       │       ├── Skip displaying initial: [Input: 0] frames
+│       │       ├── Hide particles with <=: [Input: 1] neighbor particles
+│       │       ├── Minimum attraction: [Input: -0.557]
+│       │       ├── Min radius lower: [Input: 13]
+│       │       ├── Max radius lower: [Input: 32]
+│       │       ├── Friction: [Input: 0.05]
+│       │       ├── Display rendering engine: [Dropdown: OpenGL Software]
+│       │       ├── Maximum attraction: [Input: 0.770]
+│       │       ├── Min radius upper: [Input: 32]
+│       │       ├── Max radius upper: [Input: 35]
+│       │       ├── Flat force: [Checkbox: Checked]
+│       │       ├── Wraparound edges: [Checkbox: Checked]
+│       │       ├── Bounding box: [Checkbox: Checked]
+│       │       ├── Fade-trace particles: [Checkbox: Unchecked]
+│       │       ├── Hide solo particles: [Checkbox: Checked]
+│       │       ├── Metaballs: [Checkbox: Unchecked]
+│       │       ├── Create movie frames: [Checkbox: Unchecked]
+│       │       └── Buttons: [Random, Open, Save, OK, Cancel]
+│       │       └── Note: *Launches Shared 3D Settings Dialog on execution*
+│       ├── 3D Wa-Tor/
+│       │   └── [Settings Window: 3D Wa-Tor Settings]
+│       │       ├── 95% initial fish population: [Slider]
+│       │       ├── 5% initial world filled: [Slider]
+│       │       ├── Fish breed age: [Input: 3]
+│       │       ├── Shark breed age: [Input: 15]
+│       │       ├── Shark starve time: [Input: 12]
+│       │       ├── Fish move randomly: [Checkbox: Unchecked]
+│       │       ├── Sharks move randomly: [Checkbox: Unchecked]
+│       │       ├── Color fish genes: [Checkbox: Unchecked]
+│       │       ├── Diagonal neighbors: [Checkbox: Checked]
+│       │       ├── Graph populations: [Checkbox: Checked]
+│       │       ├── Show fish: [Checkbox: Checked]
+│       │       ├── Show sharks: [Checkbox: Checked]
+│       │       ├── Colors:
+│       │       │   ├── Fish color: [Color picker: Green]
+│       │       │   ├── Healthy shark color: [Color picker: Red]
+│       │       │   ├── Normal shark color: [Color picker: Orange]
+│       │       │   ├── Starving shark color: [Color picker: Gray]
+│       │       │   └── Ocean color: [Color picker: Black]
+│       │       ├── Renderer: [Dropdown: OpenGL Software]
+│       │       ├── Cells shape: [Dropdown: Cubes]
+│       │       ├── Grid size: [Dropdown: 50]
+│       │       ├── Hide cells: [Dropdown: None]
+│       │       ├── Average cell colors: [Checkbox: Unchecked]
+│       │       ├── Auto-rotate: [Checkbox: Unchecked]
+│       │       ├── Show bounding box: [Checkbox: Checked]
+│       │       ├── Export to Wavefront OBJ file: [Checkbox: Unchecked]
+│       │       ├── Create movie frames: [Checkbox: Unchecked]
+│       │       └── Buttons: [Open, Save, OK, Cancel]
+│       │       └── Note: *Launches Shared 3D Settings Dialog on execution*
+│       └── Boids/
+│           └── [Settings Window: Boids Settings]
+│               ├── Number of boids: [Input: 500]
+│               ├── Maximum steer force: [Input: 0.05]
+│               ├── Maximum speed: [Input: 2]
+│               ├── Separation strength: [Input: 1.8]
+│               ├── Alignment strength: [Input: 1.1]
+│               ├── Cohesion strength: [Input: 1.5]
+│               ├── Obst avoid strength: [Input: 2]
+│               ├── View distance: [Dropdown: 30 %]
+│               ├── Wall style: [Dropdown: Avoid]
+│               ├── Starting flock style: [Dropdown: Random]
+│               ├── Boid size: [Input: 1.5]
+│               ├── Boid shape: [Dropdown: Triangles]
+│               ├── Boid coloring: [Dropdown: RGB Shaded]
+│               ├── Leave trails: [Checkbox: Unchecked]
+│               ├── Trail length: [Input: 100]
+│               ├── Trail thickness: [Input: 1]
+│               ├── World size (X,Y,Z): [Inputs: 100 / 200 / 100]
+│               ├── Auto rotate: [Checkbox: Unchecked]
+│               ├── Create movie frames: [Checkbox: Unchecked]
+│               └── Buttons: [Open, Save, OK, Cancel]
+│               └── Note: *Launches Shared 3D Settings Dialog on execution*
+├── Cellular Automata/
+│   ├── 1D/
+│   │   ├── 1D Cellular Automata/
+│   │   │   └── [Settings Window: One Dimensional Cellular Automaton Settings]
+│   │   │       ├── Rule Table Checkboxes (Rule 8 ... Rule 1): [Checkboxes: Checked/Unchecked]
+│   │   │       ├── Binary Values: [128, 64, 32, 16, 8, 4, 2, 1]
+│   │   │       ├── Settings:
+│   │   │       │   ├── Rule number: [Dropdown: 30]
+│   │   │       │   ├── Initial generation method: [Dropdown: Single centered point]
+│   │   │       │   └── Generations calculated before updating display: [Input: 1]
+│   │   │       ├── Colors:
+│   │   │       │   ├── Active cell: [Color picker: Black]
+│   │   │       │   └── Inactive cell: [Color picker: White]
+│   │   │       ├── Create movie frames: [Checkbox: Unchecked]
+│   │   │       ├── Music:
+│   │   │       │   ├── CA MIDI music: [Checkbox: Unchecked]
+│   │   │       │   ├── Save as MIDI file: [Checkbox: Unchecked, Input: ""]
+│   │   │       │   ├── Instrument: [Dropdown: Acoustic Grand Piano]
+│   │   │       │   ├── Octave: [Dropdown: 4]
+│   │   │       │   ├── Offset: [Input: 0]
+│   │   │       │   ├── Beats per minute: [Input: 120]
+│   │   │       │   └── Highlight color: [Color picker: Orange]
+│   │   │       └── Buttons: [Print, Print Catalog, Catalog, Save, Open, OK, Cancel]
+│   │   └── (All other 1D submodes from Video 1, e.g., 1D Hexagonal, 1D Tritonic)
+│   ├── 2D/
+│   │   ├── Zhang Cellular Automata/
+│   │   │   └── [Settings Window: Zhang Cellular Automate Settings] *UI Typo: Automate
+│   │   │       ├── Neighbor cells count 3 to 8 => Current cell state 0 to (n-1) Matrix:
+│   │   │       │   └── [Grid of 6x6 input boxes containing values 0-6]
+│   │   │       ├── State 0 background: [Checkbox: Checked, Color picker: Black]
+│   │   │       ├── State colors (1 to 8): [Color pickers: Red, Green, Blue, Purple, Orange, Cyan, Magenta, White]
+│   │   │       ├── Number of states: [Dropdown: 7]
+│   │   │       ├── Random seed: [Input: 619976173, Button: Seed]
+│   │   │       ├── Cell display size: [Dropdown: 5]
+│   │   │       ├── Zoom algorithm: [Dropdown: Nearest]
+│   │   │       ├── Create movie frames: [Checkbox: Unchecked]
+│   │   │       └── Buttons: [Random Rule, Mutate, Set color from palette, Random All, Open, Save, OK, Cancel]
+│   │   └── (All other 2D submodes from Video 1, e.g., 2D Cyclic, 2D Generations)
+│   ├── 3D/
+│   │   ├── 3D Voxel Automata Terrain/
+│   │   │   └── [Settings Window: 3D Voxel Automata Terrain Settings]
+│   │   │       ├── Rule number: [Input: 446]
+│   │   │       ├── Universe size: [Dropdown: 8]
+│   │   │       ├── Flip probability: [Input: 0]
+│   │   │       ├── Brightness: [Input: 90]
+│   │   │       ├── Contrast: [Input: 40]
+│   │   │       ├── Total states: [Dropdown: 3]
+│   │   │       ├── Show state 1 cells: [Checkbox: Checked, Color picker: Tan]
+│   │   │       ├── Show state 2 cells: [Checkbox: Checked, Color picker: Green]
+│   │   │       ├── Cell display: [Dropdown: Cubes]
+│   │   │       ├── Start pattern: [Dropdown: All state 2]
+│   │   │       ├── Color method: [Dropdown: States]
+│   │   │       ├── Display rendering engine: [Dropdown: OpenGL Software, Button: Options]
+│   │   │       ├── Export to Wavefront OBJ file: [Checkbox: Unchecked]
+│   │   │       ├── Create movie frames from 360 degree rotation: [Checkbox: Unchecked]
+│   │   │       └── Buttons: [Random, Open, Save, OK, Cancel]
+│   │   │       └── Note: *Launches Shared 3D Settings Dialog on execution*
+│   │   └── (All other 3D submodes from Video 1, e.g., 3D Accretor, 3D Cyclic)
+│   ├── 4D/
+│   │   ├── 4D Accretor Cellular Automata/
+│   │   │   └── [Settings Window: Accretor 4D Cellular Automata Settings]
+│   │   │       ├── Rule:
+│   │   │       │   ├── Rule number: [Input: 1, Button: Random Rule Number]
+│   │   │       │   ├── Max states: [Dropdown: 3]
+│   │   │       │   ├── Rule fill %: [Input: 20]
+│   │   │       │   └── Seed style: [Dropdown: Random 5x5x5]
+│   │   │       ├── Display Options:
+│   │   │       │   ├── Cell shading: [Dropdown: 4D density palette]
+│   │   │       │   ├── State colors: [Color pickers: Blue, Green, Red]
+│   │   │       │   ├── Cells shape: [Dropdown: Cubes]
+│   │   │       │   ├── Grid size: [Dropdown: 200]
+│   │   │       │   ├── Auto-Rotate: [Checkbox: Checked]
+│   │   │       │   └── Auto-zoom out: [Checkbox: Checked]
+│   │   │       ├── Display rendering engine: [Dropdown: OpenGL Software, Button: Options]
+│   │   │       ├── Only render final frame: [Checkbox: Unchecked]
+│   │   │       ├── Create movie frames: [Checkbox: Unchecked]
+│   │   │       └── Buttons: [Open, Save, OK, Cancel]
+│   │   │       └── Note: *Launches Shared 3D Settings Dialog on execution*
+│   │   └── (All other 4D submodes from Video 1)
+│   ├── 5D/
+│   │   ├── 5D Generations Cellular Automata/
+│   │   │   └── [Settings Window: 5D Generations Cellular Automata Settings]
+│   │   │       ├── Survival Checkboxes (0 to 242): [Grid of 243 Checkboxes, Buttons: Check All, Check None, Random]
+│   │   │       ├── Birth Checkboxes (0 to 242): [Grid of 243 Checkboxes (1 Checked), Buttons: Check All, Check None, Random]
+│   │   │       ├── Display options:
+│   │   │       │   ├── Renderer: [Dropdown: OpenGL Software, Button: Options]
+│   │   │       │   ├── Cell shading: [Dropdown: 4D/5D density palette]
+│   │   │       │   ├── Cells shape: [Dropdown: Cubes]
+│   │   │       │   ├── Grid size: [Dropdown: 25]
+│   │   │       │   ├── Hide cells: [Dropdown: None]
+│   │   │       │   ├── State 1 color: [Color picker: Yellow]
+│   │   │       │   ├── Final state color: [Color picker: Red]
+│   │   │       │   ├── Auto-rotate: [Checkbox: Unchecked]
+│   │   │       │   ├── Show bounding box: [Checkbox: Unchecked]
+│   │   │       │   └── Hide lowest/highest 4D/5D cells: [Checkbox: Unchecked]
+│   │   │       ├── Other settings:
+│   │   │       │   ├── Maximum cell states: [Dropdown: 2]
+│   │   │       │   ├── Starting pattern: [Dropdown: Single centered]
+│   │   │       │   ├── Create movie frames: [Checkbox: Unchecked]
+│   │   │       │   ├── Frames per 5D step: [Input: 1]
+│   │   │       │   └── Export to Wavefront OBJ file: [Checkbox: Unchecked]
+│   │   │       └── Buttons: [Random, Open, Save, OK, Cancel]
+│   │   │       └── Note: *Launches Shared 3D Settings Dialog on execution*
+│   └── NKS/
+│       ├── Page 60 - 1D Three Color Totalistic/
+│       │   └── [Settings Window: ANKOS Page 60 - Three Color Totalistic Cellular Automata Settings]
+│       │       ├── Rule number: [Dropdown: 777]
+│       │       ├── Initial population: [Dropdown: Single Centered Cell]
+│       │       ├── Cell size: [Dropdown: 5]
+│       │       ├── Zoom algorithm: [Dropdown: Nearest]
+│       │       ├── Background color: [Color picker: Black]
+│       │       ├── State 1 color: [Color picker: Gray]
+│       │       ├── Final state color: [Color picker: White]
+│       │       ├── Stop after full screen: [Checkbox: Unchecked]
+│       │       ├── Create movie frames: [Checkbox: Unchecked]
+│       │       └── Buttons: [Random, Online ref, Open, Save, OK, Cancel]
+│       ├── Page 76 - 1D Generalized Mobile Automata/
+│       │   └── [Settings Window: ANKOS Page 76 - Generalized Mobile Automata Settings]
+│       │       ├── Rule Checkboxes (Rules 7 to 0): [Grid of 3 Checkboxes per rule, all checked]
+│       │       ├── Cell size: [Dropdown: 5]
+│       │       ├── Zoom algorithm: [Dropdown: Nearest]
+│       │       ├── Background color: [Color picker: Black]
+│       │       ├── State 1 color: [Color picker: Red]
+│       │       ├── Active background color: [Color picker: Light Red]
+│       │       ├── Active state 1 color: [Color picker: Light Pink]
+│       │       ├── Stop after full screen: [Checkbox: Unchecked]
+│       │       ├── Create movie frames: [Checkbox: Unchecked]
+│       │       └── Buttons: [Random, Online ref, Open, Save, OK, Cancel]
+│       └── (All other NKS pages from Video 1)
+├── Dendritic Growth/
+│   ├── Dendritic Crystal Growth/
+│   │   └── [Settings Window: Dendritic Crystal Growth Settings]
+│   │       ├── k: [Input: 1.7]
+│   │       ├── alpha: [Input: 0.9]
+│   │       ├── teq: [Input: 1.3]
+│   │       ├── anisotropy: [Input: 5]
+│   │       ├── gamma: [Input: 10.0]
+│   │       ├── Cell size: [Dropdown: 2]
+│   │       ├── Zoom algorithm: [Dropdown: Nearest]
+│   │       ├── Stop at edge: [Checkbox: Checked]
+│   │       ├── 3D shaded effect: [Checkbox: Checked]
+│   │       ├── Create movie frames: [Checkbox: Unchecked]
+│   │       ├── Save every [Input: 100] steps: [Checkbox: Checked]
+│   │       └── Buttons: [Open, Save, OK, Cancel]
+│   ├── Gravner-Griffeath Snowflakes/
+│   │   └── [Settings Window: Snowflakes 2 Settings]
+│   │       ├── Density of diffusing particles: [Input: 0.58]
+│   │       ├── Anisotropy: [Input: 2]
+│   │       ├── Aftergrowth strength: [Input: 0.3]
+│   │       ├── Aftergrowth geometry: [Input: 0.007595]
+│   │       ├── Diffuse ice reverting to vapor: [Input: 0.00002515]
+│   │       ├── Crystallization: [Input: 0.05]
+│   │       ├── Melting: [Input: 0.01]
+│   │       ├── Randomness: [Input: 0]
+│   │       ├── Steps per update: [Input: 10]
+│   │       ├── Background color: [Color picker: Gray]
+│   │       ├── Create movie frames: [Checkbox: Unchecked]
+│   │       └── Buttons: [Open, Save, OK, Cancel]
+│   └── Reiter Snowflakes/
+│       └── [Launches directly with native system defaults]
+├── Diffusion-Limited Aggregation/
+│   ├── 2D Diffusion-Limited Aggregation/
+│   │   └── [Settings Window: DLA Settings]
+│   │       ├── Color shading method to use: [Dropdown: Black & White]
+│   │       ├── Neighbor checks: [8 Checkboxes, all checked]
+│   │       ├── Initial particles layout: [8 Checkboxes, all checked]
+│   │       ├── Particle launch area: [8 Checkboxes, all checked]
+│   │       ├── Particle stick method: [Dropdown: Count]
+│   │       ├── Update after: [Input: 100] sticks
+│   │       ├── Hits before sticking: [Input: 1]
+│   │       ├── Neighbors required for stick >=: [Input: 1]
+│   │       ├── Pixel size: [Dropdown: 2]
+│   │       ├── Zoom algorithm: [Dropdown: Nearest]
+│   │       ├── Create movie frames: [Checkbox: Unchecked]
+│   │       └── Buttons: [OK, Cancel]
+│   ├── 3D Diffusion-Limited Aggregation/
+│   │   └── [Settings Window: 3D DLA Settings]
+│   │       ├── Particle stick parameters:
+│   │       │   ├── Neighbours for hit: [Input: 1]
+│   │       │   ├── Hits per stick: [Input: 1]
+│   │       │   └── Diagonal neighbors also count: [Checkbox: Checked]
+│   │       ├── Automatic rotation:
+│   │       │   ├── Auto rotate X: [Checkbox: Unchecked]
+│   │       │   ├── Auto rotate Y: [Checkbox: Unchecked]
+│   │       │   ├── Auto rotate Z: [Checkbox: Unchecked]
+│   │       │   └── Value: [Input: 0.5] degrees
+│   │       ├── Display parameters:
+│   │       │   ├── Display style: [Dropdown: Spheres]
+│   │       │   ├── Maximum grid size: [Dropdown: 500]
+│   │       │   ├── Hits per update: [Input: 10]
+│   │       │   ├── Auto increase hits per update: [Checkbox: Checked]
+│   │       │   ├── Increase speed: [Dropdown: Medium]
+│   │       │   ├── Particle color: [Color picker: White]
+│   │       │   ├── Shade with palette: [Checkbox: Checked]
+│   │       │   ├── Display particle count each frame: [Checkbox: Unchecked]
+│   │       │   ├── Show onscreen detailed stats: [Checkbox: Unchecked]
+│   │       │   ├── Hide half (slice open): [Checkbox: Unchecked]
+│   │       │   ├── Export to Wavefront OBJ file: [Checkbox: Unchecked]
+│   │       │   └── Create movie frames: [Checkbox: Unchecked]
+│   │       ├── Fake ambient occlusion:
+│   │       │   ├── Enable fake ambient occlusion (OpenGL only): [Checkbox: Checked]
+│   │       │   └── Neighbor radius: [Input: 5]
+│   │       └── Buttons: [Open, Save, OK, Cancel]
+│   │       └── Note: *Launches Shared 3D Settings Dialog on execution*
+│   └── Dendron Diffusion-Limited Aggregation/
+│       └── [Settings Window: Dendron Settings]
+│           ├── Aggregation threshold: [Input: 3]
+│           ├── Threshold growth rate: [Input: 0.1]
+│           ├── Accretion amount: [Input: 80]
+│           ├── Maximum particle velocity: [Input: 20]
+│           ├── Blur frequency: [Input: 4]
+│           ├── Steps per update: [Input: 10]
+│           ├── Random seed: [Input: 1]
+│           ├── Start pattern: [Dropdown: Single Pixel]
+│           ├── 3D lighting effect: [Checkbox: Unchecked]
+│           ├── Create movie frames: [Checkbox: Unchecked]
+│           └── Buttons: [Open, Save, OK, Cancel]
+├── Fluid/
+│   ├── 2D/
+│   │   ├── Lattice Boltzmann Method Method 2/
+│   │   │   └── [Settings Window: Lattice Boltzmann Method Fluid 2 Settings]
+│   │   │       ├── Grid settings:
+│   │   │       │   ├── Obstacles: [Dropdown: Many circles]
+│   │   │       │   ├── Channel height: [Dropdown: Half image height]
+│   │   │       │   └── Initial fluid movement: [Dropdown: Stationary]
+│   │   │       ├── Simulation settings:
+│   │   │       │   ├── Fluid flow speed: [Input: 0.07]
+│   │   │       │   └── Fluid viscosity: [Input: 0.02]
+│   │   │       ├── Fluid visualization settings:
+│   │   │       │   ├── Style: [Dropdown: Curls]
+│   │   │       │   ├── Show flow vectors: [Checkbox: Unchecked]
+│   │   │       │   ├── Contrast: [Slider, Value: 30]
+│   │   │       │   └── Simulation steps per frame: [Input: 30]
+│   │   │       ├── Tracer particles:
+│   │   │       │   ├── Show tracer particles: [Checkbox: Checked]
+│   │   │       │   ├── Particle spacing: [Input: 8]
+│   │   │       │   ├── Particle size: [Input: 4]
+│   │   │       │   ├── Particle color: [Dropdown: Inverse fluid]
+│   │   │       │   ├── Splat particle display: [Checkbox: Unchecked]
+│   │   │       │   └── Splat radius: [Input: 4]
+│   │   │       ├── Barrier color: [Color picker: Black]
+│   │   │       ├── Oversample: [Dropdown: 1]
+│   │   │       ├── Create movie frames: [Checkbox: Unchecked]
+│   │   │       └── Buttons: [Open, Save, OK, Cancel]
+│   │   └── (All other 2D submodes from Video 1)
+│   └── 3D/
+│       ├── Jos Stam 3D Fluid/
+│       │   └── [Settings Window: Jos Stam 3D Fluid Simulation Settings]
+│       │       ├── Display options:
+│       │       │   ├── Grid size: [Dropdown: 150]
+│       │       │   ├── Slice: [Dropdown: Half]
+│       │       │   ├── Display: [Dropdown: Spheres]
+│       │       │   ├── Color: [Dropdown: Color palette density]
+│       │       │   ├── Object display size: [Input: 0.75]
+│       │       │   ├── Billboard / line alpha: [Input: 0.25]
+│       │       │   ├── Hide fluid < velocity: [Input: 0.015]
+│       │       │   ├── Hide fluid > density: [Input: 10000000]
+│       │       │   ├── Auto rotate Y: [Checkbox: Checked] [Input: 0.5]
+│       │       │   ├── Strip internal objects: [Checkbox: Checked]
+│       │       │   └── Bounding box: [Checkbox: Checked]
+│       │       ├── Display rendering engine: [Dropdown: OpenGL Software, Button: Options]
+│       │       ├── Fluid sources:
+│       │       │   ├── Configuration: [Dropdown: Single fountain]
+│       │       │   ├── Shape: [Dropdown: Circle]
+│       │       │   ├── Velocity: [Input: 10] to [Input: 10]
+│       │       │   ├── Density: [Input: 200] to [Input: 200]
+│       │       │   ├── Radius: [Input: 3]
+│       │       │   └── Stop flow after [Input: 0] steps
+│       │       ├── Delta time step: [Input: 0.1]
+│       │       ├── Diffusion: [Input: 0]
+│       │       ├── Viscosity: [Input: 0]
+│       │       ├── Fluid buoyancy: [Input: 0]
+│       │       ├── Linear solver iterations: [Input: 10]
+│       │       ├── Vorticity confinement: [Checkbox: Checked]
+│       │       ├── Create movie frames: [Checkbox: Unchecked]
+│       │       └── Buttons: [Open, Save, OK, Cancel]
+│       │       └── Note: *Launches Shared 3D Settings Dialog on execution*
+│       └── 3D Multiphase Smoothed-Particle Hydrodynamics/
+│           └── [Settings Window: 3D Multiphase SPH Settings]
+│               ├── Particle settings:
+│               │   ├── Maximum particles: [Input: 500000]
+│               │   ├── Rest density: [Input: 80]
+│               │   ├── Stiffness: [Input: 0.02]
+│               │   ├── Near stiffness: [Input: 0.025]
+│               │   ├── Surface tension: [Input: 0.00006]
+│               │   ├── Linear viscosity: [Input: 0.5]
+│               │   ├── Quadratic viscosity: [Input: 1]
+│               │   ├── Gravity: [Input: 9.8]
+│               │   ├── Delta time: [Input: 0.0005]
+│               │   └── Steps per update: [Input: 30]
+│               ├── Emitters (1 to 4):
+│               │   ├── Emitter 1: [Checkbox: Checked, Color: Red, Mass: 1, Position: Left Upper, X dir: 4, Y dir: 1, Z dir: 0, Size: 0.5, Speed: 2, Rate: 7, Display in RT mode: Checked]
+│               │   ├── Emitter 2: [Checkbox: Checked, Color: Green, Mass: 3, Position: Top Middle, X dir: 0, Y dir: -1, Z dir: 0, Size: 0.5, Speed: 5, Rate: 7, Display in RT mode: Checked]
+│               │   ├── Emitter 3: [Checkbox: Checked, Color: Blue, Mass: 2, Position: Right Upper, X dir: -4, Y dir: 1, Z dir: 0, Size: 0.5, Speed: 2, Rate: 7, Display in RT mode: Checked]
+│               │   └── Emitter 4: [Checkbox: Checked, Color: Yellow, Mass: 4, Position: Lower Middle, X dir: 0, Y dir: 1, Z dir: 0, Size: 0.5, Speed: 15, Rate: 7, Display in RT mode: Checked]
+│               ├── Rayleigh-Taylor Instability:
+│               │   └── Enable Rayleigh-Taylor: [Checkbox: Unchecked]
+│               ├── Clamp velocities: [Checkbox: Checked, Input: 10]
+│               ├── Display rendering engine: [Dropdown: OpenGL Software, Button: Options]
+│               ├── World size: [Dropdown: 250, Checkboxes: x2: Unchecked, /2: Checked]
+│               ├── Particle display radius: [Input: 1]
+│               ├── Auto rotate: [Checkbox: Unchecked, Input: 0.5] degrees
+│               ├── Show bounding box: [Checkbox: Checked]
+│               ├── Show stats: [Checkbox: Unchecked]
+│               ├── Hitting walls multiplies velocity by: [Input: 0.5]
+│               ├── Hide particles with less than: [Input: 0] neighbors
+│               └── Buttons: [Auto-set particle count, Open, Save, OK, Cancel]
+│               └── Note: *Launches Shared 3D Settings Dialog on execution*
+├── Fractals/
+│   ├── Buddhabrot/
+│   │   └── [Settings Window: Buddhabrot Settings]
+│   │       ├── Rendering style: [Dropdown: Sqrl Nebulabrot]
+│   │       ├── Random generator: [Dropdown: Mersenne Twister]
+│   │       ├── Minimum Iterations: [Dropdown: 512]
+│   │       ├── Maximum Iterations: [Dropdown: 4096]
+│   │       ├── Sqrt gamma: [Input: 1]
+│   │       ├── Contrast: [Slider, Value: 0 %]
+│   │       ├── Brightness: [Slider, Value: 100 %]
+│   │       ├── Channels start/finish percentages:
+│   │       │   ├── R start / finish %: [Inputs: 8 / 8]
+│   │       │   ├── G start / finish %: [Inputs: 8 / 8]
+│   │       │   └── B start / finish %: [Inputs: 8 / 8]
+│   │       └── Buttons: [Open, Save, OK, Cancel]
+│   ├── Ducks/
+│   │   └── [Settings Window: Ducks Julia Set Settings]
+│   │       ├── Settings Tab:
+│   │       │   ├── Formula: [Dropdown: Original z~log(abs(z)+c)]
+│   │       │   ├── Symmetry: [Dropdown: Original Imag>0]
+│   │       │   ├── Real component: [Input: "", Buttons: -, +]
+│   │       │   ├── Imaginary component: [Input: "", Buttons: -, +]
+│   │       │   ├── Power: [Input: 1]
+│   │       │   ├── Maximum Iterations: [Input: 20, Buttons: -, +]
+│   │       │   ├── Palette scale factor: [Input: 50, Buttons: -, +]
+│   │       │   ├── Kali scale: [Input: 1]
+│   │       │   ├── Kali min scale: [Input: 0]
+│   │       │   ├── Rendering mode: [Dropdown: Julia Set]
+│   │       │   ├── Coloring method: [Dropdown: Exponential smoothing]
+│   │       │   ├── Supersample: [Dropdown: 2] pixels
+│   │       │   ├── Rotation angle: [Input: 0]
+│   │       │   ├── Julia Set Hybrid: [Checkbox: Unchecked]
+│   │       │   ├── Use multi-threaded code: [Checkbox: Unchecked]
+│   │       │   ├── Render to BMP: [Checkbox: Unchecked], Width [Input: 5000], Height [Input: 5000]
+│   │       │   └── Button: [Batch Convert]
+│   │       ├── Hybrids Tab: [Not opened in video]
+│   │       ├── Orbit Traps Tab: [Not opened in video]
+│   │       └── Buttons: [Preview, Open, Save, OK, Cancel]
+│   ├── Escape/
+│   │   └── [Settings Window: Escape Fractal Settings]
+│   │       ├── Escape Files: [List of files]
+│   │       ├── Coefficients Grid: [3 x 6 Input Grid]
+│   │       ├── Angle: [Input: 0]
+│   │       ├── Supersample: [Dropdown: 2] pixels
+│   │       └── Buttons: [Save, Search, Mutate, OK, Cancel]
+│   ├── Lyapunov/
+│   │   └── [Settings Window: Lyapunov Settings]
+│   │       ├── a min / max: [Inputs: 8.89583... / 8.89583...]
+│   │       ├── b min / max: [Inputs: -5.15 / 5.15]
+│   │       ├── ab sequence: [Input: BA]
+│   │       ├── x start (0-1): [Input: 0.1]
+│   │       ├── Init: [Input: 100]
+│   │       ├── Nlyap: [Input: 200]
+│   │       ├── GLSL: [Checkbox: Checked]
+│   │       ├── Supersample: [Dropdown: 3] pixels
+│   │       └── Buttons: [Open, Save, OK, Cancel]
+│   ├── Mandelbrot/Julia Sets/
+│   │   └── [Settings Window: Mandelbrot / Julia Set Settings]
+│   │       ├── Settings Tab:
+│   │       │   ├── Fractal Coordinates:
+│   │       │   │   ├── Re min / max: [Inputs: -3.73625 / 3.73625]
+│   │       │   │   └── Im min / max: [Inputs: -2.163 / 2.163]
+│   │       │   ├── Iterations: [Dropdown: 1024]
+│   │       │   ├── Supersample: [Dropdown: 2] pixels
+│   │       │   ├── Display style: [Dropdown: Log Smooth (CPM)]
+│   │       │   └── GLSL: [Checkbox: Checked]
+│   │       ├── Julia Set Tab:
+│   │       │   ├── Real: [Input: 0]
+│   │       │   ├── Imaginary: [Input: 1]
+│   │       │   └── Buttons: [Random Circle, Random Cardioid]
+│   │       ├── Orbit Traps Tab:
+│   │       │   ├── Style: [Dropdown: Disabled]
+│   │       │   ├── Number of palettes: [Dropdown: 2]
+│   │       │   ├── Palettes (1 to 5): [Dropdowns: silver, gold, red, green, blue maps]
+│   │       │   └── Only show orbit traps: [Checkbox: Unchecked]
+│   │       └── Buttons: [Preview, Open, Save, OK, Cancel]
+│   ├── Planet/
+│   │   └── [Settings Window: Fractal Planet Settings]
+│   │       ├── Detail: [Input: 7]
+│   │       ├── Fault lines: [Input: 500]
+│   │       ├── Fault height: [Input: 0.001]
+│   │       ├── Smooth normals: [Checkbox: Unchecked]
+│   │       ├── Show build progress: [Checkbox: Checked]
+│   │       ├── Create movie frames: [Checkbox: Unchecked]
+│   │       └── Buttons: [OK, Cancel]
+│   ├── Plasma Clouds/
+│   │   └── [Settings Window: Plasma Settings]
+│   │       ├── Random seed: [Input: 1234567890, Button: Random]
+│   │       ├── Cloud roughness factor: [Input: 2]
+│   │       └── Buttons: [OK, Cancel]
+│   ├── Root-Finding Fractals/
+│   │   └── [Settings Window: Root-Finding Fractals Settings]
+│   │       ├── Formula: [Dropdown: z^7 - 3*z^5 + 6*z^3 - 3*z + 3 = 0]
+│   │       ├── Complex multiplier: [Input: 1] + [Input: 0] i
+│   │       ├── Coloring: [Dropdown: Smooth color palettes]
+│   │       ├── Palette stop amount: [Input: 3]
+│   │       ├── Supersample: [Dropdown: 2] pixels
+│   │       ├── Use multi-threaded code: [Checkbox: Checked]
+│   │       ├── Orbit Traps:
+│   │       │   ├── Style: [Dropdown: Disabled]
+│   │       │   ├── Number of palettes: [Dropdown: 2]
+│   │       │   ├── Palettes (1 to 5): [Dropdowns: silver, gold, red, green, blue maps]
+│   │       │   ├── Only show orbit traps: [Checkbox: Unchecked]
+│   │       │   └── Perlin shaded traps: [Checkbox: Unchecked]
+│   │       └── Buttons: [Open, Save, OK, Cancel]
+│   ├── Root-Finding Fractals 2/
+│   │   └── [Settings Window: Root-Finding Fractals 2 Settings]
+│   │       ├── Formula: [Dropdown: z^3 - 1]
+│   │       ├── Root finding method: [Dropdown: Newton]
+│   │       │   └── *Options:* [Newton, Halley, Schröder, Householder, Basto, Whittaker I, Whittaker II, Euler-Chebyshev, Chun-Kim I, Secant, Ostrowski, King, Chun II, Chun III, Feng, CHN, King-Traub, Fang-Ni-Chen, Rafiq, Chun-Kim II, Chun-Kim III, Sharma, Chun-Lee-Neta]
+│   │       ├── Coloring: [Dropdown: Single color per root]
+│   │       ├── Tolerance: [Input: 0.00001]
+│   │       ├── Palette step amount: [Input: 3]
+│   │       ├── Supersample: [Dropdown: 1] pixels
+│   │       ├── Specific Settings (a, beta, sec, m): [Inputs: 1.0, 0.0 / 2.0, 0.0 / 0.0, 0.0 / 1.0, 0.0]
+│   │       ├── Show shader code: [Checkbox: Unchecked]
+│   │       ├── Orbit Traps:
+│   │       │   ├── Style: [Dropdown: Disabled]
+│   │       │   │   └── *Options:* [Disabled, Circles, Crosses, Squares, Rings, Stalks]
+│   │       │   ├── Number of palettes: [Dropdown: 1]
+│   │       │   ├── Only show orbit traps: [Checkbox: Checked]
+│   │       │   └── Colors (Trap 1 to 5): [Color pickers: Green, Yellow, Red, Light Green, Blue]
+│   │       └── Buttons: [Open, Save, OK, Cancel]
+│   ├── Terrain/
+│   │   └── [Settings Window: Fractal Terrain Generator Settings]
+│   │       ├── Generation Tab:
+│   │       │   ├── Fault Sub-Tab:
+│   │       │   │   ├── Octaves: [Input: 6]
+│   │       │   │   ├── Type: [Dropdown: Standard]
+│   │       │   │   └── Random seed: [Input: 1234, Button: Randomize]
+│   │       │   ├── Circles Sub-Tab:
+│   │       │   │   ├── Iterations: [Input: 1000]
+│   │       │   │   ├── Style: [Dropdown: Step]
+│   │       │   │   └── Wave size: [Input: 3]
+│   │       │   └── Perlin Sub-Tab: [Not opened]
+│   │       ├── Erosion Tab:
+│   │       │   ├── Water drops per frame: [Input: 5000]
+│   │       │   ├── Erosion rate: [Input: 0.8]
+│   │       │   ├── Deposit rate: [Input: 0.01]
+│   │       │   ├── Average heights blur weight: [Checkbox: Checked, Input: 500]
+│   │       │   ├── Create movie frames: [Checkbox: Unchecked]
+│   │       │   └── Auto Rotate: [Checkbox: Unchecked]
+│   │       └── Buttons: [Open, Save, Preview, OK, Cancel]
+│   └── Thorn/
+│       └── [Settings Window: Thorn Fractal Settings]
+│           ├── Cx: [Input: 0.1]
+│           ├── Cy: [Input: -1]
+│           ├── Iterations: [Input: 255]
+│           ├── Palette scaling: [Input: 10]
+│           ├── Supersample: [Dropdown: 10] pixels
+│           ├── Variation: [Dropdown: Original]
+│           └── Buttons: [Random, Open, Save, OK, Cancel]
+├── Genetics/
+│   ├── Genetic Art/
+│   ├── Genetic Art 2/
+│   ├── Genetic Art 3/
+│   │   └── [Settings Window: Genetic Art 3 Settings]
+│   │       ├── Formula list box / Preview box / Binary tree box
+│   │       ├── Current formula input box
+│   │       ├── Supersample: [Dropdown: 2] pixels
+│   │       ├── Render image to BMP file: [Checkbox: Unchecked]
+│   │       └── Buttons: [Evolve New, Evolve, Animate, Evolve 5, Save, OK, Cancel]
+│   ├── Genetic Bugs/
+│   ├── Genetic Bugs 2/
+│   │   └── [Settings Window: Genetic Bug 2 Settings]
+│   │       ├── Initial bug population: [Input: 500]
+│   │       ├── Initial bug energy: [Input: 100]
+│   │       ├── Initial food density (%): [Input: 50]
+│   │       ├── Energy per food particle: [Input: 5]
+│   │       ├── New food per cycle: [Input: 50]
+│   │       ├── Wraparound world: [Checkbox: Checked]
+│   │       ├── Show statistics: [Checkbox: Unchecked]
+│   │       ├── Obstacles: [Checkbox: Checked] [Dropdown: Cross]
+│   │       ├── Genes modified at birth: [Input: 3]
+│   │       ├── Energy level for birth: [Input: 250]
+│   │       ├── Bug display style: [Dropdown: Circle]
+│   │       ├── Colors:
+│   │       │   ├── Background color: [Color picker: Black]
+│   │       │   ├── Bug color: [Color picker: Red]
+│   │       │   ├── Food color: [Color picker: Green]
+│   │       │   └── Obstacle color: [Color picker: Blue]
+│   │       └── Buttons: [Open, Save, OK, Cancel]
+│   ├── Virtual Creatures/
+│   └── Virtual Creatures 2/
+│       └── [Settings Window: Virtual Creatures 2 Settings]
+│           ├── Search for new creatures:
+│           │   ├── Type: [Dropdown: Snake] (Options: Snake, Cross, Jack)
+│           │   ├── Segments: [Input: 3]
+│           │   ├── Time steps per creature searched: [Input: 5000]
+│           │   ├── Creaturess to add to gene pool: [Input: 10] *UI Typo: Creaturess
+│           │   ├── Create movies of best creatures: [Checkbox: Checked]
+│           │   └── Button: [Search random creatures]
+│           ├── Random single creature:
+│           │   ├── Type: [Dropdown: Snake], [Input: 5] segments
+│           │   ├── Show every [Input: 1] stop(s)
+│           │   ├── Create movie frames: [Checkbox: Unchecked]
+│           │   └── Button: [Create One Random Creature]
+│           ├── Mutations:
+│           │   ├── Mutation percentage: [Input: 30]
+│           │   ├── Steps per mutation: [Input: 5000]
+│           │   ├── Steps per display: [Input: 100]
+│           │   └── Button: [Mutate Current Creature]
+│           └── Buttons: [Open, Save, OK, Cancel]
+│           └── Confirmation Prompt: [Visions of Chaos will now continuously generate random creatures...]
+├── Gravity/
+│   ├── 2D/
+│   │   ├── 2D Gravity/
+│   │   │   └── [Settings Window: Gravity Settings]
+│   │   │       ├── Number of objects: [Input: 500]
+│   │   │       ├── Display style: [Dropdown: Blue/Red Circles]
+│   │   │       ├── Cellular style: [Dropdown: 1]
+│   │   │       ├── Wrap edges: [Checkbox: Unchecked]
+│   │   │       ├── Initial pattern: [Dropdown: Random]
+│   │   │       ├── Leave trails: [Checkbox: Unchecked]
+│   │   │       ├── Bounce off walls: [Checkbox: Unchecked]
+│   │   │       ├── Limit speed of objects to: [Checkbox: Unchecked] [Input: 2]
+│   │   │       ├── Create movie frames: [Checkbox: Unchecked]
+│   │   │       ├── Update after: [Input: 1] steps
+│   │   │       └── Buttons: [Print, OK, Cancel]
+│   │   └── 2D Gravity Set/
+│   │       └── [Settings Window: Gravity Set Settings]
+│   │           ├── Global Options:
+│   │           │   ├── Gravitation constant: [Input: 1.36]
+│   │           │   ├── Delta time: [Input: 6.5]
+│   │           │   ├── Escape velocity: [Input: 0]
+│   │           │   ├── Escape radius: [Input: 100000]
+│   │           │   └── Maximum iterations: [Input: 256]
+│   │           ├── Star Options:
+│   │           │   ├── Number of stars: [Dropdown: 5]
+│   │           │   ├── Pattern: [Dropdown: Ring]
+│   │           │   ├── Positions and Masses Table: [Star 1 to 5 values: X Pos, Y Pos, Mass]
+│   │           │   └── Buttons: [Randomize positions, Randomize masses]
+│   │           ├── Orbit Options:
+│   │           │   ├── Initial X velocity: [Input: 0]
+│   │           │   └── Initial Y velocity: [Input: 0]
+│   │           ├── GLSL: [Checkbox: Checked]
+│   │           ├── Supersample: [Dropdown: 1] pixels
+│   │           └── Buttons: [Defaults, Random All, Open, Save, OK, Cancel]
+│   └── 3D/
+│       ├── 3D Gravity/
+│       │   └── [Settings Window: 3D Gravity Settings]
+│       │       ├── Number of objects: [Dropdown: 100,000]
+│       │       ├── Object display: [Dropdown: Billboard quads]
+│       │       ├── Object color: [Dropdown: Red/Blue speed]
+│       │       ├── Start pattern: [Dropdown: Rotating oblate spheroid]
+│       │       ├── Billboard alpha: [Input: 0.3]
+│       │       ├── Object display size: [Dropdown: 0.7]
+│       │       ├── Universe size: [Dropdown: 200]
+│       │       ├── Minimum interaction distance: [Input: 10]
+│       │       ├── Initial speed scale: [Input: 10]
+│       │       ├── Scale by radius: [Checkbox: Checked]
+│       │       ├── Time step: [Input: 0.02]
+│       │       ├── Enable central black hole: [Checkbox: Unchecked]
+│       │       ├── Black hole mass ratio to objects: [Input: 100]
+│       │       ├── Black hole does not move in space: [Checkbox: Checked]
+│       │       ├── Auto rotate: [Checkbox: Unchecked]
+│       │       ├── Create movie frames: [Checkbox: Unchecked]
+│       │       ├── Correct gravity calculations: [Checkbox: Unchecked]
+│       │       └── Buttons: [Open, Save, OK, Cancel]
+│       │       └── Note: *Launches Shared 3D Settings Dialog on execution*
+│       └── Light Gravity Simulation/
+│           └── [Settings Window: Same parameters as 3D Gravity]
+├── Hypercomplex Fractals/
+│   ├── Mandelbulb/
+│   │   └── [Settings Window: Mandelbulb Settings]
+│   │       ├── Basics Tab:
+│   │       │   ├── Formula: [Dropdown: Mandelbulb z^n = z^p*z...]
+│   │       │   ├── Variation: [Dropdown: Positive SIN]
+│   │       │   ├── Shading: [Dropdown: Ambient Light]
+│   │       │   ├── Iterations: [Input: 5]
+│   │       │   ├── Bailout: [Input: 4]
+│   │       │   ├── Power: [Input: 8]
+│   │       │   ├── FOV: [Input: 35]
+│   │       │   ├── L Epsilon: [Checkbox: Unchecked] [Input: 0.0001]
+│   │       │   ├── Phase: [Input: 0]
+│   │       │   ├── Theta scale / Phi scale: [Inputs: 1 / 1]
+│   │       │   ├── Brightness / Contrast: [Sliders]
+│   │       │   ├── Spikes - clamp Y to: [Checkbox: Unchecked] [Input: 0.5]
+│   │       │   ├── Distance estimation scale factor: [Input: 0.5]
+│   │       │   ├── Number of threads: [Input: 64]
+│   │       │   ├── Rendering style: [Dropdown: Blocks]
+│   │       │   ├── JuliaBulb options: [Checkbox: Unchecked, Button: Random, Real: 0, Imag 1: 0, Imag 2: 0]
+│   │       │   ├── Glow: [Checkbox: Unchecked] [Exterior: Checked, Color slider]
+│   │       │   ├── Folding: [Checkbox: Unchecked, Box folding: Unchecked, ABS folding: Unchecked, Min: 1, Max: 2, Sphere folding: Unchecked, Min: 0.5, Max: 1]
+│   │       │   ├── Camera Setup: [Cam pos, Look at, Up, Rotation coordinates]
+│   │       │   ├── Ambient Occlusion: [Checkbox: Checked, Min: 0.4, Max: 1.0]
+│   │       │   ├── Render to BMP: [Checkbox: Unchecked, Width: 5000, Height: 5000, Filename: ""]
+│   │       │   ├── AVI control points: [Dropdown: Cosine Point By Point]
+│   │       │   └── Anaglyph 3D: [Checkbox: Unchecked, Dropdown: Anaglyph Red Cyan, Pan distance: 0.15]
+│   │       ├── Background / Lighting / Hybrids / KIFS Tabs: [Unopened]
+│   │       ├── Random Settings: [Buttons: Randomize, Check All, Check None, Checkboxes: Formula, Variation, Power, Phase, Theta/Phi, JuliaBulb, Glow, Spikes, Shading, Lights, FOV, Palette, Rotations, Supersample (Dropdown: 2), GLSL]
+│   │       ├── Camera Controls: [Buttons: Forward, Backward, Move Up/Left/Right/Down, Move distance: 0.1, Pitch/Yaw/Rot controls, Rotation/Tilt deg: 10]
+│   │       └── Buttons: [Preview, Default View, Undo, Open, Save, OK, Cancel]
+│   └── Quaternion Julia Set/
+│       └── [Settings Window: Quaternion Julia Set Settings]
+│           ├── Real value: [Input: 0]
+│           ├── Imaginary value 1: [Input: 1]
+│           ├── Imaginary value 2: [Input: 0]
+│           ├── Imaginary value 3: [Input: 0]
+│           ├── Background: Type [Dropdown: Single color], [Color picker: Black]
+│           ├── Image: [Input: "", Button: ...]
+│           ├── Iterations: [Input: 10]
+│           ├── Epsilon: [Input: 0.000001]
+│           ├── Zoom: [Slider]
+│           ├── Shadows: [Checkbox: Unchecked]
+│           ├── Supersample: [Checkbox: Unchecked, Dropdown: 2] pixels
+│           ├── Eye pos: [Inputs: 0 / 0 / 1]
+│           ├── Look at: [Inputs: 0 / 0 / 0]
+│           ├── Light pos: [Inputs: 0 / 1.5 / -2]
+│           ├── Rotation: [Inputs: 0 / 0 / 90]
+│           └── Buttons: [Random, Random All, Preview, Open, Save, OK, Cancel]
+├── Iterated Function Systems/
+│   ├── Flame Fractals/
+│   │   └── [Settings Window: Flame Settings]
+│   │       ├── Gamma: [Input: 1.3]
+│   │       ├── Brightness: [Input: 1.5]
+│   │       ├── Contrast: [Input: 0]
+│   │       ├── Palette spread: [Dropdown: Probabilities]
+│   │       ├── Render image to BMP file: [Checkbox: Unchecked]
+│   │       ├── Supersample: [Dropdown: 1] pixels
+│   │       └── Buttons: [Open, Save, Mutate, Undo, Search, Preview, Advanced, OK, Cancel]
+│   └── Iterated Function Systems/
+│       └── [Settings Window: Iterated Function System Settings]
+│           ├── Rendering style: [Dropdown: Draves]
+│           ├── Supersample: [Dropdown: 1] pixels
+│           ├── Gamma: [Input: 1.3]
+│           ├── Contrast: [Input: 0]
+│           └── Buttons: [Open, Save, Search, Preview, Advanced, OK, Cancel]
+├── Lattice Gas Automata/
+│   ├── FHP LGA/
+│   │   └── [Settings Window: FHP LGA Settings]
+│   │       ├── FHP Model: [Dropdown: FHP III]
+│   │       ├── Supersample: [Dropdown: 1] pixels
+│   │       ├── No particles: [Checkbox: Unchecked, Color: White]
+│   │       ├── Moving particles: [Checkbox: Unchecked, Color: Black]
+│   │       ├── Stationary particles: [Checkbox: Unchecked, Color: Gray]
+│   │       ├── Create movie frames: [Checkbox: Unchecked]
+│   │       └── Buttons: [OK, Cancel]
+│   └── HPP LGA/
+│       └── [Settings Window: HPP LGA Settings]
+│           ├── Simulation style: [Dropdown: Leak through 2 walls]
+│           ├── Particle density %: [Input: 60]
+│           ├── Supersample: [Dropdown: 2]
+│           ├── Pixel size: [Dropdown: 2]
+│           ├── Zoom algorithm: [Dropdown: Nearest]
+│           ├── Shade with color palette: [Checkbox: Unchecked]
+│           ├── Create movie frames: [Checkbox: Unchecked]
+│           ├── Save every [Input: 1] frame(s): [Checkbox: Checked]
+│           └── Buttons: [OK, Cancel]
+├── Machine Learning/
+│   └── Check and Enable Machine Learning/
+│       └── [Dialog Action: Instantly toggles status]
+├── Music/
+│   ├── Automatic Music Composer/
+│   │   └── [Settings Window: Automatic Music Composer Settings]
+│   │       ├── Octave: [Dropdown: 4]
+│   │       ├── Formula: [Dropdown: xn=-2*x^2-1]
+│   │       ├── Note duration (ms): [Dropdown: 200]
+│   │       ├── Channels (1 to 5): [Checkboxes: Checked, Input coefficients, Instrument dropdowns (e.g. Voice Oohs)]
+│   │       ├── MIDI Output:
+│   │       │   ├── Create MIDI file: [Checkbox: Unchecked]
+│   │       │   ├── Output file name: [Input: ""]
+│   │       │   ├── Beats: [Inputs: 4 / 4]
+│   │       │   └── BPM: [Input: 160]
+│   │       ├── Instrument to notate: [Dropdown: 1]
+│   │       └── Buttons: [Open, Save, Start, Close]
+│   ├── Genetic Music Composer/
+│   │   └── [Settings Window: Genetic Music]
+│   │       ├── Master Sequence:
+│   │       │   ├── Notes per sequence: [Input: 16]
+│   │       │   ├── Tempo (BPM): [Input: 360]
+│   │       │   ├── Octave: [Dropdown: 3]
+│   │       │   ├── Instrument: [Dropdown: Acoustic Grand Piano]
+│   │       │   ├── Note mutation probability %: [Input: 10]
+│   │       │   └── Loop sequence: [Checkbox: Unchecked]
+│   │       ├── Mutated Sequences:
+│   │       │   └── [Grid of 10 rows with Play, Master, and Save buttons]
+│   │       └── Buttons: [Open Sequence, Save Sequence, Save Midi, Randomize, Play, Mutate]
+│   └── Whitney Music Box/
+│       └── [Settings Window: Whitney Music Box Settings]
+│           ├── Number of notes on scale: [Input: 60]
+│           ├── Seconds per full cycle: [Input: 180]
+│           ├── Note duration (ms): [Input: 100]
+│           ├── Minimum Hz / Maximum Hz: [Inputs: 27 / 5000]
+│           ├── Autoscale frequencies: [Checkbox: Checked]
+│           └── Buttons: [Open, Save, OK, Cancel]
+├── OpenGL Shading Language/
+│   ├── Custom Formula Editor/
+│   │   └── [Launches Custom Formula Compiler Window]
+│   └── Shader Editor/
+│       └── [Launches GLSL Shader Editor Workspace Window]
+├── Pendulums/
+│   ├── Magnetic Pendulum/
+│   │   └── [Settings Window: Magnetic Pendulum Settings]
+│   │       ├── Amount of friction: [Input: 0.97]
+│   │       ├── Magnetic field strength: [Input: 1]
+│   │       ├── Gravitational constant: [Input: 0.1]
+│   │       ├── Pendulum height above magnets: [Input: 0.25]
+│   │       ├── Mass of pendulum: [Input: 50]
+│   │       ├── Iterations per point: [Input: 100]
+│   │       ├── Preset configurations: [Dropdown: ""]
+│   │       ├── Number of magnets: [Dropdown: 3]
+│   │       ├── Supersample: [Dropdown: 2] pixels
+│   │       ├── Magnet colors (1 to 6): [Color pickers]
+│   │       └── Buttons: [Open, Save, OK, Cancel]
+│   ├── Pendulums/
+│   │   └── [Settings Window: Pendulum Settings]
+│   │       ├── Pendulum style: [Dropdown: Double Pendulum]
+│   │       │   └── *Options:* [Double Pendulum, Triple Pendulum, Quadruple Pendulum]
+│   │       ├── Friction: [Input: 0]
+│   │       ├── Pendulums (1 to 4):
+│   │       │   └── [Inputs: Angle, Length %, Mass]
+│   │       ├── Show pendulum: [Checkbox: Checked]
+│   │       ├── Trace pendulum paths: [Checkbox: Checked]
+│   │       ├── Shade trace with color palette: [Checkbox: Unchecked]
+│   │       ├── Line width: [Input: 1]
+│   │       ├── Animation delay: [Input: 0] milliseconds
+│   │       ├── Show masses: [Checkbox: Checked]
+│   │       ├── Fade pendulum trace: [Checkbox: Checked]
+│   │       ├── Sonification:
+│   │       │   ├── Sonify: [Checkbox: Unchecked]
+│   │       │   ├── Show numbers: [Checkbox: Checked]
+│   │       │   ├── Octave: [Dropdown: 4]
+│   │       │   └── Instrument: [Dropdown: Acoustic Grand Piano]
+│   │       ├── Multiple Pendulums:
+│   │       │   ├── Simultaneous pendulums: [Dropdown: 1]
+│   │       │   ├── Difference in p1 angle per pendulum: [Input: 0.000000001]
+│   │       │   └── Create movie frames: [Checkbox: Unchecked]
+│   │       └── Buttons: [OK, Cancel]
+│   └── Spring Pendulums/
+│       └── [Settings Window: Spring Pendulums Settings]
+│           ├── Pendulum type: [Dropdown: Double Pendulum]
+│           ├── Pendulum 1: Angle [Input: -90], Mass [Input: 10], Color [Color: Red, Trace: Checked]
+│           ├── Pendulum 2: Angle [Input: 270], Mass [Input: 10], Color [Color: Green, Trace: Checked]
+│           ├── Gravity: [Input: 0]
+│           ├── Delta: [Input: 0.01]
+│           ├── Steps per frame: [Input: 5]
+│           ├── Fade pendulum traces: [Checkbox: Checked]
+│           ├── Line width: [Input: 2]
+│           ├── Show pendulum: [Checkbox: Checked]
+│           ├── Create movie frames: [Checkbox: Unchecked]
+│           ├── Pendulum color: [Color picker: White]
+│           └── Buttons: [Random, OK, Cancel]
+├── Plotting/
+│   ├── 2D Spirograph/
+│   │   └── [Settings Window: Spirograph Settings]
+│   │       ├── Plot style: [Dropdown: Hypocycloid - Smaller circle rotating...]
+│   │       ├── Moving circle % size of fixed circle: [Input: 35]
+│   │       ├── Pen distance % from center of moving circle: [Input: 500]
+│   │       ├── Background color: [Color picker: Black]
+│   │       ├── Pen color: [Color picker: White]
+│   │       ├── Show progress: [Checkbox: Checked]
+│   │       ├── Create movie frames: [Checkbox: Unchecked]
+│   │       └── Buttons: [Random, Open, Save, OK, Cancel]
+│   ├── 3D Spirograph/
+│   │   └── [Settings Window: Spirograph 3D Settings]
+│   │       ├── Number of rotating spheres: [Dropdown: 3]
+│   │       ├── Spheres (1 to 3) values: [Inputs: Radius, Period 1, Period 2]
+│   │       ├── Min/max for random periods: [Dropdown: 20]
+│   │       ├── Radii: [Checkbox: Checked]
+│   │       ├── Periods: [Checkbox: Checked]
+│   │       ├── Display: [Dropdown: Solid Lines]
+│   │       ├── Color: [Dropdown: RGB Cube]
+│   │       ├── Line width: [Input: 2]
+│   │       ├── Time step: [Input: 0.01]
+│   │       ├── Update display every [Input: 100] time steps: [Checkbox: Checked]
+│   │       ├── Rotate when done: [Checkbox: Checked]
+│   │       ├── Create movie frames: [Checkbox: Unchecked]
+│   │       └── Buttons: [Random, Open, Save, OK, Cancel]
+│   │       └── Note: *Launches Shared 3D Settings Dialog on execution*
+│   ├── Fractal Spirograph/
+│   │   └── [Settings Window: Fractal Spirograph Settings]
+│   │       ├── k (number sides - 1): [Input: 4]
+│   │       ├── Number of orbits: [Input: 10]
+│   │       ├── Size ratio of orbits: [Input: 3]
+│   │       ├── Steps per update: [Input: 50]
+│   │       ├── Line width: [Input: 1]
+│   │       ├── Background color: [Color picker: Black]
+│   │       ├── Plot color: [Color picker: Red]
+│   │       ├── Orbit circles color: [Color picker: Black]
+│   │       ├── Color with color palette: [Checkbox: Unchecked]
+│   │       ├── Antialiased plot lines: [Checkbox: Unchecked]
+│   │       ├── Create movie frames: [Checkbox: Unchecked]
+│   │       └── Buttons: [Open, Save, OK, Cancel]
+│   ├── Harmonograph/
+│   │   └── [Settings Window: Harmonograph Settings]
+│   │       ├── Pendulums 1 & 3: Frequency, Phase shift, Decay inputs
+│   │       ├── Pendulums 2 & 4: Frequency, Phase shift, Decay inputs
+│   │       ├── Time step: [Input: 0.001]
+│   │       ├── Segments per update: [Input: 10]
+│   │       ├── Color step: [Input: 0.01]
+│   │       ├── Background color: [Color picker: Black]
+│   │       ├── Pen color: [Color picker: White]
+│   │       ├── Shade with color palette: [Checkbox: Checked]
+│   │       └── Buttons: [Random, Print, Open, Save, OK, Cancel]
+│   └── Knots/
+│       └── [Settings Window: Knots Settings]
+│           ├── m / n values: [Inputs: 1 / 0.25]
+│           ├── p / q values: [Inputs: 2 / -7, Button: Random]
+│           ├── h / r values: [Inputs: 0.35 / 9]
+│           ├── Display: [Dropdown: Solid Lines]
+│           ├── Color: [Dropdown: RGB Cube]
+│           ├── Line width: [Input: 2]
+│           ├── Time step: [Input: 0.01]
+│           ├── Update display every [Input: 100] time steps: [Checkbox: Checked]
+│           ├── Rotate when done: [Checkbox: Checked]
+│           ├── Create movie frames: [Checkbox: Unchecked]
+│           └── Buttons: [Open, Save, OK, Cancel]
+│           └── Note: *Launches Shared 3D Settings Dialog on execution*
+├── Reaction-Diffusion/
+│   ├── Multi-Scale Turing Patterns/
+│   │   └── [Settings Window: Multi-scale Turing Patterns Settings]
+│   │       ├── Scales (1 to 5) Rows:
+│   │       │   └── [Inputs: Activator, Inhibitor, Small Amount, Weight, Symmetry, Color picker]
+│   │       ├── Number of layers: [Dropdown: 5]
+│   │       ├── Averaging method: [Dropdown: Box blur (fastest)]
+│   │       ├── Box blur passes: [Dropdown: 1]
+│   │       ├── Color: [Dropdown: Linear grayscale]
+│   │       ├── Inject fluid simulation: [Checkbox: Unchecked]
+│   │       ├── Fluid steps: [Input: 1]
+│   │       ├── Fluid change ratio 1 /: [Input: 4]
+│   │       ├── Random seed: [Input: 1, Button: Reseed]
+│   │       ├── Show stats and histogram: [Checkbox: Unchecked]
+│   │       ├── Image Histogram equalization: [Checkbox: Unchecked]
+│   │       ├── Fake 3D emboss effect: [Checkbox: Unchecked]
+│   │       ├── Grid flow / Perlin flow / Expanding space: [Checkboxes: Unchecked]
+│   │       ├── Brightness / Contrast: [Inputs: 100 / 0]
+│   │       ├── Pixel size: [Dropdown: 2]
+│   │       ├── Zoom algorithm: [Dropdown: Nearest]
+│   │       ├── Create movie frames: [Checkbox: Unchecked]
+│   │       └── Buttons: [Double Act/Int Vals, Halve Act/Int Vals, Random Colors, Random, Search, Batch, Open, Save, OK, Cancel]
+│   └── Reaction-Diffusion/
+│       └── [Settings Window: Reaction Diffusion Settings]
+│           ├── Model: [Dropdown: Complex Ginzburg-Landau]
+│           │   └── *Options:* [Turing, Meinhardt, Gray-Scott, Complex Ginzburg-Landau, FitzHugh-Nagumo]
+│           ├── dt: [Input: 0.1]
+│           ├── c1 / c2: [Inputs: -0.6 / 0.1]
+│           ├── Keep chemical values above 0: [Checkbox: Checked]
+│           ├── Display style: [Dropdown: Real part]
+│           ├── Feedback: [Checkbox: Unchecked]
+│           ├── Initial frame style: [Dropdown: Random]
+│           ├── Initial frame image file: [Input: "", Button: ...]
+│           ├── Cycles per update: [Input: 10]
+│           ├── Pixel size: [Dropdown: 2]
+│           ├── Zoom algorithm: [Dropdown: Linear]
+│           ├── Lighting effect: [Checkbox: Checked]
+│           ├── Create movie frames: [Checkbox: Unchecked]
+│           └── Buttons: [Open, Save, OK, Cancel]
+├── Recursion/
+│   ├── Bifurcation/
+│   │   └── [Settings Window: Bifurcation Settings]
+│   │       ├── Formula: [Dropdown: Logistic Map]
+│   │       │   └── *Options:* [Logistic Map, Henon Attractor, Delayed Logistic Map, Bouncing Ball]
+│   │       ├── Formula settings (Bouncing Ball):
+│   │       │   ├── Slope degrees: [Input: 60]
+│   │       │   └── Initial velocity: [Input: 0.2]
+│   │       ├── Iterations: [Input: 5000]
+│   │       ├── Skip plotting first: [Input: 100] iterations
+│   │       ├── Color display: [Dropdown: White on black]
+│   │       ├── Background color: [Color picker: Black]
+│   │       ├── Supersample: [Dropdown: 2] pixels
+│   │       ├── Coordinates:
+│   │       │   ├── Xmin / Xmax: [Inputs: 0 / 1]
+│   │       │   └── Ymin / Ymax: [Inputs: -1 / 1]
+│   │       ├── Log scale x axis: [Checkbox: Unchecked]
+│   │       └── Buttons: [Open, Save, OK, Cancel]
+│   ├── Cube Divider/
+│   │   └── [Settings Window: Cube Divider Settings]
+│   │       ├── Division process: [Dropdown: Rule number]
+│   │       ├── Rule number: [Input: 132, Button: Random]
+│   │       ├── Divisions: [Input: 4]
+│   │       ├── Display rendering engine: [Dropdown: OpenGL Software]
+│   │       │   └── *Options:* [OpenGL Software, Mitsuba Renderer, Pixar RenderMan]
+│   │       ├── Export to Wavefront OBJ file: [Checkbox: Unchecked]
+│   │       ├── Auto rotate: [Checkbox: Checked]
+│   │       ├── RenderMan blobby metaballs: [Checkbox: Checked]
+│   │       ├── Create movie frames: [Checkbox: Unchecked]
+│   │       └── Buttons: [OK, Cancel]
+│   │       └── [Settings Window: Pixar RenderMan Settings]
+│   │           ├── Directory containing prman.exe: [Input box, Button: Select]
+│   │           ├── Samples: [Dropdown: 64 - Slow - Better Quality]
+│   │           ├── Lighting setup: [Dropdown: RenderMan Dome Light]
+│   │           ├── Run denoiser on images: [Checkbox: Unchecked]
+│   │           ├── Delete RenderMan scene files after rendering: [Checkbox: Checked]
+│   │           └── Buttons: [Reset Settings, OK]
+│   │       └── Note: *Launches Shared 3D Settings Dialog on execution*
+│   ├── L-Systems/
+│   │   └── [Settings Window: L-Systems Settings]
+│   │       ├── L-System Rule:
+│   │       │   ├── Turn angle = 360 / [Input: 6] = 60 degrees
+│   │       │   ├── Stages to generate: [Input: 3]
+│   │       │   ├── Axiom: [Input: F]
+│   │       │   ├── Production rules: [Text box: F=F+F--F+F]
+│   │       │   └── Coloring method: [Dropdown: Black on white]
+│   │       ├── L-Systems Music:
+│   │       │   ├── Generate MIDI music: [Checkbox: Unchecked]
+│   │       │   ├── Instrument: [Dropdown: Acoustic Grand Piano]
+│   │       │   ├── Lower octave / Upper octave: [Dropdowns: 3 / 7]
+│   │       │   ├── Scale type: [Dropdown: Major]
+│   │       │   └── Note length: [Input: 150]
+│   │       ├── MIDI File Creation:
+│   │       │   ├── Create MIDI file: [Checkbox: Unchecked]
+│   │       │   ├── Output file name: [Input: ""]
+│   │       │   └── Beats per minute: [Input: 240, Button: Auto BPM]
+│   │       └── Buttons: [Load Music, Save Music, Print, Open, OK, Cancel]
+│   └── Sierpinski Triangle/
+│       └── [Settings Window: Sierpinski Settings]
+│           ├── Display style: [Dropdown: Black and White]
+│           ├── Update display after [Input: 10] points plotted
+│           ├── User Input Prompt: [How many points should be plotted? Input: 1000000]
+│           └── Buttons: [Plot, OK, Cancel]
+├── Simulations/
+│   ├── Biham-Middleton-Levine Traffic/
+│   │   └── [Settings Window: Biham-Middleton-Levine Traffic Model Settings]
+│   │       ├── Cars 1 density: [Input: 0.31], Cars 1 color: [Color picker: Yellow]
+│   │       ├── Cars 2 density: [Input: 0.316], Cars 2 color: [Color picker: Red]
+│   │       ├── Background: [Color picker: Black]
+│   │       ├── Cell size: [Dropdown: 5]
+│   │       ├── Zoom algorithm: [Dropdown: Nearest]
+│   │       ├── Create movie frames: [Checkbox: Unchecked]
+│   │       └── Buttons: [OK, Cancel]
+│   ├── Cell Conquest/
+│   │   └── [Settings Window: Cell Conquest Settings]
+│   │       ├── Factions (1 to 4) Settings:
+│   │       │   └── [Inputs: Color, Cell lifespan, Required neighbors, Spread %, Attack %, Defense %]
+│   │       ├── Show graph / Shade cells / Histogram equalize: [Checkboxes: Unchecked]
+│   │       ├── Create movie frames: [Checkbox: Unchecked]
+│   │       ├── Start style: [Dropdown: 4 corners]
+│   │       ├── Background color: [Color picker: Black]
+│   │       ├── Cell size: [Dropdown: 5]
+│   │       ├── Update steps: [Input: 1]
+│   │       └── Buttons: [Open, Save, OK, Cancel]
+│   ├── Forest Fire/
+│   │   └── [Settings Window: Forest Fire Settings]
+│   │       ├── Tree density %: [Input: 61]
+│   │       ├── Regrowth chance %: [Input: 0]
+│   │       ├── Fire start pattern: [Dropdown: Left Edge]
+│   │       ├── Cell size: [Dropdown: 5]
+│   │       ├── Zoom algorithm: [Dropdown: Nearest]
+│   │       ├── Create movie frames: [Checkbox: Unchecked]
+│   │       └── Buttons: [OK, Cancel]
+│   └── Lorenz Waterwheel/
+│       └── [Settings Window: Lorenz Waterwheel Settings]
+│           ├── Number of buckets: [Input: 10]
+│           ├── Bucket leak rate: [Input: 0.25]
+│           ├── Bucket capacity: [Input: 100]
+│           ├── Water flowrate: [Input: 5]
+│           ├── Max wheel speed: [Input: 10]
+│           ├── Animation delay (ms): [Input: 50]
+│           ├── Bucket display size: [Input: 32]
+│           ├── Rotation graph: [Checkbox: Checked]
+│           ├── Create movie frames: [Checkbox: Unchecked]
+│           └── Buttons: [OK, Cancel]
+├── Strange Attractors/
+│   ├── 2D Strange Attractors/
+│   │   └── [Settings Window: 2D Strange Attractors Settings]
+│   │       ├── Attractor: [Dropdown: Fractal Dream]
+│   │       │   └── *Options:* [Acton, BadHead, Cathala, Clifford, Fractal Dream, Gingerbread, Gumowski-Mira, Henon, Hopalong, Ikeda, Jason Rampe 1, Jason Rampe 2, Jason Rampe 3, Johnny Svensson, Lorenz, Mira, Peter de Jong, Popcorn, QuadrupTwo, Rossler, Sine Map, Streikova Anishchenko, Symmetric Icon, Tinkerbell, Ushiki]
+│   │       ├── Parameter A: [Input: -2.9585]
+│   │       ├── Parameter B: [Input: -2.2965]
+│   │       ├── Parameter C: [Input: -2.88029]
+│   │       ├── Parameter D: [Input: -0.1622]
+│   │       ├── Number of points: [Dropdown: 1,000,000]
+│   │       ├── Contrast / Brightness: [Sliders]
+│   │       ├── Supersample: [Dropdown: 2] pixels
+│   │       ├── Create movie frames: [Checkbox: Unchecked]
+│   │       └── Buttons: [Print, Random, Open, Save, OK, Cancel]
+│   ├── 3D Strange Attractors/
+│   │   └── [Settings Window: 3D Strange Attractor Settings]
+│   │       ├── Attractor type: [Dropdown: Cubic]
+│   │       │   └── *Options:* [Quadratic, Cubic, Quartic, Pickover, Quaternion, Polynomial A, Polynomial B, Polynomial C, Polynomial ABS, Polynomial POW, Polynomial SIN, Rampe1 ... Rampe15]
+│   │       ├── Display style: [Dropdown: Solid]
+│   │       │   └── *Options:* [Hit Count, Depth, Solid]
+│   │       ├── Background: [Color picker: Black]
+│   │       ├── Rotation: [Input: 0]
+│   │       ├── Supersample: [Dropdown: 1] pixels
+│   │       ├── Shadows: [Checkbox: Checked]
+│   │       ├── OBJ: [Checkbox: Unchecked]
+│   │       ├── Anaglyph: [Checkbox: Unchecked, Dropdown: Anaglyph Color]
+│   │       ├── Render image to BMP file: [Checkbox: Unchecked]
+│   │       └── Buttons: [Mutate, Search, Open, Save, OK, Cancel, Preview]
+│   │       └── Note: *Launches Shared 3D Settings Dialog on execution*
+│   └── 3D Strange Attractors 2/
+│       └── [Settings Window: 3D Strange Attractor 2 Settings]
+│           ├── Attractor: [Dropdown: Thomas *]
+│           ├── b: [Input: 0.19]
+│           ├── start x: [Input: 0.1]
+│           ├── start y: [Input: 0]
+│           ├── start z: [Input: 0]
+│           ├── delta: [Input: 0.05]
+│           ├── Display: [Dropdown: Cylinders]
+│           ├── Color: [Dropdown: RGB Cube]
+│           ├── Plot width: [Dropdown: Thin]
+│           ├── Update display every [Input: 100] time steps: [Checkbox: Checked]
+│           ├── Rotate when done: [Checkbox: Checked]
+│           ├── Rotata X: [Checkbox: Unchecked] *UI Typo: Rotata
+│           ├── Rotate Y: [Checkbox: Checked]
+│           ├── Rotate Z: [Checkbox: Unchecked]
+│           ├── Create movie frames: [Checkbox: Unchecked]
+│           └── Buttons: [Open, Save, OK, Cancel]
+│           └── Note: *Launches Shared 3D Settings Dialog on execution*
+├── Universal Turing Machines/
+│   ├── 3D Ant Automaton/
+│   │   └── [Settings Window: 3D Ant Automata Settings]
+│   │       ├── Rule number: [Input: .318]
+│   │       ├── Base 4 rule: [Input: 10332]
+│   │       ├── Sample rules: [Dropdown: ""]
+│   │       ├── Grid size: [Dropdown: 100]
+│   │       ├── Update every: [Input: 10] steps
+│   │       ├── Delay ms: [Input: 0]
+│   │       ├── Wrap edges: [Checkbox: Unchecked]
+│   │       ├── Cell display: [Dropdown: State Shading]
+│   │       ├── Show bounding box: [Checkbox: Checked]
+│   │       ├── Display rendering engine: [Dropdown: OpenGL Software, Button: Options]
+│   │       ├── Export to Wavefront OBJ file: [Checkbox: Unchecked]
+│   │       ├── Create movie frames: [Checkbox: Unchecked]
+│   │       └── Buttons: [Random Rule, Rule to base 4, Base 4 to rule, OK, Cancel]
+│   │       └── Note: *Launches Shared 3D Settings Dialog on execution*
+│   ├── Ant Automata/
+│   │   └── [Settings Window: Ant Automaton Settings]
+│   │       ├── Rule number: [Input: 1080]
+│   │       ├── Binary rule: [Input: 100001111000]
+│   │       ├── Zoom algorithm: [Dropdown: Nearest]
+│   │       ├── Edge style: [Dropdown: Stop at edge]
+│   │       ├── Color 1: [Color picker: Light blue]
+│   │       ├── Color 2: [Color picker: Dark blue]
+│   │       ├── Use palette: [Checkbox: Checked]
+│   │       ├── Grid size: [Dropdown: 5]
+│   │       ├── Update after: [Input: 50] moves
+│   │       ├── Interesting rules: [Dropdown: 1080 Spiral]
+│   │       ├── Create movie frames: [Checkbox: Unchecked]
+│   │       ├── Add ant stats to frames: [Checkbox: Unchecked]
+│   │       └── Buttons: [Rule to binary, Binary to rule, Random, OK, Cancel]
+│   └── Ant Automata 2/
+│       └── [Settings Window: Ant Automaton 2 Settings]
+│           ├── Rule number: [Input: 2644]
+│           ├── Binary rule: [Input: 101001010100]
+│           ├── Zoom algorithm: [Dropdown: Nearest]
+│           ├── Edge style: [Dropdown: Stop at edge]
+│           ├── Color 1: [Color picker: Light blue]
+│           ├── Color 2: [Color picker: Dark blue]
+│           ├── Use palette: [Checkbox: Checked]
+│           ├── Grid size: [Dropdown: 5]
+│           ├── Update after: [Input: 50] moves
+│           ├── Interesting rules: [Dropdown: 2644 Highway]
+│           ├── Create movie frames: [Checkbox: Unchecked]
+│           ├── Add ant stats to frames: [Checkbox: Unchecked]
+│           └── Buttons: [Rule to binary, Binary to rule, Random, OK, Cancel]
+└── Video Feedback/
+    ├── Video Feedback/
+    ├── Video Feedback 2/
+    └── Video Feedback 3/
+```
 
 ---
 
-## 1. Agent-Based Modelling (16)
-**2D:** 2D Huegene · 2D Particle Life · 2D Wa-Tor · Ant Colony · Ant Colony 2 · Pandemic · Pandemic 2 · Physarum · Physarum 2 · Primordial Particle Systems · Species · Termites (12)
-**3D:** 3D Huegene · 3D Particle Life · 3D Wa-Tor · Boids (4)
+### Shared Global Dialog Specifications
 
-## 2. Cellular Automata (74)
-**1D (10):** 1D Cellular Automata · 1D Cellular Automata 2 · 1D Totalistic CA · Cascade CA · Combinations CA · Extended Neighborhood CA · Next Nearest Neighbor CA · Traffic CA · Two Steps Back CA · Two Steps Back Extended CA
-**2D (39):** 2D Generations CA · 2D Hexagonal Generations CA · 2D Totalistic CA · Accretor CA · Alternating Neighborhoods CA · Alternating Neighborhoods CA 2 · Alternating Neighborhoods Cyclic CA · Alternating Neighborhoods Cyclic CA 2 · Archean CA · Block CA · Coupled CA · Coupled CA 2 · Cyclic CA · Digital Inkblot · History Dependent CA · History Dependent CA 2 · Hodgepodge Machine · Indexed Totalistic CA · Indexed Totalistic CA 2 · Large Neighborhood Totalistic CA · Liquid Crystal CA · Majority Rule CA · MergeLife CA · Multiple Neighborhoods CA · Multiple Neighborhoods CA 2 · Multiple Rules CA · Nonlinear Voter Model · Pinwheels CA · Rock Paper Scissors CA · Rock Paper Scissors Image CA · Sandpile Automata · Self Replicating Loops · Smooth Life CA · Stepping Stone CA · Stochastic CA · Tiled CA · Triangular CA · Yin Yang Fire CA · Zhang CA
-**3D (10):** 3D Accretor CA · 3D Cyclic CA · 3D Generations CA · 3D Hexagonal Generations CA · 3D History Dependent CA · 3D Hodgepodge Machine · 3D Rock Paper Scissors · 3D Rule Table CA · 3D Stochastic CA · 3D Voxel Automata Terrain
-**4D (5):** 4D Accretor CA · 4D Cyclic CA · 4D Generations CA · 4D Hodgepodge Machine · 4D Rock Paper Scissors CA
-**5D (1):** 5D Generations CA
-**NKS (9):** Page 60 1D Three Color Totalistic · Page 71 1D Mobile Automata · Page 73 1D Extended Mobile Automata · Page 76 1D Generalized Mobile Automata · Page 125 1D Untitled CA · Page 156 1D Continuous Automata · Page 173 2D Untitled CA · Page 460 1D Two State Block CA · Page 461 1D Three State Block CA
+The configuration windows detailed below represent standardized interfaces that launch dynamically across multiple options within the software program.
 
-## 3. Dendritic Growth (3)
-Dendritic Crystal Growth · Gravner-Griffeath Snowflakes · Reiter Snowflakes
+#### I. Global Shared [3D Settings] Window
 
-## 4. Diffusion-Limited Aggregation (4)
-2D DLA · 3D DLA · Dendron DLA · Vertical DLA
+This dialog automatically initializes on execution for all 3D visualization and physics engine modes.
 
-## 5. Fluid (9)
-**2D (7):** 2D Multiphase Smoothed-Particle Hydrodynamics · Eulerian Marker-and-Cell Fluid · Jos Stam 2D Fluid · Lattice Boltzmann Method 1 · Lattice Boltzmann Method 2 · Ripple Tank · Viscoelastic Fluid
-**3D (2):** 3D Multiphase Smoothed-Particle Hydrodynamics · Jos Stam 3D Fluid
-
-## 6. Fractals (11)
-Buddhabrot · Ducks · Escape · Lyapunov · Mandelbrot/Julia Sets · Planet · Plasma Clouds · Root-Finding Fractals · Root-Finding Fractals 2 · Terrain · Thorn
-
-## 7. Genetics (7)
-Genetic Art · Genetic Art 2 · Genetic Art 3 · Genetic Bugs · Genetic Bugs 2 · Virtual Creatures · Virtual Creatures 2
-
-## 8. Gravity (5)
-**2D (3):** 2D Gravity · 2D Gravity Set · Light Gravity Simulation
-**3D (2):** 3D Gravity · 3D Gravity Set
-
-## 9. Hypercomplex Fractals (2)
-Mandelbulb · Quaternion Julia Set
-
-## 10. Iterated Function Systems (2)
-Flame Fractals · Iterated Function Systems
-
-## 11. Lattice Gas Automata (2)
-FHP LGA · HPP LGA
-
-## 12. Machine Learning — EXCLUDED (no-AI scope)
-
-## 13. Music (3)
-Automatic Music Composer · Genetic Music Composer · Whitney Music Box
-
-## 14. OpenGL Shading Language (2)
-Custom Formula Editor · Shader Editor  ← hosts 9,561 GLSL shaders + GLSL formula fractals (Tier-A)
-
-## 15. Pendulums (3)
-Magnetic Pendulum · Pendulums · Spring Pendulums
-
-## 16. Plotting (5)
-2D Spirograph · 3D Spirograph · Fractal Spirograph · Harmonograph · Knots
-
-## 17. Reaction-Diffusion (2)
-Multi-Scale Turing Patterns · Reaction-Diffusion
-
-## 18. Recursion (4)
-Bifurcation · Cube Divider · L-Systems · Sierpinski Triangle
-
-## 19. Simulations (4)
-Biham-Middleton-Levine Traffic · Cell Conquest · Forest Fire · Lorenz Waterwheel
-
-## 20. Strange Attractors (3)
-2D Strange Attractors · 3D Strange Attractors · 3D Strange Attractors 2
-
-## 21. Universal Turing Machines (3)
-3D Ant Automata · Ant Automata · Ant Automata 2
-
-## 22. Video Feedback (3)
-Video Feedback · Video Feedback 2 · Video Feedback 3
-
----
-
-# TOTALS (non-ML)
-
-| # | Category | Modes |
-|---|----------|-------|
-| 1 | Agent-Based Modelling | 16 |
-| 2 | Cellular Automata | 74 |
-| 3 | Dendritic Growth | 3 |
-| 4 | Diffusion-Limited Aggregation | 4 |
-| 5 | Fluid | 9 |
-| 6 | Fractals | 11 |
-| 7 | Genetics | 7 |
-| 8 | Gravity | 5 |
-| 9 | Hypercomplex Fractals | 2 |
-| 10 | Iterated Function Systems | 2 |
-| 11 | Lattice Gas Automata | 2 |
-| 12 | Machine Learning | EXCLUDED |
-| 13 | Music | 3 |
-| 14 | OpenGL Shading Language | 2 (+9,561 shaders) |
-| 15 | Pendulums | 3 |
-| 16 | Plotting | 5 |
-| 17 | Reaction-Diffusion | 2 |
-| 18 | Recursion | 4 |
-| 19 | Simulations | 4 |
-| 20 | Strange Attractors | 3 |
-| 21 | Universal Turing Machines | 3 |
-| 22 | Video Feedback | 3 |
-| | **TOTAL (excl. ML)** | **167** |
-
-**Cross-check:** 167 menu modes ≈ 167 distinct example-file extensions in `C:\VoC\Examples\Data`. Two
-independent sources converge → catalog is complete. Note the "OpenGL Shading Language" category is only 2
-menu entries but expands to 9,561 GLSL shaders + the GLSL formula compiler (the Tier-A porting goldmine).
-
-*Menu walk complete (computer-use, VoC v105.2). Classification by build tier follows in task #5.*
+```text
+[3D Settings Window]/
+├── View:
+│   ├── Camera (X, Y, Z): [Inputs: 0 / 0 / 300] *Defaults depend on current mode
+│   ├── Target (X, Y, Z): [Inputs: 0 / 7 / 0]
+│   ├── Rotation (X, Y, Z): [Inputs: 25 / 45 / 0]
+│   ├── Field of vision: [Input: 35]
+│   ├── Background color: [Color picker: Black]
+│   └── Create 3D anaglyph: [Checkbox: Unchecked, Dropdown: Red Cyan, Input: 2] degrees
+├── Lighting:
+│   ├── Infinite distance: [Checkbox: Unchecked]
+│   └── Ambient RGB: [Inputs: 0.2 / 0.2 / 0.2, Color picker: Gray]
+├── Lights (1 to 6) Configuration List:
+│   ├── Light 1: [Checkbox: Checked, Position (X,Y,Z): -1500 / 1000 / 3000, Diffuse (R,G,B): 1 / 1 / 1, Color picker: White]
+│   ├── Light 2: [Checkbox: Checked, Position (X,Y,Z): 0 / 500 / 0, Diffuse (R,G,B): 1 / 1 / 1, Color picker: White]
+│   ├── Light 3: [Checkbox: Unchecked, Position (X,Y,Z): 1250 / -1000 / 1250, Diffuse (R,G,B): 1 / 1 / 1, Color picker: White]
+│   ├── Light 4: [Checkbox: Unchecked, Position (X,Y,Z): -1250 / -1000 / -1250, Diffuse (R,G,B): 1 / 1 / 1, Color picker: White]
+│   ├── Light 5: [Checkbox: Unchecked, Position (X,Y,Z): 1250 / 1000 / 1250, Diffuse (R,G,B): 1 / 1 / 1, Color picker: White]
+│   └── Light 6: [Checkbox: Unchecked, Position (X,Y,Z): -1250 / 1000 / -1250, Diffuse (R,G,B): 1 / 1 / 1, Color picker: White]
+└── Buttons: [Default, Preset lighting setups (Dropdown: Upper right), Auto-set View, OK, Cancel]
+```
