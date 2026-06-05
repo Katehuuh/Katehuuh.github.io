@@ -2,8 +2,10 @@
   "models": {
     "qwen3.7-max": {
       "display_name": "qwen3.7-max",
+      "python_source": "assets/qwen3.7-max.py",
       "svg": "assets/qwen3.7-max.svg",
-      "_first_seen": "2026-06-05T04:26:31+02:00"
+      "python_render": "assets/qwen3.7-max-python.jpg",
+      "_first_seen": "2026-06-05T02:32:49+00:00"
     },
     "nemotron-3-ultra": {
       "display_name": "Nemotron-3-Ultra",
