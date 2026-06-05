@@ -2,15 +2,17 @@
   "models": {
     "nemotron-3-ultra": {
       "display_name": "Nemotron-3-Ultra",
+      "python_source": "assets/Nemotron-3-Ultra.py",
       "svg": "assets/Nemotron-3-Ultra.svg",
-      "_first_seen": "2026-06-05T04:12:14+02:00"
+      "python_render": "assets/Nemotron-3-Ultra-python.jpg",
+      "_first_seen": "2026-06-05T02:17:02+00:00"
     },
     "minimax-m3": {
       "display_name": "minimax-m3",
+      "python_render": "assets/minimax-m3-python.jpg",
       "python_source": "assets/minimax-m3.py",
       "svg": "assets/minimax-m3.svg",
-      "python_render": "assets/minimax-m3-python.jpg",
-      "_first_seen": "2026-06-05T02:15:45+00:00"
+      "_first_seen": "2026-06-05T02:15:56Z"
     },
     "claude-opus-4.8": {
       "display_name": "claude-opus-4.8",
