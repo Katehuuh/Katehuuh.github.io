@@ -1,5 +1,15 @@
 {
   "models": {
+    "minimax-m3": {
+      "display_name": "minimax-m3",
+      "svg": "assets/minimax-m3.svg",
+      "_first_seen": "2026-06-05T04:13:01+02:00"
+    },
+    "nemotron-3-ultra": {
+      "display_name": "Nemotron-3-Ultra",
+      "svg": "assets/Nemotron-3-Ultra.svg",
+      "_first_seen": "2026-06-05T04:12:14+02:00"
+    },
     "claude-opus-4.8": {
       "display_name": "claude-opus-4.8",
       "python_render": "assets/claude-opus-4.8-python.jpg",
