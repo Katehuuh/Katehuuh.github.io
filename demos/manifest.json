@@ -1,6 +1,11 @@
 {
   "demos": [
     {
+      "name": "[TOOL]-Text-to-ASCII-QR",
+      "type": "file",
+      "filename": "[TOOL]-Text-to-ASCII-QR.html"
+    },
+    {
       "name": "[SHOW]-Chaos-Lab",
       "type": "file",
       "filename": "[SHOW]-Chaos-Lab.html"
@@ -15,11 +20,6 @@
       "type": "file",
       "filename": "[GAME]-SoundOfPath.html",
       "description": "Accessible labyrinth for fully blind. high-tech RT sound | Control key: arrow keys or mobile gyroscope and found exit."
-    },
-    {
-      "name": "Text-to-ASCII-QR",
-      "type": "file",
-      "filename": "Text-to-ASCII-QR.html"
     },
     {
       "name": "[GAME]-Procedural-Earth-exploration",
