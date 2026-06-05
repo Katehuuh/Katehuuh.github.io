@@ -1,11 +1,16 @@
 {
   "models": {
+    "qwen3.7-max": {
+      "display_name": "qwen3.7-max",
+      "svg": "assets/qwen3.7-max.svg",
+      "_first_seen": "2026-06-05T04:26:31+02:00"
+    },
     "nemotron-3-ultra": {
       "display_name": "Nemotron-3-Ultra",
+      "python_render": "assets/Nemotron-3-Ultra-python.jpg",
       "python_source": "assets/Nemotron-3-Ultra.py",
       "svg": "assets/Nemotron-3-Ultra.svg",
-      "python_render": "assets/Nemotron-3-Ultra-python.jpg",
-      "_first_seen": "2026-06-05T02:17:02+00:00"
+      "_first_seen": "2026-06-05T02:17:13Z"
     },
     "minimax-m3": {
       "display_name": "minimax-m3",
