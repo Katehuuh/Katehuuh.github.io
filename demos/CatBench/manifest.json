@@ -2,10 +2,10 @@
   "models": {
     "grok-build-0.1": {
       "display_name": "Grok-Build-0.1",
+      "python_render": "assets/Grok-Build-0.1-python.jpg",
       "python_source": "assets/Grok-Build-0.1.py",
       "svg": "assets/Grok-Build-0.1.svg",
-      "python_render": "assets/Grok-Build-0.1-python.jpg",
-      "_first_seen": "2026-06-06T14:00:22+00:00"
+      "_first_seen": "2026-06-06T14:00:33Z"
     },
     "composer-2.5": {
       "display_name": "Composer-2.5",
