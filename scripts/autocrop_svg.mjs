@@ -51,6 +51,22 @@ const CROP_SCRIPT = `(() => {
   if (!fullW || !fullH) return null;
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   const skip = new Set(['defs', 'metadata', 'title', 'desc', 'style']);
+  const pt = svg.createSVGPoint();
+  const svgInv = svg.getCTM().inverse();
+  const bboxRoot = (el) => {
+    const b = el.getBBox();
+    const m = el.getCTM().multiply(svgInv);
+    if (!m) return b;
+    const xs = [], ys = [];
+    for (const [x, y] of [[b.x, b.y], [b.x + b.width, b.y], [b.x, b.y + b.height], [b.x + b.width, b.y + b.height]]) {
+      pt.x = x; pt.y = y;
+      const p = pt.matrixTransform(m);
+      xs.push(p.x); ys.push(p.y);
+    }
+    const x0 = Math.min(...xs), x1 = Math.max(...xs);
+    const y0 = Math.min(...ys), y1 = Math.max(...ys);
+    return { x: x0, y: y0, width: x1 - x0, height: y1 - y0 };
+  };
   const canvasArea = fullW * fullH;
   const solidFill = (el) => {
     const fill = (el.getAttribute('fill') || '').trim();
@@ -83,7 +99,7 @@ const CROP_SCRIPT = `(() => {
       if (skip.has(tag)) continue;
       if (tag === 'g') { removeBackdrops(c); continue; }
       try {
-        const b = c.getBBox();
+        const b = bboxRoot(c);
         if (isBackdrop(c, tag, b)) c.remove();
       } catch (_) {}
     }
@@ -94,7 +110,7 @@ const CROP_SCRIPT = `(() => {
       if (skip.has(tag)) continue;
       if (tag === 'g') { walk(c); continue; }
       try {
-        const b = c.getBBox();
+        const b = bboxRoot(c);
         if (b.width === 0 && b.height === 0) continue;
         if (isBackdrop(c, tag, b)) continue;
         if (b.x < minX) minX = b.x;
