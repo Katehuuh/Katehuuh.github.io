@@ -2,15 +2,17 @@
   "models": {
     "grok-build-0.1": {
       "display_name": "Grok-Build-0.1",
+      "python_source": "assets/Grok-Build-0.1.py",
       "svg": "assets/Grok-Build-0.1.svg",
+      "python_error": "ERROR rendering /home/runner/work/Katehuuh.github.io/Katehuuh.github.io/demos/CatBench/assets/Grok-Build-0.1.py: FileNotFoundError: [Errno 2] No such file or directory: 'best_of_n/kitten_10.png'",
       "_first_seen": "2026-06-06T15:30:34+02:00"
     },
     "composer-2.5": {
       "display_name": "Composer-2.5",
+      "python_render": "assets/Composer-2.5-python.jpg",
       "python_source": "assets/Composer-2.5.py",
       "svg": "assets/Composer-2.5.svg",
-      "python_render": "assets/Composer-2.5-python.jpg",
-      "_first_seen": "2026-06-06T13:44:48+00:00"
+      "_first_seen": "2026-06-06T13:44:58Z"
     },
     "qwen3.7-max": {
       "display_name": "qwen3.7-max",
