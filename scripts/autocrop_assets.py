@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 """Auto-crop CatBench raster assets to a 1:1 square around the subject.
 
-Flood-fills only edge-connected background (corner colour + tolerance). Keeps
-soft fur, highlights, and drop shadows inside the frame. Small padding avoids
-hard clips through anti-aliased edges.
+Uses edge flood-fill plus row/column margin trimming (drops pale interior
+columns/rows that never touch the border, e.g. matplotlib wash rects).
 """
 from __future__ import annotations
 
@@ -19,6 +18,7 @@ ASSETS = ROOT / "demos" / "CatBench" / "assets"
 
 CROP_EXTS = {".png", ".jpg", ".jpeg"}
 BG_TOLERANCE = 18
+EDGE_INK_RATIO = 0.02
 PADDING_PCT = 0.02
 
 
@@ -31,50 +31,80 @@ def detect_bg(rgb: np.ndarray) -> tuple[int, int, int]:
     return tuple(int(corners[:, i].mean()) for i in range(3))
 
 
-def flood_background(rgb: np.ndarray, bg: tuple[int, int, int], tol: int) -> np.ndarray:
-    h, w, _ = rgb.shape
-    bg_arr = np.array(bg, dtype=np.int16)
-    close = np.abs(rgb.astype(np.int16) - bg_arr).max(axis=2) <= tol
+def near_bg_mask(rgb: np.ndarray, bg: tuple[int, int, int], tol: int) -> np.ndarray:
+    return np.abs(rgb.astype(np.int16) - np.array(bg, dtype=np.int16)).max(axis=2) <= tol
+
+
+def flood_background(near_bg: np.ndarray) -> np.ndarray:
+    h, w = near_bg.shape
     visited = np.zeros((h, w), dtype=bool)
     q: deque[tuple[int, int]] = deque()
 
     for x in range(w):
         for y in (0, h - 1):
-            if close[y, x] and not visited[y, x]:
+            if near_bg[y, x] and not visited[y, x]:
                 visited[y, x] = True
                 q.append((y, x))
     for y in range(h):
         for x in (0, w - 1):
-            if close[y, x] and not visited[y, x]:
+            if near_bg[y, x] and not visited[y, x]:
                 visited[y, x] = True
                 q.append((y, x))
 
     while q:
         y, x = q.popleft()
         for ny, nx in ((y - 1, x), (y + 1, x), (y, x - 1), (y, x + 1)):
-            if 0 <= ny < h and 0 <= nx < w and not visited[ny, nx] and close[ny, nx]:
+            if 0 <= ny < h and 0 <= nx < w and not visited[ny, nx] and near_bg[ny, nx]:
                 visited[ny, nx] = True
                 q.append((ny, nx))
 
     return visited
 
 
-def subject_bbox(rgb: np.ndarray) -> tuple[int, int, int, int] | None:
-    bg = detect_bg(rgb)
-    is_bg = flood_background(rgb, bg, BG_TOLERANCE)
-    ys, xs = np.where(~is_bg)
-    if ys.size == 0:
+def trim_bbox(near_bg: np.ndarray, edge_ratio: float) -> tuple[int, int, int, int] | None:
+    ink = ~near_bg
+    rows = np.where(ink.mean(axis=1) > edge_ratio)[0]
+    cols = np.where(ink.mean(axis=0) > edge_ratio)[0]
+    if rows.size == 0 or cols.size == 0:
         return None
-    x0, y0, x1, y1 = int(xs.min()), int(ys.min()), int(xs.max()) + 1, int(ys.max()) + 1
+    return int(cols[0]), int(rows[0]), int(cols[-1]) + 1, int(rows[-1]) + 1
+
+
+def intersect(a: tuple[int, int, int, int], b: tuple[int, int, int, int]) -> tuple[int, int, int, int]:
+    return max(a[0], b[0]), max(a[1], b[1]), min(a[2], b[2]), min(a[3], b[3])
+
+
+def pad_bbox(bbox: tuple[int, int, int, int], size: tuple[int, int]) -> tuple[int, int, int, int]:
+    x0, y0, x1, y1 = bbox
     bw, bh = x1 - x0, y1 - y0
     px, py = int(bw * PADDING_PCT), int(bh * PADDING_PCT)
-    h, w, _ = rgb.shape
+    iw, ih = size
     return (
         max(0, x0 - px),
         max(0, y0 - py),
-        min(w, x1 + px),
-        min(h, y1 + py),
+        min(iw, x1 + px),
+        min(ih, y1 + py),
     )
+
+
+def subject_bbox(rgb: np.ndarray) -> tuple[int, int, int, int] | None:
+    bg = detect_bg(rgb)
+    near_bg = near_bg_mask(rgb, bg, BG_TOLERANCE)
+    flooded = flood_background(near_bg)
+    ys, xs = np.where(~flooded)
+    if ys.size == 0:
+        return None
+    flood_box = (int(xs.min()), int(ys.min()), int(xs.max()) + 1, int(ys.max()) + 1)
+    trim_box = trim_bbox(near_bg, EDGE_INK_RATIO)
+    if trim_box:
+        x0, y0, x1, y1 = intersect(flood_box, trim_box)
+        if x1 <= x0 or y1 <= y0:
+            bbox = flood_box
+        else:
+            bbox = (x0, y0, x1, y1)
+    else:
+        bbox = flood_box
+    return pad_bbox(bbox, (rgb.shape[1], rgb.shape[0]))
 
 
 def square_crop(img: Image.Image, bbox: tuple[int, int, int, int]) -> Image.Image:
