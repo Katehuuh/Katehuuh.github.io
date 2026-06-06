@@ -260,15 +260,20 @@ main > footer .dot { color: var(--text-3); margin: 0 .35rem; }
 (async () => {
   let manifest = { models: {} };
   try {
-    manifest = await fetch('manifest.json', { cache: 'no-store' }).then(r => r.json());
+    manifest = await fetch('manifest.json').then(r => r.json());
   } catch (e) {
     console.warn('manifest.json missing, falling back to live discovery', e);
   }
-  await liveAugment(manifest);
-  const models = manifest.models || {};
+  let models = manifest.models || {};
   if (Object.keys(models).length === 0) {
-    document.getElementById('empty-state').hidden = false;
-    return;
+    await liveAugment(manifest);
+    models = manifest.models || {};
+    if (Object.keys(models).length === 0) {
+      document.getElementById('empty-state').hidden = false;
+      return;
+    }
+  } else {
+    liveAugment(manifest);
   }
   buildGrid(models);
   setupLightbox();
@@ -375,7 +380,10 @@ function buildGrid(models) {
         frame.className = 'render-frame';
         const img = document.createElement('img');
         img.src = path;
+        img.width = 180;
+        img.height = 180;
         img.loading = 'lazy';
+        img.decoding = 'async';
         img.alt = `${m.display_name || key} ${row.label}`;
         frame.appendChild(img);
         td.appendChild(frame);
