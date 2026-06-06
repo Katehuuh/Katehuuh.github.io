@@ -1,0 +1,376 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" 
+     xmlns:xlink="http://www.w3.org/1999/xlink"
+     width="800" height="600" viewBox="0 0 800 600"
+     aria-labelledby="title" role="img">
+  <title id="title">Adorable Fluffy Kitten</title>
+  <desc>A highly detailed, cute vector illustration of a sitting fluffy kitten with large expressive eyes, layered fluffy fur using multiple paths and ellipses, detailed inner ears, long whiskers, button nose, cute mouth, soft gradient shading, curled tail, playful paw, resting on a soft pink cushion beside a ball of pastel yarn. Created with reusable defs for gradients. (Candidate 4 implementation)</desc>
+
+  <defs>
+    <!-- Reusable soft body and head fur gradients with radial for 3D plush feel -->
+    <radialGradient id="bodyFur" cx="42%" cy="32%" r="75%" fx="38%" fy="22%">
+      <stop offset="0%" stop-color="#faf4eb"/>
+      <stop offset="42%" stop-color="#f2d9b5"/>
+      <stop offset="78%" stop-color="#e6c68c"/>
+      <stop offset="100%" stop-color="#d9b474"/>
+    </radialGradient>
+
+    <radialGradient id="headFur" cx="48%" cy="35%" r="68%" fx="46%" fy="26%">
+      <stop offset="0%" stop-color="#faf4eb"/>
+      <stop offset="38%" stop-color="#f2d9b5"/>
+      <stop offset="72%" stop-color="#e3c285"/>
+      <stop offset="100%" stop-color="#d9b474"/>
+    </radialGradient>
+
+    <!-- Lighter belly / chest overlay -->
+    <linearGradient id="bellyGrad" x1="35%" y1="8%" x2="55%" y2="92%">
+      <stop offset="0%" stop-color="#fbf7f0"/>
+      <stop offset="55%" stop-color="#f6e9d4"/>
+      <stop offset="100%" stop-color="#e9d3a8"/>
+    </linearGradient>
+
+    <!-- Ear outer gradient -->
+    <linearGradient id="earOuter" x1="15%" y1="10%" x2="85%" y2="95%">
+      <stop offset="0%" stop-color="#f0d9b5"/>
+      <stop offset="55%" stop-color="#e3c285"/>
+      <stop offset="100%" stop-color="#d1a86b"/>
+    </linearGradient>
+
+    <!-- Inner ear soft pink with radial depth -->
+    <radialGradient id="innerEarGrad" cx="48%" cy="32%" r="75%" fx="42%" fy="25%">
+      <stop offset="0%" stop-color="#ffccd5"/>
+      <stop offset="50%" stop-color="#f8a5b2"/>
+      <stop offset="100%" stop-color="#e87a8c"/>
+    </radialGradient>
+
+    <!-- Expressive eye iris with soft radial highlight -->
+    <radialGradient id="irisGrad" cx="38%" cy="32%" r="72%" fx="32%" fy="24%">
+      <stop offset="0%" stop-color="#8fd3f0"/>
+      <stop offset="48%" stop-color="#5bb8e0"/>
+      <stop offset="78%" stop-color="#3e95c8"/>
+      <stop offset="100%" stop-color="#2c6fa8"/>
+    </radialGradient>
+
+    <!-- Cute button nose gradient -->
+    <radialGradient id="noseGrad" cx="28%" cy="26%" r="82%" fx="22%" fy="18%">
+      <stop offset="0%" stop-color="#ffaaaa"/>
+      <stop offset="55%" stop-color="#f47e8e"/>
+      <stop offset="100%" stop-color="#d95d72"/>
+    </radialGradient>
+
+    <!-- Soft cushion gradient -->
+    <linearGradient id="cushionGrad" x1="0%" y1="12%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#f9d5e5"/>
+      <stop offset="48%" stop-color="#e8b8d0"/>
+      <stop offset="100%" stop-color="#d89ab8"/>
+    </linearGradient>
+
+    <!-- Cushion highlight edge -->
+    <linearGradient id="cushionHighlight" x1="0%" y1="0%" x2="100%" y2="40%">
+      <stop offset="0%" stop-color="#fff0f6" stop-opacity="0.45"/>
+      <stop offset="100%" stop-color="#fff0f6" stop-opacity="0"/>
+    </linearGradient>
+
+    <!-- Yarn ball soft pastel gradient -->
+    <radialGradient id="yarnGrad" cx="32%" cy="28%" r="78%" fx="26%" fy="20%">
+      <stop offset="0%" stop-color="#fff7d9"/>
+      <stop offset="45%" stop-color="#f9e38c"/>
+      <stop offset="82%" stop-color="#f2ce4f"/>
+      <stop offset="100%" stop-color="#e8b92e"/>
+    </radialGradient>
+
+    <!-- Subtle body shadow -->
+    <radialGradient id="softShadow" cx="50%" cy="45%" r="65%">
+      <stop offset="0%" stop-color="#9a6f5f" stop-opacity="0.0"/>
+      <stop offset="65%" stop-color="#9a6f5f" stop-opacity="0.22"/>
+      <stop offset="100%" stop-color="#7a5040" stop-opacity="0.28"/>
+    </radialGradient>
+
+    <!-- Subtle pattern for cushion quilting texture -->
+    <pattern id="cushionTexture" width="28" height="28" patternUnits="userSpaceOnUse" patternTransform="rotate(12)">
+      <path d="M0 14 Q7 10 14 14 Q21 18 28 14" fill="none" stroke="#c47a9c" stroke-width="0.9" opacity="0.22"/>
+      <path d="M14 0 Q18 7 14 14 Q10 21 14 28" fill="none" stroke="#c47a9c" stroke-width="0.9" opacity="0.18"/>
+    </pattern>
+  </defs>
+
+  <!-- Very soft warm cream background -->
+  <rect x="0" y="0" width="800" height="600" fill="#fffaf2"/>
+
+  <!-- Subtle floor / surface hint -->
+  <ellipse cx="400" cy="555" rx="355" ry="48" fill="#f5e6d8" opacity="0.55"/>
+
+  <!-- Soft pink cushion with layered depth and texture -->
+  <!-- Cushion base shadow -->
+  <ellipse cx="400" cy="538" rx="295" ry="72" fill="#b87a94" opacity="0.18"/>
+  <!-- Main cushion body - plump rounded form -->
+  <path id="cushionMain"
+        d="M105 482 Q 105 435 175 428 Q 280 415 400 420 Q 520 415 625 428 Q 695 435 695 482 Q 695 555 400 562 Q 105 555 105 482 Z"
+        fill="url(#cushionGrad)" stroke="#c47a9c" stroke-width="5" stroke-linejoin="round"/>
+  <!-- Cushion top highlight layer -->
+  <path d="M120 475 Q 200 432 400 425 Q 600 432 680 475"
+        fill="none" stroke="url(#cushionHighlight)" stroke-width="38" stroke-linecap="round" opacity="0.55"/>
+  <!-- Quilted texture overlay -->
+  <path d="M130 460 Q200 448 280 452 Q360 447 400 453 Q440 447 520 452 Q600 448 670 460"
+        fill="none" stroke="#c47a9c" stroke-width="2.2" opacity="0.28"/>
+  <path d="M145 495 Q220 482 300 487 Q380 482 400 488 Q420 482 500 487 Q580 482 655 495"
+        fill="none" stroke="#c47a9c" stroke-width="2" opacity="0.25"/>
+  <!-- Subtle texture pattern fill hint -->
+  <path d="M105 482 Q 105 435 175 428 Q 280 415 400 420 Q 520 415 625 428 Q 695 435 695 482"
+        fill="url(#cushionTexture)" opacity="0.65"/>
+
+  <!-- Playful yarn ball - positioned to the right on the cushion -->
+  <g id="yarn" transform="translate(625 395)">
+    <!-- Soft shadow under yarn -->
+    <ellipse cx="8" cy="58" rx="46" ry="14" fill="#b87a94" opacity="0.22"/>
+    <!-- Main yarn sphere -->
+    <circle cx="0" cy="0" r="52" fill="url(#yarnGrad)" stroke="#d9a32e" stroke-width="3.5"/>
+    <!-- Layered wrapping strands for texture (multiple bezier arcs) -->
+    <path d="M-38 -18 Q -5 -48 36 -20" fill="none" stroke="#f4e07a" stroke-width="7" stroke-linecap="round" opacity="0.65"/>
+    <path d="M-42 12 Q 2 46 38 9" fill="none" stroke="#f4e07a" stroke-width="6.5" stroke-linecap="round" opacity="0.6"/>
+    <path d="M-30 -32 Q 12 -12 34 -28" fill="none" stroke="#f4e07a" stroke-width="5.5" stroke-linecap="round" opacity="0.55"/>
+    <path d="M-25 26 Q -2 48 29 22" fill="none" stroke="#f4e07a" stroke-width="5" stroke-linecap="round" opacity="0.5"/>
+    <path d="M-18 -38 Q 22 -25 30 -5" fill="none" stroke="#f4e07a" stroke-width="4.5" stroke-linecap="round" opacity="0.45"/>
+    <path d="M 5 38 Q 32 18 38 -8" fill="none" stroke="#f4e07a" stroke-width="4" stroke-linecap="round" opacity="0.4"/>
+    <!-- Additional criss-cross wraps -->
+    <path d="M-33 -5 Q 0 12 31 -3" fill="none" stroke="#e8b92e" stroke-width="3.5" stroke-linecap="round" opacity="0.35"/>
+    <!-- Trailing loose yarn end with playful curls -->
+    <path d="M46 -4 Q 72 18 88 12 Q 102 28 96 55 Q 82 78 68 71"
+          fill="none" stroke="#d9a32e" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M88 12 Q 95 32 82 48"
+          fill="none" stroke="#e8b92e" stroke-width="5" stroke-linecap="round" opacity="0.75"/>
+    <path d="M96 55 Q 88 65 75 62"
+          fill="none" stroke="#d9a32e" stroke-width="4" stroke-linecap="round" opacity="0.6"/>
+  </g>
+
+  <!-- Kitten shadow cast softly on the cushion -->
+  <ellipse cx="378" cy="502" rx="108" ry="32" fill="url(#softShadow)"/>
+
+  <!-- ========== TAIL (curled, fluffy, drawn early for layering behind body) ========== -->
+  <g id="tail">
+    <!-- Deepest tail layer (darker base) -->
+    <path d="M 302 398 Q 248 355 195 378 Q 155 418 172 472 Q 198 518 248 513 Q 292 495 305 455"
+          fill="none" stroke="#d1a86b" stroke-width="54" stroke-linecap="round" stroke-linejoin="round"/>
+    <!-- Primary fluffy mid layer -->
+    <path d="M 302 398 Q 252 360 200 380 Q 162 416 178 468 Q 202 510 245 506 Q 285 490 298 458"
+          fill="none" stroke="#e6c68c" stroke-width="38" stroke-linecap="round" stroke-linejoin="round" opacity="0.92"/>
+    <!-- Lighter top fur layer -->
+    <path d="M 302 398 Q 256 364 206 382 Q 170 415 182 460 Q 205 505 240 501 Q 278 487 292 462"
+          fill="none" stroke="#f2d9b5" stroke-width="26" stroke-linecap="round" stroke-linejoin="round" opacity="0.85"/>
+    <!-- Fluffy tuft ellipses along the tail for texture (layered bezier-inspired soft shapes) -->
+    <ellipse cx="235" cy="385" rx="15" ry="9" fill="#faf4eb" opacity="0.65" transform="rotate(-48 235 385)"/>
+    <ellipse cx="208" cy="402" rx="13" ry="8.5" fill="#f2d9b5" opacity="0.55" transform="rotate(-55 208 402)"/>
+    <ellipse cx="185" cy="430" rx="17" ry="10" fill="#faf4eb" opacity="0.6" transform="rotate(-35 185 430)"/>
+    <ellipse cx="175" cy="458" rx="14" ry="9" fill="#e6c68c" opacity="0.5" transform="rotate(-18 175 458)"/>
+    <ellipse cx="190" cy="485" rx="15.5" ry="8" fill="#faf4eb" opacity="0.58" transform="rotate(12 190 485)"/>
+    <ellipse cx="215" cy="502" rx="12" ry="7.5" fill="#f2d9b5" opacity="0.62" transform="rotate(28 215 502)"/>
+    <ellipse cx="248" cy="505" rx="11" ry="6.5" fill="#faf4eb" opacity="0.55" transform="rotate(38 248 505)"/>
+    <!-- Fluffier tip tuft -->
+    <ellipse cx="178" cy="472" rx="19" ry="13" fill="#f2d9b5" opacity="0.7" transform="rotate(-12 178 472)"/>
+    <ellipse cx="165" cy="475" rx="9" ry="7" fill="#faf4eb" opacity="0.75" transform="rotate(15 165 475)"/>
+  </g>
+
+  <!-- ========== MAIN BODY (sitting pose) ========== -->
+  <g id="body">
+    <!-- Primary body shape - soft rounded sitting torso -->
+    <ellipse cx="392" cy="415" rx="92" ry="118" fill="url(#bodyFur)" stroke="#c58f5f" stroke-width="4.5" stroke-linejoin="round"/>
+    <!-- Side body fluff layer (left) -->
+    <ellipse cx="308" cy="395" rx="34" ry="58" fill="#e6c68c" opacity="0.48" transform="rotate(-18 308 395)"/>
+    <!-- Side body fluff layer (right) -->
+    <ellipse cx="475" cy="402" rx="29" ry="52" fill="#e6c68c" opacity="0.42" transform="rotate(14 475 402)"/>
+    <!-- Upper back fluff tufts -->
+    <ellipse cx="338" cy="335" rx="22" ry="32" fill="#faf4eb" opacity="0.58" transform="rotate(-22 338 335)"/>
+    <ellipse cx="355" cy="320" rx="14" ry="19" fill="#f2d9b5" opacity="0.65" transform="rotate(-30 355 320)"/>
+    <ellipse cx="450" cy="338" rx="18" ry="26" fill="#faf4eb" opacity="0.52" transform="rotate(18 450 338)"/>
+    <!-- Belly / chest lighter soft shading -->
+    <ellipse cx="392" cy="445" rx="53" ry="72" fill="url(#bellyGrad)" opacity="0.88"/>
+    <!-- Additional soft body fur texture patches (layered ellipses + short curved strokes) -->
+    <ellipse cx="355" cy="380" rx="11" ry="16" fill="#faf4eb" opacity="0.48" transform="rotate(-12 355 380)"/>
+    <ellipse cx="428" cy="372" rx="9" ry="14" fill="#faf4eb" opacity="0.45" transform="rotate(9 428 372)"/>
+    <ellipse cx="365" cy="460" rx="8" ry="13" fill="#f2d9b5" opacity="0.5"/>
+    <ellipse cx="422" cy="455" rx="7.5" ry="11" fill="#f2d9b5" opacity="0.47"/>
+    <!-- Delicate fur wisps as bezier paths (light strokes) -->
+    <path d="M340 362 Q 328 378 342 392" fill="none" stroke="#faf4eb" stroke-width="3.2" opacity="0.38" stroke-linecap="round"/>
+    <path d="M445 365 Q 458 378 447 395" fill="none" stroke="#faf4eb" stroke-width="2.8" opacity="0.35" stroke-linecap="round"/>
+    <path d="M355 410 Q 343 428 358 445" fill="none" stroke="#f2d9b5" stroke-width="2.5" opacity="0.32" stroke-linecap="round"/>
+  </g>
+
+  <!-- Hind leg (tucked under body, peeking) -->
+  <g id="hindLeg">
+    <ellipse cx="308" cy="468" rx="26" ry="40" fill="#e3c285" stroke="#c58f5f" stroke-width="2.5" transform="rotate(-38 308 468)"/>
+    <!-- Hind paw pad -->
+    <ellipse cx="288" cy="502" rx="13" ry="9" fill="#f47e8e" opacity="0.85" transform="rotate(-32 288 502)"/>
+    <ellipse cx="282" cy="497" rx="4" ry="3" fill="#ffaaaa" opacity="0.9"/>
+    <ellipse cx="292" cy="500" rx="3.5" ry="2.8" fill="#ffaaaa" opacity="0.85"/>
+  </g>
+
+  <!-- ========== FRONT PAWS (one grounded, one playful slightly lifted) ========== -->
+  <g id="frontPaws">
+    <!-- Left front paw (grounded, soft and rounded) -->
+    <ellipse cx="338" cy="492" rx="21" ry="16" fill="#f2d9b5" stroke="#c58f5f" stroke-width="2.2"/>
+    <!-- Toe pads left paw -->
+    <ellipse cx="330" cy="496" rx="4.2" ry="3.4" fill="#ffaaaa"/>
+    <ellipse cx="340" cy="498" rx="3.8" ry="3.1" fill="#ffaaaa"/>
+    <ellipse cx="348" cy="496" rx="3.5" ry="2.8" fill="#ffaaaa"/>
+    <!-- Main central pad -->
+    <ellipse cx="336" cy="503" rx="6.5" ry="4.5" fill="#f47e8e"/>
+
+    <!-- Right front paw - playful lifted pose with gentle curl -->
+    <g transform="translate(445 458) rotate(22)">
+      <ellipse cx="0" cy="0" rx="18" ry="14" fill="#f2d9b5" stroke="#c58f5f" stroke-width="2"/>
+      <!-- Playful curled toes / pads on lifted paw -->
+      <ellipse cx="-7" cy="-2" rx="3.5" ry="2.8" fill="#ffaaaa"/>
+      <ellipse cx="1" cy="-3.5" rx="3.2" ry="2.6" fill="#ffaaaa"/>
+      <ellipse cx="7" cy="-1.5" rx="3" ry="2.5" fill="#ffaaaa"/>
+      <ellipse cx="0" cy="4" rx="5.5" ry="3.8" fill="#f47e8e"/>
+      <!-- Tiny claw hints for cuteness (very subtle) -->
+      <path d="M-6 -7 L-4.5 -11" fill="none" stroke="#c58f5f" stroke-width="1" stroke-linecap="round" opacity="0.6"/>
+      <path d="M2 -8.5 L2.5 -12.5" fill="none" stroke="#c58f5f" stroke-width="1" stroke-linecap="round" opacity="0.55"/>
+    </g>
+  </g>
+
+  <!-- ========== HEAD (large, fluffy, centered) ========== -->
+  <g id="head">
+    <!-- Main head base -->
+    <ellipse cx="395" cy="275" rx="76" ry="70" fill="url(#headFur)" stroke="#c58f5f" stroke-width="5" stroke-linejoin="round"/>
+    <!-- Cheek fluff layers (large soft ellipses for chubby cheeks) -->
+    <ellipse cx="335" cy="298" rx="30" ry="26" fill="#e6c68c" opacity="0.6"/>
+    <ellipse cx="455" cy="298" rx="30" ry="26" fill="#e6c68c" opacity="0.6"/>
+    <!-- Extra cheek fur overlay -->
+    <ellipse cx="328" cy="305" rx="15" ry="11" fill="#faf4eb" opacity="0.55"/>
+    <ellipse cx="462" cy="305" rx="15" ry="11" fill="#faf4eb" opacity="0.55"/>
+
+    <!-- Top-of-head fluffy tufts (layered for voluminous fur) -->
+    <ellipse cx="365" cy="212" rx="24" ry="15" fill="#faf4eb" opacity="0.68" transform="rotate(-18 365 212)"/>
+    <ellipse cx="425" cy="210" rx="21" ry="14" fill="#faf4eb" opacity="0.62" transform="rotate(16 425 210)"/>
+    <ellipse cx="395" cy="202" rx="16" ry="11" fill="#fffaf2" opacity="0.75"/>
+    <ellipse cx="375" cy="225" rx="10" ry="7" fill="#f2d9b5" opacity="0.5" transform="rotate(-25 375 225)"/>
+    <ellipse cx="415" cy="224" rx="9" ry="6.5" fill="#f2d9b5" opacity="0.48" transform="rotate(22 415 224)"/>
+
+    <!-- Neck / chest ruff (fluffy transition) -->
+    <ellipse cx="395" cy="335" rx="42" ry="19" fill="#fbf7f0" opacity="0.78"/>
+    <ellipse cx="395" cy="328" rx="28" ry="9" fill="#fffaf2" opacity="0.5"/>
+
+    <!-- ========== EARS (detailed with inner fur lines) ========== -->
+    <!-- Left ear -->
+    <g id="leftEar">
+      <!-- Outer ear -->
+      <path d="M 338 240 Q 305 158 352 188 Q 378 205 372 252 Z"
+            fill="url(#earOuter)" stroke="#c58f5f" stroke-width="3.5" stroke-linejoin="round"/>
+      <!-- Inner ear pink -->
+      <path d="M 342 235 Q 318 180 350 198 Q 366 212 363 242 Z"
+            fill="url(#innerEarGrad)" stroke="#e87a8c" stroke-width="1.2" opacity="0.9"/>
+      <!-- Detailed inner ear fur lines (delicate curved strokes) -->
+      <path d="M 345 228 Q 333 202 348 210" fill="none" stroke="#c25a70" stroke-width="1.6" stroke-linecap="round" opacity="0.55"/>
+      <path d="M 352 225 Q 340 198 355 205" fill="none" stroke="#c25a70" stroke-width="1.4" stroke-linecap="round" opacity="0.5"/>
+      <path d="M 358 222 Q 349 195 360 200" fill="none" stroke="#c25a70" stroke-width="1.3" stroke-linecap="round" opacity="0.45"/>
+      <path d="M 347 232 Q 338 215 352 217" fill="none" stroke="#c25a70" stroke-width="1.1" stroke-linecap="round" opacity="0.35"/>
+      <!-- Tiny fur tuft at ear tip -->
+      <ellipse cx="328" cy="175" rx="5" ry="3" fill="#faf4eb" opacity="0.6" transform="rotate(-30 328 175)"/>
+    </g>
+
+    <!-- Right ear (mirrored geometry) -->
+    <g id="rightEar">
+      <!-- Outer ear -->
+      <path d="M 452 240 Q 485 158 438 188 Q 412 205 418 252 Z"
+            fill="url(#earOuter)" stroke="#c58f5f" stroke-width="3.5" stroke-linejoin="round"/>
+      <!-- Inner ear pink -->
+      <path d="M 448 235 Q 472 180 440 198 Q 424 212 427 242 Z"
+            fill="url(#innerEarGrad)" stroke="#e87a8c" stroke-width="1.2" opacity="0.9"/>
+      <!-- Detailed inner ear fur lines -->
+      <path d="M 445 228 Q 457 202 442 210" fill="none" stroke="#c25a70" stroke-width="1.6" stroke-linecap="round" opacity="0.55"/>
+      <path d="M 438 225 Q 450 198 435 205" fill="none" stroke="#c25a70" stroke-width="1.4" stroke-linecap="round" opacity="0.5"/>
+      <path d="M 432 222 Q 441 195 430 200" fill="none" stroke="#c25a70" stroke-width="1.3" stroke-linecap="round" opacity="0.45"/>
+      <path d="M 443 232 Q 452 215 438 217" fill="none" stroke="#c25a70" stroke-width="1.1" stroke-linecap="round" opacity="0.35"/>
+      <!-- Tiny fur tuft at ear tip -->
+      <ellipse cx="462" cy="175" rx="5" ry="3" fill="#faf4eb" opacity="0.6" transform="rotate(30 462 175)"/>
+    </g>
+  </g>
+
+  <!-- ========== FACE FEATURES (expressive eyes, nose, mouth, blush) ========== -->
+  <g id="face">
+    <!-- Left eye (large, expressive, slightly tilted) -->
+    <ellipse cx="352" cy="262" rx="17" ry="22" fill="#ffffff" stroke="#7a7a7a" stroke-width="1.8" transform="rotate(-7 352 262)"/>
+    <!-- Iris -->
+    <ellipse cx="355" cy="265" rx="10" ry="13.5" fill="url(#irisGrad)" transform="rotate(-4 355 265)"/>
+    <!-- Pupil -->
+    <ellipse cx="357" cy="267" rx="4" ry="7.5" fill="#162a38"/>
+    <!-- Eye shine / highlights (multiple for depth and cuteness) -->
+    <ellipse cx="349" cy="255" rx="3.8" ry="2.8" fill="#ffffff" opacity="0.92"/>
+    <ellipse cx="361" cy="260" rx="1.9" ry="1.4" fill="#ffffff" opacity="0.65"/>
+    <ellipse cx="354" cy="272" rx="1.2" ry="0.9" fill="#ffffff" opacity="0.4"/>
+
+    <!-- Right eye (mirrored, expressive) -->
+    <ellipse cx="438" cy="262" rx="17" ry="22" fill="#ffffff" stroke="#7a7a7a" stroke-width="1.8" transform="rotate(7 438 262)"/>
+    <!-- Iris -->
+    <ellipse cx="435" cy="265" rx="10" ry="13.5" fill="url(#irisGrad)" transform="rotate(4 435 265)"/>
+    <!-- Pupil -->
+    <ellipse cx="433" cy="267" rx="4" ry="7.5" fill="#162a38"/>
+    <!-- Eye shine / highlights -->
+    <ellipse cx="441" cy="255" rx="3.8" ry="2.8" fill="#ffffff" opacity="0.92"/>
+    <ellipse cx="429" cy="260" rx="1.9" ry="1.4" fill="#ffffff" opacity="0.65"/>
+    <ellipse cx="436" cy="272" rx="1.2" ry="0.9" fill="#ffffff" opacity="0.4"/>
+
+    <!-- Expressive subtle eyebrows (soft curved strokes) -->
+    <path d="M 332 240 Q 348 232 368 240" fill="none" stroke="#a37c5a" stroke-width="2.8" stroke-linecap="round" opacity="0.65"/>
+    <path d="M 422 240 Q 442 232 458 240" fill="none" stroke="#a37c5a" stroke-width="2.8" stroke-linecap="round" opacity="0.65"/>
+
+    <!-- Small button nose -->
+    <ellipse cx="395" cy="294" rx="8.5" ry="6.5" fill="url(#noseGrad)" stroke="#b84a5f" stroke-width="1.4"/>
+    <!-- Nose highlight -->
+    <ellipse cx="392" cy="291" rx="2.3" ry="1.4" fill="#ffffff" opacity="0.82"/>
+
+    <!-- Cute mouth (gentle smile) -->
+    <path d="M 387 304 Q 395 311 403 304" fill="none" stroke="#a84a5f" stroke-width="2.1" stroke-linecap="round"/>
+    <!-- Tiny dimple lines for extra cuteness -->
+    <path d="M 385 306 Q 383 309 385 311" fill="none" stroke="#a84a5f" stroke-width="1.1" stroke-linecap="round" opacity="0.55"/>
+    <path d="M 405 306 Q 407 309 405 311" fill="none" stroke="#a84a5f" stroke-width="1.1" stroke-linecap="round" opacity="0.55"/>
+
+    <!-- Rosy blush cheeks (soft and subtle) -->
+    <ellipse cx="336" cy="292" rx="11" ry="7.5" fill="#f89aa8" opacity="0.32"/>
+    <ellipse cx="454" cy="292" rx="11" ry="7.5" fill="#f89aa8" opacity="0.32"/>
+  </g>
+
+  <!-- ========== LONG DELICATE WHISKERS ========== -->
+  <g id="whiskers" fill="none" stroke="#b89a75" stroke-width="1.35" stroke-linecap="round" opacity="0.72">
+    <!-- Left whiskers (4 graceful curves) -->
+    <path d="M 318 275 Q 265 263 205 268"/>
+    <path d="M 316 282 Q 260 276 198 285"/>
+    <path d="M 319 289 Q 268 292 208 302"/>
+    <path d="M 323 296 Q 275 305 215 315"/>
+    <!-- Right whiskers (mirrored) -->
+    <path d="M 472 275 Q 525 263 585 268"/>
+    <path d="M 474 282 Q 530 276 592 285"/>
+    <path d="M 471 289 Q 522 292 582 302"/>
+    <path d="M 467 296 Q 515 305 575 315"/>
+    <!-- A couple extra delicate ones lower for volume -->
+    <path d="M 315 303 Q 255 312 195 322" stroke-width="1.1" opacity="0.55"/>
+    <path d="M 475 303 Q 535 312 595 322" stroke-width="1.1" opacity="0.55"/>
+  </g>
+
+  <!-- ========== FINAL FLUFFY FUR LAYERING (topmost head and cheek wisps) ========== -->
+  <g id="extraFurTufts" fill="#fffaf2" opacity="0.52">
+    <!-- Head top and side wisps / tufts using ellipses and tiny paths for texture -->
+    <ellipse cx="358" cy="238" rx="7" ry="4.5" transform="rotate(-28 358 238)"/>
+    <ellipse cx="432" cy="237" rx="6.5" ry="4.2" transform="rotate(25 432 237)"/>
+    <ellipse cx="372" cy="248" rx="5" ry="3.2" transform="rotate(-15 372 248)"/>
+    <ellipse cx="418" cy="248" rx="4.8" ry="3" transform="rotate(12 418 248)"/>
+    <ellipse cx="340" cy="260" rx="6" ry="3.8" transform="rotate(-35 340 260)"/>
+    <ellipse cx="450" cy="260" rx="6" ry="3.8" transform="rotate(32 450 260)"/>
+    <!-- Cheek fur detail tufts -->
+    <ellipse cx="325" cy="285" rx="5.5" ry="3.5" transform="rotate(-22 325 285)"/>
+    <ellipse cx="465" cy="285" rx="5.5" ry="3.5" transform="rotate(20 465 285)"/>
+    <!-- Tiny forehead fluff -->
+    <ellipse cx="385" cy="230" rx="4" ry="2.6"/>
+    <ellipse cx="405" cy="229" rx="3.8" ry="2.5"/>
+    <!-- A few wispy path strokes for organic fur -->
+    <path d="M365 220 Q360 212 368 208" fill="none" stroke="#faf4eb" stroke-width="2.2" opacity="0.6" stroke-linecap="round"/>
+    <path d="M425 219 Q430 211 422 207" fill="none" stroke="#faf4eb" stroke-width="2.1" opacity="0.55" stroke-linecap="round"/>
+    <path d="M348 272 Q340 265 345 258" fill="none" stroke="#f2d9b5" stroke-width="1.8" opacity="0.4" stroke-linecap="round"/>
+    <path d="M442 272 Q450 265 445 258" fill="none" stroke="#f2d9b5" stroke-width="1.8" opacity="0.4" stroke-linecap="round"/>
+  </g>
+
+  <!-- Subtle final outline accents on head and body for polish (very light) -->
+  <path d="M 338 240 Q 305 158 352 188 Q 378 205 372 252" fill="none" stroke="#c58f5f" stroke-width="1.2" opacity="0.3"/>
+  <path d="M 452 240 Q 485 158 438 188 Q 412 205 418 252" fill="none" stroke="#c58f5f" stroke-width="1.2" opacity="0.3"/>
+
+</svg>
