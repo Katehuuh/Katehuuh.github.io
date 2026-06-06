@@ -91,7 +91,7 @@
   </defs>
 
   <!-- Very soft warm cream background -->
-  
+  <rect x="0" y="0" width="800" height="600" fill="#fffaf2"/>
 
   <!-- Subtle floor / surface hint -->
   <ellipse cx="400" cy="555" rx="355" ry="48" fill="#f5e6d8" opacity="0.55"/>

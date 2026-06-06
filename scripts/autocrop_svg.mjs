@@ -1,5 +1,6 @@
 // Square-crop CatBench .svg files server-side (replaces client-side attachSvgAutoCrop).
-// Uses Playwright + Chromium getBBox, same logic as the old index.html crop.
+// Solid perfect-rect backdrops are ignored for bbox only — never removed from the file.
+// Uses Playwright + Chromium getBBox in root SVG space (CTM inverse).
 //
 // Usage: node scripts/autocrop_svg.mjs
 
@@ -92,18 +93,6 @@ const CROP_SCRIPT = `(() => {
     const coverH = b.height / fullH;
     return coverW >= 0.75 || coverH >= 0.75 || area >= canvasArea * 0.55;
   };
-  const removeBackdrops = (el) => {
-    for (let i = el.children.length - 1; i >= 0; i--) {
-      const c = el.children[i];
-      const tag = (c.tagName || '').toLowerCase();
-      if (skip.has(tag)) continue;
-      if (tag === 'g') { removeBackdrops(c); continue; }
-      try {
-        const b = bboxRoot(c);
-        if (isBackdrop(c, tag, b)) c.remove();
-      } catch (_) {}
-    }
-  };
   const walk = (el) => {
     for (const c of el.children) {
       const tag = (c.tagName || '').toLowerCase();
@@ -122,7 +111,6 @@ const CROP_SCRIPT = `(() => {
   };
   walk(svg);
   if (!isFinite(minX)) return null;
-  removeBackdrops(svg);
   let x = minX, y = minY, w = maxX - minX, h = maxY - minY;
   const pad = Math.max(w, h) * 0.02;
   x -= pad; y -= pad; w += 2 * pad; h += 2 * pad;
