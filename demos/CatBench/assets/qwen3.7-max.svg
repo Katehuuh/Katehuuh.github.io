@@ -38,7 +38,7 @@
   </defs>
 
   <!-- Background -->
-  <rect width="800" height="800" fill="#F4F9F9"/>
+  
   <circle cx="400" cy="400" r="360" fill="url(#bgGrad)"/>
 
   <!-- Background Sparkles -->

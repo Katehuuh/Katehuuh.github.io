@@ -46,7 +46,7 @@
   </defs>
   
   <!-- Background -->
-  <rect width="400" height="400" fill="#FFF8F0"/>
+  
   
   <!-- Floor shadow -->
   <ellipse cx="200" cy="360" rx="110" ry="15" fill="url(#shadowGradient)"/>

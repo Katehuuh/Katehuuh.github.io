@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="64.71 74.00 312.00 312.00" preserveAspectRatio="xMidYMid meet">
-  <rect width="400" height="400" fill="#fdf6e3"/>
+  
 
   <!-- body -->
   <ellipse cx="200" cy="320" rx="100" ry="60" fill="#ff9a4a"/>
