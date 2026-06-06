@@ -426,6 +426,13 @@ function attachSvgAutoCrop(obj) {
     if (!fullW || !fullH) return;
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
     const skip = new Set(['defs', 'metadata', 'title', 'desc', 'style']);
+    const isBackdrop = (tag, b, el) => {
+      const op = parseFloat(el.getAttribute('opacity') || el.style.opacity || '1');
+      if (op < 0.35) return true;
+      if (tag === 'rect' && b.width >= fullW * 0.9 && b.height >= fullH * 0.9) return true;
+      if (tag === 'ellipse' && b.width >= fullW * 0.7 && b.height <= fullH * 0.18) return true;
+      return false;
+    };
     const walk = (el) => {
       for (const c of el.children) {
         const tag = (c.tagName || '').toLowerCase();
@@ -433,8 +440,8 @@ function attachSvgAutoCrop(obj) {
         if (tag === 'g') { walk(c); continue; }
         try {
           const b = c.getBBox();
-          if (tag === 'rect' && b.width >= fullW * 0.95 && b.height >= fullH * 0.95) continue;
           if (b.width === 0 && b.height === 0) continue;
+          if (isBackdrop(tag, b, c)) continue;
           if (b.x < minX) minX = b.x;
           if (b.y < minY) minY = b.y;
           if (b.x + b.width > maxX) maxX = b.x + b.width;
@@ -445,8 +452,6 @@ function attachSvgAutoCrop(obj) {
     walk(svg);
     if (!isFinite(minX)) return;
     let x = minX, y = minY, w = maxX - minX, h = maxY - minY;
-    const pad = Math.max(w, h) * 0.04;
-    x -= pad; y -= pad; w += 2 * pad; h += 2 * pad;
     const side = Math.max(w, h);
     x -= (side - w) / 2;
     y -= (side - h) / 2;

@@ -1,75 +1,128 @@
 #!/usr/bin/env python3
-"""Auto-crop CatBench raster assets to a consistent square framing.
+"""Auto-crop CatBench raster assets to a tight 1:1 square around the subject.
 
-Samples the four corner pixels for a background colour, finds the bounding
-box of pixels that differ from that background, crops with a small padding,
-then pads the crop back to a square in the same background. Result: kittens
-range from tiny to huge in their original files but render at consistent
-size in the grid cells.
-
-Idempotent: a cropped + squared file converges on a stable shape, so this
-can run in CI on every push. SVG and GIF files are skipped (vector and
-animated, respectively).
+Flood-fills background from image edges (corner colour + tolerance), also
+treats pale low-saturation pixels as background. Crops to the subject bbox
+with no padding, then extracts the smallest centred square. No margin fill.
 """
 from __future__ import annotations
 
 import sys
+from collections import deque
 from pathlib import Path
 
-from PIL import Image, ImageChops
+import numpy as np
+from PIL import Image
 
 ROOT = Path(__file__).resolve().parent.parent
 ASSETS = ROOT / "demos" / "CatBench" / "assets"
 
 CROP_EXTS = {".png", ".jpg", ".jpeg"}
-PADDING_PCT = 0.04
-DIFF_THRESHOLD = 12   # 0..255, per-channel diff to count as "subject"
+BG_TOLERANCE = 20       # per-channel diff from edge bg colour
+PALE_LUMA = 230         # 0-255, pixels brighter than this...
+PALE_SAT = 0.14         # ...and less saturated than this count as background
 
 
-def detect_bg(rgb: Image.Image) -> tuple[int, int, int]:
-    w, h = rgb.size
-    corners = [rgb.getpixel(p) for p in ((0, 0), (w - 1, 0), (0, h - 1), (w - 1, h - 1))]
-    return tuple(int(sum(c[i] for c in corners) / len(corners)) for i in range(3))
-
-
-def autocrop(img: Image.Image) -> tuple[Image.Image, tuple[int, int, int]]:
-    rgb = img.convert("RGB")
-    bg = detect_bg(rgb)
-    diff = ImageChops.difference(rgb, Image.new("RGB", rgb.size, bg)).convert("L")
-    mask = diff.point(lambda p: 255 if p > DIFF_THRESHOLD else 0)
-    bbox = mask.getbbox()
-    if not bbox:
-        return img, bg
-
-    bw, bh = bbox[2] - bbox[0], bbox[3] - bbox[1]
-
-    px = int(bw * PADDING_PCT)
-    py = int(bh * PADDING_PCT)
-    bbox = (
-        max(0, bbox[0] - px),
-        max(0, bbox[1] - py),
-        min(iw, bbox[2] + px),
-        min(ih, bbox[3] + py),
+def detect_bg(rgb: np.ndarray) -> tuple[int, int, int]:
+    h, w, _ = rgb.shape
+    corners = np.array(
+        [rgb[0, 0], rgb[0, w - 1], rgb[h - 1, 0], rgb[h - 1, w - 1]],
+        dtype=np.int16,
     )
-    return img.crop(bbox), bg
+    return tuple(int(corners[:, i].mean()) for i in range(3))
 
 
-def square_pad(img: Image.Image, bg: tuple[int, int, int]) -> Image.Image:
-    w, h = img.size
-    if w == h:
+def flood_background(rgb: np.ndarray, bg: tuple[int, int, int], tol: int) -> np.ndarray:
+    h, w, _ = rgb.shape
+    bg_arr = np.array(bg, dtype=np.int16)
+    close = np.abs(rgb.astype(np.int16) - bg_arr).max(axis=2) <= tol
+    visited = np.zeros((h, w), dtype=bool)
+    q: deque[tuple[int, int]] = deque()
+
+    for x in range(w):
+        for y in (0, h - 1):
+            if close[y, x] and not visited[y, x]:
+                visited[y, x] = True
+                q.append((y, x))
+    for y in range(h):
+        for x in (0, w - 1):
+            if close[y, x] and not visited[y, x]:
+                visited[y, x] = True
+                q.append((y, x))
+
+    while q:
+        y, x = q.popleft()
+        for ny, nx in ((y - 1, x), (y + 1, x), (y, x - 1), (y, x + 1)):
+            if 0 <= ny < h and 0 <= nx < w and not visited[ny, nx] and close[ny, nx]:
+                visited[ny, nx] = True
+                q.append((ny, nx))
+
+    return visited
+
+
+def pale_background(rgb: np.ndarray) -> np.ndarray:
+    px = rgb.astype(np.float32) / 255.0
+    maxc = px.max(axis=2)
+    minc = px.min(axis=2)
+    sat = np.divide(maxc - minc, maxc, out=np.zeros_like(maxc), where=maxc > 0)
+    luma = 0.299 * px[:, :, 0] + 0.587 * px[:, :, 1] + 0.114 * px[:, :, 2]
+    return (luma >= PALE_LUMA / 255.0) & (sat <= PALE_SAT)
+
+
+def subject_bbox(rgb: np.ndarray) -> tuple[int, int, int, int] | None:
+    bg = detect_bg(rgb)
+    is_bg = flood_background(rgb, bg, BG_TOLERANCE) | pale_background(rgb)
+    ys, xs = np.where(~is_bg)
+    if ys.size == 0:
+        return None
+    return int(xs.min()), int(ys.min()), int(xs.max()) + 1, int(ys.max()) + 1
+
+
+def square_crop(img: Image.Image, bbox: tuple[int, int, int, int]) -> Image.Image:
+    x0, y0, x1, y1 = bbox
+    bw, bh = x1 - x0, y1 - y0
+    cx = (x0 + x1) / 2.0
+    cy = (y0 + y1) / 2.0
+    side = max(bw, bh)
+    left = int(round(cx - side / 2))
+    top = int(round(cy - side / 2))
+    right = left + side
+    bottom = top + side
+
+    iw, ih = img.size
+    if left < 0:
+        right -= left
+        left = 0
+    if top < 0:
+        bottom -= top
+        top = 0
+    if right > iw:
+        left = max(0, left - (right - iw))
+        right = iw
+    if bottom > ih:
+        top = max(0, top - (bottom - ih))
+        bottom = ih
+
+    side = min(right - left, bottom - top)
+    right = left + side
+    bottom = top + side
+    return img.crop((left, top, right, bottom))
+
+
+def autocrop(img: Image.Image) -> Image.Image:
+    rgb = np.asarray(img.convert("RGB"))
+    bbox = subject_bbox(rgb)
+    if not bbox:
         return img
-    side = max(w, h)
-    canvas = Image.new("RGB", (side, side), bg)
-    canvas.paste(img.convert("RGB"), ((side - w) // 2, (side - h) // 2))
-    return canvas
+    cropped = img.crop(bbox)
+    return square_crop(cropped, (0, 0, cropped.size[0], cropped.size[1]))
 
 
 def process(path: Path) -> bool:
     img = Image.open(path)
     orig_size = img.size
-    cropped, bg = autocrop(img)
-    squared = square_pad(cropped, bg)
-    if squared.size == orig_size:
+    result = autocrop(img)
+    if result.size == orig_size and result.tobytes() == img.convert("RGB").tobytes():
         return False
 
     suffix = path.suffix.lower()
@@ -78,8 +131,8 @@ def process(path: Path) -> bool:
         save_kwargs = {"quality": 92, "optimize": True}
     elif suffix == ".png":
         save_kwargs = {"optimize": True}
-    squared.save(path, **save_kwargs)
-    print(f"  cropped {path.name} {orig_size} -> {squared.size}")
+    result.save(path, **save_kwargs)
+    print(f"  cropped {path.name} {orig_size} -> {result.size}")
     return True
 
 
