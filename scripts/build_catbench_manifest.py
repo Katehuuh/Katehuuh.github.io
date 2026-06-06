@@ -9,9 +9,9 @@ the leftmost column.
 Single drop folder. File kind is determined by extension plus an optional
 `-svg` or `-python` suffix on raster filenames:
 
-  <model>.svg                  -> SVG cell, vector
-  <model>-svg.{png|jpg|gif}    -> SVG cell, raster (when the model only
-                                  produced an image, including animated GIF)
+  <model>.svg                  -> SVG source (never modified by the pipeline)
+  <model>-svg.{png|jpg|gif}    -> SVG cell display raster (CI renders from
+                                  .svg via render_svg_preview.mjs, or model-only image)
   <model>.py                   -> Python source (auto-rendered if no raster)
   <model>-python.{png|jpg|gif} -> Python output, raster
   <model>.{png|jpg|gif}        -> bare raster, treated as Python output
@@ -101,7 +101,8 @@ def scan() -> dict:
             key = normalize(stem)
             models.setdefault(key, {"display_name": ""})
             if looks_like_svg(f):
-                models[key]["svg"] = f"assets/{f.name}"
+                models[key]["svg_source"] = f"assets/{f.name}"
+                models[key].setdefault("svg", f"assets/{f.name}")
                 models[key].pop("svg_error", None)
             elif "svg" not in models[key]:
                 models[key]["svg_error"] = "file is not valid SVG markup"
@@ -119,8 +120,7 @@ def scan() -> dict:
             if stem_norm.endswith(SVG_RASTER_SUFFIX):
                 base_norm = stem_norm[: -len(SVG_RASTER_SUFFIX)]
                 models.setdefault(base_norm, {"display_name": ""})
-                if "svg" not in models[base_norm]:
-                    models[base_norm]["svg"] = f"assets/{f.name}"
+                models[base_norm]["svg"] = f"assets/{f.name}"
                 base_stem = re.sub(r"-svg$", "", stem, flags=re.IGNORECASE)
                 propose(base_norm, PRI_RASTER, base_stem)
             elif stem_norm.endswith(PY_RASTER_SUFFIX):

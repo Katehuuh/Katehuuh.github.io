@@ -4,11 +4,12 @@
 #                                  no matching raster (matplotlib Agg, no display);
 #                                  writes CatBench/manifest.json sorted newest-first
 #                                  by git first-commit date.
-#   2. autocrop_assets.py        — squares each raster in CatBench/assets/ around
-#                                  its subject (corner-color background detection,
-#                                  bbox crop, padded back to a square). Runs after
-#                                  rendering so fresh -python.jpg outputs get 1:1.
-#   3. screenshot_thumbs.mjs       — Playwright Chromium screenshots every
+#   2. render_svg_preview.mjs    — JPEG previews from .svg (crop/zoom in render only;
+#                                  source .svg files are never modified).
+#   3. autocrop_assets.py        — squares each raster in CatBench/assets/ around
+#                                  its subject. Runs after rendering so fresh outputs get 1:1.
+#   4. build_catbench_manifest.py — second pass picks up -svg.jpg display paths.
+#   5. screenshot_thumbs.mjs       — Playwright Chromium screenshots every
 #                                  demos/<name>/index.html and every screenshot_from
 #                                  URL in data.json. Local pages are served on a
 #                                  tiny localhost HTTP server so fetch() works
@@ -70,8 +71,15 @@ jobs:
       - name: Build CatBench manifest (renders matplotlib)
         run: python scripts/build_catbench_manifest.py
 
+      - name: Render SVG display previews
+        working-directory: scripts
+        run: node render_svg_preview.mjs
+
       - name: Auto-crop CatBench raster assets
         run: python scripts/autocrop_assets.py
+
+      - name: Rebuild CatBench manifest (svg preview paths)
+        run: python scripts/build_catbench_manifest.py
 
       - name: Build demos manifest
         run: python scripts/build_demos_manifest.py
