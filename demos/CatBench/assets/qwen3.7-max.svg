@@ -1,5 +1,4 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="25.60 25.60 748.80 748.80" preserveAspectRatio="xMidYMid meet">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 800" width="100%" height="100%">
   <defs>
     <!-- Background Gradient -->
     <radialGradient id="bgGrad" cx="50%" cy="50%" r="50%">
@@ -38,7 +37,7 @@
   </defs>
 
   <!-- Background -->
-  
+  <rect width="800" height="800" fill="#F4F9F9"/>
   <circle cx="400" cy="400" r="360" fill="url(#bgGrad)"/>
 
   <!-- Background Sparkles -->
@@ -94,7 +93,18 @@
     <path d="M 540 190 Q 560 140 520 170 Q 530 130 500 170" fill="none" stroke="#FFF3E0" stroke-width="6" stroke-linecap="round"/>
 
     <!-- Head Base (Fluffy Cheeks) -->
-    <path d="M 400 170               C 490 170, 550 210, 570 280               Q 600 290, 580 320               Q 610 340, 580 370               Q 600 400, 560 420               C 530 490, 470 510, 400 510               C 330 510, 270 490, 240 420               Q 200 400, 220 370               Q 190 340, 220 320               Q 200 290, 230 280               C 250 210, 310 170, 400 170 Z" fill="url(#furGrad)"/>
+    <path d="M 400 170 
+             C 490 170, 550 210, 570 280 
+             Q 600 290, 580 320 
+             Q 610 340, 580 370 
+             Q 600 400, 560 420 
+             C 530 490, 470 510, 400 510 
+             C 330 510, 270 490, 240 420 
+             Q 200 400, 220 370 
+             Q 190 340, 220 320 
+             Q 200 290, 230 280 
+             C 250 210, 310 170, 400 170 Z" 
+          fill="url(#furGrad)"/>
 
     <!-- Tabby Stripes (Head) -->
     <g fill="none" stroke="#D35400" stroke-width="8" stroke-linecap="round" stroke-linejoin="round">

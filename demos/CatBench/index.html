@@ -137,6 +137,10 @@ main > footer .dot { color: var(--text-3); margin: 0 .35rem; }
   width: 180px; height: 180px; padding: 0;
   position: relative; cursor: zoom-in; background: #08080a;
 }
+.catbench-grid .cell.cell-svg,
+.catbench-grid .cell.cell-svg .render-frame {
+  background: #fffaf2;
+}
 .catbench-grid .cell .render-frame {
   display: flex; align-items: center; justify-content: center;
   width: 100%; height: 100%; overflow: hidden;
@@ -146,6 +150,10 @@ main > footer .dot { color: var(--text-3); margin: 0 .35rem; }
 .catbench-grid .cell object {
   max-width: 100%; max-height: 100%; width: auto; height: auto;
   pointer-events: none;
+}
+.catbench-grid .cell.cell-svg img,
+.catbench-grid .cell.cell-svg object {
+  width: 100%; height: 100%; object-fit: contain;
 }
 .catbench-grid .cell .source-link {
   position: absolute; bottom: 6px; right: 6px;
@@ -189,8 +197,14 @@ main > footer .dot { color: var(--text-3); margin: 0 .35rem; }
   display: flex; align-items: center; justify-content: center;
   max-width: 100%; max-height: calc(90vh - 2.4rem);
 }
+.lightbox-body.is-svg {
+  background: #fffaf2; border-radius: 8px;
+}
 .lightbox-body img, .lightbox-body svg, .lightbox-body object {
   max-width: 100%; max-height: calc(90vh - 2.4rem); display: block;
+}
+.lightbox-body.is-svg object {
+  object-fit: contain;
 }
 .lightbox-close {
   position: absolute; top: 8px; right: 12px;
@@ -376,6 +390,8 @@ function buildGrid(models) {
         td.classList.add('empty');
         td.textContent = '—';
       } else {
+        const isVectorSvg = row.kind === 'svg' && /\.svg$/i.test(path);
+        if (isVectorSvg) td.classList.add('cell-svg');
         const frame = document.createElement('div');
         frame.className = 'render-frame';
         const img = document.createElement('img');
@@ -422,13 +438,15 @@ function setupLightbox() {
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && !lb.hidden) closeLightbox(); });
 }
 
-function openLightbox({ path, label }) {
+function openLightbox({ path, label, kind }) {
   const lb = document.getElementById('lightbox');
   const body = lb.querySelector('.lightbox-body');
   body.innerHTML = '';
+  body.classList.remove('is-svg');
   const maxSide = Math.min(window.innerWidth * 0.85, window.innerHeight * 0.85 - 48);
-  const isSvg = /\.svg$/i.test(path);
+  const isSvg = kind === 'svg' && /\.svg$/i.test(path);
   if (isSvg) {
+    body.classList.add('is-svg');
     const obj = document.createElement('object');
     obj.data = path;
     obj.type = 'image/svg+xml';
@@ -448,7 +466,9 @@ function openLightbox({ path, label }) {
 function closeLightbox() {
   const lb = document.getElementById('lightbox');
   lb.hidden = true;
-  lb.querySelector('.lightbox-body').innerHTML = '';
+  const body = lb.querySelector('.lightbox-body');
+  body.innerHTML = '';
+  body.classList.remove('is-svg');
 }
 </script>
 </body>

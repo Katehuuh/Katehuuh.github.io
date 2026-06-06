@@ -1,5 +1,4 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="-12.16 -8.16 424.32 424.32" preserveAspectRatio="xMidYMid meet">
+<svg viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
   <defs>
     <!-- Background -->
     <linearGradient id="bgGrad" x1="0" y1="0" x2="0" y2="1">
@@ -42,7 +41,8 @@
   <ellipse cx="200" cy="390" rx="112" ry="18" fill="#3A5560" opacity="0.10"/>
 
   <!-- ===== BODY ===== -->
-  <path d="M200 248 C138 248,116 305,122 350 C125 378,160 392,200 392 C240 392,275 378,278 350 C284 305,262 248,200 248 Z" fill="url(#bodyGrad)" stroke="#D9802F" stroke-width="2"/>
+  <path d="M200 248 C138 248,116 305,122 350 C125 378,160 392,200 392 C240 392,275 378,278 350 C284 305,262 248,200 248 Z"
+        fill="url(#bodyGrad)" stroke="#D9802F" stroke-width="2"/>
   <!-- Body stripes -->
   <g stroke="#CE6F23" stroke-width="6" stroke-linecap="round" fill="none" opacity="0.8">
     <path d="M132 282 Q124 306 131 330"/>
@@ -51,7 +51,8 @@
     <path d="M250 270 Q258 300 253 332"/>
   </g>
   <!-- Chest fluff -->
-  <path d="M200 255 C172 260,162 315,172 355 C180 380,220 380,228 355 C238 315,228 260,200 255 Z" fill="#FFF3E0"/>
+  <path d="M200 255 C172 260,162 315,172 355 C180 380,220 380,228 355 C238 315,228 260,200 255 Z"
+        fill="#FFF3E0"/>
   <!-- Paws -->
   <ellipse cx="172" cy="384" rx="23" ry="15" fill="#FFF3E0" stroke="#EAD9C0" stroke-width="1.5"/>
   <ellipse cx="228" cy="384" rx="23" ry="15" fill="#FFF3E0" stroke="#EAD9C0" stroke-width="1.5"/>
@@ -61,7 +62,8 @@
   </g>
 
   <!-- ===== TAIL (wrapping in front) ===== -->
-  <path d="M270 360 C322 360,350 320,337 285 C330 266,305 267,305 288 C305 313,318 342,276 350 Z" fill="url(#bodyGrad)" stroke="#D9802F" stroke-width="2"/>
+  <path d="M270 360 C322 360,350 320,337 285 C330 266,305 267,305 288 C305 313,318 342,276 350 Z"
+        fill="url(#bodyGrad)" stroke="#D9802F" stroke-width="2"/>
   <g stroke="#CE6F23" stroke-width="6" stroke-linecap="round" fill="none" opacity="0.85">
     <path d="M300 300 Q318 300 328 292"/>
     <path d="M298 318 Q314 322 326 318"/>
@@ -118,7 +120,8 @@
   <ellipse cx="184" cy="216" rx="19" ry="15" fill="#FFF3E0"/>
   <ellipse cx="216" cy="216" rx="19" ry="15" fill="#FFF3E0"/>
   <!-- Nose -->
-  <path d="M190 196 Q200 194 210 196 Q207 207 200 210 Q193 207 190 196 Z" fill="#EC8B9C" stroke="#D9748A" stroke-width="1"/>
+  <path d="M190 196 Q200 194 210 196 Q207 207 200 210 Q193 207 190 196 Z"
+        fill="#EC8B9C" stroke="#D9748A" stroke-width="1"/>
   <ellipse cx="196" cy="199" rx="2.5" ry="1.5" fill="#FFFFFF" opacity="0.7"/>
   <!-- Mouth -->
   <g stroke="#C76A2A" stroke-width="2.2" stroke-linecap="round" fill="none">

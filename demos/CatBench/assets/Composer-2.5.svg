@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="-10.24 -10.24 532.48 532.48" preserveAspectRatio="xMidYMid meet">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
     <!-- Background gradient -->
     <radialGradient id="bgGrad" cx="50%" cy="40%" r="70%">
@@ -320,8 +320,10 @@
     </g>
 
     <!-- Tail peeking from box -->
-    <path d="M 320 340 Q 360 330 380 350 Q 395 365 385 380 Q 375 375 365 360 Q 350 345 330 350" fill="url(#furBody)" stroke="#4a5a6b" stroke-width="0.5" opacity="0.85"/>
-    <path d="M 320 340 Q 360 330 380 350 Q 395 365 385 380 Q 375 375 365 360 Q 350 345 330 350" fill="url(#furCheek)" opacity="0.3"/>
+    <path d="M 320 340 Q 360 330 380 350 Q 395 365 385 380 Q 375 375 365 360 Q 350 345 330 350" 
+          fill="url(#furBody)" stroke="#4a5a6b" stroke-width="0.5" opacity="0.85"/>
+    <path d="M 320 340 Q 360 330 380 350 Q 395 365 385 380 Q 375 375 365 360 Q 350 345 330 350" 
+          fill="url(#furCheek)" opacity="0.3"/>
   </g>
 
   <!-- Floating dust motes (atmosphere) -->
