@@ -1,0 +1,345 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <!-- Background gradient -->
+    <radialGradient id="bgGrad" cx="50%" cy="40%" r="70%">
+      <stop offset="0%" stop-color="#f5f0eb"/>
+      <stop offset="100%" stop-color="#d4c9be"/>
+    </radialGradient>
+
+    <!-- Cardboard gradients -->
+    <linearGradient id="cardboardMain" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#c9a87c"/>
+      <stop offset="30%" stop-color="#b8956a"/>
+      <stop offset="70%" stop-color="#a67c52"/>
+      <stop offset="100%" stop-color="#8b6340"/>
+    </linearGradient>
+    <linearGradient id="cardboardSide" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#7a5535"/>
+      <stop offset="50%" stop-color="#a67c52"/>
+      <stop offset="100%" stop-color="#6b4a2e"/>
+    </linearGradient>
+    <linearGradient id="cardboardFlap" x1="0%" y1="100%" x2="0%" y2="0%">
+      <stop offset="0%" stop-color="#8b6340"/>
+      <stop offset="40%" stop-color="#c9a87c"/>
+      <stop offset="100%" stop-color="#d4b896"/>
+    </linearGradient>
+    <linearGradient id="cardboardInner" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#5c3d28"/>
+      <stop offset="100%" stop-color="#3d2818"/>
+    </linearGradient>
+
+    <!-- Corrugated texture pattern -->
+    <pattern id="corrugated" x="0" y="0" width="8" height="4" patternUnits="userSpaceOnUse">
+      <rect width="8" height="4" fill="#b8956a"/>
+      <line x1="0" y1="0" x2="8" y2="0" stroke="#a67c52" stroke-width="0.5" opacity="0.6"/>
+      <line x1="0" y1="2" x2="8" y2="2" stroke="#d4b896" stroke-width="0.3" opacity="0.5"/>
+      <line x1="0" y1="4" x2="8" y2="4" stroke="#8b6340" stroke-width="0.4" opacity="0.4"/>
+    </pattern>
+    <pattern id="corrugatedVertical" x="0" y="0" width="4" height="8" patternUnits="userSpaceOnUse">
+      <rect width="4" height="8" fill="#a67c52"/>
+      <line x1="0" y1="0" x2="0" y2="8" stroke="#8b6340" stroke-width="0.5" opacity="0.5"/>
+      <line x1="2" y1="0" x2="2" y2="8" stroke="#c9a87c" stroke-width="0.3" opacity="0.4"/>
+      <line x1="4" y1="0" x2="4" y2="8" stroke="#7a5535" stroke-width="0.4" opacity="0.5"/>
+    </pattern>
+
+    <!-- Russian Blue fur gradients -->
+    <radialGradient id="furHead" cx="45%" cy="35%" r="65%">
+      <stop offset="0%" stop-color="#8a9baa"/>
+      <stop offset="40%" stop-color="#6b7d8f"/>
+      <stop offset="80%" stop-color="#4a5a6b"/>
+      <stop offset="100%" stop-color="#3d4d5c"/>
+    </radialGradient>
+    <linearGradient id="furBody" x1="30%" y1="0%" x2="70%" y2="100%">
+      <stop offset="0%" stop-color="#7a8d9e"/>
+      <stop offset="50%" stop-color="#5a6d7e"/>
+      <stop offset="100%" stop-color="#3d4d5c"/>
+    </linearGradient>
+    <linearGradient id="furEar" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#9aacbb"/>
+      <stop offset="50%" stop-color="#6b7d8f"/>
+      <stop offset="100%" stop-color="#4a5a6b"/>
+    </linearGradient>
+    <radialGradient id="furCheek" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#a0b0c0" stop-opacity="0.6"/>
+      <stop offset="100%" stop-color="#6b7d8f" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Eye gradients -->
+    <radialGradient id="eyeGreen" cx="40%" cy="35%" r="60%">
+      <stop offset="0%" stop-color="#c8e86a"/>
+      <stop offset="40%" stop-color="#8ab84a"/>
+      <stop offset="80%" stop-color="#4a7a2a"/>
+      <stop offset="100%" stop-color="#2a4a18"/>
+    </radialGradient>
+    <radialGradient id="eyePupil" cx="45%" cy="40%" r="50%">
+      <stop offset="0%" stop-color="#1a1a2a"/>
+      <stop offset="80%" stop-color="#0a0a12"/>
+      <stop offset="100%" stop-color="#000005"/>
+    </radialGradient>
+    <radialGradient id="eyeHighlight" cx="30%" cy="25%" r="40%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="60%" stop-color="#ffffff" stop-opacity="0.3"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Nose gradient -->
+    <radialGradient id="nosePink" cx="50%" cy="30%" r="70%">
+      <stop offset="0%" stop-color="#f0a0b0"/>
+      <stop offset="60%" stop-color="#d07088"/>
+      <stop offset="100%" stop-color="#a05068"/>
+    </radialGradient>
+
+    <!-- Inner ear -->
+    <linearGradient id="innerEar" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#e8a0b0"/>
+      <stop offset="100%" stop-color="#c07088"/>
+    </linearGradient>
+
+    <!-- Shadow filter -->
+    <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="2" dy="4" stdDeviation="6" flood-color="#2a2018" flood-opacity="0.35"/>
+    </filter>
+    <filter id="innerShadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="3" result="blur"/>
+      <feOffset dx="1" dy="2" result="offsetBlur"/>
+      <feComposite in="SourceGraphic" in2="offsetBlur" operator="over"/>
+    </filter>
+    <filter id="furTexture" x="0%" y="0%" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="4" result="noise"/>
+      <feColorMatrix type="saturate" values="0" in="noise" result="grayNoise"/>
+      <feBlend in="SourceGraphic" in2="grayNoise" mode="multiply" result="textured"/>
+    </filter>
+
+    <!-- Cel-shade highlight -->
+    <linearGradient id="celHighlight" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.25"/>
+      <stop offset="50%" stop-color="#ffffff" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0.15"/>
+    </linearGradient>
+
+    <!-- Box shadow on floor -->
+    <radialGradient id="floorShadow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#3a3028" stop-opacity="0.4"/>
+      <stop offset="100%" stop-color="#3a3028" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Tape strip -->
+    <linearGradient id="tapeGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#e8e0c8" stop-opacity="0.7"/>
+      <stop offset="50%" stop-color="#d8d0b0" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#c8c0a0" stop-opacity="0.6"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="512" height="512" fill="url(#bgGrad)"/>
+
+  <!-- Floor shadow -->
+  <ellipse cx="256" cy="460" rx="140" ry="25" fill="url(#floorShadow)"/>
+
+  <!-- === CARDBOARD BOX === -->
+  <g id="box" filter="url(#softShadow)">
+    <!-- Box back wall (inside) -->
+    <path d="M 130 280 L 130 380 L 382 380 L 382 280 Z" fill="url(#cardboardInner)"/>
+
+    <!-- Box left side -->
+    <path d="M 100 300 L 130 280 L 130 380 L 100 400 Z" fill="url(#cardboardSide)"/>
+    <path d="M 100 300 L 130 280 L 130 380 L 100 400 Z" fill="url(#corrugatedVertical)" opacity="0.3"/>
+
+    <!-- Box right side -->
+    <path d="M 382 280 L 412 300 L 412 400 L 382 380 Z" fill="url(#cardboardSide)"/>
+    <path d="M 382 280 L 412 300 L 412 400 L 382 380 Z" fill="url(#corrugatedVertical)" opacity="0.25"/>
+    <path d="M 382 280 L 412 300 L 412 400 L 382 380 Z" fill="#000000" opacity="0.08"/>
+
+    <!-- Box front face -->
+    <path d="M 100 300 L 256 220 L 412 300 L 382 380 L 130 380 L 100 400 Z" fill="url(#cardboardMain)"/>
+    <path d="M 100 300 L 256 220 L 412 300 L 382 380 L 130 380 L 100 400 Z" fill="url(#corrugated)" opacity="0.35"/>
+
+    <!-- Box front cel-shade -->
+    <path d="M 100 300 L 256 220 L 412 300 L 382 380 L 130 380 L 100 400 Z" fill="url(#celHighlight)"/>
+
+    <!-- Box top edge highlight -->
+    <path d="M 100 300 L 256 220 L 412 300" fill="none" stroke="#d4b896" stroke-width="2" opacity="0.6"/>
+
+    <!-- Box bottom edge shadow -->
+    <path d="M 100 400 L 130 380 L 382 380 L 412 400" fill="none" stroke="#5c3d28" stroke-width="1.5" opacity="0.5"/>
+
+    <!-- Left flap (folded back) -->
+    <path d="M 100 300 L 130 280 L 180 250 L 150 270 Z" fill="url(#cardboardFlap)" opacity="0.85"/>
+    <path d="M 100 300 L 130 280 L 180 250 L 150 270 Z" fill="url(#corrugated)" opacity="0.2"/>
+
+    <!-- Right flap (folded back) -->
+    <path d="M 412 300 L 382 280 L 332 250 L 362 270 Z" fill="url(#cardboardFlap)" opacity="0.75"/>
+    <path d="M 412 300 L 382 280 L 332 250 L 362 270 Z" fill="url(#corrugated)" opacity="0.2"/>
+
+    <!-- Front flap (torn/bent down - opening for kitten) -->
+    <path d="M 180 250 L 256 220 L 332 250 L 310 265 L 256 245 L 202 265 Z" fill="url(#cardboardFlap)"/>
+    <path d="M 180 250 L 256 220 L 332 250 L 310 265 L 256 245 L 202 265 Z" fill="url(#corrugated)" opacity="0.25"/>
+    <!-- Flap tear detail -->
+    <path d="M 202 265 L 210 258 L 218 266 L 225 255" fill="none" stroke="#8b6340" stroke-width="1" opacity="0.5"/>
+
+    <!-- Packing tape strips -->
+    <path d="M 140 320 L 200 295 L 205 305 L 145 330 Z" fill="url(#tapeGrad)" opacity="0.6"/>
+    <path d="M 307 295 L 367 320 L 362 330 L 302 305 Z" fill="url(#tapeGrad)" opacity="0.5"/>
+
+    <!-- Corrugated edge detail on front -->
+    <g opacity="0.4">
+      <line x1="120" y1="310" x2="125" y2="390" stroke="#8b6340" stroke-width="0.8"/>
+      <line x1="135" y1="305" x2="140" y2="385" stroke="#7a5535" stroke-width="0.6"/>
+      <line x1="370" y1="310" x2="375" y2="390" stroke="#8b6340" stroke-width="0.8"/>
+      <line x1="385" y1="305" x2="390" y2="385" stroke="#7a5535" stroke-width="0.6"/>
+    </g>
+
+    <!-- Box wear/scuff marks -->
+    <ellipse cx="160" cy="350" rx="15" ry="8" fill="#8b6340" opacity="0.15"/>
+    <ellipse cx="340" cy="340" rx="12" ry="6" fill="#7a5535" opacity="0.12"/>
+    <path d="M 220 360 Q 240 355 260 362" fill="none" stroke="#6b4a2e" stroke-width="1" opacity="0.2"/>
+  </g>
+
+  <!-- === KITTEN (Russian Blue) === -->
+  <g id="kitten" filter="url(#softShadow)">
+    <!-- Paws gripping box edge -->
+    <g id="paws">
+      <!-- Left paw -->
+      <ellipse cx="195" cy="268" rx="18" ry="14" fill="url(#furBody)" transform="rotate(-15 195 268)"/>
+      <ellipse cx="195" cy="268" rx="14" ry="10" fill="url(#furCheek)" transform="rotate(-15 195 268)"/>
+      <!-- Toe beans left -->
+      <circle cx="188" cy="262" r="3.5" fill="url(#nosePink)" opacity="0.8"/>
+      <circle cx="195" cy="260" r="3.5" fill="url(#nosePink)" opacity="0.8"/>
+      <circle cx="202" cy="262" r="3.5" fill="url(#nosePink)" opacity="0.8"/>
+      <ellipse cx="195" cy="268" rx="4" ry="3" fill="url(#nosePink)" opacity="0.7"/>
+
+      <!-- Right paw -->
+      <ellipse cx="317" cy="268" rx="18" ry="14" fill="url(#furBody)" transform="rotate(15 317 268)"/>
+      <ellipse cx="317" cy="268" rx="14" ry="10" fill="url(#furCheek)" transform="rotate(15 317 268)"/>
+      <!-- Toe beans right -->
+      <circle cx="310" cy="262" r="3.5" fill="url(#nosePink)" opacity="0.8"/>
+      <circle cx="317" cy="260" r="3.5" fill="url(#nosePink)" opacity="0.8"/>
+      <circle cx="324" cy="262" r="3.5" fill="url(#nosePink)" opacity="0.8"/>
+      <ellipse cx="317" cy="268" rx="4" ry="3" fill="url(#nosePink)" opacity="0.7"/>
+    </g>
+
+    <!-- Body hidden in box -->
+    <ellipse cx="256" cy="310" rx="70" ry="45" fill="url(#furBody)" opacity="0.9"/>
+    <ellipse cx="256" cy="305" rx="55" ry="35" fill="url(#furCheek)" opacity="0.4"/>
+
+    <!-- Head -->
+    <g id="head">
+      <!-- Main head shape -->
+      <ellipse cx="256" cy="210" rx="72" ry="65" fill="url(#furHead)"/>
+      
+      <!-- Cheek fluff highlights (cel-shade) -->
+      <ellipse cx="220" cy="225" rx="22" ry="18" fill="url(#furCheek)"/>
+      <ellipse cx="292" cy="225" rx="22" ry="18" fill="url(#furCheek)"/>
+
+      <!-- Forehead highlight -->
+      <ellipse cx="248" cy="185" rx="35" ry="20" fill="#a0b0c0" opacity="0.2"/>
+
+      <!-- Muzzle area -->
+      <ellipse cx="256" cy="235" rx="28" ry="22" fill="#7a8d9e" opacity="0.5"/>
+      <ellipse cx="256" cy="240" rx="18" ry="14" fill="#9aacbb" opacity="0.3"/>
+
+      <!-- Ears -->
+      <!-- Left ear -->
+      <path d="M 195 175 L 175 115 L 215 155 Z" fill="url(#furEar)"/>
+      <path d="M 195 172 L 182 125 L 210 158 Z" fill="url(#innerEar)" opacity="0.7"/>
+      <path d="M 195 175 L 175 115 L 215 155 Z" fill="url(#celHighlight)" opacity="0.5"/>
+      <!-- Ear tuft -->
+      <path d="M 178 120 Q 175 110 180 108 Q 185 112 178 120" fill="#8a9baa" opacity="0.6"/>
+
+      <!-- Right ear (tilted - curious!) -->
+      <path d="M 317 175 L 337 108 L 297 152 Z" fill="url(#furEar)"/>
+      <path d="M 317 172 L 330 118 L 302 155 Z" fill="url(#innerEar)" opacity="0.7"/>
+      <path d="M 317 175 L 337 108 L 297 152 Z" fill="url(#celHighlight)" opacity="0.5"/>
+      <!-- Ear tuft -->
+      <path d="M 334 113 Q 338 102 333 100 Q 328 105 334 113" fill="#8a9baa" opacity="0.6"/>
+
+      <!-- Fur texture strokes on head -->
+      <g opacity="0.15" stroke="#4a5a6b" stroke-width="0.8" fill="none">
+        <path d="M 210 195 Q 215 200 212 208"/>
+        <path d="M 300 195 Q 295 200 298 208"/>
+        <path d="M 230 180 Q 240 185 245 192"/>
+        <path d="M 280 180 Q 270 185 265 192"/>
+        <path d="M 256 170 Q 258 178 256 186"/>
+      </g>
+
+      <!-- Eyes (big, curious, wide) -->
+      <!-- Left eye -->
+      <g id="leftEye">
+        <ellipse cx="225" cy="205" rx="22" ry="26" fill="#ffffff" opacity="0.15"/>
+        <ellipse cx="225" cy="205" rx="20" ry="24" fill="url(#eyeGreen)"/>
+        <ellipse cx="225" cy="205" rx="20" ry="24" fill="none" stroke="#3a5a2a" stroke-width="1" opacity="0.4"/>
+        <!-- Pupil -->
+        <ellipse cx="227" cy="208" rx="8" ry="14" fill="url(#eyePupil)"/>
+        <!-- Highlight -->
+        <ellipse cx="220" cy="198" rx="7" ry="8" fill="url(#eyeHighlight)"/>
+        <circle cx="232" cy="212" r="2.5" fill="#ffffff" opacity="0.7"/>
+      </g>
+
+      <!-- Right eye (slightly wider - curious asymmetry) -->
+      <g id="rightEye">
+        <ellipse cx="287" cy="203" rx="23" ry="27" fill="#ffffff" opacity="0.15"/>
+        <ellipse cx="287" cy="203" rx="21" ry="25" fill="url(#eyeGreen)"/>
+        <ellipse cx="287" cy="203" rx="21" ry="25" fill="none" stroke="#3a5a2a" stroke-width="1" opacity="0.4"/>
+        <!-- Pupil -->
+        <ellipse cx="289" cy="206" rx="8" ry="15" fill="url(#eyePupil)"/>
+        <!-- Highlight -->
+        <ellipse cx="282" cy="196" rx="8" ry="9" fill="url(#eyeHighlight)"/>
+        <circle cx="294" cy="210" r="3" fill="#ffffff" opacity="0.7"/>
+      </g>
+
+      <!-- Eye brows (raised - curious expression) -->
+      <path d="M 205 182 Q 225 175 240 180" fill="none" stroke="#5a6d7e" stroke-width="3" stroke-linecap="round" opacity="0.6"/>
+      <path d="M 272 178 Q 287 172 302 180" fill="none" stroke="#5a6d7e" stroke-width="3" stroke-linecap="round" opacity="0.6"/>
+
+      <!-- Nose -->
+      <path d="M 256 228 L 250 238 Q 256 242 262 238 Z" fill="url(#nosePink)"/>
+      <ellipse cx="254" cy="232" rx="2" ry="1.5" fill="#ffffff" opacity="0.4"/>
+
+      <!-- Mouth (slight open - curious) -->
+      <path d="M 256 240 Q 252 248 246 246" fill="none" stroke="#6a5060" stroke-width="1.5" stroke-linecap="round"/>
+      <path d="M 256 240 Q 260 248 266 246" fill="none" stroke="#6a5060" stroke-width="1.5" stroke-linecap="round"/>
+      <!-- Tiny tongue peek -->
+      <ellipse cx="256" cy="248" rx="3" ry="2" fill="#e08090" opacity="0.7"/>
+
+      <!-- Whiskers -->
+      <g id="whiskers" stroke="#c8d0d8" stroke-width="0.8" stroke-linecap="round" opacity="0.7">
+        <!-- Left whiskers -->
+        <line x1="210" y1="232" x2="165" y2="225"/>
+        <line x1="208" y1="238" x2="160" y2="240"/>
+        <line x1="210" y1="244" x2="168" y2="252"/>
+        <!-- Right whiskers -->
+        <line x1="302" y1="232" x2="347" y2="225"/>
+        <line x1="304" y1="238" x2="352" y2="240"/>
+        <line x1="302" y1="244" x2="344" y2="252"/>
+      </g>
+
+      <!-- Chin shadow (cel-shade) -->
+      <ellipse cx="256" cy="252" rx="20" ry="8" fill="#4a5a6b" opacity="0.2"/>
+    </g>
+
+    <!-- Tail peeking from box -->
+    <path d="M 320 340 Q 360 330 380 350 Q 395 365 385 380 Q 375 375 365 360 Q 350 345 330 350" 
+          fill="url(#furBody)" stroke="#4a5a6b" stroke-width="0.5" opacity="0.85"/>
+    <path d="M 320 340 Q 360 330 380 350 Q 395 365 385 380 Q 375 375 365 360 Q 350 345 330 350" 
+          fill="url(#furCheek)" opacity="0.3"/>
+  </g>
+
+  <!-- Floating dust motes (atmosphere) -->
+  <g opacity="0.3">
+    <circle cx="150" cy="180" r="1.5" fill="#ffffff"/>
+    <circle cx="380" cy="200" r="1" fill="#ffffff"/>
+    <circle cx="420" cy="250" r="1.5" fill="#ffffff"/>
+    <circle cx="90" cy="220" r="1" fill="#ffffff"/>
+    <circle cx="200" cy="150" r="1" fill="#ffffff"/>
+  </g>
+
+  <!-- Subtle vignette -->
+  <rect width="512" height="512" fill="url(#bgGrad)" opacity="0" style="mix-blend-mode:multiply"/>
+  <radialGradient id="vignette" cx="50%" cy="50%" r="70%">
+    <stop offset="60%" stop-color="#000000" stop-opacity="0"/>
+    <stop offset="100%" stop-color="#000000" stop-opacity="0.12"/>
+  </radialGradient>
+  <rect width="512" height="512" fill="url(#vignette)"/>
+</svg>
