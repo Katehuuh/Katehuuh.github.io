@@ -74,6 +74,6 @@ def draw_kitten(ax):
 if __name__ == "__main__":
     fig, ax = plt.subplots(figsize=(7.2, 7.8), facecolor='#F4F0F8')
     draw_kitten(ax)
-    plt.savefig('best_of_n/kitten_10.png', dpi=220, bbox_inches='tight', facecolor=fig.get_facecolor())
-    plt.close()
-    print("kitten_10.py ready (minimalist elegant).")
+    # Display the plot interactively on screen (normal behavior).
+    # Close the window to exit the script.
+    plt.show()
