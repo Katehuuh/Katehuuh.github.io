@@ -24,7 +24,6 @@ ASSETS = ROOT / "demos" / "CatBench" / "assets"
 CROP_EXTS = {".png", ".jpg", ".jpeg"}
 PADDING_PCT = 0.04
 DIFF_THRESHOLD = 12   # 0..255, per-channel diff to count as "subject"
-MIN_CROP_RATIO = 0.92 # don't crop if the bbox already covers >= 92% of the image
 
 
 def detect_bg(rgb: Image.Image) -> tuple[int, int, int]:
@@ -43,9 +42,6 @@ def autocrop(img: Image.Image) -> tuple[Image.Image, tuple[int, int, int]]:
         return img, bg
 
     bw, bh = bbox[2] - bbox[0], bbox[3] - bbox[1]
-    iw, ih = img.size
-    if bw / iw >= MIN_CROP_RATIO and bh / ih >= MIN_CROP_RATIO:
-        return img, bg
 
     px = int(bw * PADDING_PCT)
     py = int(bh * PADDING_PCT)

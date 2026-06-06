@@ -445,7 +445,6 @@ function attachSvgAutoCrop(obj) {
     walk(svg);
     if (!isFinite(minX)) return;
     let x = minX, y = minY, w = maxX - minX, h = maxY - minY;
-    if (w / fullW >= 0.92 && h / fullH >= 0.92) return;
     const pad = Math.max(w, h) * 0.04;
     x -= pad; y -= pad; w += 2 * pad; h += 2 * pad;
     const side = Math.max(w, h);
