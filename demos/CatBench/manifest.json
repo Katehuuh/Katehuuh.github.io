@@ -1,5 +1,15 @@
 {
   "models": {
+    "composer-2.5": {
+      "display_name": "Composer-2.5",
+      "svg": "assets/Composer-2.5.svg",
+      "_first_seen": "2026-06-06T15:30:34+02:00"
+    },
+    "grok-build-0.1": {
+      "display_name": "Grok-Build-0.1",
+      "svg": "assets/Grok-Build-0.1.svg",
+      "_first_seen": "2026-06-06T15:30:34+02:00"
+    },
     "qwen3.7-max": {
       "display_name": "qwen3.7-max",
       "python_render": "assets/qwen3.7-max-python.jpg",
