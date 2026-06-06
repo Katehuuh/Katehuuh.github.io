@@ -194,8 +194,9 @@ main > footer .dot { color: var(--text-3); margin: 0 .35rem; }
 }
 .lightbox-body object.lightbox-vector {
   display: block;
+  aspect-ratio: 1 / 1;
   width: min(85vw, calc(90vh - 2.4rem));
-  height: min(85vw, calc(90vh - 2.4rem));
+  height: auto;
 }
 .lightbox-close {
   position: absolute; top: 8px; right: 12px;
@@ -382,9 +383,10 @@ function buildGrid(models) {
         if (isVector) {
           const obj = document.createElement('object');
           obj.type = 'image/svg+xml';
-          attachSvgAutoCrop(obj);
-          obj.data = path;
           frame.appendChild(obj);
+          const kick = attachSvgAutoCrop(obj);
+          obj.data = path;
+          kick();
         } else {
           const img = document.createElement('img');
           img.src = path;
@@ -419,51 +421,67 @@ function attachSourceLink(td, sourcePath) {
   td.appendChild(a);
 }
 
+function cropSvgRoot(svg) {
+  if (svg.dataset.catbenchCropped) return;
+  const vb = svg.viewBox && svg.viewBox.baseVal;
+  const fullW = (vb && vb.width) || svg.getBBox().width;
+  const fullH = (vb && vb.height) || svg.getBBox().height;
+  if (!fullW || !fullH) return;
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  const skip = new Set(['defs', 'metadata', 'title', 'desc', 'style']);
+  const isBackdrop = (tag, b) => {
+    if (tag === 'rect' && b.width >= fullW * 0.95 && b.height >= fullH * 0.95) return true;
+    return false;
+  };
+  const walk = (el) => {
+    for (const c of el.children) {
+      const tag = (c.tagName || '').toLowerCase();
+      if (skip.has(tag)) continue;
+      if (tag === 'g') { walk(c); continue; }
+      try {
+        const b = c.getBBox();
+        if (b.width === 0 && b.height === 0) continue;
+        if (isBackdrop(tag, b)) continue;
+        if (b.x < minX) minX = b.x;
+        if (b.y < minY) minY = b.y;
+        if (b.x + b.width > maxX) maxX = b.x + b.width;
+        if (b.y + b.height > maxY) maxY = b.y + b.height;
+      } catch (_) {}
+    }
+  };
+  walk(svg);
+  if (!isFinite(minX)) return;
+  let x = minX, y = minY, w = maxX - minX, h = maxY - minY;
+  const pad = Math.max(w, h) * 0.02;
+  x -= pad; y -= pad; w += 2 * pad; h += 2 * pad;
+  const side = Math.max(w, h);
+  x -= (side - w) / 2;
+  y -= (side - h) / 2;
+  svg.setAttribute('viewBox', `${x.toFixed(2)} ${y.toFixed(2)} ${side.toFixed(2)} ${side.toFixed(2)}`);
+  svg.removeAttribute('width');
+  svg.removeAttribute('height');
+  svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+  svg.dataset.catbenchCropped = '1';
+}
+
 function attachSvgAutoCrop(obj) {
-  obj.addEventListener('load', () => {
+  const tryCrop = () => {
     let svg;
     try { svg = obj.contentDocument && obj.contentDocument.querySelector('svg'); }
-    catch (_) { return; }
-    if (!svg) return;
-    const vb = svg.viewBox && svg.viewBox.baseVal;
-    const fullW = (vb && vb.width) || svg.getBBox().width;
-    const fullH = (vb && vb.height) || svg.getBBox().height;
-    if (!fullW || !fullH) return;
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    const skip = new Set(['defs', 'metadata', 'title', 'desc', 'style']);
-    const isBackdrop = (tag, b) => {
-      if (tag === 'rect' && b.width >= fullW * 0.95 && b.height >= fullH * 0.95) return true;
-      return false;
-    };
-    const walk = (el) => {
-      for (const c of el.children) {
-        const tag = (c.tagName || '').toLowerCase();
-        if (skip.has(tag)) continue;
-        if (tag === 'g') { walk(c); continue; }
-        try {
-          const b = c.getBBox();
-          if (b.width === 0 && b.height === 0) continue;
-          if (isBackdrop(tag, b)) continue;
-          if (b.x < minX) minX = b.x;
-          if (b.y < minY) minY = b.y;
-          if (b.x + b.width > maxX) maxX = b.x + b.width;
-          if (b.y + b.height > maxY) maxY = b.y + b.height;
-        } catch (_) {}
-      }
-    };
-    walk(svg);
-    if (!isFinite(minX)) return;
-    let x = minX, y = minY, w = maxX - minX, h = maxY - minY;
-    const pad = Math.max(w, h) * 0.02;
-    x -= pad; y -= pad; w += 2 * pad; h += 2 * pad;
-    const side = Math.max(w, h);
-    x -= (side - w) / 2;
-    y -= (side - h) / 2;
-    svg.setAttribute('viewBox', `${x.toFixed(2)} ${y.toFixed(2)} ${side.toFixed(2)} ${side.toFixed(2)}`);
-    svg.removeAttribute('width');
-    svg.removeAttribute('height');
-    svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
-  }, { once: true });
+    catch (_) { return false; }
+    if (!svg) return false;
+    cropSvgRoot(svg);
+    return true;
+  };
+  const kick = () => {
+    if (tryCrop()) return;
+    requestAnimationFrame(() => {
+      if (tryCrop()) return;
+      setTimeout(tryCrop, 50);
+    });
+  };
+  obj.addEventListener('load', kick, { once: true });
+  return kick;
 }
 
 function setupLightbox() {
@@ -485,9 +503,10 @@ function openLightbox({ path, label }) {
     obj.type = 'image/svg+xml';
     obj.className = 'lightbox-vector';
     obj.setAttribute('aria-label', label || '');
-    attachSvgAutoCrop(obj);
-    obj.data = path;
     body.appendChild(obj);
+    const kick = attachSvgAutoCrop(obj);
+    obj.data = path;
+    kick();
   } else {
     const img = document.createElement('img');
     img.src = path;
