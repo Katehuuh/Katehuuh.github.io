@@ -1,4 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="400" height="400">
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-29.34 -15.66 398.32 398.32" preserveAspectRatio="xMidYMid meet">
   <defs>
     <!-- Gradient for the body fur -->
     <radialGradient id="bodyGradient" cx="50%" cy="40%" r="60%">
@@ -51,8 +52,7 @@
   <ellipse cx="200" cy="360" rx="110" ry="15" fill="url(#shadowGradient)"/>
   
   <!-- Tail (curled around to the right) -->
-  <path d="M 290 300 Q 340 290 350 250 Q 355 220 335 210 Q 320 205 315 220 Q 315 240 305 245 Q 290 250 285 280 Z" 
-        fill="url(#bodyGradient)" stroke="#C97529" stroke-width="1.5"/>
+  <path d="M 290 300 Q 340 290 350 250 Q 355 220 335 210 Q 320 205 315 220 Q 315 240 305 245 Q 290 250 285 280 Z" fill="url(#bodyGradient)" stroke="#C97529" stroke-width="1.5"/>
   
   <!-- Tail stripes -->
   <path d="M 340 235 Q 348 240 348 250" stroke="#C97529" stroke-width="2" fill="none" opacity="0.5"/>
@@ -141,8 +141,7 @@
   <path d="M 235 140 Q 250 138 260 145" stroke="#C97529" stroke-width="2.5" fill="none" stroke-linecap="round"/>
   
   <!-- Nose -->
-  <path d="M 192 200 Q 200 195 208 200 Q 205 212 200 213 Q 195 212 192 200 Z" 
-        fill="#FF6B8A" stroke="#C7506A" stroke-width="1"/>
+  <path d="M 192 200 Q 200 195 208 200 Q 205 212 200 213 Q 195 212 192 200 Z" fill="#FF6B8A" stroke="#C7506A" stroke-width="1"/>
   <!-- Nose highlight -->
   <ellipse cx="197" cy="202" rx="2" ry="1.5" fill="#FFB6C1" opacity="0.7"/>
   
@@ -176,26 +175,22 @@
   
   <!-- Small heart decoration above head (cuteness) -->
   <g transform="translate(200, 50)">
-    <path d="M 0 5 C -5 -5, -15 -5, -10 5 L 0 15 L 10 5 C 15 -5, 5 -5, 0 5 Z" 
-          fill="#FF6B8A" opacity="0.7"/>
+    <path d="M 0 5 C -5 -5, -15 -5, -10 5 L 0 15 L 10 5 C 15 -5, 5 -5, 0 5 Z" fill="#FF6B8A" opacity="0.7"/>
   </g>
   
   <!-- Sparkle decorations -->
   <g opacity="0.7">
     <!-- Sparkle 1 -->
     <g transform="translate(80, 80)">
-      <path d="M 0 -8 L 1.5 -1.5 L 8 0 L 1.5 1.5 L 0 8 L -1.5 1.5 L -8 0 L -1.5 -1.5 Z" 
-            fill="#FFD700"/>
+      <path d="M 0 -8 L 1.5 -1.5 L 8 0 L 1.5 1.5 L 0 8 L -1.5 1.5 L -8 0 L -1.5 -1.5 Z" fill="#FFD700"/>
     </g>
     <!-- Sparkle 2 -->
     <g transform="translate(320, 100)">
-      <path d="M 0 -6 L 1 -1 L 6 0 L 1 1 L 0 6 L -1 1 L -6 0 L -1 -1 Z" 
-            fill="#FFD700"/>
+      <path d="M 0 -6 L 1 -1 L 6 0 L 1 1 L 0 6 L -1 1 L -6 0 L -1 -1 Z" fill="#FFD700"/>
     </g>
     <!-- Sparkle 3 -->
     <g transform="translate(60, 280)">
-      <path d="M 0 -5 L 1 -1 L 5 0 L 1 1 L 0 5 L -1 1 L -5 0 L -1 -1 Z" 
-            fill="#FFD700"/>
+      <path d="M 0 -5 L 1 -1 L 5 0 L 1 1 L 0 5 L -1 1 L -5 0 L -1 -1 Z" fill="#FFD700"/>
     </g>
   </g>
 </svg>

@@ -1,8 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" 
-     xmlns:xlink="http://www.w3.org/1999/xlink"
-     width="800" height="600" viewBox="0 0 800 600"
-     aria-labelledby="title" role="img">
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="-68.14 -140.64 839.28 839.28" aria-labelledby="title" role="img" preserveAspectRatio="xMidYMid meet">
   <title id="title">Adorable Fluffy Kitten</title>
   <desc>A highly detailed, cute vector illustration of a sitting fluffy kitten with large expressive eyes, layered fluffy fur using multiple paths and ellipses, detailed inner ears, long whiskers, button nose, cute mouth, soft gradient shading, curled tail, playful paw, resting on a soft pink cushion beside a ball of pastel yarn. Created with reusable defs for gradients. (Candidate 4 implementation)</desc>
 
@@ -103,20 +100,14 @@
   <!-- Cushion base shadow -->
   <ellipse cx="400" cy="538" rx="295" ry="72" fill="#b87a94" opacity="0.18"/>
   <!-- Main cushion body - plump rounded form -->
-  <path id="cushionMain"
-        d="M105 482 Q 105 435 175 428 Q 280 415 400 420 Q 520 415 625 428 Q 695 435 695 482 Q 695 555 400 562 Q 105 555 105 482 Z"
-        fill="url(#cushionGrad)" stroke="#c47a9c" stroke-width="5" stroke-linejoin="round"/>
+  <path id="cushionMain" d="M105 482 Q 105 435 175 428 Q 280 415 400 420 Q 520 415 625 428 Q 695 435 695 482 Q 695 555 400 562 Q 105 555 105 482 Z" fill="url(#cushionGrad)" stroke="#c47a9c" stroke-width="5" stroke-linejoin="round"/>
   <!-- Cushion top highlight layer -->
-  <path d="M120 475 Q 200 432 400 425 Q 600 432 680 475"
-        fill="none" stroke="url(#cushionHighlight)" stroke-width="38" stroke-linecap="round" opacity="0.55"/>
+  <path d="M120 475 Q 200 432 400 425 Q 600 432 680 475" fill="none" stroke="url(#cushionHighlight)" stroke-width="38" stroke-linecap="round" opacity="0.55"/>
   <!-- Quilted texture overlay -->
-  <path d="M130 460 Q200 448 280 452 Q360 447 400 453 Q440 447 520 452 Q600 448 670 460"
-        fill="none" stroke="#c47a9c" stroke-width="2.2" opacity="0.28"/>
-  <path d="M145 495 Q220 482 300 487 Q380 482 400 488 Q420 482 500 487 Q580 482 655 495"
-        fill="none" stroke="#c47a9c" stroke-width="2" opacity="0.25"/>
+  <path d="M130 460 Q200 448 280 452 Q360 447 400 453 Q440 447 520 452 Q600 448 670 460" fill="none" stroke="#c47a9c" stroke-width="2.2" opacity="0.28"/>
+  <path d="M145 495 Q220 482 300 487 Q380 482 400 488 Q420 482 500 487 Q580 482 655 495" fill="none" stroke="#c47a9c" stroke-width="2" opacity="0.25"/>
   <!-- Subtle texture pattern fill hint -->
-  <path d="M105 482 Q 105 435 175 428 Q 280 415 400 420 Q 520 415 625 428 Q 695 435 695 482"
-        fill="url(#cushionTexture)" opacity="0.65"/>
+  <path d="M105 482 Q 105 435 175 428 Q 280 415 400 420 Q 520 415 625 428 Q 695 435 695 482" fill="url(#cushionTexture)" opacity="0.65"/>
 
   <!-- Playful yarn ball - positioned to the right on the cushion -->
   <g id="yarn" transform="translate(625 395)">
@@ -134,12 +125,9 @@
     <!-- Additional criss-cross wraps -->
     <path d="M-33 -5 Q 0 12 31 -3" fill="none" stroke="#e8b92e" stroke-width="3.5" stroke-linecap="round" opacity="0.35"/>
     <!-- Trailing loose yarn end with playful curls -->
-    <path d="M46 -4 Q 72 18 88 12 Q 102 28 96 55 Q 82 78 68 71"
-          fill="none" stroke="#d9a32e" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
-    <path d="M88 12 Q 95 32 82 48"
-          fill="none" stroke="#e8b92e" stroke-width="5" stroke-linecap="round" opacity="0.75"/>
-    <path d="M96 55 Q 88 65 75 62"
-          fill="none" stroke="#d9a32e" stroke-width="4" stroke-linecap="round" opacity="0.6"/>
+    <path d="M46 -4 Q 72 18 88 12 Q 102 28 96 55 Q 82 78 68 71" fill="none" stroke="#d9a32e" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M88 12 Q 95 32 82 48" fill="none" stroke="#e8b92e" stroke-width="5" stroke-linecap="round" opacity="0.75"/>
+    <path d="M96 55 Q 88 65 75 62" fill="none" stroke="#d9a32e" stroke-width="4" stroke-linecap="round" opacity="0.6"/>
   </g>
 
   <!-- Kitten shadow cast softly on the cushion -->
@@ -148,14 +136,11 @@
   <!-- ========== TAIL (curled, fluffy, drawn early for layering behind body) ========== -->
   <g id="tail">
     <!-- Deepest tail layer (darker base) -->
-    <path d="M 302 398 Q 248 355 195 378 Q 155 418 172 472 Q 198 518 248 513 Q 292 495 305 455"
-          fill="none" stroke="#d1a86b" stroke-width="54" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M 302 398 Q 248 355 195 378 Q 155 418 172 472 Q 198 518 248 513 Q 292 495 305 455" fill="none" stroke="#d1a86b" stroke-width="54" stroke-linecap="round" stroke-linejoin="round"/>
     <!-- Primary fluffy mid layer -->
-    <path d="M 302 398 Q 252 360 200 380 Q 162 416 178 468 Q 202 510 245 506 Q 285 490 298 458"
-          fill="none" stroke="#e6c68c" stroke-width="38" stroke-linecap="round" stroke-linejoin="round" opacity="0.92"/>
+    <path d="M 302 398 Q 252 360 200 380 Q 162 416 178 468 Q 202 510 245 506 Q 285 490 298 458" fill="none" stroke="#e6c68c" stroke-width="38" stroke-linecap="round" stroke-linejoin="round" opacity="0.92"/>
     <!-- Lighter top fur layer -->
-    <path d="M 302 398 Q 256 364 206 382 Q 170 415 182 460 Q 205 505 240 501 Q 278 487 292 462"
-          fill="none" stroke="#f2d9b5" stroke-width="26" stroke-linecap="round" stroke-linejoin="round" opacity="0.85"/>
+    <path d="M 302 398 Q 256 364 206 382 Q 170 415 182 460 Q 205 505 240 501 Q 278 487 292 462" fill="none" stroke="#f2d9b5" stroke-width="26" stroke-linecap="round" stroke-linejoin="round" opacity="0.85"/>
     <!-- Fluffy tuft ellipses along the tail for texture (layered bezier-inspired soft shapes) -->
     <ellipse cx="235" cy="385" rx="15" ry="9" fill="#faf4eb" opacity="0.65" transform="rotate(-48 235 385)"/>
     <ellipse cx="208" cy="402" rx="13" ry="8.5" fill="#f2d9b5" opacity="0.55" transform="rotate(-55 208 402)"/>
@@ -254,11 +239,9 @@
     <!-- Left ear -->
     <g id="leftEar">
       <!-- Outer ear -->
-      <path d="M 338 240 Q 305 158 352 188 Q 378 205 372 252 Z"
-            fill="url(#earOuter)" stroke="#c58f5f" stroke-width="3.5" stroke-linejoin="round"/>
+      <path d="M 338 240 Q 305 158 352 188 Q 378 205 372 252 Z" fill="url(#earOuter)" stroke="#c58f5f" stroke-width="3.5" stroke-linejoin="round"/>
       <!-- Inner ear pink -->
-      <path d="M 342 235 Q 318 180 350 198 Q 366 212 363 242 Z"
-            fill="url(#innerEarGrad)" stroke="#e87a8c" stroke-width="1.2" opacity="0.9"/>
+      <path d="M 342 235 Q 318 180 350 198 Q 366 212 363 242 Z" fill="url(#innerEarGrad)" stroke="#e87a8c" stroke-width="1.2" opacity="0.9"/>
       <!-- Detailed inner ear fur lines (delicate curved strokes) -->
       <path d="M 345 228 Q 333 202 348 210" fill="none" stroke="#c25a70" stroke-width="1.6" stroke-linecap="round" opacity="0.55"/>
       <path d="M 352 225 Q 340 198 355 205" fill="none" stroke="#c25a70" stroke-width="1.4" stroke-linecap="round" opacity="0.5"/>
@@ -271,11 +254,9 @@
     <!-- Right ear (mirrored geometry) -->
     <g id="rightEar">
       <!-- Outer ear -->
-      <path d="M 452 240 Q 485 158 438 188 Q 412 205 418 252 Z"
-            fill="url(#earOuter)" stroke="#c58f5f" stroke-width="3.5" stroke-linejoin="round"/>
+      <path d="M 452 240 Q 485 158 438 188 Q 412 205 418 252 Z" fill="url(#earOuter)" stroke="#c58f5f" stroke-width="3.5" stroke-linejoin="round"/>
       <!-- Inner ear pink -->
-      <path d="M 448 235 Q 472 180 440 198 Q 424 212 427 242 Z"
-            fill="url(#innerEarGrad)" stroke="#e87a8c" stroke-width="1.2" opacity="0.9"/>
+      <path d="M 448 235 Q 472 180 440 198 Q 424 212 427 242 Z" fill="url(#innerEarGrad)" stroke="#e87a8c" stroke-width="1.2" opacity="0.9"/>
       <!-- Detailed inner ear fur lines -->
       <path d="M 445 228 Q 457 202 442 210" fill="none" stroke="#c25a70" stroke-width="1.6" stroke-linecap="round" opacity="0.55"/>
       <path d="M 438 225 Q 450 198 435 205" fill="none" stroke="#c25a70" stroke-width="1.4" stroke-linecap="round" opacity="0.5"/>

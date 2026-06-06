@@ -1,36 +1,37 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="400" height="400">
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="45.34 22.84 372.32 372.32" preserveAspectRatio="xMidYMid meet">
   <!-- Definitions: Gradients & Filters -->
   <defs>
     <!-- Main Fur Gradient (Warm Grey/Tabby) -->
     <linearGradient id="furGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#E0D8D0;stop-opacity:1" />
-      <stop offset="50%" style="stop-color:#C8B8A8;stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#A89888;stop-opacity:1" />
+      <stop offset="0%" style="stop-color:#E0D8D0;stop-opacity:1"/>
+      <stop offset="50%" style="stop-color:#C8B8A8;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#A89888;stop-opacity:1"/>
     </linearGradient>
     
     <!-- Belly/Inner Ear Gradient (Lighter) -->
     <linearGradient id="bellyGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" style="stop-color:#FFF8F0;stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#F0E8E0;stop-opacity:1" />
+      <stop offset="0%" style="stop-color:#FFF8F0;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#F0E8E0;stop-opacity:1"/>
     </linearGradient>
 
     <!-- Nose Gradient -->
     <radialGradient id="noseGradient" cx="50%" cy="30%" r="60%">
-      <stop offset="0%" style="stop-color:#FFB6C1;stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#D87093;stop-opacity:1" />
+      <stop offset="0%" style="stop-color:#FFB6C1;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#D87093;stop-opacity:1"/>
     </radialGradient>
 
     <!-- Eye Gradient (Big Shiny Eyes) -->
     <radialGradient id="eyeGradient" cx="35%" cy="35%" r="65%">
-      <stop offset="0%" style="stop-color:#7FFFD4;stop-opacity:1" /> <!-- Aquamarine highlight -->
-      <stop offset="40%" style="stop-color:#008B8B;stop-opacity:1" /> <!-- Dark Teal -->
-      <stop offset="100%" style="stop-color:#004D4D;stop-opacity:1" />
+      <stop offset="0%" style="stop-color:#7FFFD4;stop-opacity:1"/> <!-- Aquamarine highlight -->
+      <stop offset="40%" style="stop-color:#008B8B;stop-opacity:1"/> <!-- Dark Teal -->
+      <stop offset="100%" style="stop-color:#004D4D;stop-opacity:1"/>
     </radialGradient>
     
     <!-- Pupil Gradient -->
     <radialGradient id="pupilGradient" cx="50%" cy="50%" r="50%">
-      <stop offset="0%" style="stop-color:#111;stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#000;stop-opacity:1" />
+      <stop offset="0%" style="stop-color:#111;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#000;stop-opacity:1"/>
     </radialGradient>
 
     <!-- Soft Shadow Filter -->
@@ -66,8 +67,7 @@
   <g filter="url(#dropShadow)">
     
     <!-- TAIL (Behind Body) -->
-    <path d="M310,220 Q340,200 360,150 Q370,120 365,90 Q360,70 340,60 Q320,55 290,80 Q280,100 290,140 Q300,180 310,220 Z" 
-          fill="url(#furGradient)" stroke="#908070" stroke-width="1.5" opacity="0.9"/>
+    <path d="M310,220 Q340,200 360,150 Q370,120 365,90 Q360,70 340,60 Q320,55 290,80 Q280,100 290,140 Q300,180 310,220 Z" fill="url(#furGradient)" stroke="#908070" stroke-width="1.5" opacity="0.9"/>
     <!-- Tail Tip -->
     <ellipse cx="355" cy="85" rx="18" ry="12" fill="url(#furGradient)" stroke="#908070" stroke-width="1"/>
     <!-- Tail Stripes -->
