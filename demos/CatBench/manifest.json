@@ -4,8 +4,8 @@
       "display_name": "Grok-Build-0.1",
       "python_source": "assets/Grok-Build-0.1.py",
       "svg": "assets/Grok-Build-0.1.svg",
-      "python_error": "ERROR rendering /home/runner/work/Katehuuh.github.io/Katehuuh.github.io/demos/CatBench/assets/Grok-Build-0.1.py: FileNotFoundError: [Errno 2] No such file or directory: 'best_of_n/kitten_10.png'",
-      "_first_seen": "2026-06-06T15:30:34+02:00"
+      "python_render": "assets/Grok-Build-0.1-python.jpg",
+      "_first_seen": "2026-06-06T14:00:22+00:00"
     },
     "composer-2.5": {
       "display_name": "Composer-2.5",
