@@ -426,10 +426,22 @@ function openLightbox({ path, label }) {
   const lb = document.getElementById('lightbox');
   const body = lb.querySelector('.lightbox-body');
   body.innerHTML = '';
-  const img = document.createElement('img');
-  img.src = path;
-  img.alt = label || '';
-  body.appendChild(img);
+  const maxSide = Math.min(window.innerWidth * 0.85, window.innerHeight * 0.85 - 48);
+  const isSvg = /\.svg$/i.test(path);
+  if (isSvg) {
+    const obj = document.createElement('object');
+    obj.data = path;
+    obj.type = 'image/svg+xml';
+    obj.width = maxSide;
+    obj.height = maxSide;
+    obj.setAttribute('aria-label', label || '');
+    body.appendChild(obj);
+  } else {
+    const img = document.createElement('img');
+    img.src = path;
+    img.alt = label || '';
+    body.appendChild(img);
+  }
   lb.hidden = false;
 }
 
