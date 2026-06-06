@@ -189,8 +189,13 @@ main > footer .dot { color: var(--text-3); margin: 0 .35rem; }
   display: flex; align-items: center; justify-content: center;
   max-width: 100%; max-height: calc(90vh - 2.4rem);
 }
-.lightbox-body img, .lightbox-body svg, .lightbox-body object {
+.lightbox-body img, .lightbox-body svg {
   max-width: 100%; max-height: calc(90vh - 2.4rem); display: block;
+}
+.lightbox-body object.lightbox-vector {
+  display: block;
+  width: min(85vw, calc(90vh - 2.4rem));
+  height: min(85vw, calc(90vh - 2.4rem));
 }
 .lightbox-close {
   position: absolute; top: 8px; right: 12px;
@@ -466,6 +471,7 @@ function setupLightbox() {
   const close = lb.querySelector('.lightbox-close');
   close.addEventListener('click', () => closeLightbox());
   lb.addEventListener('click', e => { if (e.target === lb) closeLightbox(); });
+  lb.querySelector('.lightbox-content').addEventListener('click', e => e.stopPropagation());
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && !lb.hidden) closeLightbox(); });
 }
 
@@ -473,10 +479,21 @@ function openLightbox({ path, label }) {
   const lb = document.getElementById('lightbox');
   const body = lb.querySelector('.lightbox-body');
   body.innerHTML = '';
-  const img = document.createElement('img');
-  img.src = path;
-  img.alt = label || '';
-  body.appendChild(img);
+  const isVector = /\.svg$/i.test(path);
+  if (isVector) {
+    const obj = document.createElement('object');
+    obj.type = 'image/svg+xml';
+    obj.className = 'lightbox-vector';
+    obj.setAttribute('aria-label', label || '');
+    attachSvgAutoCrop(obj);
+    obj.data = path;
+    body.appendChild(obj);
+  } else {
+    const img = document.createElement('img');
+    img.src = path;
+    img.alt = label || '';
+    body.appendChild(img);
+  }
   lb.hidden = false;
 }
 
