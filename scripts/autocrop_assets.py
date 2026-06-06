@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Auto-crop CatBench raster assets to a tight 1:1 square around the subject.
+"""Auto-crop CatBench raster assets to a 1:1 square around the subject.
 
-Flood-fills background from image edges (corner colour + tolerance), also
-treats pale low-saturation pixels as background. Crops to the subject bbox
-with no padding, then extracts the smallest centred square. No margin fill.
+Flood-fills only edge-connected background (corner colour + tolerance). Keeps
+soft fur, highlights, and drop shadows inside the frame. Small padding avoids
+hard clips through anti-aliased edges.
 """
 from __future__ import annotations
 
@@ -18,9 +18,8 @@ ROOT = Path(__file__).resolve().parent.parent
 ASSETS = ROOT / "demos" / "CatBench" / "assets"
 
 CROP_EXTS = {".png", ".jpg", ".jpeg"}
-BG_TOLERANCE = 20       # per-channel diff from edge bg colour
-PALE_LUMA = 230         # 0-255, pixels brighter than this...
-PALE_SAT = 0.14         # ...and less saturated than this count as background
+BG_TOLERANCE = 18
+PADDING_PCT = 0.02
 
 
 def detect_bg(rgb: np.ndarray) -> tuple[int, int, int]:
@@ -60,22 +59,22 @@ def flood_background(rgb: np.ndarray, bg: tuple[int, int, int], tol: int) -> np.
     return visited
 
 
-def pale_background(rgb: np.ndarray) -> np.ndarray:
-    px = rgb.astype(np.float32) / 255.0
-    maxc = px.max(axis=2)
-    minc = px.min(axis=2)
-    sat = np.divide(maxc - minc, maxc, out=np.zeros_like(maxc), where=maxc > 0)
-    luma = 0.299 * px[:, :, 0] + 0.587 * px[:, :, 1] + 0.114 * px[:, :, 2]
-    return (luma >= PALE_LUMA / 255.0) & (sat <= PALE_SAT)
-
-
 def subject_bbox(rgb: np.ndarray) -> tuple[int, int, int, int] | None:
     bg = detect_bg(rgb)
-    is_bg = flood_background(rgb, bg, BG_TOLERANCE) | pale_background(rgb)
+    is_bg = flood_background(rgb, bg, BG_TOLERANCE)
     ys, xs = np.where(~is_bg)
     if ys.size == 0:
         return None
-    return int(xs.min()), int(ys.min()), int(xs.max()) + 1, int(ys.max()) + 1
+    x0, y0, x1, y1 = int(xs.min()), int(ys.min()), int(xs.max()) + 1, int(ys.max()) + 1
+    bw, bh = x1 - x0, y1 - y0
+    px, py = int(bw * PADDING_PCT), int(bh * PADDING_PCT)
+    h, w, _ = rgb.shape
+    return (
+        max(0, x0 - px),
+        max(0, y0 - py),
+        min(w, x1 + px),
+        min(h, y1 + py),
+    )
 
 
 def square_crop(img: Image.Image, bbox: tuple[int, int, int, int]) -> Image.Image:
@@ -104,9 +103,7 @@ def square_crop(img: Image.Image, bbox: tuple[int, int, int, int]) -> Image.Imag
         bottom = ih
 
     side = min(right - left, bottom - top)
-    right = left + side
-    bottom = top + side
-    return img.crop((left, top, right, bottom))
+    return img.crop((left, top, left + side, top + side))
 
 
 def autocrop(img: Image.Image) -> Image.Image:
@@ -114,8 +111,7 @@ def autocrop(img: Image.Image) -> Image.Image:
     bbox = subject_bbox(rgb)
     if not bbox:
         return img
-    cropped = img.crop(bbox)
-    return square_crop(cropped, (0, 0, cropped.size[0], cropped.size[1]))
+    return square_crop(img, bbox)
 
 
 def process(path: Path) -> bool:
