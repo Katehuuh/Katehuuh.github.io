@@ -1,5 +1,11 @@
 {
   "models": {
+    "claude-fable-5": {
+      "display_name": "claude-fable-5",
+      "svg": "assets/claude-fable-5-svg.jpg",
+      "svg_source": "assets/claude-fable-5.svg",
+      "_first_seen": "2026-06-09T19:40:20+00:00"
+    },
     "grok-build-0.1": {
       "display_name": "Grok-Build-0.1",
       "python_render": "assets/Grok-Build-0.1-python.jpg",
