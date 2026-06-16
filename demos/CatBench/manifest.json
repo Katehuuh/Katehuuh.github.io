@@ -1,5 +1,13 @@
 {
   "models": {
+    "glm-5.2": {
+      "display_name": "glm-5.2",
+      "python_render": "assets/glm-5.2-python.jpg",
+      "svg": "assets/glm-5.2-svg.jpg",
+      "python_source": "assets/glm-5.2.py",
+      "svg_source": "assets/glm-5.2.svg",
+      "_first_seen": "2026-06-16T21:45:45+00:00"
+    },
     "claude-fable-5": {
       "display_name": "claude-fable-5",
       "python_render": "assets/claude-fable-5-python.jpg",
