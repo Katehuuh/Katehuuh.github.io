@@ -1,0 +1,182 @@
+<svg viewBox="0 0 800 800" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="bgGrad" cx="50%" cy="50%" r="75%">
+      <stop offset="0%" stop-color="#e0f7fa" />
+      <stop offset="100%" stop-color="#80deea" />
+    </radialGradient>
+    
+    <linearGradient id="furGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffcc80" />
+      <stop offset="100%" stop-color="#ffb74d" />
+    </linearGradient>
+
+    <linearGradient id="creamGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#fff8e1" />
+      <stop offset="100%" stop-color="#ffe0b2" />
+    </linearGradient>
+
+    <linearGradient id="eyeGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#80cbc4" />
+      <stop offset="50%" stop-color="#4db6ac" />
+      <stop offset="100%" stop-color="#004d40" />
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="800" height="800" fill="url(#bgGrad)" />
+
+  <!-- Background Decorations -->
+  <g id="decorations">
+    <path d="M 130,200 C 130,170 80,170 80,200 C 80,240 140,280 140,280 C 140,280 200,240 200,200 C 200,170 150,170 130,200 Z" fill="#ff8a80" opacity="0.6" />
+    <path d="M 660,140 C 660,125 630,125 630,140 C 630,165 670,190 670,190 C 670,190 710,165 710,140 C 710,125 680,125 660,140 Z" fill="#ff8a80" opacity="0.4" />
+    <path d="M 180,450 L 190,420 L 200,450 L 230,460 L 200,470 L 190,500 L 180,470 L 150,460 Z" fill="#fff9c4" opacity="0.8" />
+    <path d="M 640,320 L 645,300 L 650,320 L 670,330 L 650,340 L 645,360 L 640,340 L 620,330 Z" fill="#fff9c4" opacity="0.8" />
+  </g>
+
+  <!-- Kitten Drop Shadow -->
+  <ellipse cx="400" cy="675" rx="220" ry="35" fill="#000" opacity="0.08" />
+
+  <!-- Kitten Tail -->
+  <g id="kitten-tail">
+    <path d="M 530,630 C 630,620 680,520 660,440 C 650,400 620,380 590,390 C 580,395 580,410 590,415 C 610,425 620,480 580,540 C 550,580 480,590 480,590 Z" fill="url(#furGrad)" />
+    <path d="M 590,390 C 580,395 580,410 590,415 C 610,425 620,480 580,540 C 570,550 560,560 550,565 C 560,510 550,450 590,410 C 585,400 580,395 590,390 Z" fill="url(#creamGrad)" />
+    <!-- Tail Stripes -->
+    <path d="M 610,590 Q 630,580 635,560" fill="none" stroke="#ff9959" stroke-width="10" stroke-linecap="round" opacity="0.6" />
+    <path d="M 640,540 Q 660,530 660,505" fill="none" stroke="#ff9959" stroke-width="10" stroke-linecap="round" opacity="0.6" />
+    <path d="M 650,480 Q 665,470 655,445" fill="none" stroke="#ff9959" stroke-width="10" stroke-linecap="round" opacity="0.6" />
+    <path d="M 625,415 Q 615,405 605,410" fill="none" stroke="#ff9959" stroke-width="10" stroke-linecap="round" opacity="0.6" />
+  </g>
+
+  <!-- Kitten Body -->
+  <g id="kitten-body">
+    <path d="M 260,640 C 260,460 320,420 400,420 C 480,420 540,460 540,640 C 535,665 490,670 470,655 C 450,675 350,675 330,655 C 310,670 265,665 260,640 Z" fill="url(#furGrad)" />
+    
+    <!-- Belly Patch -->
+    <path d="M 330,470 C 310,560 320,630 350,660 C 380,680 420,680 450,660 C 480,630 490,560 470,470 C 440,450 360,450 330,470 Z" fill="url(#creamGrad)" />
+
+    <!-- Body & Haunch Stripes -->
+    <path d="M 240,560 Q 270,580 250,600" fill="none" stroke="#ff9959" stroke-width="10" stroke-linecap="round" opacity="0.6" />
+    <path d="M 230,590 Q 270,610 260,630" fill="none" stroke="#ff9959" stroke-width="10" stroke-linecap="round" opacity="0.6" />
+    <path d="M 560,560 Q 530,580 550,600" fill="none" stroke="#ff9959" stroke-width="10" stroke-linecap="round" opacity="0.6" />
+    <path d="M 570,590 Q 530,610 540,630" fill="none" stroke="#ff9959" stroke-width="10" stroke-linecap="round" opacity="0.6" />
+    <path d="M 270,490 Q 300,510 280,530" fill="none" stroke="#ff9959" stroke-width="10" stroke-linecap="round" opacity="0.6" />
+    <path d="M 265,530 Q 295,550 275,570" fill="none" stroke="#ff9959" stroke-width="10" stroke-linecap="round" opacity="0.6" />
+    <path d="M 530,490 Q 500,510 520,530" fill="none" stroke="#ff9959" stroke-width="10" stroke-linecap="round" opacity="0.6" />
+    <path d="M 535,530 Q 505,550 525,570" fill="none" stroke="#ff9959" stroke-width="10" stroke-linecap="round" opacity="0.6" />
+  </g>
+
+  <!-- Front Paws -->
+  <g id="kitten-paws">
+    <ellipse cx="340" cy="645" rx="35" ry="25" fill="url(#creamGrad)" />
+    <ellipse cx="460" cy="645" rx="35" ry="25" fill="url(#creamGrad)" />
+    <!-- Toe Lines -->
+    <path d="M 325,640 L 325,650 M 340,640 L 340,650 M 355,640 L 355,650" fill="none" stroke="#d7ccc8" stroke-width="3" stroke-linecap="round" />
+    <path d="M 445,640 L 445,650 M 460,640 L 460,650 M 475,640 L 475,650" fill="none" stroke="#d7ccc8" stroke-width="3" stroke-linecap="round" />
+  </g>
+
+  <!-- Collar & Bell -->
+  <g id="kitten-collar">
+    <path d="M 285,460 Q 400,520 515,460" fill="none" stroke="#4fc3f7" stroke-width="22" stroke-linecap="round" />
+    <path d="M 285,460 Q 400,520 515,460" fill="none" stroke="#29b6f6" stroke-width="4" stroke-linecap="round" stroke-dasharray="4 8" />
+    <circle cx="400" cy="475" r="5" fill="none" stroke="#ff8f00" stroke-width="3" />
+    <line x1="400" y1="485" x2="400" y2="478" stroke="#ff8f00" stroke-width="3" />
+    <circle cx="400" cy="495" r="20" fill="#ffd54f" />
+    <path d="M 380,495 A 20 20 0 0 0 420 495 Q 400 505 380 495 Z" fill="#ffb300" />
+    <circle cx="392" cy="487" r="4" fill="#fff9c4" opacity="0.8" />
+    <rect x="396" y="498" width="8" height="12" rx="3" fill="#ff8f00" />
+  </g>
+
+  <!-- Yarn Ball -->
+  <g id="yarn-ball">
+    <circle cx="560" cy="660" r="45" fill="#ef5350" />
+    <!-- Loose String to Paw -->
+    <path d="M 480,645 Q 500,665 520,660 Q 535,655 540,660" fill="none" stroke="#ef5350" stroke-width="4" stroke-linecap="round" />
+    <!-- Yarn Strings -->
+    <path d="M 520,640 Q 560,620 600,650" fill="none" stroke="#e53935" stroke-width="4" opacity="0.8" />
+    <path d="M 530,680 Q 570,700 590,670" fill="none" stroke="#e53935" stroke-width="4" opacity="0.8" />
+    <path d="M 540,630 Q 560,670 580,690" fill="none" stroke="#e53935" stroke-width="4" opacity="0.8" />
+    <path d="M 520,660 Q 570,640 590,680" fill="none" stroke="#e53935" stroke-width="4" opacity="0.8" />
+    <path d="M 530,615 Q 570,660 550,705" fill="none" stroke="#e53935" stroke-width="4" opacity="0.8" />
+    <path d="M 515,670 Q 575,635 595,685" fill="none" stroke="#e53935" stroke-width="4" opacity="0.8" />
+    <path d="M 525,650 Q 565,635 595,660" fill="none" stroke="#ffcdd2" stroke-width="2" opacity="0.8" />
+    <path d="M 535,670 Q 575,685 585,655" fill="none" stroke="#ffcdd2" stroke-width="2" opacity="0.8" />
+    <circle cx="550" cy="645" r="15" fill="#ff8a80" opacity="0.5" />
+  </g>
+
+  <!-- Kitten Head -->
+  <g id="kitten-head">
+    <!-- Ears (Outer) -->
+    <path d="M 280,260 L 230,110 L 360,210 Z" fill="url(#furGrad)" />
+    <path d="M 520,260 L 570,110 L 440,210 Z" fill="url(#furGrad)" />
+    <!-- Ears (Inner) -->
+    <path d="M 290,240 L 250,140 L 340,215 Z" fill="#ffab91" />
+    <path d="M 510,240 L 550,140 L 460,215 Z" fill="#ffab91" />
+    <!-- Ear Fluff -->
+    <path d="M 290,260 L 300,245 L 310,255 L 320,240 L 330,250 L 340,235" fill="none" stroke="#fff8e1" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M 460,235 L 470,250 L 480,240 L 490,255 L 500,245 L 510,260" fill="none" stroke="#fff8e1" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+
+    <!-- Head Base with Fluffy Cheeks -->
+    <path d="M 280,360 C 260,250 330,190 400,180 C 470,190 540,250 520,360 C 540,440 510,480 480,485 L 465,500 L 475,480 L 455,490 L 460,470 L 440,485 L 435,460 C 410,470 390,470 365,460 L 360,485 L 340,470 L 345,490 L 325,480 L 335,500 L 320,485 C 290,480 260,440 280,360 Z" fill="url(#furGrad)" />
+    
+    <!-- Cheek Tuft Details -->
+    <path d="M 345,480 L 335,470 M 360,485 L 350,475" fill="none" stroke="#ffb74d" stroke-width="2" opacity="0.6" />
+    <path d="M 455,480 L 465,470 M 440,485 L 450,475" fill="none" stroke="#ffb74d" stroke-width="2" opacity="0.6" />
+
+    <!-- Forehead Stripes (M Shape) -->
+    <path d="M 360,210 L 380,250 L 390,220 L 400,260 L 410,220 L 420,250 L 440,210 M 400,260 L 400,290" fill="none" stroke="#ff9959" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" opacity="0.7" />
+    <!-- Cheek Stripes -->
+    <path d="M 285,340 Q 255,350 245,370 M 290,360 Q 260,375 250,395" fill="none" stroke="#ff9959" stroke-width="8" stroke-linecap="round" opacity="0.7" />
+    <path d="M 515,340 Q 545,350 555,370 M 510,360 Q 540,375 550,395" fill="none" stroke="#ff9959" stroke-width="8" stroke-linecap="round" opacity="0.7" />
+  </g>
+
+  <!-- Kitten Face Details -->
+  <g id="kitten-face">
+    <!-- Muzzle Patch -->
+    <path d="M 340,360 C 320,400 340,440 380,450 C 390,455 410,455 420,450 C 460,440 480,400 460,360 C 440,345 360,345 340,360 Z" fill="url(#creamGrad)" />
+
+    <!-- Cheek Blush -->
+    <ellipse cx="300" cy="410" rx="25" ry="12" fill="#ff8a80" opacity="0.5" transform="rotate(-15 300 410)" />
+    <ellipse cx="500" cy="410" rx="25" ry="12" fill="#ff8a80" opacity="0.5" transform="rotate(15 500 410)" />
+
+    <!-- Eyes -->
+    <path d="M 290,330 C 290,300 320,295 320,295 C 320,295 350,300 350,330 C 350,370 320,375 320,375 C 320,375 290,370 290,330 Z" fill="url(#eyeGrad)" />
+    <path d="M 510,330 C 510,300 480,295 480,295 C 480,295 450,300 450,330 C 450,370 480,375 480,375 C 480,375 510,370 510,330 Z" fill="url(#eyeGrad)" />
+    
+    <!-- Eye Outlines -->
+    <path d="M 290,330 C 290,300 320,295 320,295 C 320,295 350,300 350,330 C 350,370 320,375 320,375 C 320,375 290,370 290,330 Z" fill="none" stroke="#3e2723" stroke-width="4" />
+    <path d="M 510,330 C 510,300 480,295 480,295 C 480,295 450,300 450,330 C 450,370 480,375 480,375 C 480,375 510,370 510,330 Z" fill="none" stroke="#3e2723" stroke-width="4" />
+
+    <!-- Pupils -->
+    <ellipse cx="320" cy="335" rx="14" ry="28" fill="#111" />
+    <ellipse cx="480" cy="335" rx="14" ry="28" fill="#111" />
+
+    <!-- Catchlights -->
+    <circle cx="313" cy="325" r="6" fill="#fff" />
+    <circle cx="328" cy="345" r="3" fill="#fff" />
+    <circle cx="473" cy="325" r="6" fill="#fff" />
+    <circle cx="488" cy="345" r="3" fill="#fff" />
+
+    <!-- Nose -->
+    <path d="M 385,385 C 385,375 415,375 415,385 C 415,395 400,405 400,405 C 400,405 385,395 385,385 Z" fill="#f48fb1" stroke="#e57373" stroke-width="1.5" />
+    <line x1="400" y1="405" x2="400" y2="405" />
+
+    <!-- Mouth -->
+    <path d="M 400,405 L 400,420" fill="none" stroke="#5d4037" stroke-width="4" stroke-linecap="round" />
+    <path d="M 400,420 Q 380,440 365,420" fill="none" stroke="#5d4037" stroke-width="4" stroke-linecap="round" />
+    <path d="M 400,420 Q 420,440 435,420" fill="none" stroke="#5d4037" stroke-width="4" stroke-linecap="round" />
+
+    <!-- Whiskers -->
+    <path d="M 335,385 Q 250,380 190,400" fill="none" stroke="#fff" stroke-width="3" opacity="0.8" stroke-linecap="round" />
+    <path d="M 340,400 Q 250,405 180,430" fill="none" stroke="#fff" stroke-width="3" opacity="0.8" stroke-linecap="round" />
+    <path d="M 335,415 Q 260,430 200,460" fill="none" stroke="#fff" stroke-width="3" opacity="0.8" stroke-linecap="round" />
+    <path d="M 465,385 Q 550,380 610,400" fill="none" stroke="#fff" stroke-width="3" opacity="0.8" stroke-linecap="round" />
+    <path d="M 460,400 Q 550,405 620,430" fill="none" stroke="#fff" stroke-width="3" opacity="0.8" stroke-linecap="round" />
+    <path d="M 465,415 Q 540,430 600,460" fill="none" stroke="#fff" stroke-width="3" opacity="0.8" stroke-linecap="round" />
+
+    <!-- Eyebrow Whiskers -->
+    <path d="M 305,285 L 275,235" fill="none" stroke="#fff" stroke-width="2" opacity="0.7" stroke-linecap="round" />
+    <path d="M 320,280 L 305,225" fill="none" stroke="#fff" stroke-width="2" opacity="0.7" stroke-linecap="round" />
+    <path d="M 495,285 L 525,235" fill="none" stroke="#fff" stroke-width="2" opacity="0.7" stroke-linecap="round" />
+    <path d="M 480,280 L 495,225" fill="none" stroke="#fff" stroke-width="2" opacity="0.7" stroke-linecap="round" />
+  </g>
+</svg>
