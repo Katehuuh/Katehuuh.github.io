@@ -2,21 +2,27 @@
   "models": {
     "laguna-m.1-225b-a32b": {
       "display_name": "Laguna-M.1 225B-A32B",
+      "python_render": "assets/Laguna-M.1_225B-A32B-python.jpg",
       "svg": "assets/Laguna-M.1_225B-A32B-svg.jpg",
+      "python_source": "assets/Laguna-M.1_225B-A32B.py",
       "svg_source": "assets/Laguna-M.1_225B-A32B.svg",
-      "_first_seen": "2026-06-27T23:56:03+00:00"
+      "_first_seen": "2026-06-27T23:56:13Z"
     },
     "laguna-xs.2-33b-a3b": {
       "display_name": "Laguna-XS.2 33B-A3B",
+      "python_render": "assets/Laguna-XS.2_33B-A3B-python.jpg",
       "svg": "assets/Laguna-XS.2_33B-A3B-svg.jpg",
+      "python_source": "assets/Laguna-XS.2_33B-A3B.py",
       "svg_source": "assets/Laguna-XS.2_33B-A3B.svg",
-      "_first_seen": "2026-06-27T23:56:03+00:00"
+      "_first_seen": "2026-06-27T23:56:13Z"
     },
     "north-mini-code-1.0-30b": {
       "display_name": "North-Mini-Code-1.0 30B",
+      "python_render": "assets/North-Mini-Code-1.0_30B-python.jpg",
       "svg": "assets/North-Mini-Code-1.0_30B-svg.jpg",
+      "python_source": "assets/North-Mini-Code-1.0_30B.py",
       "svg_source": "assets/North-Mini-Code-1.0_30B.svg",
-      "_first_seen": "2026-06-27T23:56:03+00:00"
+      "_first_seen": "2026-06-27T23:56:13Z"
     },
     "glm-5.2": {
       "display_name": "glm-5.2",
