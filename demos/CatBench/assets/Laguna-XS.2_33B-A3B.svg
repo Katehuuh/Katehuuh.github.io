@@ -1,0 +1,92 @@
+<svg width="300" height="400" viewBox="0 0 300 400" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="300" height="400" fill="#87CEEB"/>
+  
+  <!-- Ground -->
+  <rect x="0" y="300" width="300" height="100" fill="#90EE90"/>
+  
+  <!-- Shadow under kitten -->
+  <ellipse cx="150" cy="310" rx="40" ry="10" fill="rgba(0,0,0,0.2)"/>
+  
+  <!-- Body -->
+  <path d="M150 280 
+           C190 280 220 250 220 210 
+           C220 170 190 140 150 140 
+           C110 140 80 170 80 210 
+           C80 250 110 280 150 280 Z" 
+        fill="#FFB6C1"/>
+  
+  <!-- Head -->
+  <circle cx="150" cy="170" r="60" fill="#FFB6C1"/>
+  
+  <!-- Left Eye (white) -->
+  <circle cx="130" cy="160" r="12" fill="white"/>
+  <!-- Left Eye (pupil) -->
+  <circle cx="125" cy="155" r="5" fill="#4682B4"/>
+  <!-- Left Eye (highlight) -->
+  <circle cx="122" cy="152" r="1.5" fill="white"/>
+  
+  <!-- Right Eye (white) -->
+  <circle cx="170" cy="160" r="12" fill="white"/>
+  <!-- Right Eye (pupil) -->
+  <circle cx="165" cy="155" r="5" fill="#4682B4"/>
+  <!-- Right Eye (highlight) -->
+  <circle cx="162" cy="152" r="1.5" fill="white"/>
+  
+  <!-- Whiskers (left) -->
+  <line x1="105" y1="165" x2="125" y2="168" stroke="#333" stroke-width="1.5"/>
+  <line x1="105" y1="175" x2="125" y2="175" stroke="#333" stroke-width="1.5"/>
+  
+  <!-- Whiskers (right) -->
+  <line x1="195" y1="165" x2="215" y2="168" stroke="#333" stroke-width="1.5"/>
+  <line x1="195" y1="175" x2="215" y2="175" stroke="#333" stroke-width="1.5"/>
+  
+  <!-- Nose -->
+  <path d="M150 180 
+           C155 185 160 185 160 180 
+           C160 175 155 170 150 170 
+           C145 170 140 175 140 180 
+           C140 185 145 185 150 180 Z" 
+        fill="#FF69B4"/>
+  
+  <!-- Mouth -->
+  <path d="M145 190 C150 195 155 195 160 190" stroke="#333" stroke-width="2" fill="none"/>
+  
+  <!-- Left Ear -->
+  <path d="M120 110 
+           L140 160 
+           L160 110 
+           Z" fill="#FFB6C1"/>
+  <path d="M130 120 
+           L140 150 
+           L150 120 
+           Z" fill="#FF69B4"/>
+  
+  <!-- Right Ear -->
+  <path d="M180 110 
+           L160 160 
+           L140 110 
+           Z" fill="#FFB6C1"/>
+  <path d="M170 120 
+           L160 150 
+           L150 120 
+           Z" fill="#FF69B4"/>
+  
+  <!-- Tail -->
+  <path d="M100 230 
+           C80 250 70 280 80 310 
+           C90 340 120 350 140 330 
+           C130 310 110 280 100 260 
+           Z" fill="#FFB6C1"/>
+  
+  <!-- Front Paws -->
+  <ellipse cx="130" cy="275" rx="12" ry="8" fill="#FFB6C1"/>
+  <ellipse cx="170" cy="275" rx="12" ry="8" fill="#FFB6C1"/>
+  
+  <!-- Hind Legs -->
+  <rect x="130" y="280" width="15" height="25" rx="5" fill="#FFB6C1"/>
+  <rect x="155" y="280" width="15" height="25" rx="5" fill="#FFB6C1"/>
+  
+  <!-- Blinking effect (optional cute detail) -->
+  <path d="M125 160 L135 160 M165 160 L175 160" stroke="#4682B4" stroke-width="3" stroke-linecap="round"/>
+</svg>
