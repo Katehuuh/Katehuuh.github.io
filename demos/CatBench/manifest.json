@@ -1,12 +1,30 @@
 {
   "models": {
+    "laguna-m.1-225b-a32b": {
+      "display_name": "Laguna-M.1 225B-A32B",
+      "svg": "assets/Laguna-M.1_225B-A32B-svg.jpg",
+      "svg_source": "assets/Laguna-M.1_225B-A32B.svg",
+      "_first_seen": "2026-06-27T23:56:03+00:00"
+    },
+    "laguna-xs.2-33b-a3b": {
+      "display_name": "Laguna-XS.2 33B-A3B",
+      "svg": "assets/Laguna-XS.2_33B-A3B-svg.jpg",
+      "svg_source": "assets/Laguna-XS.2_33B-A3B.svg",
+      "_first_seen": "2026-06-27T23:56:03+00:00"
+    },
+    "north-mini-code-1.0-30b": {
+      "display_name": "North-Mini-Code-1.0 30B",
+      "svg": "assets/North-Mini-Code-1.0_30B-svg.jpg",
+      "svg_source": "assets/North-Mini-Code-1.0_30B.svg",
+      "_first_seen": "2026-06-27T23:56:03+00:00"
+    },
     "glm-5.2": {
       "display_name": "glm-5.2",
       "python_render": "assets/glm-5.2-python.jpg",
       "svg": "assets/glm-5.2-svg.jpg",
       "python_source": "assets/glm-5.2.py",
       "svg_source": "assets/glm-5.2.svg",
-      "_first_seen": "2026-06-16T21:45:45+00:00"
+      "_first_seen": "2026-06-16T21:45:56Z"
     },
     "claude-fable-5": {
       "display_name": "claude-fable-5",
