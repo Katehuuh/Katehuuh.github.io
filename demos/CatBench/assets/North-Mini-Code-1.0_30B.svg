@@ -1,0 +1,57 @@
+<svg width="300" height="300" viewBox="0 0 300 300"
+     xmlns="http://www.w3.org/2000/svg"
+     role="img" aria-labelledby="title desc">
+  <title id="title">Cute Kitten</title>
+  <desc id="desc">A round‑headed kitten with large, expressive eyes, pointed ears, and a fluffy tail.</desc>
+
+  <!-- Background (optional – can be removed) -->
+  <rect x="0" y="0" width="300" height="300" fill="#fef5e7"/>
+
+  <!-- Body -->
+  <ellipse cx="150" cy="200" rx="80" ry="60" fill="#ff9999"/>
+
+  <!-- Head -->
+  <circle cx="150" cy="150" r="70" fill="#ffcc99"/>
+
+  <!-- Right ear -->
+  <path d="M 150 120 L 130 80 L 170 80 Z" fill="#ffb366"/>
+
+  <!-- Left ear -->
+  <path d="M 150 120 L 170 80 L 130 80 Z" fill="#ffb366"/>
+
+  <!-- Eyes -->
+  <!-- Right eye -->
+  <circle cx="170" cy="140" r="12" fill="#2d3436"/>
+  <circle cx="170" cy="140" r="4" fill="#fff"/>
+  <!-- Left eye -->
+  <circle cx="130" cy="140" r="12" fill="#2d3436"/>
+  <circle cx="130" cy="140" r="4" fill="#fff"/>
+
+  <!-- Whiskers -->
+  <g stroke="#2d3436" stroke-width="1.5" fill="none">
+    <!-- Right side -->
+    <path d="M 190 140 Q 200 130, 210 140"/>
+    <path d="M 190 145 Q 200 140, 210 145"/>
+    <path d="M 190 150 Q 200 145, 210 150"/>
+    <!-- Left side -->
+    <path d="M 110 140 Q 100 130, 90 140"/>
+    <path d="M 110 145 Q 100 140, 90 145"/>
+    <path d="M 110 150 Q 100 145, 90 150"/>
+  </g>
+
+  <!-- Nose -->
+  <ellipse cx="150" cy="165" rx="6" ry="4" fill="#ff9999"/>
+
+  <!-- Mouth -->
+  <path d="M 140 170 Q 150 180, 160 170" stroke="#2d3436" stroke-width="2" fill="none" stroke-linecap="round"/>
+
+  <!-- Right front leg -->
+  <ellipse cx="200" cy="240" rx="15" ry="30" fill="#ff9999"/>
+
+  <!-- Left front leg -->
+  <ellipse cx="100" cy="240" rx="15" ry="30" fill="#ff9999"/>
+
+  <!-- Tail -->
+  <ellipse cx="80" cy="180" rx="20" ry="12" fill="#ff9999" transform="rotate(-30 80 180)"/>
+
+</svg>
