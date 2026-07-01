@@ -2,9 +2,11 @@
   "models": {
     "claude-sonnet-5": {
       "display_name": "claude-sonnet-5",
+      "python_render": "assets/claude-sonnet-5-python.jpg",
       "svg": "assets/claude-sonnet-5-svg.jpg",
+      "python_source": "assets/claude-sonnet-5.py",
       "svg_source": "assets/claude-sonnet-5.svg",
-      "_first_seen": "2026-07-01T02:46:06+00:00"
+      "_first_seen": "2026-07-01T02:46:17Z"
     },
     "laguna-m.1-225b-a32b": {
       "display_name": "Laguna-M.1 225B-A32B",
