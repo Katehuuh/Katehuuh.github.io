@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Gargantua</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #000000; display: flex; align-items: center; justify-content: center; min-height: 100vh; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
+    #__bundler_loading { position: fixed; bottom: 20px; right: 20px; font: 13px/1.4 -apple-system, BlinkMacSystemFont, sans-serif; color: #666; background: #fff; padding: 8px 14px; border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,0.12); z-index: 10000; }
+    #__bundler_thumbnail { position: fixed; inset: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: #000000; z-index: 9999; }
+    #__bundler_thumbnail svg { width: 100%; height: 100%; object-fit: contain; }
+    #__bundler_placeholder { color: #999; font-size: 14px; }
+  </style>
+  <noscript>
+    <style>#__bundler_loading { display: none; }</style>
+    <div style="position:fixed;bottom:12px;left:12px;font:13px/1.4 -apple-system,BlinkMacSystemFont,sans-serif;color:#999;background:rgba(255,255,255,0.9);padding:6px 12px;border-radius:6px;box-shadow:0 1px 4px rgba(0,0,0,0.08);z-index:10000;">
+      This page requires JavaScript to display.
+    </div>
+  </noscript>
+</head>
+<body>
+  <div id="__bundler_thumbnail">
+  <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <radialGradient id="g" cx="50%" cy="50%" r="50%">
+        <stop offset="0%" stop-color="#000000"></stop>
+        <stop offset="58%" stop-color="#000000"></stop>
+        <stop offset="63%" stop-color="#ff9a3c"></stop>
+        <stop offset="68%" stop-color="#ffdcae"></stop>
+        <stop offset="74%" stop-color="#3a1408"></stop>
+        <stop offset="100%" stop-color="#000000"></stop>
+      </radialGradient>
+    </defs>
+    <rect width="100" height="100" fill="#000000"></rect>
+    <circle cx="50" cy="50" r="38" fill="url(#g)"></circle>
+    <ellipse cx="50" cy="50" rx="34" ry="9" fill="none" stroke="#ffb066" stroke-width="2.2" opacity="0.85"></ellipse>
+  </svg>
+</div>
+  <div id="__bundler_loading">Unpacking...</div>
+
+  <script>
+    
+document.addEventListener('DOMContentLoaded', async function() {
+  const loading = document.getElementById('__bundler_loading');
+  function setStatus(msg) { if (loading) loading.textContent = msg; }
+
+  // Error sink persists across replaceWith since it's on window, not the DOM.
+  window.addEventListener('error', function(e) {
+    var p = document.body || document.documentElement;
+    var d = document.getElementById('__bundler_err') || p.appendChild(document.createElement('div'));
+    d.id = '__bundler_err';
+    d.style.cssText = 'position:fixed;bottom:12px;left:12px;right:12px;font:12px/1.4 ui-monospace,monospace;background:#2a1215;color:#ff8a80;padding:10px 14px;border-radius:8px;border:1px solid #5c2b2e;z-index:99999;white-space:pre-wrap;max-height:40vh;overflow:auto';
+    d.textContent = (d.textContent ? d.textContent + String.fromCharCode(10) : '') +
+      '[bundle] ' + (e.message || e.type) +
+      (e.filename ? ' (' + e.filename.slice(0, 60) + ':' + e.lineno + ')' : '');
+  }, true);
+
+  try {
+    const manifestEl = document.querySelector('script[type="__bundler/manifest"]');
+    const templateEl = document.querySelector('script[type="__bundler/template"]');
+    if (!manifestEl || !templateEl) {
+      setStatus('Error: missing bundle data');
+      console.error('[bundler] Missing script tags — manifestEl:', !!manifestEl, 'templateEl:', !!templateEl);
+      return;
+    }
+
+    const manifest = JSON.parse(manifestEl.textContent);
+    let template = JSON.parse(templateEl.textContent);
+
+    const uuids = Object.keys(manifest);
+    setStatus('Unpacking ' + uuids.length + ' assets...');
+
+    const blobUrls = {};
+    await Promise.all(uuids.map(async (uuid) => {
+      const entry = manifest[uuid];
+      try {
+        const binaryStr = atob(entry.data);
+        const bytes = new Uint8Array(binaryStr.length);
+        for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
+
+        let finalBytes = bytes;
+        if (entry.compressed) {
+          if (typeof DecompressionStream !== 'undefined') {
+            const ds = new DecompressionStream('gzip');
+            const writer = ds.writable.getWriter();
+            const reader = ds.readable.getReader();
+            writer.write(bytes);
+            writer.close();
+            const chunks = [];
+            let totalLen = 0;
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              chunks.push(value);
+              totalLen += value.length;
+            }
+            finalBytes = new Uint8Array(totalLen);
+            let offset = 0;
+            for (const chunk of chunks) { finalBytes.set(chunk, offset); offset += chunk.length; }
+          } else {
+            console.warn('DecompressionStream not available, asset ' + uuid + ' may not render');
+          }
+        }
+
+        blobUrls[uuid] = URL.createObjectURL(new Blob([finalBytes], { type: entry.mime }));
+      } catch (err) {
+        console.error('Failed to decode asset ' + uuid + ':', err);
+        blobUrls[uuid] = URL.createObjectURL(new Blob([], { type: entry.mime }));
+      }
+    }));
+
+    const extResEl = document.querySelector('script[type="__bundler/ext_resources"]');
+    const extResources = extResEl ? JSON.parse(extResEl.textContent) : [];
+    const resourceMap = {};
+    for (const entry of extResources) {
+      if (blobUrls[entry.uuid]) resourceMap[entry.id] = blobUrls[entry.uuid];
+    }
+
+    setStatus('Rendering...');
+    for (const uuid of uuids) template = template.split(uuid).join(blobUrls[uuid]);
+
+    // Strip integrity + crossorigin — blob URLs from a file:// document inherit
+    // a null origin, so crossorigin forces a CORS fetch that SRI then rejects.
+    // The manifest bytes are ours; SRI protects against CDN compromise, not this.
+    template = template.replace(/\s+integrity="[^"]*"/gi, '').replace(/\s+crossorigin="[^"]*"/gi, '');
+
+    const resourceScript = '<script>window.__resources = ' +
+      JSON.stringify(resourceMap).split('</' + 'script>').join('<\\/' + 'script>') +
+      ';</' + 'script>';
+    // Inject after <head> so the DOCTYPE stays first; prepending the script
+    // would push the parser into quirks mode. DOMParser always emits a <head>
+    // (synthesizing one if the source HTML omitted it) but may carry
+    // attributes through, so match the full opening tag. slice() rather than
+    // replace() keeps us clear of $-pattern substitution in resourceScript.
+    const headOpen = template.match(/<head[^>]*>/i);
+    if (headOpen) {
+      const i = headOpen.index + headOpen[0].length;
+      template = template.slice(0, i) + resourceScript + template.slice(i);
+    }
+
+    // Parse the template and swap the root element. Scripts inserted via
+    // DOMParser/replaceWith are inert per spec — re-create each with
+    // createElement so they execute, awaiting onload for src scripts to
+    // preserve ordering (React before ReactDOM before Babel before text/babel).
+    const doc = new DOMParser().parseFromString(template, 'text/html');
+    document.documentElement.replaceWith(doc.documentElement);
+    const dead = Array.from(document.scripts);
+    for (const old of dead) {
+      const s = document.createElement('script');
+      for (const a of old.attributes) s.setAttribute(a.name, a.value);
+      s.textContent = old.textContent;
+      // text/babel scripts with a src: fetch and inline. transformScriptTags
+      // does XHR against the src, but blob:null/ from a file:// origin is
+      // silently dropped. Inlining makes it a plain inline babel script,
+      // which transformScriptTags handles unconditionally.
+      if ((s.type === 'text/babel' || s.type === 'text/jsx') && s.src) {
+        const r = await fetch(s.src);
+        s.textContent = await r.text();
+        s.removeAttribute('src');
+      }
+      const p = s.src ? new Promise(function(r) { s.onload = s.onerror = r; }) : null;
+      old.replaceWith(s);
+      if (p) await p;
+    }
+    // Babel standalone auto-transforms type=text/babel on DOMContentLoaded,
+    // which fired before we swapped the document. Trigger manually if present.
+    if (window.Babel && typeof window.Babel.transformScriptTags === 'function') {
+      window.Babel.transformScriptTags();
+    }
+  } catch (err) {
+    setStatus('Error unpacking: ' + err.message);
+    console.error('Bundle unpack error:', err);
+  }
+});
+
+  </script>
+
+  <script type="__bundler/manifest">
+{}
+  </script>
+
+  <script type="__bundler/ext_resources">
+[]
+  </script>
+
+  <script type="__bundler/template">
+"<!DOCTYPE html>\n<html lang=\"en\"><head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1, viewport-fit=cover\">\n<title>Gargantua<\u002Ftitle>\n\n<style>\n  html, body { margin:0; padding:0; height:100%; background:#000; overflow:hidden; }\n  canvas { position:fixed; inset:0; width:100%; height:100%; display:block; cursor:grab; touch-action:none; }\n  canvas.dragging { cursor:grabbing; }\n  #err { position:fixed; inset:0; display:none; align-items:center; justify-content:center;\n         color:#886; font:14px/1.5 system-ui, sans-serif; text-align:center; padding:2rem; }\n<\u002Fstyle>\n<\u002Fhead>\n<body>\n<div id=\"err\">This experience needs WebGL2.<br>Try a recent Chrome, Edge, Firefox or Safari.<\u002Fdiv>\n<script>\n(function(){\n\"use strict\";\n\n/* ============================================================\n   GARGANTUA — a cinematic, general-relativistic black hole\n   Fully self-contained: raw WebGL2, no external engine/CDN.\n   Photon paths are bent by -1.5 h² r̂/r⁴ (Schwarzschild null\n   geodesic approximation), so lensing, the photon ring, and\n   the \"over/under\" disk arcs emerge from the integration\n   itself rather than being faked. A hand-rolled 3-level\n   HDR bloom (bright-pass → downsample ×2 → upsample-combine\n   ×2) stands in for three.js's UnrealBloomPass.\n   ============================================================ */\n\nconst errEl = document.getElementById('err');\nfunction fail(){ errEl.style.display = 'flex'; }\n\nconst canvas = document.createElement('canvas');\ndocument.body.appendChild(canvas);\n\nconst gl = canvas.getContext('webgl2', { antialias:false, powerPreference:'high-performance', preserveDrawingBuffer:true, alpha:false });\nif(!gl){ fail(); throw new Error('WebGL2 unavailable'); }\n\nconst HDR = !!(gl.getExtension('EXT_color_buffer_float') || gl.getExtension('EXT_color_buffer_half_float'));\n\n/* ============================ shaders ============================ */\nconst VERT = `#version 300 es\nlayout(location=0) in vec2 position;\nout vec2 vUv;\nvoid main(){ vUv = position*0.5+0.5; gl_Position = vec4(position, 0.0, 1.0); }\n`;\n\nconst SCENE_FRAG = `#version 300 es\nprecision highp float;\nout vec4 fragColor;\n\nuniform vec2  uRes;\nuniform float uTime;\nuniform vec3  uCamPos;\nuniform vec3  uFwd, uRight, uUp;\nuniform float uFovTan;\nuniform float uSteps;      // quality knob (max march steps actually used)\n\n#define MAXS 320\n#define DISK_IN  2.35\n#define DISK_OUT 12.0\n#define PI 3.14159265\n#define TAU 6.2831853\n\n/* ---------- hash / noise ---------- */\nfloat hash12(vec2 p){ vec3 p3 = fract(vec3(p.xyx)*0.1031); p3 += dot(p3, p3.yzx+33.33); return fract((p3.x+p3.y)*p3.z); }\nfloat hash13(vec3 p3){ p3 = fract(p3*0.1031); p3 += dot(p3, p3.zyx+31.32); return fract((p3.x+p3.y)*p3.z); }\n\n/* value noise, periodic in x (for seamless azimuthal disk noise) */\nfloat vnoiseP(vec2 p, float period){\n  vec2 i = floor(p), f = fract(p);\n  vec2 u = f*f*(3.0-2.0*f);\n  float a = hash12(vec2(mod(i.x,        period), i.y      ));\n  float b = hash12(vec2(mod(i.x+1.0,    period), i.y      ));\n  float c = hash12(vec2(mod(i.x,        period), i.y+1.0  ));\n  float d = hash12(vec2(mod(i.x+1.0,    period), i.y+1.0  ));\n  return mix(mix(a,b,u.x), mix(c,d,u.x), u.y);\n}\nfloat fbmP(vec2 p, float period){\n  float v = 0.0, a = 0.55;\n  for(int i=0;i<4;i++){\n    v += a*vnoiseP(p, period);\n    p = p*2.0 + vec2(0.0, 13.7);\n    period *= 2.0;\n    a *= 0.5;\n  }\n  return v;\n}\nfloat vnoise3(vec3 p){\n  vec3 i = floor(p), f = fract(p);\n  vec3 u = f*f*(3.0-2.0*f);\n  return mix(\n    mix(mix(hash13(i+vec3(0,0,0)), hash13(i+vec3(1,0,0)), u.x),\n        mix(hash13(i+vec3(0,1,0)), hash13(i+vec3(1,1,0)), u.x), u.y),\n    mix(mix(hash13(i+vec3(0,0,1)), hash13(i+vec3(1,0,1)), u.x),\n        mix(hash13(i+vec3(0,1,1)), hash13(i+vec3(1,1,1)), u.x), u.y), u.z);\n}\nfloat fbm3(vec3 p){\n  float v = 0.0, a = 0.5;\n  for(int i=0;i<4;i++){ v += a*vnoise3(p); p = p*2.03 + vec3(7.1); a *= 0.5; }\n  return v;\n}\n\n/* ---------- starfield + nebula sky ---------- */\nvec2 octWrap(vec2 v){ return (1.0-abs(v.yx)) * vec2(v.x>=0.0?1.0:-1.0, v.y>=0.0?1.0:-1.0); }\nvec2 dirToOct(vec3 n){\n  n /= (abs(n.x)+abs(n.y)+abs(n.z));\n  return (n.y >= 0.0) ? n.xz : octWrap(n.xz);\n}\nvec3 starLayer(vec2 uv, float scale, float t){\n  vec2 p  = uv*scale;\n  vec2 id = floor(p), f = fract(p);\n  float h  = hash12(id);\n  vec2  sp = vec2(hash12(id+3.17), hash12(id+7.79))*0.7 + 0.15;\n  float d2 = dot(f-sp, f-sp);\n  float b  = pow(h, 18.0);                              // few, bright\n  float tw = 0.72 + 0.28*sin(t*(1.0+h*2.5) + h*90.0);   // twinkle\n  vec3 tint = mix(vec3(0.62,0.74,1.0), vec3(1.0,0.86,0.62), hash12(id+11.7));\n  return tint * b * tw * ( exp(-d2*720.0)*2.6 + exp(-d2*52.0)*0.15*b );\n}\nvec3 background(vec3 rd, float t){\n  vec3 bandN = normalize(vec3(0.48, 0.72, 0.38));\n  float band = exp(-pow(dot(rd, bandN), 2.0)*6.5);\n\n  vec3 col = vec3(0.003, 0.004, 0.008);\n  float n1 = fbm3(rd*2.7 + vec3(9.2, 1.0, 4.4));\n  float n2 = fbm3(rd*5.6 + vec3(3.0, 7.0, 1.0));\n  float n3 = fbm3(rd*3.1 + vec3(21.0, 5.0, 13.0));\n  col += vec3(0.012,0.020,0.052) * pow(n1, 2.0) * (0.5 + 1.5*band);\n  col += vec3(0.032,0.013,0.050) * pow(n2, 3.2) * (0.3 + 1.7*band);\n  col += vec3(0.085,0.042,0.018) * pow(n3, 4.5) * band * 1.4;\n\n  vec2 ouv = dirToOct(rd);\n  col += ( starLayer(ouv, 120.0, t) + starLayer(ouv, 251.0, t) + starLayer(ouv, 87.0, t*0.7) )\n         * (0.50 + 0.70*band);\n  return col;\n}\n\n/* ---------- accretion disk ---------- */\nvec3 diskPal(float t){\n  vec3 c = mix(vec3(0.36,0.045,0.010), vec3(1.00,0.36,0.085), smoothstep(0.0, 0.45, t));\n  c = mix(c, vec3(1.00,0.66,0.30),  smoothstep(0.45, 1.00, t));\n  c = mix(c, vec3(1.02,0.94,0.83),  smoothstep(1.00, 1.90, t));\n  return c;\n}\n\nvec4 diskShade(vec3 p, vec3 rd, float t){\n  float r   = length(p.xz);\n  float phi = atan(p.z, p.x);\n  float wr  = 0.72 * inversesqrt(r*r*r);        // Keplerian Ω ∝ r^-3/2\n\n  /* streaky filaments, seamless in φ, differentially rotating */\n  float P1 = 26.0;\n  float u1 = (phi - wr*t) * (P1/TAU) + log(r)*3.2;\n  float n1 = fbmP(vec2(u1, r*2.55), P1);\n\n  float P2 = 9.0;\n  float u2 = (phi - wr*t*0.85) * (P2/TAU) - log(r)*1.4;\n  float n2 = vnoiseP(vec2(u2, r*0.62), P2);      // slow hot-spot clumps\n\n  float P3 = 64.0;\n  float u3 = (phi - wr*t*1.18) * (P3/TAU) + log(r)*5.5;\n  float n3 = fbmP(vec2(u3, r*6.5), P3);          // fine sparks / grit\n\n  float streak = clamp(0.42 + 0.82*n1 + 0.55*(n2-0.5), 0.0, 2.0);\n  float sparks = pow(max(n3-0.52, 0.0)*2.3, 3.0);\n\n  float inner = smoothstep(DISK_IN-0.10, DISK_IN+0.42, r);\n  float outer = 1.0 - smoothstep(DISK_OUT-5.5, DISK_OUT-0.5, r);\n  float body  = inner*outer;\n  float heat  = pow(DISK_IN/r, 2.0) + 0.05;\n\n  /* dense matter density (no beaming) → opacity */\n  float dens = body * heat * streak;\n\n  /* infalling wisps: DISK_IN → horizon, spiralling in and dying out */\n  float rr = clamp((r-1.0)/(DISK_IN-1.0), 0.0, 1.0);\n  float uf = (phi - t*1.35 - (1.0-rr)*7.0) * (12.0/TAU);\n  float nf = fbmP(vec2(uf, rr*4.2 + t*0.55), 12.0);\n  float infall = (1.0-inner) * smoothstep(1.04, 1.30, r) * pow(nf, 2.6) * pow(rr, 0.55) * 1.35;\n\n  float bright = dens*(1.0 + sparks*2.2) + infall;\n  bright *= 1.0 + 1.6*exp(-(r-DISK_IN)*1.1);     // inner-edge blaze\n\n  /* relativistic beaming: approaching side blazes, receding side dims */\n  vec3  od   = normalize(vec3(-p.z, 0.0, p.x));  // orbital direction (CCW)\n  float beta = 0.55 * inversesqrt(max(r, 1.4));\n  float dop  = 1.0 / (1.0 - beta*dot(od, -rd));\n  bright *= pow(dop, 2.6);\n\n  vec3 c = diskPal(min(bright, 2.1));\n  float s = clamp((dop-1.0)*1.5, -0.65, 1.0);    // blue/red shift tint\n  c *= mix(vec3(1.06,0.90,0.72), vec3(0.86,0.95,1.24), 0.5+0.5*s);\n\n  float alpha = clamp(dens*1.7 + infall*0.5, 0.0, 1.0) * 0.92;\n  /* soft knee keeps texture readable inside the hottest regions */\n  return vec4(c * (bright / (1.0 + bright*0.46)) * 1.35, alpha);\n}\n\n/* ---------- geodesic march ---------- */\nvec3 render(vec2 sc, vec2 frag){\n  vec3 rd  = normalize(uFwd + uFovTan*(sc.x*uRight + sc.y*uUp));\n  vec3 pos = uCamPos;\n  vec3 vel = rd;\n  vec3 hv  = cross(pos, vel);\n  float h2 = dot(hv, hv);\n\n  float jitter = hash12(frag + fract(uTime)*vec2(13.1, 7.7));\n  pos += vel * jitter * 0.15;\n\n  vec3  col = vec3(0.0);\n  float T   = 1.0;                 // transmittance\n  float minR = 1e4;\n  bool  captured = false;\n\n  for(int i=0; i<MAXS; i++){\n    if(float(i) >= uSteps) break;\n    float r2 = dot(pos,pos);\n    float r  = sqrt(r2);\n    minR = min(minR, r);\n    if(r < 1.0){ captured = true; break; }\n    if(r2 > 1400.0 && dot(pos, vel) > 0.0) break;\n\n    float dt = 0.045 + 0.26*smoothstep(1.2, 7.0, r) + 0.60*smoothstep(9.0, 24.0, r);\n\n    /* bend: Schwarzschild null-geodesic approximation */\n    vel += -1.5 * h2 * pos / (r2*r2*r) * dt;\n    vec3 npos = pos + vel*dt;\n\n    /* equatorial-plane crossing → disk */\n    if(pos.y * npos.y < 0.0 && T > 0.012){\n      float f  = pos.y / (pos.y - npos.y);\n      vec3  hp = mix(pos, npos, f);\n      float hr = length(hp.xz);\n      if(hr > 1.04 && hr < DISK_OUT){\n        vec4 em = diskShade(hp, normalize(vel), uTime);\n        col += T * em.rgb;\n        T   *= (1.0 - em.a);\n      }\n    }\n\n    /* faint warm haze cradling the inner disk */\n    float ha = exp(-abs(pos.y)*2.4) * exp(-max(r-DISK_IN, 0.0)*0.55);\n    col += T * vec3(1.0, 0.52, 0.22) * ha * 0.038 * dt;\n\n    pos = npos;\n    if(T < 0.012) break;\n  }\n\n  if(captured){\n    /* whisper of light hugging the shadow rim (photon sphere r=1.5) */\n    col += T * vec3(1.0, 0.82, 0.58) * exp(-pow((minR-1.5)/0.22, 2.0)) * 0.28;\n  } else if(T > 0.012){\n    col += T * background(normalize(vel), uTime);\n  }\n  return col;\n}\n\nvoid main(){\n  vec2 frag = gl_FragCoord.xy;\n  vec2 sc = (2.0*frag - uRes) / uRes.y;   // aspect-corrected\n  vec3 col = render(sc, frag);\n  fragColor = vec4(col, 1.0);\n}\n`;\n\nconst BRIGHT_FRAG = `#version 300 es\nprecision highp float;\nin vec2 vUv;\nout vec4 fragColor;\nuniform sampler2D tScene;\nuniform vec2 uTexel;\nuniform float uThreshold;\nuniform float uKnee;\nvoid main(){\n  vec2 o = uTexel*0.5;\n  vec3 c = texture(tScene, vUv+vec2(-o.x,-o.y)).rgb\n         + texture(tScene, vUv+vec2( o.x,-o.y)).rgb\n         + texture(tScene, vUv+vec2(-o.x, o.y)).rgb\n         + texture(tScene, vUv+vec2( o.x, o.y)).rgb;\n  c *= 0.25;\n  float b = max(c.r, max(c.g, c.b));\n  float knee = uThreshold*uKnee + 1e-5;\n  float soft = clamp(b - uThreshold + knee, 0.0, 2.0*knee);\n  soft = soft*soft/(4.0*knee+1e-5);\n  float contrib = max(soft, b - uThreshold) / max(b, 1e-4);\n  fragColor = vec4(c*contrib, 1.0);\n}\n`;\n\nconst DOWN_FRAG = `#version 300 es\nprecision highp float;\nin vec2 vUv;\nout vec4 fragColor;\nuniform sampler2D tSrc;\nuniform vec2 uTexel;\nvoid main(){\n  vec2 o = uTexel*0.5;\n  vec3 c = texture(tSrc, vUv+vec2(-o.x,-o.y)).rgb\n         + texture(tSrc, vUv+vec2( o.x,-o.y)).rgb\n         + texture(tSrc, vUv+vec2(-o.x, o.y)).rgb\n         + texture(tSrc, vUv+vec2( o.x, o.y)).rgb;\n  fragColor = vec4(c*0.25, 1.0);\n}\n`;\n\nconst COMBINE_FRAG = `#version 300 es\nprecision highp float;\nin vec2 vUv;\nout vec4 fragColor;\nuniform sampler2D tBase;\nuniform sampler2D tSmall;\nuniform float uMix;\nvoid main(){\n  fragColor = vec4(texture(tBase, vUv).rgb + texture(tSmall, vUv).rgb*uMix, 1.0);\n}\n`;\n\nconst FINAL_FRAG = `#version 300 es\nprecision highp float;\nin vec2 vUv;\nout vec4 fragColor;\nuniform sampler2D tScene;\nuniform sampler2D tBloom;\nuniform vec2  uRes;\nuniform float uTime;\nuniform float uExposure;\nuniform float uBloomStrength;\n\nvec3 aces(vec3 x){\n  const float a=2.51, b=0.03, c=2.43, d=0.59, e=0.14;\n  return clamp((x*(a*x+b))/(x*(c*x+d)+e), 0.0, 1.0);\n}\nfloat hash12(vec2 p){ vec3 p3 = fract(vec3(p.xyx)*0.1031); p3 += dot(p3, p3.yzx+33.33); return fract((p3.x+p3.y)*p3.z); }\n\nvec3 sampleAt(vec2 uv){\n  return texture(tScene, uv).rgb + texture(tBloom, uv).rgb*uBloomStrength;\n}\n\nvoid main(){\n  vec2 uv = vUv;\n  vec2 c  = uv - 0.5;\n  float r2 = dot(c,c);\n\n  /* subtle radial chromatic aberration, applied to the bloom-combined image */\n  float ca = 0.0038 * r2;\n  vec3 col;\n  col.r = sampleAt(uv + c*ca).r;\n  col.g = sampleAt(uv).g;\n  col.b = sampleAt(uv - c*ca).b;\n\n  col *= uExposure;\n  col = aces(col);\n\n  /* cool lift in the shadows — filmic space feel */\n  col += (1.0-col) * vec3(0.002, 0.004, 0.010);\n\n  /* vignette */\n  col *= 1.0 - 0.34*smoothstep(0.12, 0.62, r2);\n\n  /* fine grain + dither (kills banding) */\n  float g = hash12(gl_FragCoord.xy + fract(uTime)*vec2(191.0, 113.0)) - 0.5;\n  col += g * 0.025;\n\n  col = pow(max(col, 0.0), vec3(1.0/2.2));\n  fragColor = vec4(col, 1.0);\n}\n`;\n\n/* ============================ GL helpers ============================ */\nfunction compile(type, src){\n  const sh = gl.createShader(type);\n  gl.shaderSource(sh, src);\n  gl.compileShader(sh);\n  if(!gl.getShaderParameter(sh, gl.COMPILE_STATUS)){\n    console.error(gl.getShaderInfoLog(sh));\n    throw new Error('shader compile failed');\n  }\n  return sh;\n}\nfunction makeProgram(vsSrc, fsSrc){\n  const vs = compile(gl.VERTEX_SHADER, vsSrc);\n  const fs = compile(gl.FRAGMENT_SHADER, fsSrc);\n  const p = gl.createProgram();\n  gl.attachShader(p, vs); gl.attachShader(p, fs);\n  gl.linkProgram(p);\n  if(!gl.getProgramParameter(p, gl.LINK_STATUS)){\n    console.error(gl.getProgramInfoLog(p));\n    throw new Error('program link failed');\n  }\n  return p;\n}\nfunction getLocs(program, names){\n  const o = {};\n  for(const n of names) o[n] = gl.getUniformLocation(program, n);\n  return o;\n}\n\nlet progScene, progBright, progDown, progCombine, progFinal;\nlet locScene, locBright, locDown, locCombine, locFinal;\ntry {\n  progScene   = makeProgram(VERT, SCENE_FRAG);\n  progBright  = makeProgram(VERT, BRIGHT_FRAG);\n  progDown    = makeProgram(VERT, DOWN_FRAG);\n  progCombine = makeProgram(VERT, COMBINE_FRAG);\n  progFinal   = makeProgram(VERT, FINAL_FRAG);\n} catch(e){ fail(); throw e; }\n\nlocScene   = getLocs(progScene,   ['uRes','uTime','uCamPos','uFwd','uRight','uUp','uFovTan','uSteps']);\nlocBright  = getLocs(progBright,  ['tScene','uTexel','uThreshold','uKnee']);\nlocDown    = getLocs(progDown,    ['tSrc','uTexel']);\nlocCombine = getLocs(progCombine, ['tBase','tSmall','uMix']);\nlocFinal   = getLocs(progFinal,   ['tScene','tBloom','uRes','uTime','uExposure','uBloomStrength']);\n\n/* fullscreen triangle, shared by every pass */\nconst vao = gl.createVertexArray();\ngl.bindVertexArray(vao);\nconst vbo = gl.createBuffer();\ngl.bindBuffer(gl.ARRAY_BUFFER, vbo);\ngl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 3,-1, -1,3]), gl.STATIC_DRAW);\ngl.enableVertexAttribArray(0);\ngl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);\ngl.bindVertexArray(null);\n\n/* ============================ render targets ============================ */\nfunction makeTarget(w, h){\n  const tex = gl.createTexture();\n  gl.bindTexture(gl.TEXTURE_2D, tex);\n  if(HDR) gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, w, h, 0, gl.RGBA, gl.HALF_FLOAT, null);\n  else    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8,   w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);\n  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);\n  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);\n  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);\n  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);\n  const fbo = gl.createFramebuffer();\n  gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);\n  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);\n  gl.bindFramebuffer(gl.FRAMEBUFFER, null);\n  return { tex, fbo, w, h };\n}\nfunction freeTarget(t){ if(!t) return; gl.deleteTexture(t.tex); gl.deleteFramebuffer(t.fbo); }\n\nlet rt = {};\nfunction allocateTargets(W, H){\n  for(const k in rt) freeTarget(rt[k]);\n  const hw = Math.max(1, W>>1),  hh = Math.max(1, H>>1);\n  const qw = Math.max(1, hw>>1), qh = Math.max(1, hh>>1);\n  const ew = Math.max(1, qw>>1), eh = Math.max(1, qh>>1);\n  rt = {\n    scene:        makeTarget(W, H),\n    half:         makeTarget(hw, hh),\n    quarter:      makeTarget(qw, qh),\n    eighth:       makeTarget(ew, eh),\n    comboQuarter: makeTarget(qw, qh),\n    comboHalf:    makeTarget(hw, hh),\n  };\n}\n\n/* ============================ sizing / adaptive quality ============================ */\nlet renderScale = 0.85;\nconst dprCap = 1.6;\nlet W = 2, H = 2;\nfunction applySize(){\n  const w = window.innerWidth, h = window.innerHeight;\n  const dpr = Math.min(window.devicePixelRatio || 1, dprCap);\n  W = Math.max(2, Math.floor(w*dpr*renderScale));\n  H = Math.max(2, Math.floor(h*dpr*renderScale));\n  canvas.width = W; canvas.height = H;\n  canvas.style.width = w+'px'; canvas.style.height = h+'px';\n  allocateTargets(W, H);\n}\nwindow.addEventListener('resize', applySize);\napplySize();\n\nlet emaDt = 16, lastAdjust = 0;\nfunction adaptQuality(t, dtMs){\n  emaDt = emaDt*0.94 + dtMs*0.06;\n  if(t - lastAdjust < 0.9) return;\n  if(emaDt > 30 && renderScale > 0.5){ renderScale = Math.max(0.5, renderScale*0.88); lastAdjust = t; applySize(); }\n  else if(emaDt < 15 && renderScale < 1.0){ renderScale = Math.min(1.0, renderScale*1.08); lastAdjust = t; applySize(); }\n}\n\n/* ============================ camera (plain-array vector math) ============================ */\nfunction sub3(a,b){ return [a[0]-b[0], a[1]-b[1], a[2]-b[2]]; }\nfunction add3(a,b){ return [a[0]+b[0], a[1]+b[1], a[2]+b[2]]; }\nfunction scale3(a,s){ return [a[0]*s, a[1]*s, a[2]*s]; }\nfunction cross3(a,b){ return [a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]]; }\nfunction norm3(a){ const l = Math.hypot(a[0],a[1],a[2]) || 1; return [a[0]/l, a[1]/l, a[2]/l]; }\nfunction clampN(x,a,b){ return Math.min(Math.max(x,a),b); }\nfunction lerpN(a,b,t){ return a+(b-a)*t; }\n\nconst st = {\n  yaw: -0.9, pitch: 0.30, dist: 19,\n  baseDist: 14.2,\n  yawVel: 0, pitchVel: 0,\n  dragging: false, lastX: 0, lastY: 0,\n  lastInput: -10,\n  pointers: new Map(), pinchD: 0,\n};\nconst cam = { pos:[0,0,19], fwd:[0,0,-1], right:[1,0,0], up:[0,1,0], fovTan: 0.62 };\n\nfunction updateCamera(t, dt){\n  const idle = (t - st.lastInput) > 2.5;\n  const autoBlend = idle ? Math.min((t - st.lastInput - 2.5)/2.0, 1) : 0;\n\n  // intro dolly-in\n  const k = Math.min(t/5.0, 1);\n  const ease = 1 - Math.pow(1-k, 3);\n  const breathe = 0.55*Math.sin(t*0.037);\n  const targetDist = lerpN(19, st.baseDist + breathe*ease, ease);\n  st.dist += (targetDist - st.dist) * Math.min(dt*2.2, 1);\n\n  if(!st.dragging){\n    st.yaw   += st.yawVel;   st.yawVel   *= Math.pow(0.94, dt*60);\n    st.pitch += st.pitchVel; st.pitchVel *= Math.pow(0.94, dt*60);\n    st.yaw   += 0.030*dt*autoBlend;\n    const pitchTarget = 0.17 + 0.04*Math.sin(t*0.043);\n    st.pitch += (pitchTarget - st.pitch) * Math.min(dt*0.25, 1) * autoBlend;\n  }\n  st.pitch = clampN(st.pitch, -1.25, 1.25);\n\n  const cp = [\n    st.dist*Math.cos(st.pitch)*Math.sin(st.yaw),\n    st.dist*Math.sin(st.pitch),\n    st.dist*Math.cos(st.pitch)*Math.cos(st.yaw)\n  ];\n  const fwd = norm3(sub3([0,0.6,0], cp));\n  const right = norm3(cross3(fwd, [0,1,0]));\n  const up = cross3(right, fwd);\n\n  // gentle cinematic roll\n  const roll = 0.035*Math.sin(t*0.06) * ease;\n  const cr = Math.cos(roll), sr = Math.sin(roll);\n  const r2 = add3(scale3(right,cr), scale3(up,sr));\n  const u2 = sub3(scale3(up,cr), scale3(right,sr));\n\n  cam.pos = cp; cam.fwd = fwd; cam.right = r2; cam.up = u2;\n}\n\n/* ============================ input ============================ */\nlet animT = 0, lastFrameAt = 0;\ncanvas.addEventListener('pointerdown', e => {\n  canvas.setPointerCapture(e.pointerId);\n  st.pointers.set(e.pointerId, [e.clientX, e.clientY]);\n  if(st.pointers.size === 1){\n    st.dragging = true; canvas.classList.add('dragging');\n    st.lastX = e.clientX; st.lastY = e.clientY;\n    st.yawVel = st.pitchVel = 0;\n  } else if(st.pointers.size === 2){\n    const p = [...st.pointers.values()];\n    st.pinchD = Math.hypot(p[0][0]-p[1][0], p[0][1]-p[1][1]);\n  }\n  st.lastInput = animT;\n});\ncanvas.addEventListener('pointermove', e => {\n  if(!st.pointers.has(e.pointerId)) return;\n  st.pointers.set(e.pointerId, [e.clientX, e.clientY]);\n  if(st.pointers.size === 1 && st.dragging){\n    const dx = e.clientX - st.lastX, dy = e.clientY - st.lastY;\n    st.lastX = e.clientX; st.lastY = e.clientY;\n    const s = 0.0042;\n    st.yaw   -= dx*s;  st.pitch += dy*s;\n    st.yawVel = -dx*s*0.55; st.pitchVel = dy*s*0.55;\n    st.pitch = clampN(st.pitch, -1.25, 1.25);\n  } else if(st.pointers.size === 2){\n    const p = [...st.pointers.values()];\n    const d = Math.hypot(p[0][0]-p[1][0], p[0][1]-p[1][1]);\n    if(st.pinchD > 0){ st.baseDist = clampN(st.baseDist * st.pinchD/d, 7, 34); }\n    st.pinchD = d;\n  }\n  st.lastInput = animT;\n});\nfunction endPointer(e){\n  st.pointers.delete(e.pointerId);\n  if(st.pointers.size === 0){ st.dragging = false; canvas.classList.remove('dragging'); }\n  st.lastInput = animT;\n}\ncanvas.addEventListener('pointerup', endPointer);\ncanvas.addEventListener('pointercancel', endPointer);\ncanvas.addEventListener('wheel', e => {\n  e.preventDefault();\n  st.baseDist = clampN(st.baseDist * Math.exp(e.deltaY*0.0011), 7, 34);\n  st.lastInput = animT;\n}, { passive:false });\ncanvas.addEventListener('contextmenu', e => e.preventDefault());\n\n/* ============================ render ============================ */\nfunction bindTex(unit, tex){ gl.activeTexture(gl.TEXTURE0+unit); gl.bindTexture(gl.TEXTURE_2D, tex); }\nfunction drawPass(fbo, w, h){\n  gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);\n  gl.viewport(0,0,w,h);\n  gl.bindVertexArray(vao);\n  gl.drawArrays(gl.TRIANGLES, 0, 3);\n}\n\nlet exposureVal = 0;\nfunction render(){\n  gl.disable(gl.DEPTH_TEST);\n  gl.disable(gl.BLEND);\n\n  // 1) scene: the geodesic raymarch, full res\n  gl.useProgram(progScene);\n  gl.uniform2f(locScene.uRes, W, H);\n  gl.uniform1f(locScene.uTime, animT);\n  gl.uniform3f(locScene.uCamPos, cam.pos[0], cam.pos[1], cam.pos[2]);\n  gl.uniform3f(locScene.uFwd, cam.fwd[0], cam.fwd[1], cam.fwd[2]);\n  gl.uniform3f(locScene.uRight, cam.right[0], cam.right[1], cam.right[2]);\n  gl.uniform3f(locScene.uUp, cam.up[0], cam.up[1], cam.up[2]);\n  gl.uniform1f(locScene.uFovTan, cam.fovTan);\n  gl.uniform1f(locScene.uSteps, 300);\n  drawPass(rt.scene.fbo, rt.scene.w, rt.scene.h);\n\n  // 2) bright-pass extract, scene -> half res\n  gl.useProgram(progBright);\n  bindTex(0, rt.scene.tex); gl.uniform1i(locBright.tScene, 0);\n  gl.uniform2f(locBright.uTexel, 1/rt.scene.w, 1/rt.scene.h);\n  gl.uniform1f(locBright.uThreshold, 0.92);\n  gl.uniform1f(locBright.uKnee, 0.55);\n  drawPass(rt.half.fbo, rt.half.w, rt.half.h);\n\n  // 3) downsample chain: half -> quarter -> eighth\n  gl.useProgram(progDown);\n  bindTex(0, rt.half.tex); gl.uniform1i(locDown.tSrc, 0);\n  gl.uniform2f(locDown.uTexel, 1/rt.half.w, 1/rt.half.h);\n  drawPass(rt.quarter.fbo, rt.quarter.w, rt.quarter.h);\n\n  bindTex(0, rt.quarter.tex); gl.uniform1i(locDown.tSrc, 0);\n  gl.uniform2f(locDown.uTexel, 1/rt.quarter.w, 1/rt.quarter.h);\n  drawPass(rt.eighth.fbo, rt.eighth.w, rt.eighth.h);\n\n  // 4) upsample + combine back up: quarter += eighth ; half += quarter\n  gl.useProgram(progCombine);\n  bindTex(0, rt.quarter.tex); gl.uniform1i(locCombine.tBase, 0);\n  bindTex(1, rt.eighth.tex);  gl.uniform1i(locCombine.tSmall, 1);\n  gl.uniform1f(locCombine.uMix, 1.0);\n  drawPass(rt.comboQuarter.fbo, rt.comboQuarter.w, rt.comboQuarter.h);\n\n  bindTex(0, rt.half.tex);         gl.uniform1i(locCombine.tBase, 0);\n  bindTex(1, rt.comboQuarter.tex); gl.uniform1i(locCombine.tSmall, 1);\n  gl.uniform1f(locCombine.uMix, 1.0);\n  drawPass(rt.comboHalf.fbo, rt.comboHalf.w, rt.comboHalf.h);\n\n  // 5) final composite (CA + tonemap + vignette + grain) -> canvas\n  gl.useProgram(progFinal);\n  bindTex(0, rt.scene.tex);     gl.uniform1i(locFinal.tScene, 0);\n  bindTex(1, rt.comboHalf.tex); gl.uniform1i(locFinal.tBloom, 1);\n  gl.uniform2f(locFinal.uRes, W, H);\n  gl.uniform1f(locFinal.uTime, animT);\n  gl.uniform1f(locFinal.uExposure, exposureVal);\n  gl.uniform1f(locFinal.uBloomStrength, 0.85);\n  drawPass(null, W, H);\n}\n\n/* ============================ loop ============================ */\nconst t0 = performance.now();\nconst perfT = () => (performance.now() - t0)/1000;\nlet prev = 0;\n/* animT advances only on rendered frames → pause-safe: captures, tab\n   switches and rAF throttling never leave a stale under-exposed frame. */\nfunction step(fromRaf){\n  const now = perfT();\n  const dt = Math.min(Math.max(now - prev, 0.001), 0.05);\n  prev = now;\n  animT += dt;\n  lastFrameAt = now;\n\n  updateCamera(animT, dt);\n  exposureVal = Math.min(animT/1.4, 1) * 0.78;  // fade in from black\n\n  render();\n  if(fromRaf) adaptQuality(now, dt*1000);\n}\nfunction frame(){ requestAnimationFrame(frame); step(true); }\nframe();\n/* watchdog: keep rendering if rAF is throttled (hidden iframe, capture) */\nsetInterval(() => { if(perfT() - lastFrameAt > 0.22) step(false); }, 120);\n\n})();\n<\u002Fscript>\n\n\n<\u002Fbody><\u002Fhtml>"
+  </script>
+</body>
+</html>
