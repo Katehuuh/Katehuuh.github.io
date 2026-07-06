@@ -1085,31 +1085,102 @@ const volMat = new THREE.ShaderMaterial({
     `
 });
 
-// composite: scene color + upscaled light shafts (additive).
-// uDebug: 0 = normal, 1 = shafts only (amplified, on black) for verifying the effect.
-const compMat = new THREE.ShaderMaterial({
+// --- Radial god-ray occlusion buffer (camera view). Bright toward the sun where the
+// sky shows between clouds, black on clouds/terrain. Radial-blurring this from the
+// sun's screen position produces the crisp beams fanning out through the cloud gaps
+// (the classic sun-through-clouds photo). Computed from depth + a cloud raymarch, so
+// there is no extra geometry pass.
+const OCC_SCALE = 2;
+const occlusionRT = new THREE.WebGLRenderTarget(
+    Math.floor(window.innerWidth / OCC_SCALE), Math.floor(window.innerHeight / OCC_SCALE));
+occlusionRT.texture.minFilter = THREE.LinearFilter;
+occlusionRT.texture.magFilter = THREE.LinearFilter;
+const occlusionMat = new THREE.ShaderMaterial({
     uniforms: {
-        tScene: { value: sceneRT.texture }, tVol: { value: volRT.texture },
-        tCloudShadow: { value: cloudShadowRT.texture }, uDebug: { value: 0 }
+        uDepth: { value: sceneRT.depthTexture },
+        uInvVP: { value: new THREE.Matrix4() },
+        uCam: { value: new THREE.Vector3() },
+        uSun: { value: sunDir },
+        uTime: { value: 0 },
+        uPlanetR: { value: PLANET_RADIUS },
+        uCloudInner: { value: cloudInnerR },
+        uCloudOuter: { value: cloudOuterR },
+        uCloudDensity: { value: 0.8 }
     },
     vertexShader: FS_VERT,
     fragmentShader: `
-        uniform sampler2D tScene, tVol, tCloudShadow;
-        uniform float uDebug;
+        ${GLSL_NOISE}
+        uniform sampler2D uDepth;
+        uniform mat4 uInvVP;
+        uniform vec3 uCam, uSun;
+        uniform float uTime, uPlanetR, uCloudInner, uCloudOuter, uCloudDensity;
         varying vec2 vUv;
+        vec2 raySphere(float r, vec3 ro, vec3 rd){
+            float b = dot(ro, rd), c = dot(ro, ro) - r * r, d = b * b - c;
+            if(d < 0.0) return vec2(-1.0);
+            float s = sqrt(d); return vec2(-b - s, -b + s);
+        }
+        ${CLOUD_DENSITY_GLSL}
         void main(){
-            vec3 v = texture2D(tVol, vUv).rgb;
-            if(uDebug > 1.5){ float t = texture2D(tCloudShadow, vUv).r; gl_FragColor = vec4(t, t, t, 1.0); return; }
-            if(uDebug > 0.5){ gl_FragColor = vec4(v * 4.0, 1.0); return; }
-            // soft exponential rolloff so bright shafts near the sun saturate gracefully
-            vec3 shaft = vec3(1.0) - exp(-v * 1.4);
-            gl_FragColor = vec4(texture2D(tScene, vUv).rgb + shaft, 1.0);
+            vec4 w = uInvVP * vec4(vUv * 2.0 - 1.0, 1.0, 1.0); w /= w.w;
+            vec3 rd = normalize(w.xyz - uCam), ro = uCam;
+            float sky = step(0.9999, texture2D(uDepth, vUv).x);        // 1 = no opaque geometry
+            float md = max(0.0, dot(rd, normalize(uSun)));
+            float source = pow(md, 250.0) * 4.0 + pow(md, 12.0) * 0.6; // sun disc + tight glow
+            float coverage = 0.0;                                      // clouds occlude the source
+            vec2 hit = raySphere(uCloudOuter, ro, rd);
+            if(hit.y > 0.0){
+                float t0 = max(0.0, hit.x), seg = (hit.y - t0) / 12.0, od = 0.0;
+                for(int i = 0; i < 12; i++) od += cloudDensityAt(ro + rd * (t0 + (float(i) + 0.5) * seg));
+                coverage = 1.0 - exp(-od * seg * 4.0);
+            }
+            gl_FragColor = vec4(vec3(sky * (1.0 - coverage) * source), 1.0);
         }
     `
 });
-// B key cycles: composite -> shafts only -> cloud shadow map -> composite
+
+// composite: scene + world-space shafts + radial god-ray streaks.
+// uDebug: 0 = normal, 1 = shafts only, 2 = cloud shadow map, 3 = occlusion buffer.
+const compMat = new THREE.ShaderMaterial({
+    uniforms: {
+        tScene: { value: sceneRT.texture }, tVol: { value: volRT.texture },
+        tCloudShadow: { value: cloudShadowRT.texture }, tOcclusion: { value: occlusionRT.texture },
+        uSunScreen: { value: new THREE.Vector2(0.5, 0.5) }, uRadialWeight: { value: 0.0 },
+        uDebug: { value: 0 }
+    },
+    vertexShader: FS_VERT,
+    fragmentShader: `
+        uniform sampler2D tScene, tVol, tCloudShadow, tOcclusion;
+        uniform vec2 uSunScreen;
+        uniform float uRadialWeight, uDebug;
+        varying vec2 vUv;
+        void main(){
+            vec3 v = texture2D(tVol, vUv).rgb;
+            if(uDebug > 2.5){ gl_FragColor = texture2D(tOcclusion, vUv); return; }
+            if(uDebug > 1.5){ float t = texture2D(tCloudShadow, vUv).r; gl_FragColor = vec4(t, t, t, 1.0); return; }
+            if(uDebug > 0.5){ gl_FragColor = vec4(v * 4.0, 1.0); return; }
+            // radial god rays: march toward the sun screen pos accumulating the occlusion
+            // buffer -> crisp beams fanning through the cloud gaps
+            vec3 rays = vec3(0.0);
+            if(uRadialWeight > 0.0){
+                vec2 uv = vUv;
+                vec2 delta = (vUv - uSunScreen) * (0.92 / 64.0);
+                float illum = 1.0;
+                for(int i = 0; i < 64; i++){
+                    uv -= delta;
+                    rays += texture2D(tOcclusion, uv).rgb * illum;
+                    illum *= 0.955;
+                }
+                rays *= uRadialWeight;
+            }
+            vec3 shaft = vec3(1.0) - exp(-v * 1.4);
+            gl_FragColor = vec4(texture2D(tScene, vUv).rgb + shaft + rays * vec3(1.0, 0.92, 0.78), 1.0);
+        }
+    `
+});
+// B key cycles debug: composite -> shafts -> cloud shadow map -> occlusion buffer
 window.addEventListener('keydown', (e) => {
-    if(e.code === 'KeyB'){ compMat.uniforms.uDebug.value = (compMat.uniforms.uDebug.value + 1) % 3; }
+    if(e.code === 'KeyB'){ compMat.uniforms.uDebug.value = (compMat.uniforms.uDebug.value + 1) % 4; }
 });
 
 const fsScene = new THREE.Scene();
@@ -1117,7 +1188,7 @@ const fsQuad = new THREE.Mesh(new THREE.PlaneBufferGeometry(2, 2), volMat);
 fsQuad.frustumCulled = false;
 fsScene.add(fsQuad);
 const fsCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
-const _sunRight = new THREE.Vector3(), _sunUp = new THREE.Vector3();
+const _sunRight = new THREE.Vector3(), _sunUp = new THREE.Vector3(), _sunScreen = new THREE.Vector3();
 
 // ============================================
 // SUN MESH
@@ -1856,7 +1927,21 @@ function animate() {
         renderer.setRenderTarget(volRT);
         renderer.render(fsScene, fsCam);
 
-        // Pass 4: composite scene + shafts to the screen
+        // Pass 3b: camera-view occlusion buffer for the radial god-ray streaks
+        occlusionMat.uniforms.uInvVP.value.copy(volMat.uniforms.uInvVP.value);
+        occlusionMat.uniforms.uCam.value.copy(camera.position);
+        occlusionMat.uniforms.uTime.value = tsec;
+        occlusionMat.uniforms.uCloudDensity.value = cloudDensity;
+        fsQuad.material = occlusionMat;
+        renderer.setRenderTarget(occlusionRT);
+        renderer.render(fsScene, fsCam);
+        // sun screen position (radial blur origin); disable rays when the sun is off screen
+        _sunScreen.copy(sunMesh.position).project(camera);
+        const sunOnScreen = _sunScreen.z < 1.0 && Math.abs(_sunScreen.x) < 1.4 && Math.abs(_sunScreen.y) < 1.4;
+        compMat.uniforms.uSunScreen.value.set(_sunScreen.x * 0.5 + 0.5, _sunScreen.y * 0.5 + 0.5);
+        compMat.uniforms.uRadialWeight.value = sunOnScreen ? 0.16 : 0.0;
+
+        // Pass 4: composite scene + shafts + radial streaks to the screen
         fsQuad.material = compMat;
         renderer.setRenderTarget(null);
         renderer.render(fsScene, fsCam);
@@ -1873,6 +1958,7 @@ window.addEventListener('resize', () => {
     // Resize volumetric-lighting render targets
     sceneRT.setSize(window.innerWidth, window.innerHeight);
     volRT.setSize(Math.floor(window.innerWidth / VOL_SCALE), Math.floor(window.innerHeight / VOL_SCALE));
+    occlusionRT.setSize(Math.floor(window.innerWidth / OCC_SCALE), Math.floor(window.innerHeight / OCC_SCALE));
 });
 
 animate();
