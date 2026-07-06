@@ -510,8 +510,9 @@ const oceanMat = new THREE.ShaderMaterial({
     fragmentShader: `
         ${GLSL_NOISE}
         ${OCEAN_FUNCS}
-        uniform vec3 uSun;
-        uniform float uTime, uSeaR;
+        uniform vec3 uSun, uSunRightC, uSunUpC;
+        uniform float uTime, uSeaR, uExtentC;
+        uniform sampler2D uCloudShadowW;
         varying vec3 vDir, vWorld;
         varying float vWaveH, vDepth;
 
@@ -566,6 +567,11 @@ const oceanMat = new THREE.ShaderMaterial({
             foam *= smoothstep(0.25, 0.85, fn * 0.5 + 0.75);
             col = mix(col, vec3(0.90, 0.95, 1.0) * (0.25 + 0.75 * dayFac), foam);
 
+            // cloud shadow swept across the water (sun-view shadow map) - visible from any angle
+            vec2 csuv = vec2(dot(vWorld, uSunRightC), dot(vWorld, uSunUpC)) / (2.0 * uExtentC) + 0.5;
+            float cshadow = texture2D(uCloudShadowW, csuv).r;
+            col *= mix(0.42, 1.0, smoothstep(0.12, 0.6, cshadow));
+
             float alpha = max(mix(0.82, 0.98, openness), foam);
             gl_FragColor = vec4(col, alpha);
         }
@@ -577,7 +583,11 @@ const oceanMat = new THREE.ShaderMaterial({
         uSeaElev: { value: SEA_LEVEL },
         uHeight: { value: heightTex },
         uSim: { value: waterSimOK ? simRTA.texture : flatSim },
-        uSimScale: { value: 1.1 }
+        uSimScale: { value: 1.1 },
+        uCloudShadowW: { value: null },   // set once the shadow map exists
+        uSunRightC: { value: new THREE.Vector3(1, 0, 0) },
+        uSunUpC: { value: new THREE.Vector3(0, 1, 0) },
+        uExtentC: { value: PLANET_RADIUS + CLOUD_BASE + CLOUD_THICK + 8.0 } // = CLOUD_EXTENT
     },
     transparent: true,
     depthWrite: true
@@ -942,9 +952,9 @@ const CLOUD_DENSITY_GLSL = `
         vec3 sp = normalize(p);
         float latMask = smoothstep(0.85, 0.4, abs(sp.y));
         vec3 pos = sp * 4.0 + vec3(uTime * 0.012, 0.0, uTime * 0.008);
-        float n = fbm(pos, 4) + fbm(pos * 3.1, 2) * 0.4;
-        // sharp, high-frequency coverage cutoff -> hard-edged broken-cloud gaps
-        return smoothstep(0.34, 0.44, n) * hFall * latMask * uCloudDensity;
+        // match the VISIBLE cloud coverage so ground shadows line up with the clouds you see
+        float n = smoothstep(0.0, 0.6, fbm(pos, 5));
+        return n * hFall * latMask * uCloudDensity;
     }`;
 
 // --- Cloud shadow map: cloud optical depth along the parallel sun rays, rendered
@@ -1189,6 +1199,24 @@ fsQuad.frustumCulled = false;
 fsScene.add(fsQuad);
 const fsCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
 const _sunRight = new THREE.Vector3(), _sunUp = new THREE.Vector3(), _sunScreen = new THREE.Vector3();
+
+// Cast the cloud shadow map onto the terrain (view-independent: cloud shadows sweep
+// across the land, visible from any angle or distance, unlike the in-air shafts).
+terrainMat.onBeforeCompile = (shader) => {
+    shader.uniforms.uCloudShadowG = { value: cloudShadowRT.texture };
+    shader.uniforms.uSunRightG = { value: _sunRight };
+    shader.uniforms.uSunUpG = { value: _sunUp };
+    shader.uniforms.uExtentG = { value: CLOUD_EXTENT };
+    shader.vertexShader = 'varying vec3 vWorldG;\n' + shader.vertexShader.replace(
+        '#include <begin_vertex>',
+        '#include <begin_vertex>\n    vWorldG = (modelMatrix * vec4(transformed, 1.0)).xyz;'
+    );
+    shader.fragmentShader = 'uniform sampler2D uCloudShadowG;\nuniform vec3 uSunRightG, uSunUpG;\nuniform float uExtentG;\nvarying vec3 vWorldG;\n' + shader.fragmentShader.replace(
+        '#include <dithering_fragment>',
+        '#include <dithering_fragment>\n    vec2 csuvG = vec2(dot(vWorldG, uSunRightG), dot(vWorldG, uSunUpG)) / (2.0 * uExtentG) + 0.5;\n    float cshadowG = texture2D(uCloudShadowG, csuvG).r;\n    gl_FragColor.rgb *= mix(0.42, 1.0, smoothstep(0.12, 0.6, cshadowG));'
+    );
+};
+terrainMat.needsUpdate = true;
 
 // ============================================
 // SUN MESH
@@ -1891,31 +1919,32 @@ function animate() {
     cloudMesh.material.uniforms.uTime.value = now * 0.001;
     cloudMesh.material.uniforms.uSun.value = sunDir;
 
-    // Volumetric light shafts. Skip the whole thing when the sun is well below the
-    // local horizon (no shafts to form) and just render the scene straight to screen.
+    // Cloud shadow map first (from the sun's view). It feeds BOTH the cloud shadows on
+    // the ground (terrain + ocean, visible from any angle/distance) and the in-air shafts.
     const sunUp = sunDir.dot(camera.position.clone().normalize());
+    const cloudDensityNow = cloudMesh.material.uniforms.uDensity.value;
+    _sunRight.set(0, 1, 0).cross(sunDir);
+    if (_sunRight.lengthSq() < 1e-4) _sunRight.set(1, 0, 0);
+    _sunRight.normalize();
+    _sunUp.copy(sunDir).cross(_sunRight).normalize();
+    cloudShadowMat.uniforms.uSunRight.value.copy(_sunRight);
+    cloudShadowMat.uniforms.uSunUp.value.copy(_sunUp);
+    cloudShadowMat.uniforms.uTime.value = tsec;
+    cloudShadowMat.uniforms.uCloudDensity.value = cloudDensityNow;
+    fsQuad.material = cloudShadowMat;
+    renderer.setRenderTarget(cloudShadowRT);
+    renderer.render(fsScene, fsCam);
+    // ocean samples the same map for its ground shadow (terrain reads _sunRight refs directly)
+    if (oceanMat.uniforms.uCloudShadowW.value === null) oceanMat.uniforms.uCloudShadowW.value = cloudShadowRT.texture;
+    oceanMat.uniforms.uSunRightC.value.copy(_sunRight);
+    oceanMat.uniforms.uSunUpC.value.copy(_sunUp);
+
     if (godRaysEnabled && sunUp > -0.25) {
-        // Pass 1: scene + depth into an offscreen target
+        // Pass 1: scene + depth (terrain + ocean now show the swept cloud shadows)
         renderer.setRenderTarget(sceneRT);
         renderer.render(scene, camera);
 
-        // sun-aligned basis (perpendicular to the sun) for the shadow map + projection
-        _sunRight.set(0, 1, 0).cross(sunDir);
-        if (_sunRight.lengthSq() < 1e-4) _sunRight.set(1, 0, 0);
-        _sunRight.normalize();
-        _sunUp.copy(sunDir).cross(_sunRight).normalize();
-        const cloudDensity = cloudMesh.material.uniforms.uDensity.value;
-
-        // Pass 2: cloud optical depth from the sun's point of view (the shadow map)
-        cloudShadowMat.uniforms.uSunRight.value.copy(_sunRight);
-        cloudShadowMat.uniforms.uSunUp.value.copy(_sunUp);
-        cloudShadowMat.uniforms.uTime.value = tsec;
-        cloudShadowMat.uniforms.uCloudDensity.value = cloudDensity;
-        fsQuad.material = cloudShadowMat;
-        renderer.setRenderTarget(cloudShadowRT);
-        renderer.render(fsScene, fsCam);
-
-        // Pass 3: raymarch the shafts at reduced resolution, sampling the shadow map
+        // Pass 2: raymarch the in-air shafts at reduced resolution, sampling the shadow map
         camera.updateMatrixWorld();
         camera.matrixWorldInverse.copy(camera.matrixWorld).invert();
         volMat.uniforms.uInvVP.value.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse).invert();
@@ -1927,11 +1956,11 @@ function animate() {
         renderer.setRenderTarget(volRT);
         renderer.render(fsScene, fsCam);
 
-        // Pass 3b: camera-view occlusion buffer for the radial god-ray streaks
+        // Pass 3: camera-view occlusion buffer for the radial god-ray streaks
         occlusionMat.uniforms.uInvVP.value.copy(volMat.uniforms.uInvVP.value);
         occlusionMat.uniforms.uCam.value.copy(camera.position);
         occlusionMat.uniforms.uTime.value = tsec;
-        occlusionMat.uniforms.uCloudDensity.value = cloudDensity;
+        occlusionMat.uniforms.uCloudDensity.value = cloudDensityNow;
         fsQuad.material = occlusionMat;
         renderer.setRenderTarget(occlusionRT);
         renderer.render(fsScene, fsCam);
