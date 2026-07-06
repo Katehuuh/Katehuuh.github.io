@@ -116,6 +116,10 @@ const G = 6.674e-11 * 5e9;
 const ATMO_HEIGHT = 12;
 const CLOUD_BASE = 8;
 const CLOUD_THICK = 4;
+// Sea level as a terrain-elevation threshold. Terrain floor is clamped to elev>=0,
+// so the water surface must sit ABOVE 0 to be visible in basins (was buried before).
+const SEA_LEVEL = 0.35;
+const seaRadius = PLANET_RADIUS + SEA_LEVEL;
 
 // ============================================
 // NOISE
@@ -237,7 +241,8 @@ function getBiome(pos) {
     const elev = terrainElev(dir);
     const moist = noise.fbm(dir.x * 3 + 50, dir.y * 3 + 50, dir.z * 3 + 50, 4) * 0.5 + 0.5;
     if (lat > 0.75) return 'Ice';
-    if (elev < 0.3) return 'Ocean';
+    if (elev < SEA_LEVEL) return 'Ocean';
+    if (elev < SEA_LEVEL + 0.14) return 'Beach';
     if (elev > 3) return 'Mountain';
     if (moist < 0.3) return 'Desert';
     if (moist < 0.6) return 'Grassland';
@@ -306,7 +311,8 @@ for (let i = 0; i < positions.count; i++) {
     const biome = getBiome(v);
     let col = new THREE.Color();
     if (biome === 'Ice') col.setStyle('#e8f4f8');
-    else if (biome === 'Ocean') col.setStyle('#0a3050');
+    else if (biome === 'Ocean') col.setStyle('#0a3a4a');
+    else if (biome === 'Beach') col.setStyle('#d8c69a');
     else if (biome === 'Mountain') col.setStyle('#808080');
     else if (biome === 'Desert') col.setStyle('#d4a050');
     else if (biome === 'Grassland') col.setStyle('#4a8020');
@@ -331,46 +337,173 @@ planet.receiveShadow = true;
 scene.add(planet);
 
 // ============================================
-// OCEAN
+// OCEAN  (Gerstner waves + shoreline foam + interactive car ripples)
 // ============================================
-const oceanGeo = new THREE.IcosahedronGeometry(PLANET_RADIUS - 0.4, 48);
+// Bake terrain elevation into an equirectangular texture so the water shader can
+// know exactly where the coastline is (GLSL snoise != JS simplex, so we cannot
+// re-derive the terrain in-shader). R channel = elev/3, sampled for foam + depth.
+const MAX_RIPPLES = 6;
+function bakeHeightTexture(W, H) {
+    const data = new Uint8Array(W * H * 4);
+    const tmp = new THREE.Vector3();
+    for (let y = 0; y < H; y++) {
+        const lat = (y / (H - 1) - 0.5) * Math.PI;
+        const cy = Math.cos(lat), sy = Math.sin(lat);
+        for (let x = 0; x < W; x++) {
+            const lon = (x / W - 0.5) * Math.PI * 2;
+            tmp.set(cy * Math.cos(lon), sy, cy * Math.sin(lon));
+            const e = Math.max(0, Math.min(1, terrainElev(tmp) / 3));
+            const i = (y * W + x) * 4;
+            data[i] = data[i + 1] = data[i + 2] = Math.round(e * 255);
+            data[i + 3] = 255;
+        }
+    }
+    const tex = new THREE.DataTexture(data, W, H, THREE.RGBAFormat);
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.wrapT = THREE.ClampToEdgeWrapping;
+    tex.minFilter = THREE.LinearFilter;
+    tex.magFilter = THREE.LinearFilter;
+    tex.needsUpdate = true;
+    return tex;
+}
+const heightTex = bakeHeightTexture(512, 256);
+
+// Wave field shared by vertex (displacement) and fragment (analytic normal + foam).
+const OCEAN_FUNCS = `
+    uniform sampler2D uHeight;
+    uniform float uSeaElev;
+    uniform vec4 uRipples[${MAX_RIPPLES}];
+
+    float terrH(vec3 d) {
+        float u = atan(d.z, d.x) * 0.15915494 + 0.5;
+        float v = asin(clamp(d.y, -1.0, 1.0)) * 0.31830989 + 0.5;
+        return texture2D(uHeight, vec2(u, v)).r * 3.0;
+    }
+    // expanding circular ripples emitted by the car when it is in water
+    float rippleH(vec3 d, float t) {
+        float h = 0.0;
+        for (int i = 0; i < ${MAX_RIPPLES}; i++) {
+            if (uRipples[i].w < -100.0) continue;
+            float age = t - uRipples[i].w;
+            if (age < 0.0 || age > 4.0) continue;
+            float chord = length(d - uRipples[i].xyz);
+            float dd = chord - age * 0.9;
+            float env = exp(-age * 0.9) * exp(-dd * dd * 45.0);
+            h += sin(dd * 32.0) * env * 0.055;
+        }
+        return h;
+    }
+    // interfering directional swells + choppy detail
+    float oceanH(vec3 d, float t) {
+        float h = 0.0;
+        h += sin(dot(d, vec3( 1.0,  0.2,  0.3)) * 22.0 + t * 1.10) * 0.030;
+        h += sin(dot(d, vec3(-0.3,  0.1,  1.0)) * 17.0 + t * 0.90) * 0.026;
+        h += sin(dot(d, vec3( 0.6, -0.2, -0.6)) * 29.0 + t * 1.40) * 0.017;
+        h += fbm(d * 40.0 + vec3(t * 0.15, 0.0, t * 0.10), 3) * 0.018;
+        return h;
+    }
+    float waveField(vec3 d, float t) { return oceanH(d, t) + rippleH(d, t); }
+`;
+
+const oceanGeo = new THREE.IcosahedronGeometry(seaRadius, 64);
 const oceanMat = new THREE.ShaderMaterial({
     vertexShader: `
         ${GLSL_NOISE}
-        uniform float uTime;
-        varying vec3 vNorm, vWorld;
+        ${OCEAN_FUNCS}
+        uniform float uTime, uSeaR;
+        varying vec3 vDir, vWorld;
+        varying float vShore, vWaveH, vDepth;
         void main() {
-            vec3 dir = normalize(position);
-            float w = sin(dir.x*30.0+uTime*1.5)*0.012 + sin(dir.z*25.0+uTime)*0.01 + snoise(dir*25.0+uTime*0.3)*0.015;
-            vec3 pos = dir * (${PLANET_RADIUS.toFixed(1)} - 0.4 + w);
-            vNorm = dir;
+            vec3 d = normalize(position);
+            float terr = terrH(d);
+            float depth = uSeaElev - terr;
+            float shore = smoothstep(0.0, 0.18, depth);
+            float wave = waveField(d, uTime) * (0.25 + 0.75 * shore);
+            vDir = d; vShore = shore; vWaveH = wave; vDepth = depth;
+            vec3 pos = d * (uSeaR + wave);
             vWorld = (modelMatrix * vec4(pos, 1.0)).xyz;
             gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
         }
     `,
     fragmentShader: `
+        ${GLSL_NOISE}
+        ${OCEAN_FUNCS}
         uniform vec3 uSun;
-        varying vec3 vNorm, vWorld;
+        uniform float uTime, uSeaR;
+        varying vec3 vDir, vWorld;
+        varying float vShore, vWaveH, vDepth;
+
         void main() {
-            vec3 n = normalize(vNorm);
-            vec3 v = normalize(cameraPosition - vWorld);
-            vec3 deep = vec3(0.01, 0.05, 0.15);
-            vec3 shallow = vec3(0.04, 0.2, 0.35);
-            float fresnel = pow(1.0 - max(0.0, dot(v, n)), 4.0);
-            vec3 col = mix(deep, shallow, fresnel * 0.5);
-            float diff = max(0.0, dot(n, uSun));
-            vec3 refl = reflect(-uSun, n);
-            float spec = pow(max(0.0, dot(v, refl)), 128.0);
-            col = col * (0.1 + diff * 0.9) + vec3(1,0.95,0.85) * spec * 0.5;
-            col = mix(col, vec3(0.35,0.55,0.85), fresnel * 0.2);
-            gl_FragColor = vec4(col, 0.9);
+            vec3 d = vDir;
+            vec3 up = d;
+            vec3 t1 = normalize(cross(abs(d.y) < 0.99 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0), up));
+            vec3 t2 = cross(up, t1);
+
+            // analytic normal from the wave gradient (crisp detail beyond geometry)
+            float e = 0.0025;
+            float h0 = waveField(d, uTime);
+            float hx = waveField(normalize(d + t1 * e), uTime);
+            float hy = waveField(normalize(d + t2 * e), uTime);
+            vec3 N = normalize(up - t1 * ((hx - h0) / e) * 0.16 - t2 * ((hy - h0) / e) * 0.16);
+
+            vec3 V = normalize(cameraPosition - vWorld);
+            vec3 L = normalize(uSun);
+            float fres = 0.02 + 0.98 * pow(1.0 - max(0.0, dot(N, V)), 5.0);
+
+            // depth-graded body colour
+            float openness = smoothstep(0.02, 0.25, vDepth);
+            vec3 water = mix(vec3(0.10, 0.42, 0.48), vec3(0.015, 0.09, 0.19), openness);
+
+            // reflected sky gradient + sun disc + micro glint
+            vec3 R = reflect(-V, N);
+            vec3 skyC = mix(vec3(0.70, 0.80, 0.95), vec3(0.15, 0.35, 0.70), clamp(R.y * 0.5 + 0.5, 0.0, 1.0));
+            float sunSpec = pow(max(0.0, dot(R, L)), 400.0);
+            float glint = pow(max(0.0, dot(N, normalize(L + V))), 200.0);
+
+            float diff = max(0.0, dot(N, L));
+            vec3 col = water * (0.15 + 0.85 * diff);
+            col = mix(col, skyC, fres * 0.75);
+            col += vec3(1.0, 0.95, 0.80) * (sunSpec * 2.0 + glint * 0.6);
+
+            // subsurface crest glow when looking toward the sun through a swell
+            float sss = smoothstep(0.02, 0.08, vWaveH) * pow(max(0.0, dot(V, -L)), 2.0);
+            col += vec3(0.10, 0.40, 0.35) * sss * 0.6;
+
+            // shoreline foam that washes in/out, plus wave-crest whitecaps
+            // (one shared noise sample drives both crest break-up and foam texture)
+            float fn = fbm(d * 100.0 + uTime * 0.25, 3);
+            float wash = 0.5 + 0.5 * sin(vDepth * 60.0 - uTime * 2.0);
+            float shoreFoam = smoothstep(0.14, 0.0, vDepth) * (0.5 + 0.5 * wash);
+            float crest = smoothstep(0.045, 0.075, vWaveH + fn * 0.02);
+            float foam = clamp(max(shoreFoam * 0.9, crest), 0.0, 1.0);
+            foam *= smoothstep(0.25, 0.85, fn * 0.5 + 0.75);
+            col = mix(col, vec3(0.90, 0.95, 1.0), foam);
+
+            float alpha = max(mix(0.82, 0.98, openness), foam);
+            gl_FragColor = vec4(col, alpha);
         }
     `,
-    uniforms: { uSun: { value: sunDir }, uTime: { value: 0 } },
+    uniforms: {
+        uSun: { value: sunDir },
+        uTime: { value: 0 },
+        uSeaR: { value: seaRadius },
+        uSeaElev: { value: SEA_LEVEL },
+        uHeight: { value: heightTex },
+        uRipples: { value: Array.from({ length: MAX_RIPPLES }, () => new THREE.Vector4(0, 0, 0, -999)) }
+    },
     transparent: true,
     depthWrite: true
 });
-scene.add(new THREE.Mesh(oceanGeo, oceanMat));
+const oceanMesh = new THREE.Mesh(oceanGeo, oceanMat);
+scene.add(oceanMesh);
+
+// --- car ripple emitter (ring buffer of impulses fed to the ocean shader) ---
+const rippleData = Array.from({ length: MAX_RIPPLES }, () => new THREE.Vector4(0, 0, 0, -999));
+let rippleCursor = 0, lastRippleT = -1;
+function emitRipple(dir, t) {
+    rippleData[rippleCursor].set(dir.x, dir.y, dir.z, t);
+    rippleCursor = (rippleCursor + 1) % MAX_RIPPLES;
+}
 
 // ============================================
 // CLOUD LAYER RADII (defined early for atmosphere god rays)
@@ -641,7 +774,12 @@ const cloudMat = new THREE.ShaderMaterial({
     transparent: true,
     side: THREE.DoubleSide,
     depthWrite: false,
-    depthTest: true
+    // Clouds are raymarched on a proxy sphere the camera sits INSIDE, so the proxy's
+    // far-hemisphere fragments land behind the planet and a depth test kills them
+    // wherever the planet is visible -> clouds pop out as the car moves. The shader
+    // already clamps the march to the planet surface (end = planet.x), so disabling
+    // the geometry depth test is both the fix and correct.
+    depthTest: false
 });
 const cloudMesh = new THREE.Mesh(cloudGeo, cloudMat);
 cloudMesh.renderOrder = 100;
@@ -856,7 +994,7 @@ for (let i = 0; i < 15; i++) {
         Math.sin(phi) * Math.sin(theta)
     );
     const h = terrainHeight(dir.clone().multiplyScalar(PLANET_RADIUS));
-    if (h > PLANET_RADIUS + 0.4) {
+    if (h > seaRadius + 0.3) {
         const crystalGeo = new THREE.OctahedronGeometry(0.35, 0);
         const crystalMat = new THREE.MeshStandardMaterial({
             color: 0x4fc3f7,
@@ -1073,10 +1211,6 @@ class Rover {
     update(dt, input) {
         dt = Math.min(dt, 1/30); // Cap dt for stability
 
-        // DEBUG counter
-        if (!this.debugCounter) this.debugCounter = 0;
-        this.debugCounter++;
-
         // === GRAVITY-BASED RIGIDBODY PHYSICS ===
         // Car can jump off mountains and feel weight!
 
@@ -1091,16 +1225,6 @@ class Rover {
         const carForward = new THREE.Vector3(0, 0, 1).applyQuaternion(this.quaternion);
         const carRight = new THREE.Vector3(1, 0, 0).applyQuaternion(this.quaternion);
         const carUp = new THREE.Vector3(0, 1, 0).applyQuaternion(this.quaternion);
-
-        // DEBUG: Print every 60 frames (~1 second)
-        if (this.debugCounter % 60 === 0) {
-            console.log('=== CAR DEBUG ===');
-            console.log('Position length:', this.position.length().toFixed(2));
-            console.log('planetUp (should point away from planet):', planetUp.x.toFixed(3), planetUp.y.toFixed(3), planetUp.z.toFixed(3));
-            console.log('carUp (local Y, should match planetUp for upright car):', carUp.x.toFixed(3), carUp.y.toFixed(3), carUp.z.toFixed(3));
-            console.log('carUp · planetUp (1=upright, -1=upside down):', carUp.dot(planetUp).toFixed(3));
-            console.log('carForward:', carForward.x.toFixed(3), carForward.y.toFixed(3), carForward.z.toFixed(3));
-        }
 
         // Check ground contact
         const terrainH = terrainHeight(this.position);
@@ -1527,8 +1651,17 @@ function animate() {
     cameraController.update(dt);
     updateShadows(); // Shadow camera follows car
 
-    oceanMat.uniforms.uTime.value = now * 0.001;
+    // Ocean: emit a ripple when the car drives through water, feed the ring buffer.
+    const tsec = now * 0.001;
+    const carDir = rover.position.clone().normalize();
+    const inWater = rover.position.length() < seaRadius + 0.5;
+    if (inWater && rover.speed > 1.5 && tsec - lastRippleT > 0.22) {
+        emitRipple(carDir, tsec);
+        lastRippleT = tsec;
+    }
+    oceanMat.uniforms.uTime.value = tsec;
     oceanMat.uniforms.uSun.value = sunDir;
+    for (let i = 0; i < MAX_RIPPLES; i++) oceanMat.uniforms.uRipples.value[i].copy(rippleData[i]);
     atmoMat.uniforms.uCam.value.copy(camera.position);
     atmoMat.uniforms.uSun.value = sunDir;
     cloudMesh.material.uniforms.uTime.value = now * 0.001;
