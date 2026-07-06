@@ -1022,10 +1022,15 @@ const volMat = new THREE.ShaderMaterial({
         uPlanetR: { value: PLANET_RADIUS },
         uVolR: { value: VOL_R },
         uHazeH: { value: 8.0 },        // haze scale height (smaller = shafts hug the ground)
-        uSigma: { value: 0.35 },       // haze extinction (bounds the integral so it cannot blow out)
+        // Low extinction: shafts must stay visible tens of units away (high sigma fogged
+        // them out past ~10 units, which is why they vanished at distance).
+        uSigma: { value: 0.05 },
         uCloudAbsorb: { value: 5.0 },  // (unused in march now; shadow map bakes it) kept for reference
-        uPhaseG: { value: 0.45 },      // moderate forward scatter (high g spikes into bloom near the sun)
-        uIntensity: { value: 0.2 }
+        uPhaseG: { value: 0.5 },       // forward lobe of the dual-lobe phase
+        // 0.5 keeps beam structure visible in BOTH directions: side-on shafts read
+        // clearly, and the sun-facing view keeps its dark shadow bands instead of
+        // saturating into a white veil.
+        uIntensity: { value: 0.5 }
     },
     vertexShader: FS_VERT,
     fragmentShader: `
@@ -1074,7 +1079,10 @@ const volMat = new THREE.ShaderMaterial({
             float seg = (tend - tstart) / float(STEPS);
             float jit = hash12(uv + fract(uTime * 0.37)) * seg;   // dither hides banding
             vec3 L = normalize(uSun);
-            float phase = hg(dot(rd, L), uPhaseG);
+            // Dual-lobe phase: isotropic base + forward HG lobe. A single forward lobe
+            // made the shafts ~8x dimmer side-on than sun-on, which is why they only
+            // showed while looking near the sun. Real haze side-scatters plenty.
+            float phase = mix(0.0796, hg(dot(rd, L), uPhaseG), 0.55);
 
             // Beer-Lambert integration: in-scatter attenuated by the haze already
             // traversed. 'lit' is the crisp cloud shadow map -> distinct radiating shafts.
@@ -1090,7 +1098,10 @@ const volMat = new THREE.ShaderMaterial({
                 T *= exp(-density * uSigma * seg);
                 if(T < 0.02) break;
             }
-            gl_FragColor = vec4(uSunColor * inscatter * phase * uIntensity, 1.0);
+            // alpha carries the path transmittance so the composite can dim the scene
+            // behind the haze (aerial perspective) - shadowed columns then read as dark
+            // bands even against a bright sky, from any view angle.
+            gl_FragColor = vec4(uSunColor * inscatter * phase * uIntensity, T);
         }
     `
 });
@@ -1156,16 +1167,17 @@ const compMat = new THREE.ShaderMaterial({
         tScene: { value: sceneRT.texture }, tVol: { value: volRT.texture },
         tCloudShadow: { value: cloudShadowRT.texture }, tOcclusion: { value: occlusionRT.texture },
         uSunScreen: { value: new THREE.Vector2(0.5, 0.5) }, uRadialWeight: { value: 0.0 },
-        uDebug: { value: 0 }
+        uFogW: { value: 0.0 }, uDebug: { value: 0 }
     },
     vertexShader: FS_VERT,
     fragmentShader: `
         uniform sampler2D tScene, tVol, tCloudShadow, tOcclusion;
         uniform vec2 uSunScreen;
-        uniform float uRadialWeight, uDebug;
+        uniform float uRadialWeight, uFogW, uDebug;
         varying vec2 vUv;
         void main(){
-            vec3 v = texture2D(tVol, vUv).rgb;
+            vec4 vol4 = texture2D(tVol, vUv);
+            vec3 v = vol4.rgb;
             if(uDebug > 2.5){ gl_FragColor = texture2D(tOcclusion, vUv); return; }
             if(uDebug > 1.5){ float t = texture2D(tCloudShadow, vUv).r; gl_FragColor = vec4(t, t, t, 1.0); return; }
             if(uDebug > 0.5){ gl_FragColor = vec4(v * 4.0, 1.0); return; }
@@ -1184,7 +1196,10 @@ const compMat = new THREE.ShaderMaterial({
                 rays *= uRadialWeight;
             }
             vec3 shaft = vec3(1.0) - exp(-v * 1.4);
-            gl_FragColor = vec4(texture2D(tScene, vUv).rgb + shaft + rays * vec3(1.0, 0.92, 0.78), 1.0);
+            // aerial perspective: the haze dims what is behind it, so shadowed columns
+            // become dark bands even against bright sky - beams read from any angle
+            float Tf = mix(1.0, vol4.a, uFogW);
+            gl_FragColor = vec4(texture2D(tScene, vUv).rgb * Tf + shaft + rays * vec3(1.0, 0.92, 0.78), 1.0);
         }
     `
 });
@@ -1923,6 +1938,9 @@ function animate() {
     // the ground (terrain + ocean, visible from any angle/distance) and the in-air shafts.
     const sunUp = sunDir.dot(camera.position.clone().normalize());
     const cloudDensityNow = cloudMesh.material.uniforms.uDensity.value;
+    // aerial-perspective strength follows sun elevation (fades out before the night
+    // branch takes over, so there is no visible pop at the terminator)
+    compMat.uniforms.uFogW.value = 0.65 * Math.min(1, Math.max(0, (sunUp + 0.25) / 0.35));
     _sunRight.set(0, 1, 0).cross(sunDir);
     if (_sunRight.lengthSq() < 1e-4) _sunRight.set(1, 0, 0);
     _sunRight.normalize();
