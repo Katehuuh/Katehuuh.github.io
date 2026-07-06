@@ -337,12 +337,11 @@ planet.receiveShadow = true;
 scene.add(planet);
 
 // ============================================
-// OCEAN  (Gerstner waves + shoreline foam + interactive car ripples)
+// OCEAN  (GPU heightfield water physics + shoreline foam)
 // ============================================
-// Bake terrain elevation into an equirectangular texture so the water shader can
-// know exactly where the coastline is (GLSL snoise != JS simplex, so we cannot
-// re-derive the terrain in-shader). R channel = elev/3, sampled for foam + depth.
-const MAX_RIPPLES = 6;
+// Bake terrain elevation into an equirectangular texture so both the water sim and
+// the ocean shader know exactly where the coastline is (GLSL snoise != JS simplex,
+// so we cannot re-derive the terrain in-shader). R channel = elev/3.
 function bakeHeightTexture(W, H) {
     const data = new Uint8Array(W * H * 4);
     const tmp = new THREE.Vector3();
@@ -368,41 +367,112 @@ function bakeHeightTexture(W, H) {
 }
 const heightTex = bakeHeightTexture(512, 256);
 
+// --- Interactive water physics: GPU heightfield wave-equation solver ----------
+// A ping-ponged equirectangular field (R = surface height, G = velocity) integrates
+// the 2D wave equation every frame. Land cells (read from the baked terrain height)
+// behave as reflective walls, so waves genuinely bounce off coastlines; the car
+// stamps a moving impulse that radiates a real wake. Same lon/lat mapping as heightTex.
+const SIM_W = 512, SIM_H = 256;
+const _glctx = renderer.getContext();
+let waterSimOK = renderer.capabilities.isWebGL2
+    ? !!_glctx.getExtension('EXT_color_buffer_float')
+    : (!!_glctx.getExtension('OES_texture_half_float') && !!_glctx.getExtension('WEBGL_color_buffer_float'));
+const simRTopts = {
+    type: THREE.HalfFloatType, format: THREE.RGBAFormat,
+    minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter,
+    wrapS: THREE.RepeatWrapping, wrapT: THREE.ClampToEdgeWrapping,
+    depthBuffer: false, stencilBuffer: false
+};
+let simRTA = new THREE.WebGLRenderTarget(SIM_W, SIM_H, simRTopts);
+let simRTB = new THREE.WebGLRenderTarget(SIM_W, SIM_H, simRTopts);
+// flat fallback field when float render targets are unavailable
+const flatSim = new THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1, THREE.RGBAFormat);
+flatSim.needsUpdate = true;
+
+const simMat = new THREE.ShaderMaterial({
+    vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`,
+    fragmentShader: `
+        uniform sampler2D uPrev, uHeight;
+        uniform vec2 uTexel, uCarUV;
+        uniform float uSeaElev, uDamping, uSpeed2, uPoleFix, uCarStamp;
+        varying vec2 vUv;
+        float landAt(vec2 uv){ return step(uSeaElev, texture2D(uHeight, uv).r * 3.0); }
+        float nb(vec2 uv, float c){ return mix(texture2D(uPrev, uv).r, c, landAt(uv)); }
+        void main(){
+            vec2 uv = vUv;
+            if(landAt(uv) > 0.5){ gl_FragColor = vec4(0.0); return; }   // land = reflective wall
+            vec4 s = texture2D(uPrev, uv);
+            float h = s.r, v = s.g;
+            float hL = nb(uv - vec2(uTexel.x, 0.0), h), hR = nb(uv + vec2(uTexel.x, 0.0), h);
+            float hU = nb(uv - vec2(0.0, uTexel.y), h), hD = nb(uv + vec2(0.0, uTexel.y), h);
+            // metric-aware laplacian, coupling capped near the poles for stability
+            float lat = (uv.y - 0.5) * 3.14159265;
+            float cl = max(uPoleFix, cos(lat));
+            float lap = (hL + hR - 2.0 * h) * cl * cl + (hU + hD - 2.0 * h);
+            v += lap * uSpeed2;
+            v *= uDamping;
+            h += v;
+            // moving car impulse (wrap longitude distance) -> radiating wake
+            float du = abs(uv.x - uCarUV.x); du = min(du, 1.0 - du);
+            float dv = uv.y - uCarUV.y;
+            h -= uCarStamp * exp(-(du * du + dv * dv) * 9000.0);
+            h = clamp(h, -3.0, 3.0);
+            gl_FragColor = vec4(h, v, 0.0, 1.0);
+        }
+    `,
+    uniforms: {
+        uPrev: { value: null }, uHeight: { value: heightTex },
+        uTexel: { value: new THREE.Vector2(1 / SIM_W, 1 / SIM_H) },
+        uCarUV: { value: new THREE.Vector2(0.5, 0.5) },
+        uSeaElev: { value: SEA_LEVEL }, uDamping: { value: 0.996 },
+        uSpeed2: { value: 0.22 }, uPoleFix: { value: 0.25 }, uCarStamp: { value: 0.0 }
+    }
+});
+const simScene = new THREE.Scene();
+simScene.add(Object.assign(new THREE.Mesh(new THREE.PlaneBufferGeometry(2, 2), simMat), { frustumCulled: false }));
+const simCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+if (waterSimOK) {
+    [simRTA, simRTB].forEach(rt => { renderer.setRenderTarget(rt); renderer.setClearColor(0x000000, 0); renderer.clear(); });
+    renderer.setRenderTarget(null);
+}
+const carUV = new THREE.Vector2(0.5, 0.5);
+function dirToUV(d, out) {
+    out.set(Math.atan2(d.z, d.x) / (2 * Math.PI) + 0.5, Math.asin(Math.max(-1, Math.min(1, d.y))) / Math.PI + 0.5);
+    return out;
+}
+function stepWater(carStamp) {
+    if (!waterSimOK) return;
+    simMat.uniforms.uPrev.value = simRTA.texture;
+    simMat.uniforms.uCarUV.value.copy(carUV);
+    simMat.uniforms.uCarStamp.value = carStamp;
+    renderer.setRenderTarget(simRTB);
+    renderer.render(simScene, simCamera);
+    renderer.setRenderTarget(null);
+    const t = simRTA; simRTA = simRTB; simRTB = t;
+    oceanMat.uniforms.uSim.value = simRTA.texture;
+}
+
 // Wave field shared by vertex (displacement) and fragment (analytic normal + foam).
 const OCEAN_FUNCS = `
-    uniform sampler2D uHeight;
-    uniform float uSeaElev;
-    uniform vec4 uRipples[${MAX_RIPPLES}];
+    uniform sampler2D uHeight, uSim;
+    uniform float uSeaElev, uSimScale;
 
-    float terrH(vec3 d) {
-        float u = atan(d.z, d.x) * 0.15915494 + 0.5;
-        float v = asin(clamp(d.y, -1.0, 1.0)) * 0.31830989 + 0.5;
-        return texture2D(uHeight, vec2(u, v)).r * 3.0;
+    vec2 dirToUV(vec3 d) {
+        return vec2(atan(d.z, d.x) * 0.15915494 + 0.5, asin(clamp(d.y, -1.0, 1.0)) * 0.31830989 + 0.5);
     }
-    // expanding circular ripples emitted by the car when it is in water
-    float rippleH(vec3 d, float t) {
+    float terrH(vec3 d) { return texture2D(uHeight, dirToUV(d)).r * 3.0; }
+    // physical surface height + velocity from the water simulation
+    float simH(vec3 d) { return texture2D(uSim, dirToUV(d)).r * uSimScale; }
+    float simV(vec3 d) { return texture2D(uSim, dirToUV(d)).g; }
+    // light ambient wind chop so calm open water still has life
+    float ambientH(vec3 d, float t) {
         float h = 0.0;
-        for (int i = 0; i < ${MAX_RIPPLES}; i++) {
-            if (uRipples[i].w < -100.0) continue;
-            float age = t - uRipples[i].w;
-            if (age < 0.0 || age > 4.0) continue;
-            float chord = length(d - uRipples[i].xyz);
-            float dd = chord - age * 0.9;
-            float env = exp(-age * 0.9) * exp(-dd * dd * 45.0);
-            h += sin(dd * 32.0) * env * 0.055;
-        }
+        h += sin(dot(d, vec3( 1.0,  0.2,  0.3)) * 22.0 + t * 1.10) * 0.018;
+        h += sin(dot(d, vec3(-0.3,  0.1,  1.0)) * 17.0 + t * 0.90) * 0.014;
+        h += fbm(d * 40.0 + vec3(t * 0.15, 0.0, t * 0.10), 3) * 0.012;
         return h;
     }
-    // interfering directional swells + choppy detail
-    float oceanH(vec3 d, float t) {
-        float h = 0.0;
-        h += sin(dot(d, vec3( 1.0,  0.2,  0.3)) * 22.0 + t * 1.10) * 0.030;
-        h += sin(dot(d, vec3(-0.3,  0.1,  1.0)) * 17.0 + t * 0.90) * 0.026;
-        h += sin(dot(d, vec3( 0.6, -0.2, -0.6)) * 29.0 + t * 1.40) * 0.017;
-        h += fbm(d * 40.0 + vec3(t * 0.15, 0.0, t * 0.10), 3) * 0.018;
-        return h;
-    }
-    float waveField(vec3 d, float t) { return oceanH(d, t) + rippleH(d, t); }
+    float waveField(vec3 d, float t) { return ambientH(d, t) + simH(d); }
 `;
 
 const oceanGeo = new THREE.IcosahedronGeometry(seaRadius, 64);
@@ -412,14 +482,15 @@ const oceanMat = new THREE.ShaderMaterial({
         ${OCEAN_FUNCS}
         uniform float uTime, uSeaR;
         varying vec3 vDir, vWorld;
-        varying float vShore, vWaveH, vDepth;
+        varying float vWaveH, vDepth;
         void main() {
             vec3 d = normalize(position);
             float terr = terrH(d);
             float depth = uSeaElev - terr;
             float shore = smoothstep(0.0, 0.18, depth);
-            float wave = waveField(d, uTime) * (0.25 + 0.75 * shore);
-            vDir = d; vShore = shore; vWaveH = wave; vDepth = depth;
+            // ambient chop fades toward shore; the physical sim already zeroes on land
+            float wave = ambientH(d, uTime) * (0.25 + 0.75 * shore) + simH(d);
+            vDir = d; vWaveH = wave; vDepth = depth;
             vec3 pos = d * (uSeaR + wave);
             vWorld = (modelMatrix * vec4(pos, 1.0)).xyz;
             gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
@@ -431,7 +502,7 @@ const oceanMat = new THREE.ShaderMaterial({
         uniform vec3 uSun;
         uniform float uTime, uSeaR;
         varying vec3 vDir, vWorld;
-        varying float vShore, vWaveH, vDepth;
+        varying float vWaveH, vDepth;
 
         void main() {
             vec3 d = vDir;
@@ -469,13 +540,13 @@ const oceanMat = new THREE.ShaderMaterial({
             float sss = smoothstep(0.02, 0.08, vWaveH) * pow(max(0.0, dot(V, -L)), 2.0);
             col += vec3(0.10, 0.40, 0.35) * sss * 0.6;
 
-            // shoreline foam that washes in/out, plus wave-crest whitecaps
-            // (one shared noise sample drives both crest break-up and foam texture)
+            // foam: dynamic whitecaps where the simulated water moves fast (car wake,
+            // waves breaking against coastlines) plus a shoreline wash band
             float fn = fbm(d * 100.0 + uTime * 0.25, 3);
+            float moving = smoothstep(0.012, 0.05, abs(simV(d)));
             float wash = 0.5 + 0.5 * sin(vDepth * 60.0 - uTime * 2.0);
             float shoreFoam = smoothstep(0.14, 0.0, vDepth) * (0.5 + 0.5 * wash);
-            float crest = smoothstep(0.045, 0.075, vWaveH + fn * 0.02);
-            float foam = clamp(max(shoreFoam * 0.9, crest), 0.0, 1.0);
+            float foam = clamp(max(shoreFoam * 0.9, moving), 0.0, 1.0);
             foam *= smoothstep(0.25, 0.85, fn * 0.5 + 0.75);
             col = mix(col, vec3(0.90, 0.95, 1.0), foam);
 
@@ -489,21 +560,15 @@ const oceanMat = new THREE.ShaderMaterial({
         uSeaR: { value: seaRadius },
         uSeaElev: { value: SEA_LEVEL },
         uHeight: { value: heightTex },
-        uRipples: { value: Array.from({ length: MAX_RIPPLES }, () => new THREE.Vector4(0, 0, 0, -999)) }
+        uSim: { value: waterSimOK ? simRTA.texture : flatSim },
+        uSimScale: { value: 1.1 }
     },
     transparent: true,
     depthWrite: true
 });
 const oceanMesh = new THREE.Mesh(oceanGeo, oceanMat);
+oceanMesh.frustumCulled = false;
 scene.add(oceanMesh);
-
-// --- car ripple emitter (ring buffer of impulses fed to the ocean shader) ---
-const rippleData = Array.from({ length: MAX_RIPPLES }, () => new THREE.Vector4(0, 0, 0, -999));
-let rippleCursor = 0, lastRippleT = -1;
-function emitRipple(dir, t) {
-    rippleData[rippleCursor].set(dir.x, dir.y, dir.z, t);
-    rippleCursor = (rippleCursor + 1) % MAX_RIPPLES;
-}
 
 // ============================================
 // CLOUD LAYER RADII (defined early for atmosphere god rays)
@@ -686,35 +751,24 @@ const cloudMat = new THREE.ShaderMaterial({
             vec3 rd = normalize(vRayD);
             vec3 ro = vRayO;
 
-            vec2 inner = raySphere(uInnerR, ro, rd);
             vec2 outer = raySphere(uOuterR, ro, rd);
 
             if(outer.y < 0.0) discard;
 
-            float camR = length(ro);
-            float start, end;
-
-            if(camR > uOuterR) {
-                if(outer.x < 0.0) discard;
-                start = outer.x;
-                end = (inner.x > 0.0) ? inner.x : outer.y;
-            }
-            else if(camR > uInnerR) {
-                start = 0.0;
-                end = (inner.x > 0.0) ? inner.x : outer.y;
-            }
-            else {
-                if(inner.y < 0.0) discard;
-                start = inner.y;
-                end = outer.y;
-            }
-
-            if(start >= end) discard;
+            // One continuous march segment: enter the outer cloud shell (0 if the
+            // camera is already inside it) and exit it, then clamp to the planet.
+            // The cloud altitude band is handled by the density falloff, so there is
+            // no camera-radius branch to jump when the car changes elevation. That
+            // branch switching was what made the clouds pop in and out while driving.
+            float start = max(0.0, outer.x);
+            float end = outer.y;
 
             vec2 planet = raySphere(uPlanetR, ro, rd);
             if(planet.x > 0.0 && planet.x < end) {
                 end = planet.x;
             }
+
+            if(start >= end) discard;
 
             // Sebastian Lague's approach
             float stepSize = (end - start) / float(STEPS);
@@ -783,6 +837,7 @@ const cloudMat = new THREE.ShaderMaterial({
 });
 const cloudMesh = new THREE.Mesh(cloudGeo, cloudMat);
 cloudMesh.renderOrder = 100;
+cloudMesh.frustumCulled = false; // camera can sit near/inside the shell; never cull it
 scene.add(cloudMesh);
 
 // ============================================
@@ -817,26 +872,12 @@ const cloudOcclusionMat = new THREE.ShaderMaterial({
             vec3 rd = normalize(vRayD);
             vec3 ro = vRayO;
 
-            vec2 inner = raySphere(uInnerR, ro, rd);
             vec2 outer = raySphere(uOuterR, ro, rd);
 
             if(outer.y < 0.0) discard;
 
-            float camR = length(ro);
-            float start, end;
-
-            if(camR > uOuterR) {
-                if(outer.x < 0.0) discard;
-                start = outer.x;
-                end = (inner.x > 0.0) ? inner.x : outer.y;
-            } else if(camR > uInnerR) {
-                start = 0.0;
-                end = (inner.x > 0.0) ? inner.x : outer.y;
-            } else {
-                start = inner.y;
-                end = outer.y;
-            }
-
+            float start = max(0.0, outer.x);
+            float end = outer.y;
             if(start >= end) discard;
 
             // Quick density estimation (fewer samples for occlusion)
@@ -1651,17 +1692,15 @@ function animate() {
     cameraController.update(dt);
     updateShadows(); // Shadow camera follows car
 
-    // Ocean: emit a ripple when the car drives through water, feed the ring buffer.
+    // Ocean: step the water physics. A moving car in water stamps a wake impulse.
     const tsec = now * 0.001;
     const carDir = rover.position.clone().normalize();
-    const inWater = rover.position.length() < seaRadius + 0.5;
-    if (inWater && rover.speed > 1.5 && tsec - lastRippleT > 0.22) {
-        emitRipple(carDir, tsec);
-        lastRippleT = tsec;
-    }
+    const inWater = rover.position.length() < seaRadius + 0.4;
+    dirToUV(carDir, carUV);
+    const carStamp = (inWater && rover.speed > 1.0) ? Math.min(0.03, rover.speed * 0.003) : 0.0;
+    stepWater(carStamp);
     oceanMat.uniforms.uTime.value = tsec;
     oceanMat.uniforms.uSun.value = sunDir;
-    for (let i = 0; i < MAX_RIPPLES; i++) oceanMat.uniforms.uRipples.value[i].copy(rippleData[i]);
     atmoMat.uniforms.uCam.value.copy(camera.position);
     atmoMat.uniforms.uSun.value = sunDir;
     cloudMesh.material.uniforms.uTime.value = now * 0.001;
