@@ -1011,11 +1011,11 @@ const volMat = new THREE.ShaderMaterial({
         uTime: { value: 0 },
         uPlanetR: { value: PLANET_RADIUS },
         uVolR: { value: VOL_R },
-        uHazeH: { value: 10.0 },       // haze scale height (smaller = shafts hug the ground)
-        uSigma: { value: 0.28 },       // haze extinction (bounds the integral so it cannot blow out)
+        uHazeH: { value: 8.0 },        // haze scale height (smaller = shafts hug the ground)
+        uSigma: { value: 0.35 },       // haze extinction (bounds the integral so it cannot blow out)
         uCloudAbsorb: { value: 5.0 },  // (unused in march now; shadow map bakes it) kept for reference
-        uPhaseG: { value: 0.72 },      // strong forward scattering -> beams pop toward the sun
-        uIntensity: { value: 0.6 }
+        uPhaseG: { value: 0.45 },      // moderate forward scatter (high g spikes into bloom near the sun)
+        uIntensity: { value: 0.2 }
     },
     vertexShader: FS_VERT,
     fragmentShader: `
@@ -1080,9 +1080,7 @@ const volMat = new THREE.ShaderMaterial({
                 T *= exp(-density * uSigma * seg);
                 if(T < 0.02) break;
             }
-            // contrast curve deepens the gaps so neighbouring beams read as separate
-            float shaft = pow(max(0.0, inscatter * phase), 1.3) * uIntensity;
-            gl_FragColor = vec4(uSunColor * shaft, 1.0);
+            gl_FragColor = vec4(uSunColor * inscatter * phase * uIntensity, 1.0);
         }
     `
 });
