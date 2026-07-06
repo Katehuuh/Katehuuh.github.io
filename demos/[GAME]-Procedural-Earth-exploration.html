@@ -261,7 +261,10 @@ scene.background = new THREE.Color(0x000510);
 const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+// Cap device pixel ratio: this scene is fragment-bound (ocean/cloud/atmosphere are
+// per-pixel raymarchers), so on a 4K panel the difference between 1.75 and 2.0 is
+// ~23% fewer pixels for no visible loss on high-DPI displays.
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.body.appendChild(renderer.domElement);
@@ -761,8 +764,8 @@ const cloudMat = new THREE.ShaderMaterial({
         uniform float uTime, uPlanetR, uInnerR, uOuterR, uDensity;
         varying vec3 vWorld, vRayO, vRayD;
 
-        #define STEPS 24
-        #define LSTEPS 5
+        #define STEPS 18
+        #define LSTEPS 4
 
         vec2 raySphere(float r, vec3 ro, vec3 rd) {
             float b = dot(ro, rd);
@@ -910,7 +913,7 @@ scene.add(cloudMesh);
 // ============================================
 let godRaysEnabled = true; // Re-enabled with fixed shader
 const sceneRT = new THREE.WebGLRenderTarget(window.innerWidth, window.innerHeight);
-const occlusionRT = new THREE.WebGLRenderTarget(window.innerWidth / 2, window.innerHeight / 2); // Half res for perf
+const occlusionRT = new THREE.WebGLRenderTarget(window.innerWidth / 3, window.innerHeight / 3); // low res; god rays are blurry anyway
 
 // Black material for occlusion pass (everything except sun)
 const occlusionMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
@@ -1012,7 +1015,7 @@ const godRaysShader = {
         uniform float uExposure, uDecay, uDensity, uWeight, uSunVisible;
         varying vec2 vUv;
 
-        #define NUM_SAMPLES 50
+        #define NUM_SAMPLES 40
 
         void main() {
             // Base scene color
@@ -1777,23 +1780,27 @@ function animate() {
     cloudMesh.material.uniforms.uTime.value = now * 0.001;
     cloudMesh.material.uniforms.uSun.value = sunDir;
 
-    if (godRaysEnabled) {
-        // Get sun screen position
-        const sunScreen = getSunScreenPos();
+    // God rays only add anything while the sun is actually on screen. When it is not,
+    // the ray contribution is zero, so skip the extra scene + occlusion + composite
+    // passes and do a single plain render - visually identical, far cheaper. That is
+    // roughly half the frames while driving (sun behind you / below the horizon).
+    const sunScreen = godRaysEnabled ? getSunScreenPos() : null;
+    if (sunScreen && sunScreen.visible) {
         godRaysMaterial.uniforms.uSunScreenPos.value.set(sunScreen.x, sunScreen.y);
-        godRaysMaterial.uniforms.uSunVisible.value = sunScreen.visible ? 1.0 : 0.0;
+        godRaysMaterial.uniforms.uSunVisible.value = 1.0;
 
-        // Pass 1: Render scene normally
+        // Pass 1: scene into an offscreen target
         renderer.setRenderTarget(sceneRT);
         renderer.render(scene, camera);
 
-        // Pass 2: Render occlusion (sun bright, clouds with holes, rest black)
-        // Temporarily swap materials
+        // Pass 2: occlusion (sun bright, clouds punch holes, everything else black).
+        // Hide the additive splash so its particles cannot seed false ray sources.
+        const splashWasVisible = splash.visible;
+        splash.visible = false;
         const originalMaterials = new Map();
         scene.traverse(obj => {
             if (obj.isMesh && obj !== sunMesh) {
                 originalMaterials.set(obj, obj.material);
-                // Cloud mesh uses special occlusion material with transparency
                 if (obj === cloudMesh) {
                     cloudOcclusionMat.uniforms.uTime.value = cloudMesh.material.uniforms.uTime.value;
                     cloudOcclusionMat.uniforms.uDensity.value = cloudMesh.material.uniforms.uDensity.value;
@@ -1803,22 +1810,18 @@ function animate() {
                 }
             }
         });
-
         renderer.setRenderTarget(occlusionRT);
         renderer.render(scene, camera);
+        originalMaterials.forEach((mat, obj) => { obj.material = mat; });
+        splash.visible = splashWasVisible;
 
-        // Restore materials
-        originalMaterials.forEach((mat, obj) => {
-            obj.material = mat;
-        });
-
-        // Pass 3: Apply god rays and composite
+        // Pass 3: composite scene + god rays to the screen
         godRaysMaterial.uniforms.tDiffuse.value = sceneRT.texture;
         godRaysMaterial.uniforms.tOcclusion.value = occlusionRT.texture;
-
         renderer.setRenderTarget(null);
         renderer.render(godRaysScene, godRaysCamera);
     } else {
+        renderer.setRenderTarget(null);
         renderer.render(scene, camera);
     }
 }
@@ -1829,7 +1832,7 @@ window.addEventListener('resize', () => {
     renderer.setSize(window.innerWidth, window.innerHeight);
     // Resize god rays render targets
     sceneRT.setSize(window.innerWidth, window.innerHeight);
-    occlusionRT.setSize(window.innerWidth / 2, window.innerHeight / 2);
+    occlusionRT.setSize(window.innerWidth / 3, window.innerHeight / 3);
 });
 
 animate();
