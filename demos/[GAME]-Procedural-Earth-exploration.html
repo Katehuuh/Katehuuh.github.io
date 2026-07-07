@@ -207,6 +207,32 @@ float snoise(vec3 v){
 float fbm(vec3 p,int o){float v=0.0,a=0.5;for(int i=0;i<6;i++){if(i>=o)break;v+=a*snoise(p);p*=2.0;a*=0.5;}return v;}
 `;
 
+// Aurora: shared by the sky shell raymarch AND the water reflection so they match.
+// Band = the auroral oval around each pole; curtain = the dancing filament pattern.
+const AURORA_GLSL = `
+    float auroraBand(vec3 sp){
+        float a = abs(sp.y);
+        return smoothstep(0.56, 0.68, a) * smoothstep(0.97, 0.85, a);
+    }
+    float auroraCurtain(vec3 sp, float t){
+        vec3 p = sp * 7.0;
+        float w = snoise(p * 0.35 + vec3(0.0, t * 0.03, 0.0));
+        float n = snoise(p * 1.6 + vec3(w * 1.8, t * 0.06, -w));
+        n += 0.55 * snoise(p * 3.8 + vec3(-w, t * 0.10, w * 2.0));
+        n += 0.30 * snoise(p * 8.5 + vec3(w * 3.0, t * 0.14, -w * 2.0));
+        return pow(clamp(n * 0.60 + 0.38, 0.0, 1.0), 4.0);
+    }
+    float starGlint(vec3 rd, float t){
+        vec3 g = rd * 170.0;
+        vec3 cell = floor(g);
+        float h = fract(sin(dot(cell, vec3(12.9898, 78.233, 37.719))) * 43758.5453);
+        if(h < 0.9952) return 0.0;
+        vec3 f = fract(g) - 0.5;
+        float tw = 0.6 + 0.4 * sin(t * 4.0 + h * 91.0);
+        return exp(-dot(f, f) * 55.0) * tw * 2.5;
+    }
+`;
+
 // ============================================
 // TERRAIN
 // ============================================
@@ -774,6 +800,7 @@ const oceanMat = new THREE.ShaderMaterial({
     fragmentShader: `
         ${GLSL_NOISE}
         ${OCEAN_FUNCS}
+        ${AURORA_GLSL}
         uniform vec3 uSun, uSunRightC, uSunUpC;
         uniform float uTime, uSeaR, uExtentC, uHeadOn;
         uniform vec3 uHeadPos[2], uHeadDir[2];
@@ -816,6 +843,23 @@ const oceanMat = new THREE.ShaderMaterial({
             vec3 col = water * (0.04 + 0.30 * dayFac + 0.66 * diff);
             col = mix(col, skyC, fres * 0.75);
             col += vec3(1.0, 0.95, 0.80) * (sunSpec * 2.0 + glint * 0.6) * dayFac;
+
+            // night sky mirrored on the water: the aurora curtains + star glints
+            // shimmer with the waves because R follows the simulated normals
+            float nightW = 1.0 - dayFac;
+            if(nightW > 0.05 && dot(R, d) > 0.03){
+                float bA = dot(vWorld, R);
+                float cA = dot(vWorld, vWorld) - ${(PLANET_RADIUS + 26).toFixed(1)} * ${(PLANET_RADIUS + 26).toFixed(1)};
+                float dscA = bA * bA - cA;
+                if(dscA > 0.0){
+                    vec3 spA = normalize(vWorld + R * (-bA + sqrt(dscA)));
+                    float aur = auroraCurtain(spA, uTime) * auroraBand(spA)
+                              * smoothstep(0.02, -0.22, dot(spA, uSun));
+                    col += mix(vec3(0.06, 0.85, 0.35), vec3(0.45, 0.18, 0.85), 0.3)
+                         * aur * nightW * (0.55 + fres * 0.9);
+                }
+                col += vec3(0.8, 0.88, 1.0) * starGlint(R, uTime) * nightW * 0.5;
+            }
 
             // subsurface crest glow when looking toward the sun through a swell
             float sss = smoothstep(0.02, 0.08, vWaveH) * pow(max(0.0, dot(V, -L)), 2.0);
@@ -1729,6 +1773,140 @@ sunMesh.position.copy(sunDir.clone().multiplyScalar(250));
 scene.add(sunMesh);
 
 // ============================================
+// STARFIELD (procedural, twinkling, with a faint milky way band; fades out on
+// the day side so the blue sky stays clean)
+// ============================================
+const starMat = new THREE.ShaderMaterial({
+    vertexShader: `
+        varying vec3 vDirS;
+        void main(){
+            vDirS = position;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+    `,
+    fragmentShader: `
+        ${GLSL_NOISE}
+        uniform vec3 uSun;
+        uniform float uTime;
+        varying vec3 vDirS;
+        float starLayer(vec3 d, float scale, float thresh, float t){
+            vec3 g = d * scale;
+            vec3 cell = floor(g);
+            float h = fract(sin(dot(cell, vec3(12.9898, 78.233, 37.719))) * 43758.5453);
+            if(h < thresh) return 0.0;
+            float h2 = fract(h * 91.17);
+            vec3 f = fract(g) - 0.5;
+            float tw = 0.65 + 0.35 * sin(t * (2.0 + h2 * 3.0) + h * 95.0);
+            return exp(-dot(f, f) * (40.0 + h2 * 60.0)) * tw * (0.4 + h2 * 1.2);
+        }
+        void main(){
+            vec3 d = normalize(vDirS);
+            float night = smoothstep(0.18, -0.12, dot(d, uSun));
+            if(night < 0.01){ gl_FragColor = vec4(0.0, 0.0, 0.0, 0.0); return; }
+            float s = starLayer(d, 170.0, 0.994, uTime)
+                    + starLayer(d, 83.0, 0.9965, uTime * 0.8) * 1.4;
+            vec3 col = vec3(0.85, 0.9, 1.0) * s;
+            // faint milky way band on a tilted axis
+            float bandD = dot(d, normalize(vec3(0.35, 0.72, 0.55)));
+            float mw = exp(-bandD * bandD * 14.0);
+            col += (vec3(0.10, 0.11, 0.17) * (fbm(d * 6.0, 3) * 0.5 + 0.5)
+                  + vec3(0.05, 0.04, 0.06) * (fbm(d * 14.0, 3) * 0.5 + 0.5)) * mw;
+            gl_FragColor = vec4(col * night, 1.0);
+        }
+    `,
+    uniforms: { uSun: { value: sunDir }, uTime: { value: 0 } },
+    side: THREE.BackSide,
+    depthWrite: false
+});
+const starMesh = new THREE.Mesh(new THREE.SphereGeometry(600, 32, 32), starMat);
+starMesh.frustumCulled = false;
+scene.add(starMesh);
+
+// ============================================
+// AURORA (raymarched emission curtains in ovals around both poles, night side
+// only - green oxygen glow at the base fading to purple at altitude)
+// ============================================
+const auroraInnerR = PLANET_RADIUS + 22;
+const auroraOuterR = PLANET_RADIUS + 34;
+const auroraMat = new THREE.ShaderMaterial({
+    vertexShader: `
+        varying vec3 vWorld, vRayO, vRayD;
+        void main(){
+            vWorld = (modelMatrix * vec4(position, 1.0)).xyz;
+            vRayO = cameraPosition;
+            vRayD = vWorld - cameraPosition;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+    `,
+    fragmentShader: `
+        ${GLSL_NOISE}
+        ${AURORA_GLSL}
+        uniform vec3 uSun;
+        uniform float uTime, uPlanetR, uInnerA, uOuterA;
+        varying vec3 vWorld, vRayO, vRayD;
+        vec2 raySphere(float r, vec3 ro, vec3 rd){
+            float b = dot(ro, rd), c = dot(ro, ro) - r * r, d = b * b - c;
+            if(d < 0.0) return vec2(-1.0);
+            float s = sqrt(d); return vec2(-b - s, -b + s);
+        }
+        float hashA(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
+        void main(){
+            vec3 rd = normalize(vRayD), ro = vRayO;
+            vec2 outer = raySphere(uOuterA, ro, rd);
+            if(outer.y < 0.0) discard;
+            float start = max(0.0, outer.x), end = outer.y;
+            vec2 pl = raySphere(uPlanetR, ro, rd);
+            if(pl.x > 0.0) end = min(end, pl.x);
+            if(start >= end) discard;
+            // quick reject: whole segment outside the polar band or on the day side
+            vec3 spm = normalize(ro + rd * (start + end) * 0.5);
+            vec3 spe = normalize(ro + rd * end);
+            vec3 sps = normalize(ro + rd * start);
+            if(auroraBand(spm) + auroraBand(spe) + auroraBand(sps) < 0.02) discard;
+            if(max(max(dot(spm, -uSun), dot(spe, -uSun)), dot(sps, -uSun)) < -0.02) discard;
+
+            const int STEPS = 20;
+            float seg = (end - start) / float(STEPS);
+            float jit = hashA(gl_FragCoord.xy + fract(uTime)) * seg;
+            vec3 col = vec3(0.0);
+            for(int i = 0; i < STEPS; i++){
+                vec3 p = ro + rd * (start + jit + float(i) * seg);
+                float r = length(p);
+                float hf = (r - uInnerA) / (uOuterA - uInnerA);
+                if(hf < 0.0 || hf > 1.0) continue;
+                vec3 sp = p / r;
+                float band = auroraBand(sp);
+                if(band < 0.01) continue;
+                float night = smoothstep(0.02, -0.22, dot(sp, uSun));
+                if(night < 0.01) continue;
+                float prof = smoothstep(0.0, 0.16, hf) * exp(-hf * 2.4);
+                float cur = auroraCurtain(sp, uTime);
+                vec3 aCol = mix(vec3(0.08, 1.0, 0.38), vec3(0.55, 0.18, 0.95), smoothstep(0.12, 0.9, hf));
+                col += aCol * cur * band * night * prof;
+            }
+            col *= seg * 0.38;
+            if(col.g + col.r < 0.003) discard;
+            gl_FragColor = vec4(col, 1.0);
+        }
+    `,
+    uniforms: {
+        uSun: { value: sunDir },
+        uTime: { value: 0 },
+        uPlanetR: { value: PLANET_RADIUS },
+        uInnerA: { value: auroraInnerR },
+        uOuterA: { value: auroraOuterR }
+    },
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    side: THREE.BackSide,
+    depthWrite: false
+});
+const auroraMesh = new THREE.Mesh(new THREE.SphereGeometry(auroraOuterR, 48, 48), auroraMat);
+auroraMesh.renderOrder = 101;   // above the clouds
+auroraMesh.frustumCulled = false;
+scene.add(auroraMesh);
+
+// ============================================
 // COLLECTIBLES
 // ============================================
 const crystals = [];
@@ -2559,6 +2737,8 @@ function animate() {
     rover.tailMat.emissiveIntensity = (input.down || input.space) ? 3.2 : 0.3 + nightF * 1.0;
     oceanMat.uniforms.uTime.value = tsec;
     oceanMat.uniforms.uSun.value = sunDir;
+    starMat.uniforms.uTime.value = tsec;
+    auroraMat.uniforms.uTime.value = tsec;
     if (terrainMat.userData.shader) {
         const ts = terrainMat.userData.shader.uniforms;
         ts.uTimeG.value = tsec;                 // seabed caustics
