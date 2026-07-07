@@ -481,16 +481,24 @@ const advectMat = new THREE.ShaderMaterial({
     uniforms: { uPrev: { value: null }, uDt: { value: 1 / 60 } }
 });
 
-// Pass B: shallow-water forces + wheel stirring + foam generation + shore walls.
+// Pass B (SYMPLECTIC, two sub-passes): velocity first from the height gradient,
+// then height from the UPDATED velocity's divergence. Doing both from the previous
+// state (forward Euler) is unconditionally unstable for wave equations - short
+// waves grow every frame until the clamps catch them, which is exactly the
+// saturated vibrating stripe field we debugged. Same fix Evan Wallace's sim uses.
+const _wheelU = [new THREE.Vector4(), new THREE.Vector4(), new THREE.Vector4(), new THREE.Vector4()];
+const _wheelPU = [new THREE.Vector4(), new THREE.Vector4(), new THREE.Vector4(), new THREE.Vector4()];
+const _wheelOldU = [new THREE.Vector4(), new THREE.Vector4(), new THREE.Vector4(), new THREE.Vector4()];
+
+// B1: velocity update (h gradient force, wheel velocity splats, viscosity, sponge)
 const forceMat = new THREE.ShaderMaterial({
     vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`,
     fragmentShader: `
         ${SIM_COMMON}
         uniform sampler2D uPrev;
-        uniform float uDt, uRain, uTimeR;
+        uniform float uDt;
         uniform vec4 uWheel[4];   // xy = patch coords, zw = wheel velocity (patch axes)
         uniform vec4 uWheelP[4];  // x = radius, y = displaced volume, z = churn(foam), w = active
-        uniform vec4 uWheelOld[4];// xy = last frame's patch coords
         varying vec2 vUv;
         void main(){
             if(landAt(vUv) > 0.5){ gl_FragColor = vec4(0.0); return; }
@@ -505,24 +513,68 @@ const forceMat = new THREE.ShaderMaterial({
             float hL = mix(sL.r, s.r, lL), hR = mix(sR.r, s.r, lR);
             float hD = mix(sD.r, s.r, lD), hU = mix(sU.r, s.r, lU);
 
-            float h = s.r; vec2 vel = s.gb; float foam = s.a;
+            vec2 vel = s.gb;
             float dx = PSIZE * TEXEL;
-
-            // SWE: velocity follows the height gradient, height follows divergence
             vec2 grad = vec2(hR - hL, hU - hD) / (2.0 * dx);
             vel += -9.0 * grad * uDt;
+
+            // wheel stirring
+            vec2 xy = (vUv - 0.5) * PSIZE;
+            for(int i = 0; i < 4; i++){
+                if(uWheelP[i].w < 0.5) continue;
+                vec2 d = xy - uWheel[i].xy;
+                float g = exp(-dot(d, d) / (uWheelP[i].x * uWheelP[i].x));
+                vel += uWheel[i].zw * g * 4.0 * uDt;
+            }
+
+            // viscosity (also damps the residual checkerboard mode) + sponge border
+            vec2 velAvg = (sL.gb + sR.gb + sD.gb + sU.gb) * 0.25;
+            vel = mix(vel, velAvg, 0.08);
+            float edge = smoothstep(0.0, 0.12, min(min(vUv.x, 1.0 - vUv.x), min(vUv.y, 1.0 - vUv.y)));
+            vel *= mix(0.90, 0.994, edge);
+            vel = clamp(vel, vec2(-8.0), vec2(8.0));
+            gl_FragColor = vec4(s.r, vel, s.a);
+        }
+    `,
+    uniforms: {
+        uPrev: { value: null }, uHeight: { value: heightTex },
+        uAnchor: { value: patchAnchor }, uE: { value: patchE }, uN: { value: patchN },
+        uSeaElev: { value: SEA_LEVEL }, uDt: { value: 1 / 60 },
+        uWheel: { value: _wheelU }, uWheelP: { value: _wheelPU }
+    }
+});
+
+// B2: height + foam update, reading the FRESH velocities from B1
+const heightMat = new THREE.ShaderMaterial({
+    vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`,
+    fragmentShader: `
+        ${SIM_COMMON}
+        uniform sampler2D uPrev;
+        uniform float uDt, uRain, uTimeR;
+        uniform vec4 uWheel[4];
+        uniform vec4 uWheelP[4];
+        uniform vec4 uWheelOld[4];
+        varying vec2 vUv;
+        void main(){
+            if(landAt(vUv) > 0.5){ gl_FragColor = vec4(0.0); return; }
+            vec4 s  = texture2D(uPrev, vUv);
+            vec4 sL = texture2D(uPrev, vUv - vec2(TEXEL, 0.0));
+            vec4 sR = texture2D(uPrev, vUv + vec2(TEXEL, 0.0));
+            vec4 sD = texture2D(uPrev, vUv - vec2(0.0, TEXEL));
+            vec4 sU = texture2D(uPrev, vUv + vec2(0.0, TEXEL));
+            float lL = landAt(vUv - vec2(TEXEL, 0.0)), lR = landAt(vUv + vec2(TEXEL, 0.0));
+            float lD = landAt(vUv - vec2(0.0, TEXEL)), lU = landAt(vUv + vec2(0.0, TEXEL));
+            float hL = mix(sL.r, s.r, lL), hR = mix(sR.r, s.r, lR);
+            float hD = mix(sD.r, s.r, lD), hU = mix(sU.r, s.r, lU);
+
+            float h = s.r; float foam = s.a;
+            float dx = PSIZE * TEXEL;
             float div = (mix(sR.g, -s.g, lR) - mix(sL.g, -s.g, lL)
                        + mix(sU.b, -s.b, lU) - mix(sD.b, -s.b, lD)) / (2.0 * dx);
             h += -0.45 * div * uDt;
-            // slight diffusion kills the central-difference checkerboard mode (and
-            // reads as water viscosity); land neighbours are zero = shore friction
-            vec2 velAvg = (sL.gb + sR.gb + sD.gb + sU.gb) * 0.25;
-            vel = mix(vel, velAvg, 0.12);
-            h = mix(h, (hL + hR + hD + hU) * 0.25, 0.05);
+            h = mix(h, (hL + hR + hD + hU) * 0.25, 0.04);
 
-            // wheels stir the water: velocity splat + moving volume displacement
-            // (add the volume back where the wheel WAS, remove it where it IS - this
-            // conserves water and creates the bow wave + trailing wake for free)
+            // wheel volume displacement (bow wave + wake) + churn foam
             vec2 xy = (vUv - 0.5) * PSIZE;
             for(int i = 0; i < 4; i++){
                 if(uWheelP[i].w < 0.5) continue;
@@ -530,7 +582,6 @@ const forceMat = new THREE.ShaderMaterial({
                 float g = exp(-dot(d, d) / (uWheelP[i].x * uWheelP[i].x));
                 vec2 dOld = xy - uWheelOld[i].xy;
                 float gOld = exp(-dot(dOld, dOld) / (uWheelP[i].x * uWheelP[i].x));
-                vel += uWheel[i].zw * g * 4.0 * uDt;
                 h   += uWheelP[i].y * (gOld - g);
                 foam += uWheelP[i].z * g * uDt;
             }
@@ -542,20 +593,14 @@ const forceMat = new THREE.ShaderMaterial({
                 if(rnd < 0.00006 * uRain) h -= 0.06;
             }
 
-            // whitecap foam only where flow converges VIOLENTLY (wheel churn, big
-            // colliding fronts). Rain rings and sloshing must not froth the sea white.
-            foam += max(0.0, -div - 1.35) * 0.5 * uDt;
-            foam *= pow(0.5, uDt / 1.4);              // ~1.4 s half-life
-            // damping + sponge border so waves fade instead of reflecting off the window.
-            // Base damping is strong enough that an enclosed lagoon settles in a few
-            // seconds instead of sloshing forever.
+            // whitecap foam needs BOTH violent convergence AND genuinely fast water
+            foam += max(0.0, -div - 1.35) * smoothstep(1.1, 2.6, length(s.gb)) * 0.5 * uDt;
+            foam *= pow(0.5, uDt / 1.4);
             float edge = smoothstep(0.0, 0.12, min(min(vUv.x, 1.0 - vUv.x), min(vUv.y, 1.0 - vUv.y)));
-            vel *= mix(0.90, 0.992, edge);
-            h   *= mix(0.90, 0.997, edge);
+            h *= mix(0.90, 0.998, edge);
             h = clamp(h, -1.2, 1.2);
-            vel = clamp(vel, vec2(-8.0), vec2(8.0));
             foam = clamp(foam, 0.0, 1.2);
-            gl_FragColor = vec4(h, vel, foam);
+            gl_FragColor = vec4(h, s.gb, foam);
         }
     `,
     uniforms: {
@@ -563,9 +608,7 @@ const forceMat = new THREE.ShaderMaterial({
         uAnchor: { value: patchAnchor }, uE: { value: patchE }, uN: { value: patchN },
         uSeaElev: { value: SEA_LEVEL }, uDt: { value: 1 / 60 },
         uRain: { value: 0 }, uTimeR: { value: 0 },
-        uWheel: { value: [new THREE.Vector4(), new THREE.Vector4(), new THREE.Vector4(), new THREE.Vector4()] },
-        uWheelP: { value: [new THREE.Vector4(), new THREE.Vector4(), new THREE.Vector4(), new THREE.Vector4()] },
-        uWheelOld: { value: [new THREE.Vector4(), new THREE.Vector4(), new THREE.Vector4(), new THREE.Vector4()] }
+        uWheel: { value: _wheelU }, uWheelP: { value: _wheelPU }, uWheelOld: { value: _wheelOldU }
     }
 });
 
@@ -668,8 +711,10 @@ function stepWater(dt, carDir) {
     const cdt = Math.min(dt, 1 / 60);
     advectMat.uniforms.uDt.value = cdt;
     forceMat.uniforms.uDt.value = cdt;
+    heightMat.uniforms.uDt.value = cdt;
     simPass(advectMat);
-    simPass(forceMat);
+    simPass(forceMat);    // symplectic B1: velocity from height gradient
+    simPass(heightMat);   // symplectic B2: height from the FRESH velocity
     renderer.setRenderTarget(null);
     oceanMat.uniforms.uSim.value = simRTA.texture;
     oceanMat.uniforms.uPAnchor.value.copy(patchAnchor);
@@ -683,8 +728,7 @@ function stepWater(dt, carDir) {
 const _wheelPrevW = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
 const _wheelPrevOK = [false, false, false, false];
 function updateWheelSplats() {
-    const wArr = forceMat.uniforms.uWheel.value, pArr = forceMat.uniforms.uWheelP.value;
-    const oArr = forceMat.uniforms.uWheelOld.value;
+    const wArr = _wheelU, pArr = _wheelPU, oArr = _wheelOldU;   // shared by both sim passes
     for (let i = 0; i < 4; i++) {
         const w = rover.wheels[i];
         _wxy.copy(w.pos).applyQuaternion(rover.quaternion).add(rover.position);
@@ -752,6 +796,17 @@ const OCEAN_FUNCS = `
         return vec3(uv, m);
     }
     float simH(vec3 d)    { vec3 pu = patchAt(d); return texture2D(uSim, pu.xy).r * uSimScale * pu.z; }
+    // low-passed sim height for VERTEX displacement: the mesh (~0.9u vertex spacing)
+    // cannot represent the sim's short waves; displacing it with them folds into a
+    // shimmering herringbone moire. Fine detail lives in the fragment normals instead.
+    float simHLP(vec3 d) {
+        vec3 pu = patchAt(d);
+        float o = 6.0 / 512.0;
+        float s = texture2D(uSim, pu.xy).r
+                + texture2D(uSim, pu.xy + vec2(o, 0.0)).r + texture2D(uSim, pu.xy - vec2(o, 0.0)).r
+                + texture2D(uSim, pu.xy + vec2(0.0, o)).r + texture2D(uSim, pu.xy - vec2(0.0, o)).r;
+        return s * 0.2 * uSimScale * pu.z;
+    }
     vec2  simVel(vec3 d)  { vec3 pu = patchAt(d); return texture2D(uSim, pu.xy).gb * pu.z; }
     float simFoam(vec3 d) { vec3 pu = patchAt(d); return texture2D(uSim, pu.xy).a * pu.z; }
     // light ambient wind chop so calm open water still has life (kept gentle so
@@ -793,7 +848,7 @@ const oceanMat = new THREE.ShaderMaterial({
             float depth = uSeaElev - terr;
             float shore = smoothstep(0.0, 0.18, depth);
             // ambient chop fades toward shore; the physical sim already zeroes on land
-            float wave = ambientH(d, uTime) * (0.25 + 0.75 * shore) + simH(d);
+            float wave = ambientH(d, uTime) * (0.25 + 0.75 * shore) + simHLP(d);
             vDir = d; vWaveH = wave; vDepth = depth;
             vec3 pos = d * (uSeaR + wave);
             vWorld = (modelMatrix * vec4(pos, 1.0)).xyz;
@@ -870,9 +925,11 @@ const oceanMat = new THREE.ShaderMaterial({
             float sss = smoothstep(0.02, 0.08, vWaveH) * pow(max(0.0, dot(V, -L)), 2.0);
             col += vec3(0.10, 0.40, 0.35) * sss * 0.6 * dayFac;
 
-            // caustic light webs dancing in the shallows
+            // caustic light webs dancing in the shallows. Coarse scale + distance fade:
+            // fine caustics at range alias into a vibrating checker moire.
             float cdepth = smoothstep(0.34, 0.03, vDepth) * smoothstep(0.005, 0.03, vDepth);
-            col += vec3(0.22, 0.42, 0.42) * caustic(dirToUV(d) * 220.0, uTime * 0.6) * cdepth * dayFac;
+            float cfade = smoothstep(22.0, 9.0, length(cameraPosition - vWorld));
+            col += vec3(0.20, 0.38, 0.38) * caustic(dirToUV(d) * 120.0, uTime * 0.6) * cdepth * dayFac * cfade;
 
             // foam: the simulated foam field (advected by the flow -> swirls and wakes)
             // + whitecaps where the water moves fast + a shoreline wash band
@@ -1006,7 +1063,8 @@ window.addEventListener('keydown', (e) => {
 function updateWeather(dt) {
     weather.t += dt;
     if (weather.state === 'clear') {
-        if (weather.t > weather.next) { weather.state = 'building'; weather.t = 0; }
+        // storms are MANUAL ONLY (T key). The auto cycle made the water "randomly"
+        // start waving and speckling while the player sat still - read as a bug.
     } else if (weather.state === 'building') {
         weather.storm = Math.min(1, weather.storm + dt / 9);
         if (weather.storm >= 1) { weather.state = 'storm'; weather.t = 0; weather.next = 25 + Math.random() * 25; }
@@ -1763,12 +1821,16 @@ float vnT(vec3 p){
 
     float depthG = ${seaRadius.toFixed(2)} - rG;
     if(depthG > 0.0){
-        // maldives seabed: soft sand ripple bands sculpted by the water...
-        float ripG = sin(dot(vWorldG, vec3(4.1, 1.3, 3.7)) * 13.0 + vnT(vWorldG * 5.0) * 8.0);
-        gl_FragColor.rgb *= 1.0 + 0.07 * ripG * smoothstep(0.6, 0.05, depthG);
-        // ...and chromatic caustic light webs dancing over them
-        float fadeG = smoothstep(0.5, 0.06, depthG) * smoothstep(0.0, 0.02, depthG);
-        vec2 cuvG = vec2(atan(dG.z, dG.x), asin(clamp(dG.y, -1.0, 1.0))) * 220.0;
+        // maldives seabed: soft sand ripple bands sculpted by the water. Direction
+        // must be NORMALIZED and the frequency coarse (~0.7 unit wavelength) or the
+        // bands alias into a shimmering herringbone moire.
+        float ripG = sin(dot(vWorldG, normalize(vec3(4.1, 1.3, 3.7))) * 9.0 + vnT(vWorldG * 4.0) * 4.0);
+        gl_FragColor.rgb *= 1.0 + 0.05 * ripG * smoothstep(0.6, 0.05, depthG);
+        // ...and chromatic caustic light webs dancing over them. Coarse scale +
+        // camera-distance fade: fine caustics at range alias into vibrating moire.
+        float fadeG = smoothstep(0.5, 0.06, depthG) * smoothstep(0.0, 0.02, depthG)
+                    * smoothstep(24.0, 10.0, length(cameraPosition - vWorldG));
+        vec2 cuvG = vec2(atan(dG.z, dG.x), asin(clamp(dG.y, -1.0, 1.0))) * 130.0;
         float caG = causticG(cuvG, uTimeG * 0.6);
         float cbG = causticG(cuvG + vec2(0.9, 0.4), uTimeG * 0.6 + 0.6);
         gl_FragColor.rgb += (vec3(0.34, 0.60, 0.50) * caG + vec3(0.18, 0.28, 0.50) * cbG) * fadeG * dayG;
@@ -2737,8 +2799,8 @@ function animate() {
     cloudMesh.material.uniforms.uStorm.value = weather.storm;
     cloudMesh.material.uniforms.uFlash.value = weather.flash;
     cloudMesh.material.uniforms.uFlashDir.value.copy(weather.flashDir);
-    forceMat.uniforms.uRain.value = weather.rain;
-    forceMat.uniforms.uTimeR.value = tsec;
+    heightMat.uniforms.uRain.value = weather.rain;
+    heightMat.uniforms.uTimeR.value = tsec;
     sunLight.intensity = 1.2 * (1 - weather.storm * 0.55) + weather.flash * 1.4;
     ambientLight.intensity = 0.6 * (1 - weather.storm * 0.35) + weather.flash * 0.7;
     updateRainFX(dt);
