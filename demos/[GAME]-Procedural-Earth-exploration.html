@@ -102,7 +102,7 @@
 </div>
 
 <div id="controls">
-    <b>↑↓</b> Gas/Brake  <b>←→</b> Steer  <b>SPACE</b> Handbrake  <b>SHIFT</b> Boost  <b>R</b> Reset
+    <b>↑↓</b> Gas/Brake  <b>←→</b> Steer  <b>SPACE</b> Handbrake  <b>SHIFT</b> Boost  <b>R</b> Reset  <b>T</b> Storm
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -461,7 +461,7 @@ const forceMat = new THREE.ShaderMaterial({
     fragmentShader: `
         ${SIM_COMMON}
         uniform sampler2D uPrev;
-        uniform float uDt;
+        uniform float uDt, uRain, uTimeR;
         uniform vec4 uWheel[4];   // xy = patch coords, zw = wheel velocity (patch axes)
         uniform vec4 uWheelP[4];  // x = radius, y = displaced volume, z = churn(foam), w = active
         uniform vec4 uWheelOld[4];// xy = last frame's patch coords
@@ -509,6 +509,13 @@ const forceMat = new THREE.ShaderMaterial({
                 foam += uWheelP[i].z * g * uDt;
             }
 
+            // rain: scattered droplet impacts ring the whole patch with real ripples
+            if(uRain > 0.001){
+                vec2 cellR = floor(vUv * 512.0);
+                float rnd = fract(sin(dot(cellR, vec2(127.1, 311.7)) + fract(uTimeR * 7.313) * 917.0) * 43758.5453);
+                if(rnd < 0.00006 * uRain) h -= 0.06;
+            }
+
             // whitecap foam only where flow converges HARD (colliding fronts, churn);
             // gentle sloshing must not paint the whole lagoon white
             foam += max(0.0, -div - 0.9) * 0.5 * uDt;
@@ -529,6 +536,7 @@ const forceMat = new THREE.ShaderMaterial({
         uPrev: { value: null }, uHeight: { value: heightTex },
         uAnchor: { value: patchAnchor }, uE: { value: patchE }, uN: { value: patchN },
         uSeaElev: { value: SEA_LEVEL }, uDt: { value: 1 / 60 },
+        uRain: { value: 0 }, uTimeR: { value: 0 },
         uWheel: { value: [new THREE.Vector4(), new THREE.Vector4(), new THREE.Vector4(), new THREE.Vector4()] },
         uWheelP: { value: [new THREE.Vector4(), new THREE.Vector4(), new THREE.Vector4(), new THREE.Vector4()] },
         uWheelOld: { value: [new THREE.Vector4(), new THREE.Vector4(), new THREE.Vector4(), new THREE.Vector4()] }
@@ -767,7 +775,8 @@ const oceanMat = new THREE.ShaderMaterial({
         ${GLSL_NOISE}
         ${OCEAN_FUNCS}
         uniform vec3 uSun, uSunRightC, uSunUpC;
-        uniform float uTime, uSeaR, uExtentC;
+        uniform float uTime, uSeaR, uExtentC, uHeadOn;
+        uniform vec3 uHeadPos[2], uHeadDir[2];
         uniform sampler2D uCloudShadowW;
         varying vec3 vDir, vWorld;
         varying float vWaveH, vDepth;
@@ -833,6 +842,18 @@ const oceanMat = new THREE.ShaderMaterial({
             float cshadow = texture2D(uCloudShadowW, csuv).r;
             col *= mix(0.42, 1.0, smoothstep(0.12, 0.6, cshadow));
 
+            // headlight pools + glints on the water at night
+            if(uHeadOn > 0.01){
+                for(int hi = 0; hi < 2; hi++){
+                    vec3 Lh = uHeadPos[hi] - vWorld;
+                    float distH = max(0.3, length(Lh)); Lh /= distH;
+                    float cone = smoothstep(0.76, 0.94, dot(-Lh, uHeadDir[hi]));
+                    float att = cone * exp(-distH * 0.22) * uHeadOn;
+                    col += vec3(1.0, 0.93, 0.75) * att * (max(0.0, dot(N, Lh)) * 0.9
+                         + pow(max(0.0, dot(reflect(-Lh, N), V)), 48.0) * 1.4);
+                }
+            }
+
             // more transparent in the shallows so the sandy seabed glows through
             float alpha = max(mix(0.62, 0.97, openness), foam);
             gl_FragColor = vec4(col, alpha);
@@ -851,10 +872,14 @@ const oceanMat = new THREE.ShaderMaterial({
         uCloudShadowW: { value: null },   // set once the shadow map exists
         uSunRightC: { value: new THREE.Vector3(1, 0, 0) },
         uSunUpC: { value: new THREE.Vector3(0, 1, 0) },
-        uExtentC: { value: PLANET_RADIUS + CLOUD_BASE + CLOUD_THICK + 8.0 } // = CLOUD_EXTENT
+        uExtentC: { value: PLANET_RADIUS + CLOUD_BASE + CLOUD_THICK + 8.0 }, // = CLOUD_EXTENT
+        uHeadOn: { value: 0 },
+        uHeadPos: { value: [new THREE.Vector3(), new THREE.Vector3()] },
+        uHeadDir: { value: [new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0, 1)] }
     },
     transparent: true,
-    depthWrite: true
+    depthWrite: true,
+    side: THREE.DoubleSide   // surface must be visible from below (underwater mode)
 });
 const oceanMesh = new THREE.Mesh(oceanGeo, oceanMat);
 oceanMesh.frustumCulled = false;
@@ -917,6 +942,113 @@ function updateSplash(dt) {
         }
     }
     splashGeo.attributes.position.needsUpdate = true;
+}
+
+// ============================================
+// WEATHER (clear -> storm cycle, rain into the fluid sim, lightning) - T toggles
+// ============================================
+const weather = {
+    state: 'clear', t: 0, storm: 0, rain: 0,
+    next: 40 + Math.random() * 40, flash: 0, flashDir: new THREE.Vector3(1, 0, 0)
+};
+window.addEventListener('keydown', (e) => {
+    if (e.code === 'KeyT') { weather.state = weather.storm > 0.5 ? 'clearing' : 'building'; weather.t = 0; }
+});
+function updateWeather(dt) {
+    weather.t += dt;
+    if (weather.state === 'clear') {
+        if (weather.t > weather.next) { weather.state = 'building'; weather.t = 0; }
+    } else if (weather.state === 'building') {
+        weather.storm = Math.min(1, weather.storm + dt / 9);
+        if (weather.storm >= 1) { weather.state = 'storm'; weather.t = 0; weather.next = 25 + Math.random() * 25; }
+    } else if (weather.state === 'storm') {
+        if (weather.t > weather.next) { weather.state = 'clearing'; weather.t = 0; }
+    } else {
+        weather.storm = Math.max(0, weather.storm - dt / 11);
+        if (weather.storm <= 0) { weather.state = 'clear'; weather.t = 0; weather.next = 50 + Math.random() * 70; }
+    }
+    weather.rain = Math.max(0, weather.storm - 0.45) / 0.55;
+    weather.flash = Math.max(0, weather.flash - dt * 5);
+    if (weather.state === 'storm' && Math.random() < dt * 0.5) {
+        weather.flash = 0.8 + Math.random() * 0.4;
+        weather.flashDir.copy(camera.position).normalize()
+            .addScaledVector(_sunRight, (Math.random() - 0.5) * 1.6)
+            .addScaledVector(_sunUp, (Math.random() - 0.5) * 1.6).normalize();
+    }
+}
+
+// rain streaks falling around the camera
+const RAIN_N = 800;
+const rainPosA = new Float32Array(RAIN_N * 3);
+const rainGeo = new THREE.BufferGeometry();
+rainGeo.setAttribute('position', new THREE.BufferAttribute(rainPosA, 3));
+const rainPts = new THREE.Points(rainGeo, new THREE.PointsMaterial({
+    color: 0xa8c4d8, size: 0.05, sizeAttenuation: true,
+    transparent: true, opacity: 0.35, depthWrite: false
+}));
+rainPts.visible = false;
+rainPts.frustumCulled = false;
+scene.add(rainPts);
+function updateRainFX(dt) {
+    rainPts.visible = weather.rain > 0.03 && underF < 0.5;
+    if (!rainPts.visible) return;
+    rainPts.material.opacity = 0.12 + 0.3 * weather.rain;
+    const cx = camera.position.x, cy = camera.position.y, cz = camera.position.z;
+    const cl = Math.hypot(cx, cy, cz) || 1;
+    const ux = cx / cl, uy = cy / cl, uz = cz / cl;
+    const fall = 26 * dt;
+    for (let i = 0; i < RAIN_N; i++) {
+        let px = rainPosA[i*3], py = rainPosA[i*3+1], pz = rainPosA[i*3+2];
+        px -= ux * fall; py -= uy * fall; pz -= uz * fall;
+        const rel = (px - cx) * ux + (py - cy) * uy + (pz - cz) * uz;
+        const dx = px - cx, dy = py - cy, dz = pz - cz;
+        if (rel < -3 || dx*dx + dy*dy + dz*dz > 500) {
+            const a = (Math.random() - 0.5) * 22, b = (Math.random() - 0.5) * 22, c = 3 + Math.random() * 9;
+            px = cx + patchE.x * a + patchN.x * b + ux * c;
+            py = cy + patchE.y * a + patchN.y * b + uy * c;
+            pz = cz + patchE.z * a + patchN.z * b + uz * c;
+        }
+        rainPosA[i*3] = px; rainPosA[i*3+1] = py; rainPosA[i*3+2] = pz;
+    }
+    rainGeo.attributes.position.needsUpdate = true;
+}
+
+// bubbles rising past the camera when underwater
+let underF = 0;
+const BUB_N = 140;
+const bubPosA = new Float32Array(BUB_N * 3);
+const bubGeo = new THREE.BufferGeometry();
+bubGeo.setAttribute('position', new THREE.BufferAttribute(bubPosA, 3));
+const bubPts = new THREE.Points(bubGeo, new THREE.PointsMaterial({
+    map: splashTex, color: 0xbfe8f0, size: 0.09, sizeAttenuation: true,
+    transparent: true, opacity: 0.55, depthWrite: false
+}));
+bubPts.visible = false;
+bubPts.frustumCulled = false;
+scene.add(bubPts);
+function updateBubbles(dt) {
+    bubPts.visible = underF > 0.25;
+    if (!bubPts.visible) return;
+    const cx = camera.position.x, cy = camera.position.y, cz = camera.position.z;
+    const cl = Math.hypot(cx, cy, cz) || 1;
+    const ux = cx / cl, uy = cy / cl, uz = cz / cl;
+    const rise = 1.4 * dt, t = performance.now() * 0.003;
+    for (let i = 0; i < BUB_N; i++) {
+        let px = bubPosA[i*3], py = bubPosA[i*3+1], pz = bubPosA[i*3+2];
+        px += ux * rise + Math.sin(t + i) * 0.15 * dt;
+        py += uy * rise + Math.cos(t * 1.3 + i) * 0.15 * dt;
+        pz += uz * rise;
+        const dx = px - cx, dy = py - cy, dz = pz - cz;
+        const surf = Math.hypot(px, py, pz) > seaRadius - 0.05;
+        if (surf || dx*dx + dy*dy + dz*dz > 90) {
+            const a = (Math.random() - 0.5) * 9, b = (Math.random() - 0.5) * 9, c = -1 - Math.random() * 4;
+            px = cx + patchE.x * a + patchN.x * b + ux * c;
+            py = cy + patchE.y * a + patchN.y * b + uy * c;
+            pz = cz + patchE.z * a + patchN.z * b + uz * c;
+        }
+        bubPosA[i*3] = px; bubPosA[i*3+1] = py; bubPosA[i*3+2] = pz;
+    }
+    bubGeo.attributes.position.needsUpdate = true;
 }
 
 // ============================================
@@ -1038,8 +1170,8 @@ const cloudMat = new THREE.ShaderMaterial({
     `,
     fragmentShader: `
         ${GLSL_NOISE}
-        uniform vec3 uSun;
-        uniform float uTime, uPlanetR, uInnerR, uOuterR, uDensity;
+        uniform vec3 uSun, uFlashDir;
+        uniform float uTime, uPlanetR, uInnerR, uOuterR, uDensity, uStorm, uFlash;
         varying vec3 vWorld, vRayO, vRayD;
 
         #define STEPS 18
@@ -1067,10 +1199,13 @@ const cloudMat = new THREE.ShaderMaterial({
             // Less clouds at poles
             float latMask = smoothstep(0.8, 0.4, abs(sp.y));
 
-            // Simple FBM noise for cloud shape
+            // FBM base shape eroded by high-frequency detail at the edges ->
+            // crisp cauliflower silhouettes instead of uniform blur
             vec3 pos = sp * 4.0 + vec3(uTime * 0.012, 0.0, uTime * 0.008);
             float n = fbm(pos, 5);
             n = smoothstep(0.0, 0.6, n); // Coverage control
+            float detail = fbm(pos * 6.1 + vec3(uTime * 0.02), 3) * 0.5 + 0.5;
+            n = max(0.0, n - (1.0 - n) * detail * 0.55);
 
             return n * hFall * latMask * uDensity;
         }
@@ -1147,8 +1282,12 @@ const cloudMat = new THREE.ShaderMaterial({
                     // Light march towards sun
                     float lightTransmittance = lightMarch(rayPos);
 
+                    // powder term: dense cores go dark before they go bright (the
+                    // crevice shading that sells volumetric cumulus)
+                    float powder = 1.0 - exp(-density * 8.0);
+
                     // Accumulate light energy (Sebastian's formula)
-                    lightEnergy += density * stepSize * transmittance * lightTransmittance * phaseVal;
+                    lightEnergy += density * stepSize * transmittance * lightTransmittance * phaseVal * (0.35 + 0.65 * powder);
 
                     // Beer's law for view ray
                     transmittance *= exp(-density * stepSize * lightAbsorptionThroughCloud);
@@ -1159,8 +1298,15 @@ const cloudMat = new THREE.ShaderMaterial({
 
             if(transmittance > 0.99) discard;
 
-            // Final cloud color (Sebastian's blend)
-            vec3 cloudCol = lightEnergy * sunCol;
+            // Final cloud color: storm darkening, bluish ambient underside,
+            // and lightning flashes lighting the volume from inside
+            vec3 stormSun = mix(sunCol, vec3(0.42, 0.45, 0.53), uStorm * 0.75);
+            vec3 cloudCol = lightEnergy * stormSun;
+            cloudCol += vec3(0.16, 0.22, 0.33) * (1.0 - transmittance) * (0.30 + uStorm * 0.25);
+            if(uFlash > 0.001){
+                float fl = pow(max(0.0, dot(normalize(vWorld), uFlashDir)), 5.0);
+                cloudCol += vec3(0.85, 0.88, 1.0) * uFlash * fl * (1.0 - transmittance) * 2.5;
+            }
 
             // Output clouds blend over background via transmittance
             gl_FragColor = vec4(cloudCol, 1.0 - transmittance);
@@ -1172,7 +1318,10 @@ const cloudMat = new THREE.ShaderMaterial({
         uPlanetR: { value: PLANET_RADIUS },
         uInnerR: { value: cloudInnerR },
         uOuterR: { value: cloudOuterR },
-        uDensity: { value: 0.8 }
+        uDensity: { value: 0.8 },
+        uStorm: { value: 0 },
+        uFlash: { value: 0 },
+        uFlashDir: { value: new THREE.Vector3(1, 0, 0) }
     },
     transparent: true,
     side: THREE.DoubleSide,
@@ -1435,13 +1584,13 @@ const compMat = new THREE.ShaderMaterial({
         tScene: { value: sceneRT.texture }, tVol: { value: volRT.texture },
         tCloudShadow: { value: cloudShadowRT.texture }, tOcclusion: { value: occlusionRT.texture },
         uSunScreen: { value: new THREE.Vector2(0.5, 0.5) }, uRadialWeight: { value: 0.0 },
-        uFogW: { value: 0.0 }, uDebug: { value: 0 }
+        uFogW: { value: 0.0 }, uUnder: { value: 0.0 }, uTimeU: { value: 0.0 }, uDebug: { value: 0 }
     },
     vertexShader: FS_VERT,
     fragmentShader: `
         uniform sampler2D tScene, tVol, tCloudShadow, tOcclusion;
         uniform vec2 uSunScreen;
-        uniform float uRadialWeight, uFogW, uDebug;
+        uniform float uRadialWeight, uFogW, uUnder, uTimeU, uDebug;
         varying vec2 vUv;
         void main(){
             vec4 vol4 = texture2D(tVol, vUv);
@@ -1463,11 +1612,19 @@ const compMat = new THREE.ShaderMaterial({
                 }
                 rays *= uRadialWeight;
             }
+            // underwater: wavy refraction wobble on the scene sample
+            vec2 suv = vUv;
+            if(uUnder > 0.01){
+                suv += vec2(sin(vUv.y * 42.0 + uTimeU * 2.1), cos(vUv.x * 38.0 + uTimeU * 1.7)) * 0.0045 * uUnder;
+            }
             vec3 shaft = vec3(1.0) - exp(-v * 1.4);
             // aerial perspective: the haze dims what is behind it, so shadowed columns
             // become dark bands even against bright sky - beams read from any angle
             float Tf = mix(1.0, vol4.a, uFogW);
-            gl_FragColor = vec4(texture2D(tScene, vUv).rgb * Tf + shaft + rays * vec3(1.0, 0.92, 0.78), 1.0);
+            vec3 outC = texture2D(tScene, suv).rgb * Tf + shaft + rays * vec3(1.0, 0.92, 0.78);
+            // underwater: pull everything toward aquamarine depth fog
+            outC = mix(outC, outC * vec3(0.30, 0.72, 0.78) + vec3(0.015, 0.10, 0.13), uUnder * 0.8);
+            gl_FragColor = vec4(outC, 1.0);
         }
     `
 });
@@ -1481,7 +1638,7 @@ const fsQuad = new THREE.Mesh(new THREE.PlaneBufferGeometry(2, 2), volMat);
 fsQuad.frustumCulled = false;
 fsScene.add(fsQuad);
 const fsCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
-const _sunRight = new THREE.Vector3(), _sunUp = new THREE.Vector3(), _sunScreen = new THREE.Vector3();
+const _sunRight = new THREE.Vector3(), _sunUp = new THREE.Vector3(), _sunScreen = new THREE.Vector3(), _hTmp = new THREE.Vector3();
 
 // Cast the cloud shadow map onto the terrain (view-independent: cloud shadows sweep
 // across the land, visible from any angle or distance, unlike the in-air shafts).
@@ -1492,13 +1649,18 @@ terrainMat.onBeforeCompile = (shader) => {
     shader.uniforms.uExtentG = { value: CLOUD_EXTENT };
     shader.uniforms.uTimeG = { value: 0 };
     shader.uniforms.uSunG = { value: sunDir };
+    shader.uniforms.uWetG = { value: 0 };                 // storm wetness
+    shader.uniforms.uSimT = { value: waterSimOK ? simRTA.texture : flatSim };
+    shader.uniforms.uPAnchorT = { value: patchAnchor };
+    shader.uniforms.uPET = { value: patchE };
+    shader.uniforms.uPNT = { value: patchN };
     shader.vertexShader = 'varying vec3 vWorldG;\n' + shader.vertexShader.replace(
         '#include <begin_vertex>',
         '#include <begin_vertex>\n    vWorldG = (modelMatrix * vec4(transformed, 1.0)).xyz;'
     );
-    shader.fragmentShader = `uniform sampler2D uCloudShadowG;
-uniform vec3 uSunRightG, uSunUpG, uSunG;
-uniform float uExtentG, uTimeG;
+    shader.fragmentShader = `uniform sampler2D uCloudShadowG, uSimT;
+uniform vec3 uSunRightG, uSunUpG, uSunG, uPAnchorT, uPET, uPNT;
+uniform float uExtentG, uTimeG, uWetG;
 varying vec3 vWorldG;
 float causticG(vec2 p, float t){
     vec2 i = p; float c = 1.0;
@@ -1510,21 +1672,47 @@ float causticG(vec2 p, float t){
     c /= 3.0; c = 1.17 - pow(c, 1.4);
     return clamp(pow(abs(c), 8.0), 0.0, 1.2);
 }
+float hashT(vec3 p){ p = fract(p * 0.1031); p += dot(p, p.zyx + 31.32); return fract((p.x + p.y) * p.z); }
 ` + shader.fragmentShader.replace(
         '#include <dithering_fragment>',
         `#include <dithering_fragment>
+    float rG = length(vWorldG);
+    vec3 dG = vWorldG / rG;
+    float dayG = smoothstep(-0.05, 0.25, dot(dG, uSunG));
+
+    // micro-detail: value-noise albedo break-up so surfaces are not flat-colored
+    float mnG = hashT(floor(vWorldG * 11.0)) * 0.6 + hashT(floor(vWorldG * 47.0)) * 0.4;
+    gl_FragColor.rgb *= 0.90 + 0.18 * mnG;
+
+    // slope shading: steep faces read as bare rock
+    vec3 wNG = inverseTransformDirection(normal, viewMatrix);
+    float slopeG = 1.0 - abs(dot(wNG, dG));
+    gl_FragColor.rgb = mix(gl_FragColor.rgb, vec3(0.42, 0.40, 0.38) * (0.6 + 0.5 * mnG) * dayG, smoothstep(0.55, 0.8, slopeG) * 0.55);
+
+    // cloud shadows swept across the ground
     vec2 csuvG = vec2(dot(vWorldG, uSunRightG), dot(vWorldG, uSunUpG)) / (2.0 * uExtentG) + 0.5;
     float cshadowG = texture2D(uCloudShadowG, csuvG).r;
     gl_FragColor.rgb *= mix(0.42, 1.0, smoothstep(0.12, 0.6, cshadowG));
-    // caustic light webs on the submerged seabed (maldives lagoon look)
-    float rG = length(vWorldG);
+
+    // wet sand band that follows the ACTUAL simulated waves running up the beach
+    vec2 puvT = vec2(dot(vWorldG, uPET), dot(vWorldG, uPNT)) / ${PATCH_SIZE.toFixed(1)} + 0.5;
+    float inPT = step(0.0, dot(dG, uPAnchorT))
+               * step(abs(puvT.x - 0.5), 0.48) * step(abs(puvT.y - 0.5), 0.48);
+    float wlG = ${seaRadius.toFixed(2)} + texture2D(uSimT, puvT).r * inPT + 0.015;
+    float wetG = smoothstep(0.14, 0.01, rG - wlG);
+    wetG = max(wetG, uWetG * 0.55);                       // storm rain wets everything
+    gl_FragColor.rgb *= mix(1.0, 0.58, wetG * smoothstep(0.9, 0.2, rG - ${seaRadius.toFixed(2)}) + uWetG * 0.28);
+
     float depthG = ${seaRadius.toFixed(2)} - rG;
     if(depthG > 0.0){
-        vec3 dG = vWorldG / rG;
+        // caustic light webs on the submerged seabed (maldives lagoon look)
         float fadeG = smoothstep(0.5, 0.06, depthG) * smoothstep(0.0, 0.02, depthG);
-        float dayG = smoothstep(-0.05, 0.25, dot(dG, uSunG));
         vec2 cuvG = vec2(atan(dG.z, dG.x), asin(clamp(dG.y, -1.0, 1.0))) * 220.0;
         gl_FragColor.rgb += vec3(0.40, 0.60, 0.55) * causticG(cuvG, uTimeG * 0.6) * fadeG * dayG;
+    } else if(depthG > -0.4){
+        // sand glitter: rare micro-facets catching the sun on dry beach
+        float gl1 = step(0.9965, hashT(floor(vWorldG * 90.0)));
+        gl_FragColor.rgb += vec3(1.0, 0.97, 0.9) * gl1 * dayG * (1.0 - wetG) * 0.85;
     }`
     );
     terrainMat.userData.shader = shader;
@@ -1651,42 +1839,144 @@ class Rover {
     createMesh() {
         this.mesh = new THREE.Group();
 
-        const bodyGeo = new THREE.BoxGeometry(1.2, 0.5, 1.6);
-        const bodyMat = new THREE.MeshStandardMaterial({ color: 0xff4400, roughness: 0.5, metalness: 0.4 });
-        const body = new THREE.Mesh(bodyGeo, bodyMat);
-        body.position.y = 0.6;
+        // --- chassis: car silhouette profile, extruded across the width with a
+        // bevel so every edge is rounded and catches the clearcoat highlight
+        const prof = new THREE.Shape();
+        prof.moveTo(-0.80, 0.38);
+        prof.lineTo(-0.80, 0.72);
+        prof.quadraticCurveTo(-0.72, 0.84, -0.52, 0.86);   // trunk
+        prof.quadraticCurveTo(-0.34, 1.10, -0.05, 1.12);   // cabin rear slope
+        prof.lineTo(0.14, 1.10);                            // roof
+        prof.quadraticCurveTo(0.40, 0.92, 0.58, 0.80);      // windshield slope
+        prof.quadraticCurveTo(0.76, 0.74, 0.80, 0.58);      // hood -> nose
+        prof.lineTo(0.80, 0.38);
+        prof.closePath();
+        const bodyGeo = new THREE.ExtrudeGeometry(prof, {
+            depth: 0.92, bevelEnabled: true, bevelThickness: 0.09, bevelSize: 0.08, bevelSegments: 3
+        });
+        bodyGeo.rotateY(-Math.PI / 2);
+        bodyGeo.translate(0.46, 0, 0);   // center the width
+        // Substrate-style layered car paint: metallic base + procedural flakes
+        // (injected below) + smooth clearcoat, reflecting a live cubemap
+        this.paintMat = new THREE.MeshPhysicalMaterial({
+            color: 0xd42808, metalness: 0.7, roughness: 0.34,
+            clearcoat: 1.0, clearcoatRoughness: 0.08,
+            envMap: carEnvRT.texture, envMapIntensity: 1.1
+        });
+        this.paintMat.onBeforeCompile = (shader) => {
+            shader.uniforms.uSunP = { value: sunDir };
+            shader.vertexShader = 'varying vec3 vWorldP;\n' + shader.vertexShader.replace(
+                '#include <begin_vertex>',
+                '#include <begin_vertex>\n    vWorldP = (modelMatrix * vec4(transformed, 1.0)).xyz;'
+            );
+            shader.fragmentShader = `uniform vec3 uSunP;
+varying vec3 vWorldP;
+vec3 hash3P(vec3 p){ p = fract(p * vec3(443.897, 441.423, 437.195)); p += dot(p, p.yzx + 19.19); return fract(vec3((p.x + p.y) * p.z, (p.x + p.z) * p.y, (p.y + p.z) * p.x)); }
+` + shader.fragmentShader.replace(
+                '#include <output_fragment>',
+                `// metallic flake layer: world-anchored micro-mirrors under the clearcoat
+    vec3 cellP = floor(vWorldP * 210.0);
+    vec3 rndP = hash3P(cellP);
+    if(rndP.z > 0.55){
+        vec3 flakeN = normalize(normal + (rndP - 0.5) * 0.5);
+        vec3 viewDirP = normalize(cameraPosition - vWorldP);
+        float glint = pow(max(0.0, dot(reflect(-uSunP, flakeN), viewDirP)), 90.0);
+        outgoingLight += vec3(1.0, 0.85, 0.6) * glint * 2.2;
+    }
+    #include <output_fragment>`
+            );
+        };
+        const body = new THREE.Mesh(bodyGeo, this.paintMat);
         body.castShadow = true;
         body.receiveShadow = true;
         this.mesh.add(body);
 
-        const cabinGeo = new THREE.BoxGeometry(1.0, 0.5, 0.85);
-        const cabinMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.4, metalness: 0.6 });
-        const cabin = new THREE.Mesh(cabinGeo, cabinMat);
-        cabin.position.set(0, 1.05, -0.1);
-        cabin.castShadow = true;
-        cabin.receiveShadow = true;
-        this.mesh.add(cabin);
+        // --- glass canopy bubble with a real interior behind it (genuine parallax
+        // depth through the glass, the effect the substrate POM demos fake)
+        const glassMat = new THREE.MeshPhysicalMaterial({
+            color: 0x8fd8e8, metalness: 0, roughness: 0.05,
+            transparent: true, opacity: 0.32,
+            clearcoat: 1.0, clearcoatRoughness: 0.03,
+            envMap: carEnvRT.texture, envMapIntensity: 1.6, side: THREE.DoubleSide
+        });
+        const canopy = new THREE.Mesh(new THREE.SphereGeometry(0.5, 24, 16), glassMat);
+        canopy.scale.set(0.82, 0.55, 1.0);
+        canopy.position.set(0, 1.06, -0.02);
+        this.mesh.add(canopy);
+        const interiorMat = new THREE.MeshStandardMaterial({ color: 0x14161c, roughness: 0.85 });
+        const seat = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.34, 0.3), interiorMat);
+        seat.position.set(0, 0.98, -0.18);
+        this.mesh.add(seat);
+        const wheelRing = new THREE.Mesh(new THREE.TorusGeometry(0.11, 0.022, 8, 20), interiorMat);
+        wheelRing.position.set(0, 0.98, 0.16);
+        wheelRing.rotation.x = -0.5;
+        this.mesh.add(wheelRing);
 
+        // --- wheels: tire + polished rim + spokes (they all spin together)
         this.wheelMeshes = [];
-        const wheelGeo = new THREE.CylinderGeometry(this.wheelRadius, this.wheelRadius, this.wheelWidth, 32);
-        const wheelMat = new THREE.MeshStandardMaterial({ color: 0x0a0a0a, roughness: 0.9 });
-
+        const tireGeo = new THREE.CylinderGeometry(this.wheelRadius, this.wheelRadius, this.wheelWidth, 28);
+        const tireMat = new THREE.MeshStandardMaterial({ color: 0x0b0b0d, roughness: 0.92 });
+        const rimMat = new THREE.MeshStandardMaterial({
+            color: 0xd8dce2, metalness: 1.0, roughness: 0.25, envMap: carEnvRT.texture
+        });
         this.wheels.forEach(() => {
             const wheelGroup = new THREE.Group();
-            const tire = new THREE.Mesh(wheelGeo, wheelMat);
+            const tire = new THREE.Mesh(tireGeo, tireMat);
             tire.rotation.z = Math.PI / 2;
             tire.castShadow = true;
             wheelGroup.add(tire);
+            const rim = new THREE.Mesh(
+                new THREE.CylinderGeometry(this.wheelRadius * 0.55, this.wheelRadius * 0.55, this.wheelWidth + 0.02, 20), rimMat);
+            rim.rotation.z = Math.PI / 2;
+            wheelGroup.add(rim);
+            for (let s = 0; s < 5; s++) {
+                const spoke = new THREE.Mesh(new THREE.BoxGeometry(this.wheelWidth + 0.03, 0.05, this.wheelRadius * 1.7), rimMat);
+                spoke.rotation.x = (s / 5) * Math.PI;
+                wheelGroup.add(spoke);
+            }
             this.wheelMeshes.push(wheelGroup);
             this.mesh.add(wheelGroup);
         });
 
-        const lightGeo = new THREE.CircleGeometry(0.09, 16);
-        const lightMat = new THREE.MeshStandardMaterial({ color: 0xffffee, emissive: 0xffffee, emissiveIntensity: 2.5 });
-        [-0.42, 0.42].forEach(x => {
-            const light = new THREE.Mesh(lightGeo, lightMat);
-            light.position.set(x, 0.4, 0.85);
-            this.mesh.add(light);
+        // --- headlights: emissive lenses + real spotlights that light the world at
+        // night + additive beam cones for the visible shafts
+        this.headMat = new THREE.MeshStandardMaterial({
+            color: 0xfff6dd, emissive: 0xfff6dd, emissiveIntensity: 0.4
+        });
+        this.spots = [];
+        this.beamCones = [];
+        [-0.34, 0.34].forEach(x => {
+            const lens = new THREE.Mesh(new THREE.CircleGeometry(0.085, 16), this.headMat);
+            lens.position.set(x, 0.58, 0.885);
+            this.mesh.add(lens);
+            const spot = new THREE.SpotLight(0xfff2d0, 0.0, 26, 0.5, 0.55, 1.3);
+            spot.position.set(x, 0.62, 0.8);
+            const tgt = new THREE.Object3D();
+            tgt.position.set(x * 0.6, -0.4, 9);
+            this.mesh.add(tgt);
+            spot.target = tgt;
+            this.mesh.add(spot);
+            this.spots.push(spot);
+            const cone = new THREE.Mesh(
+                new THREE.ConeGeometry(1.1, 7, 16, 1, true),
+                new THREE.MeshBasicMaterial({
+                    color: 0xfff2cc, transparent: true, opacity: 0.0,
+                    depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide
+                }));
+            cone.position.set(x, 0.45, 4.2);
+            cone.rotation.x = Math.PI / 2 - 0.09;
+            this.mesh.add(cone);
+            this.beamCones.push(cone);
+        });
+
+        // --- taillights: brighten when braking
+        this.tailMat = new THREE.MeshStandardMaterial({
+            color: 0x550000, emissive: 0xff2211, emissiveIntensity: 0.35
+        });
+        [-0.32, 0.32].forEach(x => {
+            const tail = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.07, 0.03), this.tailMat);
+            tail.position.set(x, 0.68, -0.885);
+            this.mesh.add(tail);
         });
     }
 
@@ -2106,6 +2396,15 @@ window.addEventListener('keyup', (e) => {
 // ============================================
 // INIT & LOOP
 // ============================================
+// live environment cubemap for the car paint / glass / rims (updated every few
+// frames from the car's position, so the paint reflects the actual world)
+const carEnvRT = new THREE.WebGLCubeRenderTarget(128, {
+    format: THREE.RGBFormat, generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter
+});
+const carEnvCam = new THREE.CubeCamera(0.5, 400, carEnvRT);
+scene.add(carEnvCam);
+let envFrame = 0;
+
 const rover = new Rover();
 const cameraController = new CameraController(rover);
 
@@ -2173,8 +2472,7 @@ document.getElementById('sT').addEventListener('dblclick', () => {
 document.getElementById('sC').addEventListener('input', (e) => {
     const v = parseFloat(e.target.value);
     document.getElementById('vC').textContent = v.toFixed(1);
-    cloudDensity = v;
-    cloudMesh.material.uniforms.uDensity.value = v;
+    cloudDensity = v;   // storm density is layered on top of this in the loop
 });
 
 let lastTime = performance.now();
@@ -2221,9 +2519,52 @@ function animate() {
     emitFromCells();
     updateSplash(dt);
     splash.material.opacity = 0.2 + 0.75 * Math.max(0, sunDir.dot(carDir)); // dim spray at night
+
+    // weather cycle: storm clouds, rain into the fluid sim, lightning
+    updateWeather(dt);
+    cloudMesh.material.uniforms.uDensity.value = cloudDensity + weather.storm * 1.5;
+    cloudMesh.material.uniforms.uStorm.value = weather.storm;
+    cloudMesh.material.uniforms.uFlash.value = weather.flash;
+    cloudMesh.material.uniforms.uFlashDir.value.copy(weather.flashDir);
+    forceMat.uniforms.uRain.value = weather.rain;
+    forceMat.uniforms.uTimeR.value = tsec;
+    sunLight.intensity = 1.2 * (1 - weather.storm * 0.55) + weather.flash * 1.4;
+    ambientLight.intensity = 0.6 * (1 - weather.storm * 0.35) + weather.flash * 0.7;
+    updateRainFX(dt);
+
+    // underwater camera mode
+    underF += ((camera.position.length() < seaRadius - 0.02 ? 1 : 0) - underF) * Math.min(1, dt * 6);
+    compMat.uniforms.uUnder.value = underF;
+    compMat.uniforms.uTimeU.value = tsec;
+    updateBubbles(dt);
+
+    // hero car: live paint reflections, headlights at night, brake lights
+    rover.mesh.updateMatrixWorld(true);
+    if ((envFrame++ % 3) === 0) {
+        rover.mesh.visible = false;
+        carEnvCam.position.copy(rover.position);
+        carEnvCam.update(renderer, scene);
+        rover.mesh.visible = true;
+    }
+    const nightF = Math.min(1, Math.max(0, (0.06 - sunDir.dot(carDir)) / 0.22));
+    for (let i = 0; i < 2; i++) {
+        rover.spots[i].intensity = nightF * 2.6;
+        rover.beamCones[i].material.opacity = nightF * (0.045 + weather.rain * 0.035);
+        rover.spots[i].getWorldPosition(oceanMat.uniforms.uHeadPos.value[i]);
+        rover.spots[i].target.getWorldPosition(_hTmp).sub(oceanMat.uniforms.uHeadPos.value[i]).normalize();
+        oceanMat.uniforms.uHeadDir.value[i].copy(_hTmp);
+    }
+    oceanMat.uniforms.uHeadOn.value = nightF;
+    rover.headMat.emissiveIntensity = 0.35 + nightF * 2.4;
+    rover.tailMat.emissiveIntensity = (input.down || input.space) ? 3.2 : 0.3 + nightF * 1.0;
     oceanMat.uniforms.uTime.value = tsec;
     oceanMat.uniforms.uSun.value = sunDir;
-    if (terrainMat.userData.shader) terrainMat.userData.shader.uniforms.uTimeG.value = tsec; // seabed caustics
+    if (terrainMat.userData.shader) {
+        const ts = terrainMat.userData.shader.uniforms;
+        ts.uTimeG.value = tsec;                 // seabed caustics
+        ts.uWetG.value = weather.storm;         // storm rain wets the ground
+        ts.uSimT.value = waterSimOK ? simRTA.texture : flatSim; // ping-pong sync for the wet shoreline
+    }
     atmoMat.uniforms.uCam.value.copy(camera.position);
     atmoMat.uniforms.uSun.value = sunDir;
     cloudMesh.material.uniforms.uTime.value = now * 0.001;
