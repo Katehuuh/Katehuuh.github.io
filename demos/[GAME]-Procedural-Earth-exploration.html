@@ -695,8 +695,10 @@ function updateWheelSplats() {
         const px = _wxy.dot(patchE), py = _wxy.dot(patchN);
         const vx = rover.velocity.dot(patchE), vy = rover.velocity.dot(patchN);
         const speed = Math.hypot(vx, vy);
-        // throttle churn: spinning wheels froth the water even at low speed
-        const churn = (rover.throttle > 0 ? 2.2 : 0.0) + speed * 0.45;
+        // a parked car must not froth the water: no injection at all when static
+        if (speed < 0.4) { pArr[i].set(0, 0, 0, 0); _wheelPrevW[i].copy(_wxy); continue; }
+        // churn scales with real movement (throttle only adds on top of motion)
+        const churn = speed * 0.5 + (rover.throttle > 0 ? Math.min(1.6, speed * 0.6) : 0);
         pArr[i].set(0.42, 0.30, Math.min(6, churn), 1);
         wArr[i].set(px, py, vx, vy);
         oArr[i].set(_wheelPrevW[i].dot(patchE), _wheelPrevW[i].dot(patchN), 0, 0);
@@ -1717,6 +1719,14 @@ float causticG(vec2 p, float t){
     return clamp(pow(abs(c), 8.0), 0.0, 1.2);
 }
 float hashT(vec3 p){ p = fract(p * 0.1031); p += dot(p, p.zyx + 31.32); return fract((p.x + p.y) * p.z); }
+float vnT(vec3 p){
+    vec3 ip = floor(p), fp = fract(p);
+    fp = fp * fp * (3.0 - 2.0 * fp);
+    return mix(mix(mix(hashT(ip), hashT(ip + vec3(1,0,0)), fp.x),
+                   mix(hashT(ip + vec3(0,1,0)), hashT(ip + vec3(1,1,0)), fp.x), fp.y),
+               mix(mix(hashT(ip + vec3(0,0,1)), hashT(ip + vec3(1,0,1)), fp.x),
+                   mix(hashT(ip + vec3(0,1,1)), hashT(ip + vec3(1,1,1)), fp.x), fp.y), fp.z);
+}
 ` + shader.fragmentShader.replace(
         '#include <dithering_fragment>',
         `#include <dithering_fragment>
@@ -1724,8 +1734,9 @@ float hashT(vec3 p){ p = fract(p * 0.1031); p += dot(p, p.zyx + 31.32); return f
     vec3 dG = vWorldG / rG;
     float dayG = smoothstep(-0.05, 0.25, dot(dG, uSunG));
 
-    // micro-detail: value-noise albedo break-up so surfaces are not flat-colored
-    float mnG = hashT(floor(vWorldG * 11.0)) * 0.6 + hashT(floor(vWorldG * 47.0)) * 0.4;
+    // micro-detail: SMOOTH value noise (blocky floor-cells read as an ugly grid,
+    // especially through the water)
+    float mnG = vnT(vWorldG * 9.0) * 0.6 + vnT(vWorldG * 31.0) * 0.4;
     gl_FragColor.rgb *= 0.90 + 0.18 * mnG;
 
     // slope shading: steep faces read as bare rock
@@ -1749,10 +1760,15 @@ float hashT(vec3 p){ p = fract(p * 0.1031); p += dot(p, p.zyx + 31.32); return f
 
     float depthG = ${seaRadius.toFixed(2)} - rG;
     if(depthG > 0.0){
-        // caustic light webs on the submerged seabed (maldives lagoon look)
+        // maldives seabed: soft sand ripple bands sculpted by the water...
+        float ripG = sin(dot(vWorldG, vec3(4.1, 1.3, 3.7)) * 13.0 + vnT(vWorldG * 5.0) * 8.0);
+        gl_FragColor.rgb *= 1.0 + 0.07 * ripG * smoothstep(0.6, 0.05, depthG);
+        // ...and chromatic caustic light webs dancing over them
         float fadeG = smoothstep(0.5, 0.06, depthG) * smoothstep(0.0, 0.02, depthG);
         vec2 cuvG = vec2(atan(dG.z, dG.x), asin(clamp(dG.y, -1.0, 1.0))) * 220.0;
-        gl_FragColor.rgb += vec3(0.40, 0.60, 0.55) * causticG(cuvG, uTimeG * 0.6) * fadeG * dayG;
+        float caG = causticG(cuvG, uTimeG * 0.6);
+        float cbG = causticG(cuvG + vec2(0.9, 0.4), uTimeG * 0.6 + 0.6);
+        gl_FragColor.rgb += (vec3(0.34, 0.60, 0.50) * caG + vec3(0.18, 0.28, 0.50) * cbG) * fadeG * dayG;
     } else if(depthG > -0.4){
         // sand glitter: rare micro-facets catching the sun on dry beach
         float gl1 = step(0.9965, hashT(floor(vWorldG * 90.0)));
@@ -1801,7 +1817,10 @@ const starMat = new THREE.ShaderMaterial({
         }
         void main(){
             vec3 d = normalize(vDirS);
-            float night = smoothstep(0.18, -0.12, dot(d, uSun));
+            // stars only when the sky at the CAMERA is dark (no stars at noon),
+            // and fade further for sky directions near the sun
+            float camNight = smoothstep(0.10, -0.10, dot(normalize(cameraPosition), uSun));
+            float night = smoothstep(0.18, -0.12, dot(d, uSun)) * camNight;
             if(night < 0.01){ gl_FragColor = vec4(0.0, 0.0, 0.0, 0.0); return; }
             float s = starLayer(d, 170.0, 0.994, uTime)
                     + starLayer(d, 83.0, 0.9965, uTime * 0.8) * 1.4;
@@ -1852,6 +1871,10 @@ const auroraMat = new THREE.ShaderMaterial({
         float hashA(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
         void main(){
             vec3 rd = normalize(vRayD), ro = vRayO;
+            // no aurora in daylight: the viewer's own bright sky drowns it out,
+            // so fade by how dark the sky is at the CAMERA's position
+            float camNight = smoothstep(0.05, -0.12, dot(normalize(ro), uSun));
+            if(camNight < 0.01) discard;
             vec2 outer = raySphere(uOuterA, ro, rd);
             if(outer.y < 0.0) discard;
             float start = max(0.0, outer.x), end = outer.y;
@@ -1884,7 +1907,7 @@ const auroraMat = new THREE.ShaderMaterial({
                 vec3 aCol = mix(vec3(0.08, 1.0, 0.38), vec3(0.55, 0.18, 0.95), smoothstep(0.12, 0.9, hf));
                 col += aCol * cur * band * night * prof;
             }
-            col *= seg * 0.38;
+            col *= seg * 0.38 * camNight;
             if(col.g + col.r < 0.003) discard;
             gl_FragColor = vec4(col, 1.0);
         }
@@ -2019,18 +2042,21 @@ class Rover {
 
         // --- chassis: car silhouette profile, extruded across the width with a
         // bevel so every edge is rounded and catches the clearcoat highlight
+        // pickup truck silhouette: long flat bed at the rear, boxy cab forward,
+        // long hood - crisp edges (small bevel), not a rounded coupe
         const prof = new THREE.Shape();
-        prof.moveTo(-0.80, 0.38);
-        prof.lineTo(-0.80, 0.72);
-        prof.quadraticCurveTo(-0.72, 0.84, -0.52, 0.86);   // trunk
-        prof.quadraticCurveTo(-0.34, 1.10, -0.05, 1.12);   // cabin rear slope
-        prof.lineTo(0.14, 1.10);                            // roof
-        prof.quadraticCurveTo(0.40, 0.92, 0.58, 0.80);      // windshield slope
-        prof.quadraticCurveTo(0.76, 0.74, 0.80, 0.58);      // hood -> nose
-        prof.lineTo(0.80, 0.38);
+        prof.moveTo(-0.88, 0.40);
+        prof.lineTo(-0.88, 0.80);            // tailgate
+        prof.lineTo(-0.16, 0.80);            // flat open bed rim
+        prof.lineTo(-0.16, 1.16);            // cab rear wall
+        prof.lineTo(0.26, 1.16);             // flat cab roof
+        prof.lineTo(0.46, 0.88);             // raked windshield
+        prof.lineTo(0.84, 0.84);             // long flat hood
+        prof.lineTo(0.88, 0.60);             // grille
+        prof.lineTo(0.88, 0.40);
         prof.closePath();
         const bodyGeo = new THREE.ExtrudeGeometry(prof, {
-            depth: 0.92, bevelEnabled: true, bevelThickness: 0.09, bevelSize: 0.08, bevelSegments: 3
+            depth: 0.92, bevelEnabled: true, bevelThickness: 0.045, bevelSize: 0.04, bevelSegments: 2
         });
         bodyGeo.rotateY(-Math.PI / 2);
         bodyGeo.translate(0.46, 0, 0);   // center the width
@@ -2078,17 +2104,21 @@ vec3 hash3P(vec3 p){ p = fract(p * vec3(443.897, 441.423, 437.195)); p += dot(p,
             envMap: carEnvRT.texture, envMapIntensity: 1.6, side: THREE.DoubleSide
         });
         const canopy = new THREE.Mesh(new THREE.SphereGeometry(0.5, 24, 16), glassMat);
-        canopy.scale.set(0.82, 0.55, 1.0);
-        canopy.position.set(0, 1.06, -0.02);
+        canopy.scale.set(0.80, 0.48, 0.66);
+        canopy.position.set(0, 1.10, 0.06);   // over the cab
         this.mesh.add(canopy);
         const interiorMat = new THREE.MeshStandardMaterial({ color: 0x14161c, roughness: 0.85 });
-        const seat = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.34, 0.3), interiorMat);
-        seat.position.set(0, 0.98, -0.18);
+        const seat = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.34, 0.26), interiorMat);
+        seat.position.set(0, 1.0, -0.04);
         this.mesh.add(seat);
-        const wheelRing = new THREE.Mesh(new THREE.TorusGeometry(0.11, 0.022, 8, 20), interiorMat);
-        wheelRing.position.set(0, 0.98, 0.16);
+        const wheelRing = new THREE.Mesh(new THREE.TorusGeometry(0.10, 0.02, 8, 20), interiorMat);
+        wheelRing.position.set(0, 1.0, 0.2);
         wheelRing.rotation.x = -0.5;
         this.mesh.add(wheelRing);
+        // open truck bed: dark liner inset behind the cab
+        const bedLiner = new THREE.Mesh(new THREE.BoxGeometry(0.78, 0.05, 0.62), interiorMat);
+        bedLiner.position.set(0, 0.80, -0.52);
+        this.mesh.add(bedLiner);
 
         // --- wheels: tire + polished rim + spokes (they all spin together)
         this.wheelMeshes = [];
