@@ -1,6 +1,11 @@
 {
   "demos": [
     {
+      "name": "[GAME]-EONS-evolution-saga",
+      "type": "file",
+      "filename": "[GAME]-EONS-evolution-saga.html"
+    },
+    {
       "name": "[SHOW]-Black-Hole-fable-5",
       "type": "file",
       "filename": "[SHOW]-Black-Hole-fable-5.html"
