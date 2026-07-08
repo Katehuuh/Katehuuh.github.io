@@ -143,7 +143,8 @@ const Planet={
     const rng=Rng(seed).fork('planet');
     const N=W*H;
     const elev=this.elev=new Float32Array(N), temp=this.temp=new Float32Array(N),
-          moist=this.moist=new Float32Array(N), biome=this.biome=new Uint8Array(N), ocean=this.ocean=new Uint8Array(N);
+          moist=this.moist=new Float32Array(N), biome=this.biome=new Uint8Array(N), ocean=this.ocean=new Uint8Array(N),
+          boundary=this.boundary=new Float32Array(N); // signed plate-boundary strength (>0 convergent/volcanic) - used by Civ events + Lume
     // sphere-point cache for the current row (recomputed per j)
     const nz=makeNoise(rng.fork('elev').seedVal);
     // --- plates ---
@@ -175,6 +176,7 @@ const Planet={
         e+=0.30*nz.fbm(sx*3.1+11,sy*3.1,sz*3.1,4);
         if(conv>0) e+=nz.ridged(sx*3.4+5,sy*3.4,sz*3.4,4)*edge*conv*1.05;
         else e+=edge*conv*0.35; // divergent rift lowers
+        boundary[j*W+i]=conv*edge;
         elev[j*W+i]=e; if(e<emin)emin=e; if(e>emax)emax=e;
       }
     }
@@ -1189,6 +1191,147 @@ const City={ saveAs:'world', name:'City', ecs:null, rng:null, aiR:null, t:0, mod
 };
 
 // ============================================================================
+// P5: Civilization  [doc section 16] - the whole planet as a province board
+//   provinces segmented from real geography; 6-10 AI nations from the trait
+//   matrix; economy (gold/research/Lume) + 9-node tech + stack combat +
+//   diplomacy + planet-driven events; unify 60% -> Trait Card V
+// ============================================================================
+const CIV_TECH=[
+  {row:0,name:'Bronze Arms',cost:16},{row:0,name:'Iron Ranks',cost:40},{row:0,name:'Siegecraft',cost:74},
+  {row:1,name:'Sacred Rites',cost:16},{row:1,name:'Academies',cost:40},{row:1,name:'Broadcast',cost:74},
+  {row:2,name:'Roadworks',cost:16},{row:2,name:'Markets',cost:40},{row:2,name:'Guilds',cost:74} ];
+const CIV_ROWCOL=['#ff9a7f','#9ad0ff','#c9a24b'], CIV_ROWNAME=['military','culture','economy'];
+function hexRgb(h){ return [parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)]; }
+const Civ={ saveAs:'world', name:'Civilization', rng:null, t:0, mode:'map', turn:1,
+  W:0,H:0, prov:null, provs:null, nations:null, player:null, sel:-1, selNation:-1, board:null, boardDirty:true, view:null, exiting:0, endInfo:'', _btns:null,
+  load(){ this.rng=Game.rng.fork('civ'); this.t=0; this.turn=1; this.mode='map'; this.sel=-1; this.selNation=-1; this.exiting=0; this.boardDirty=true;
+    this._segment(); this._makeNations(); this.view={z:1,bx:0,by:0,bw:0,bh:0}; Audio.motif(); toast('the age of nations - unify the world by sword, song, or coin.'); },
+  _segment(){ const P=Planet,W=P.W,H=P.H,N=W*H,rng=this.rng; this.W=W; this.H=H;
+    const land=[]; for(let k=0;k<N;k++)if(!P.ocean[k])land.push(k);
+    const NP=clamp(Math.round(land.length/850),34,80), seeds=[]; for(let i=0;i<NP;i++)seeds.push(land[rng.int(0,land.length)]);
+    const prov=this.prov=new Int16Array(N).fill(-1);
+    for(const k of land){ const j=(k/W)|0,i=k%W; let best=0,bd=1e18; for(let s=0;s<NP;s++){ const sk=seeds[s],sj=(sk/W)|0,si=sk%W; let di=Math.abs(i-si); di=Math.min(di,W-di); const dj=j-sj,d=di*di+dj*dj; if(d<bd){bd=d;best=s;} } prov[k]=best; }
+    const provs=this.provs=[]; for(let s=0;s<NP;s++)provs.push({id:s,cells:[],si:0,sj:0,bc:{},owner:-1,capital:false,lume:false,volcano:false,army:0,dev:1,drought:0,gainedBy:null,neighbors:new Set()});
+    for(const k of land){ const p=provs[prov[k]]; p.cells.push(k); p.si+=k%W; p.sj+=(k/W)|0; const b=P.biome[k]; p.bc[b]=(p.bc[b]||0)+1; if(P.boundary[k]>0.32)p.volcano=true; if(P.boundary[k]<-0.18||P.boundary[k]>0.5)p.lume=true; }
+    for(const p of provs){ const n=p.cells.length||1; p.si/=n; p.sj/=n; p.size=n; let mb=B.GRASS,mc=-1; for(const b in p.bc)if(p.bc[b]>mc){mc=p.bc[b];mb=+b;} p.biome=mb; p.terrainDef=(mb===B.MOUNTAIN||mb===B.SNOW)?1.6:(mb===B.TFOREST||mb===B.TAIGA||mb===B.RAIN)?1.3:1.0; }
+    for(let j=0;j<H;j++)for(let i=0;i<W;i++){ const k=j*W+i,pk=prov[k]; if(pk<0)continue; const rk=j*W+((i+1)%W),dk=(j+1)*W+i;
+      if(prov[rk]>=0&&prov[rk]!==pk){ provs[pk].neighbors.add(prov[rk]); provs[prov[rk]].neighbors.add(pk); }
+      if(j+1<H&&prov[dk]>=0&&prov[dk]!==pk){ provs[pk].neighbors.add(prov[dk]); provs[prov[dk]].neighbors.add(pk); } }
+    for(const p of provs)p.army=rng.int(1,4); },
+  yield(p){ const b=p.biome, g=(b===B.GRASS||b===B.SAVANNA||b===B.SHRUB||b===B.BEACH)?3:(b===B.TFOREST||b===B.RAIN)?2:(b===B.DESERT||b===B.TUNDRA||b===B.ICE)?1:2, c=(b===B.TFOREST||b===B.RAIN||b===B.TAIGA)?2:1;
+    return {g:(g+p.dev-1)*(p.drought>0?0.4:1),c}; },
+  _playerPers(){ let mil=1,cul=1,eco=1; const map={Carnivore:'mil',Predator:'mil',Raider:'mil',Fortifier:'mil',Herbivore:'cul',Social:'cul',Harmonist:'cul',Cultural:'cul',Omnivore:'eco',Adaptive:'eco',Trader:'eco',Builder:'eco',Merchant:'eco'};
+    for(const t of (Game.traits||[])){ const k=t&&map[t.card]; if(k==='mil')mil++;else if(k==='cul')cul++;else if(k==='eco')eco++; } const s=mil+cul+eco; return {mil:mil/s,cul:cul/s,eco:eco/s}; },
+  _randPers(){ let m=this.rng.range(0.2,1),c=this.rng.range(0.2,1),e=this.rng.range(0.2,1),s=m+c+e; return {mil:m/s,cul:c/s,eco:e/s}; },
+  _makeNations(){ const rng=this.rng,NP=this.provs.length,NN=clamp(Math.round(NP/8),6,10),used=new Set();
+    const pickCap=()=>{ for(let i=0;i<300;i++){ const p=this.provs[rng.int(0,NP)]; if(!used.has(p.id)&&p.size>5){ used.add(p.id); return p; } } for(const p of this.provs)if(!used.has(p.id)){used.add(p.id);return p;} return this.provs[0]; };
+    this.nations=[]; for(let n=0;n<NN;n++){ const cap=pickCap(),col=CGEN.PAL[rng.int(0,CGEN.PAL.length)][0];
+      const nat={id:n,name:CGEN.name(rng),color:col,rgb:hexRgb(col),pers:n===0?this._playerPers():this._randPers(),gold:14,research:0,lume:0,tech:new Set(),milT:0,culT:0,ecoT:0,atWar:new Set(),att:{},capital:cap.id,alive:true,battlesWon:0,converts:0,goldEarned:0,isPlayer:n===0};
+      cap.owner=n; cap.capital=true; cap.army=6; cap.dev=3; this.nations.push(nat); }
+    for(const nat of this.nations){ let c=0; for(const nb of this.provs[nat.capital].neighbors){ if(c>=2)break; const p=this.provs[nb]; if(p.owner<0){ p.owner=nat.id; p.army=3; c++; } } }
+    for(const a of this.nations)for(const b of this.nations)if(a!==b)a.att[b.id]=clamp(24+Math.round(-70*Math.abs(a.pers.mil-b.pers.mil)+30),-100,100);
+    this.player=this.nations[0]; },
+  count(id){ let c=0; for(const p of this.provs)if(p.owner===id)c++; return c; },
+  _income(nat){ let g=0,c=0,lu=0; for(const p of this.provs){ if(p.owner!==nat.id)continue; const y=this.yield(p); g+=y.g; c+=y.c; if(p.lume)lu++; }
+    g=Math.round(g*(1+nat.ecoT*0.15)); c=Math.round(c*(1+nat.culT*0.2)); nat.gold+=g; nat.goldEarned+=g; nat.research+=c; nat.lume+=lu; nat._g=g; nat._c=c; },
+  _canTech(idx){ const t=CIV_TECH[idx]; return !this.player.tech.has(idx) && (idx%3===0||this.player.tech.has(idx-1)) && this.player.research>=t.cost; },
+  _research(idx){ if(!this._canTech(idx))return; const t=CIV_TECH[idx]; this.player.research-=t.cost; this.player.tech.add(idx); if(t.row===0)this.player.milT++;else if(t.row===1)this.player.culT++;else this.player.ecoT++; Audio.blip(500,0.06); toast('researched '+t.name,true); },
+  _recruit(){ const p=this.provs[this.sel]; if(!p||p.owner!==0){ toast('select one of your provinces'); return; } if(this.player.gold<6){ toast('need 6 gold'); return; } this.player.gold-=6; p.army+=2+this.player.milT; Audio.blip(200,0.05); },
+  _develop(){ const p=this.provs[this.sel]; if(!p||p.owner!==0)return; if(this.player.gold<10){ toast('need 10 gold'); return; } this.player.gold-=10; p.dev++; toast('province developed'); },
+  _act(target){ const s=this.provs[this.sel],t=this.provs[target]; if(!s||s.owner!==0||!s.neighbors.has(target))return; if(s.army<=1){ toast('no army to move'); return; }
+    const move=s.army-1;
+    if(t.owner===0){ t.army+=move; s.army=1; return; }
+    if(t.owner>0&&!this.player.atWar.has(t.owner))this._war(0,t.owner);
+    const atk=move*(1+this.player.milT*0.2), def=t.army*t.terrainDef;
+    if(atk>def){ const prev=t.owner; t.owner=0; t.capital=false; t.gainedBy='war'; t.army=Math.max(1,Math.round(move-def/(1+this.player.milT*0.2))); s.army=1; this.player.battlesWon++; this.boardDirty=true; toast('province captured'); if(prev>=0)this._checkAlive(prev); this._checkVictory(); }
+    else { s.army=Math.max(1,1+Math.round(move-def*0.6)); t.army=Math.max(1,Math.round(t.army-atk/t.terrainDef)); toast('the assault is repelled'); } },
+  _war(a,b){ this.nations[a].atWar.add(b); this.nations[b].atWar.add(a); this.nations[a].att[b]=Math.min(this.nations[a].att[b]||0,-30); this.nations[b].att[a]=Math.min(this.nations[b].att[a]||0,-30); },
+  _peace(){ const b=this.selNation; if(b<0)return; this.player.atWar.delete(b); this.nations[b].atWar.delete(0); toast('peace with the '+this.nations[b].name); },
+  _gift(){ const b=this.selNation; if(b<0)return; if(this.player.gold<8){ toast('need 8 gold'); return; } this.player.gold-=8; this.nations[b].att[0]=clamp((this.nations[b].att[0]||0)+18,-100,100); toast('a gift sways the '+this.nations[b].name); },
+  _declare(){ const b=this.selNation; if(b<0)return; this._war(0,b); toast('war declared on the '+this.nations[b].name); },
+  _checkAlive(id){ if(id<0)return; const n=this.nations[id]; if(!n.alive)return; if(!this.provs.some(p=>p.owner===id)){ n.alive=false; if(id!==0)toast('the '+n.name+' fall'); } },
+  _aiTurn(nat){ const aff=CIV_TECH.map((t,i)=>i).filter(i=>!nat.tech.has(i)&&(i%3===0||nat.tech.has(i-1))&&nat.research>=CIV_TECH[i].cost);
+    if(aff.length){ aff.sort((x,y)=>this._tw(nat,y)-this._tw(nat,x)); const i=aff[0],t=CIV_TECH[i]; nat.research-=t.cost; nat.tech.add(i); if(t.row===0)nat.milT++;else if(t.row===1)nat.culT++;else nat.ecoT++; }
+    const mine=this.provs.filter(p=>p.owner===nat.id); if(!mine.length)return;
+    if(nat.gold>=6){ nat.gold-=6; this.rng.pick(mine).army+=2+nat.milT; }
+    for(const p of mine){ if(p.army<4)continue; for(const nb of p.neighbors){ const t=this.provs[nb]; if(t.owner===nat.id)continue;
+      const atk=(p.army-1)*(1+nat.milT*0.2), def=t.army*t.terrainDef;
+      const go = t.owner<0 ? this.rng.next()<0.7 : (this.rng.next()<nat.pers.mil*0.7 && (nat.att[t.owner]<-10||this.rng.next()<0.25));
+      if(go&&atk>def*1.15){ if(t.owner>0&&!nat.atWar.has(t.owner))this._war(nat.id,t.owner); const prev=t.owner; t.owner=nat.id; t.capital=false; t.gainedBy='war'; t.army=Math.max(1,Math.round((p.army-1)-def)); p.army=1; nat.battlesWon++; this.boardDirty=true; if(prev>=0)this._checkAlive(prev); break; } } } },
+  _tw(nat,i){ const r=CIV_TECH[i].row; return (r===0?nat.pers.mil:r===1?nat.pers.cul:nat.pers.eco)+this.rng.range(0,0.2); },
+  _diploTick(){ for(const a of this.nations){ if(!a.alive)continue; for(const b of this.nations){ if(a===b||!b.alive)continue; a.att[b.id]=clamp((a.att[b.id]||0)+(a.atWar.has(b.id)?-1.5:0.4),-100,100); } } },
+  _flips(){ for(const p of this.provs){ let bn=-1,bc=0; for(const nb of p.neighbors){ const t=this.provs[nb]; if(t.owner<0)continue; const n=this.nations[t.owner]; if(n.culT>bc){bc=n.culT;bn=t.owner;} }
+    if(bn<0||p.owner===bn||bc<2)continue; const n=this.nations[bn]; if(!this.nations[p.owner<0?bn:p.owner]) continue;
+    if(this.rng.chance(0.018*n.culT*(p.owner<0?2:1)*(this.player.atWar.has(bn)?0.3:1))){ const prev=p.owner; if(prev>=0&&this.nations[prev].isPlayer)continue; p.owner=bn; p.gainedBy='culture'; p.capital=false; n.converts++; this.boardDirty=true; if(bn===0)toast('a province joins your culture'); if(prev>=0)this._checkAlive(prev); } } },
+  _events(){ for(const p of this.provs){ if(p.owner<0)continue;
+    if(p.volcano&&this.rng.chance(0.012)){ p.dev=Math.max(1,p.dev-1); p.army=Math.max(0,p.army-2); if(p.owner===0)toast('a volcano erupts in your lands'); }
+    if((p.biome===B.DESERT||p.biome===B.SAVANNA)&&this.rng.chance(0.01)){ p.drought=4; if(p.owner===0)toast('drought grips a province'); }
+    if(p.drought>0)p.drought--; } },
+  _endTurn(){ if(this.exiting)return; for(const n of this.nations)if(n.alive)this._income(n);
+    for(const n of this.nations)if(n.alive&&!n.isPlayer)this._aiTurn(n); this._diploTick(); this._flips(); this._events(); this.turn++; this._checkVictory(); },
+  _checkVictory(){ if(this.exiting)return; const total=this.provs.length,pc=this.count(0);
+    if(pc/total>=0.6){ this.exiting=0.001; this.endInfo='you unify '+Math.round(pc/total*100)+'% of the world'; }
+    else if(pc===0){ this.exiting=0.001; this.endInfo='your civilization has fallen'; } },
+  _finishExit(){ const p=this.player, mil=p.battlesWon+p.milT*2, cul=p.converts+p.culT*3, eco=Math.floor(p.goldEarned/40)+p.ecoT*2;
+    let card='Military'; if(cul>=mil&&cul>=eco)card='Cultural'; else if(eco>mil&&eco>cul)card='Economic';
+    Game.traits[4]={stage:'civ',card,battlesWon:p.battlesWon,converts:p.converts,gold:Math.floor(p.goldEarned)}; Game.log('civ','trait',{card}); Game.persist(); toast('Trait Card V locked: '+card,true); setScreen(Stages.SPACE); },
+  onkey(k){ if(this.exiting)return; if(k==='enter'||k===' ')this._endTurn(); else if(k==='c')this.mode=this.mode==='tech'?'map':'tech'; else if(k==='escape')this.mode='map'; },
+  onpointer(){ if(this._btns)for(const b of this._btns){ if(Input.mx>=b.x&&Input.mx<=b.x+b.w&&Input.my>=b.y&&Input.my<=b.y+b.h){ b.fn(); return; } } if(this.mode==='tech'||this.exiting)return;
+    const v=this.view; if(Input.mx>=v.bx&&Input.mx<=v.bx+v.bw&&Input.my>=v.by&&Input.my<=v.by+v.bh){ const ci=((Input.mx-v.bx)/v.bw*this.W)|0,cj=((Input.my-v.by)/v.bh*this.H)|0,pk=this.prov[cj*this.W+ci];
+      if(pk<0){ this.sel=-1; this.selNation=-1; return; }
+      if(this.sel>=0&&pk!==this.sel&&this.provs[this.sel].owner===0&&this.provs[this.sel].neighbors.has(pk))this._act(pk);
+      else { this.sel=pk; this.selNation=this.provs[pk].owner>0?this.provs[pk].owner:-1; } } },
+  update(dt){ this.t+=dt; if(this.exiting){ this.exiting+=dt; if(this.exiting>2.8)this._finishExit(); } },
+  _star(x,y,r){ ctx.beginPath(); ctx.moveTo(x,y-r); ctx.lineTo(x+r*0.6,y); ctx.lineTo(x,y+r); ctx.lineTo(x-r*0.6,y); ctx.closePath(); ctx.fill(); ctx.stroke(); },
+  _bakeBoard(){ const W=this.W,H=this.H,cv=this.board||document.createElement('canvas'); cv.width=W; cv.height=H; this.board=cv; const cx=cv.getContext('2d'),img=cx.createImageData(W,H),d=img.data;
+    for(let k=0;k<W*H;k++){ const pk=this.prov[k]; let r,g,b; if(pk<0){ const c=BIOME_COL[Planet.biome[k]]; r=c[0]*0.45;g=c[1]*0.5;b=c[2]*0.62; }
+      else { const p=this.provs[pk],bc=BIOME_COL[p.biome]; if(p.owner<0){ r=bc[0]*0.72;g=bc[1]*0.72;b=bc[2]*0.6; } else { const oc=this.nations[p.owner].rgb; r=lerp(bc[0],oc[0],0.55);g=lerp(bc[1],oc[1],0.55);b=lerp(bc[2],oc[2],0.55); if(p.lume){r=lerp(r,180,0.15);b=lerp(b,255,0.15);} } }
+      const o=k*4; d[o]=r;d[o+1]=g;d[o+2]=b;d[o+3]=255; }
+    for(let j=0;j<H;j++)for(let i=0;i<W;i++){ const k=j*W+i,pk=this.prov[k]; if(pk<0)continue; const rk=j*W+((i+1)%W);
+      if(this.prov[rk]>=0){ const o1=this.provs[pk].owner,o2=this.provs[this.prov[rk]].owner,o=k*4; if(o1!==o2){ d[o]*=0.35;d[o+1]*=0.35;d[o+2]*=0.35; } else if(this.prov[rk]!==pk){ d[o]*=0.8;d[o+1]*=0.8;d[o+2]*=0.8; } } }
+    cx.putImageData(img,0,0); this.boardDirty=false; },
+  render(){ ctx.fillStyle='#05070d'; ctx.fillRect(0,0,VW,VH); if(this.boardDirty)this._bakeBoard();
+    const z=Math.min(VW/this.W,(VH-150)/this.H)*0.98, bw=this.W*z, bh=this.H*z, bx=(VW-bw)/2, by=54; this.view={z,bx,by,bw,bh};
+    ctx.imageSmoothingEnabled=false; ctx.drawImage(this.board,bx,by,bw,bh); ctx.imageSmoothingEnabled=true;
+    ctx.strokeStyle='#1d2942'; ctx.strokeRect(bx,by,bw,bh);
+    for(const p of this.provs){ if(p.owner<0&&p.army<=0)continue; const sx=bx+(p.si/this.W)*bw, sy=by+(p.sj/this.H)*bh;
+      if(p.capital&&p.owner>=0){ ctx.fillStyle=this.nations[p.owner].color; ctx.strokeStyle='#fff'; ctx.lineWidth=1.2; this._star(sx,sy,6); }
+      if(p.army>0){ ctx.fillStyle='#000a'; ctx.fillRect(sx-8,sy-6,16,12); ctx.fillStyle=p.owner===0?'#7fe0d3':(p.owner<0?'#aeb8c8':'#ff9a7f'); ctx.font='10px IBM Plex Mono, monospace'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(p.army,sx,sy); } }
+    if(this.sel>=0){ const p=this.provs[this.sel],sx=bx+(p.si/this.W)*bw,sy=by+(p.sj/this.H)*bh; ctx.strokeStyle='#fff'; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(sx,sy,12,0,TAU); ctx.stroke();
+      if(p.owner===0)for(const nb of p.neighbors){ const t=this.provs[nb],tx=bx+(t.si/this.W)*bw,ty=by+(t.sj/this.H)*bh; ctx.strokeStyle=t.owner===0?'#7fe0d3aa':'#ff9a7faa'; ctx.lineWidth=1.5; ctx.beginPath(); ctx.arc(tx,ty,9,0,TAU); ctx.stroke(); } }
+    this._hud(); if(this.mode==='tech')this._techRender();
+    if(this.exiting){ ctx.fillStyle='rgba(8,12,20,'+clamp(this.exiting/3,0,0.82)+')'; ctx.fillRect(0,0,VW,VH); ctx.fillStyle='#e8eef6'; ctx.font='700 26px Space Grotesk, sans-serif'; ctx.textAlign='center'; ctx.fillText(this.endInfo,VW/2,VH/2); } },
+  _hud(){ this._btns=[]; const P=this.player; ctx.textAlign='left'; ctx.textBaseline='middle';
+    ctx.fillStyle='#0b1220cc'; panel(0,0,VW,44,0); ctx.fill();
+    ctx.fillStyle='#e8eef6'; ctx.font='700 15px Space Grotesk, sans-serif'; ctx.fillText('turn '+this.turn,16,22);
+    ctx.font='13px IBM Plex Mono, monospace'; ctx.fillStyle='#e0c060'; ctx.fillText('gold '+Math.floor(P.gold),96,22); ctx.fillStyle='#9ad0ff'; ctx.fillText('research '+Math.floor(P.research),190,22); ctx.fillStyle='#c79aff'; ctx.fillText('lume '+P.lume,320,22);
+    const total=this.provs.length; ctx.fillStyle='#7fe0d3'; ctx.fillText('provinces '+this.count(0)+'/'+total+' ('+Math.round(this.count(0)/total*100)+'% - unify 60%)',410,22);
+    this._mk(VW-118,8,106,28,'end turn [E]',()=>this._endTurn(),'#7fe0d3'); this._mk(VW-232,8,108,28,'tech [C]',()=>this.mode='tech','#9ad0ff');
+    // selected province panel
+    if(this.sel>=0){ const p=this.provs[this.sel],px=12,py=VH-118; ctx.fillStyle='#0b1220cc'; panel(px,py,250,104,10); ctx.fill();
+      const own=p.owner<0?'neutral':(p.owner===0?'you':'the '+this.nations[p.owner].name); ctx.fillStyle='#e8eef6'; ctx.font='700 14px Space Grotesk, sans-serif'; ctx.textBaseline='top'; ctx.fillText(BIOME_NAME[p.biome]+(p.capital?' (capital)':''),px+12,py+10);
+      ctx.fillStyle='#8a97ab'; ctx.font='11px IBM Plex Mono, monospace'; ctx.fillText(own+'   army '+p.army+'   dev '+p.dev+(p.lume?'   +Lume':'')+(p.volcano?'   volcanic':''),px+12,py+30);
+      if(p.owner===0){ this._mk(px+12,py+52,72,34,'recruit 6g',()=>this._recruit(),'#ff9a7f'); this._mk(px+92,py+52,72,34,'develop 10g',()=>this._develop(),'#c9a24b'); ctx.fillStyle='#59657a'; ctx.fillText('click a ringed neighbour to move/attack',px+12,py+92); } }
+    // selected rival diplomacy
+    if(this.selNation>0){ const n=this.nations[this.selNation],px=VW-262,py=VH-118; ctx.fillStyle='#0b1220cc'; panel(px,py,250,104,10); ctx.fill();
+      ctx.fillStyle=n.color; ctx.font='700 14px Space Grotesk, sans-serif'; ctx.textBaseline='top'; ctx.fillText('the '+n.name,px+12,py+10);
+      ctx.fillStyle='#8a97ab'; ctx.font='11px IBM Plex Mono, monospace'; ctx.fillText('attitude '+Math.round(n.att[0]||0)+'   '+(this.player.atWar.has(n.id)?'AT WAR':'at peace')+'   '+this.count(n.id)+' provinces',px+12,py+30);
+      this._mk(px+12,py+52,70,34,'gift 8g',()=>this._gift(),'#8fbf5a'); if(this.player.atWar.has(n.id))this._mk(px+90,py+52,74,34,'make peace',()=>this._peace(),'#9ad0ff'); else this._mk(px+90,py+52,74,34,'declare war',()=>this._declare(),'#ff9a7f'); }
+    ctx.fillStyle='#59657a'; ctx.font='11px IBM Plex Mono, monospace'; ctx.textBaseline='alphabetic'; ctx.fillText('click a province to select; end turns to grow. events strike volcanic and arid lands. culture and coin can win without war.',12,VH-8); },
+  _techRender(){ ctx.fillStyle='rgba(4,8,14,0.92)'; ctx.fillRect(0,0,VW,VH); this._btns=[]; ctx.textAlign='center'; ctx.textBaseline='top';
+    ctx.fillStyle='#e8eef6'; ctx.font='700 22px Space Grotesk, sans-serif'; ctx.fillText('TECH - research '+Math.floor(this.player.research),VW/2,40);
+    const cw=200,gap=24,x0=VW/2-(cw*1.5+gap),y0=110,rh=90;
+    for(let r=0;r<3;r++){ ctx.fillStyle=CIV_ROWCOL[r]; ctx.textAlign='left'; ctx.font='700 13px Space Grotesk, sans-serif'; ctx.fillText(CIV_ROWNAME[r],x0,y0+r*rh-18);
+      for(let c=0;c<3;c++){ const idx=r*3+c,t=CIV_TECH[idx],x=x0+c*(cw+gap),y=y0+r*rh,has=this.player.tech.has(idx),can=this._canTech(idx);
+        ctx.fillStyle=has?CIV_ROWCOL[r]:can?'#12203a':'#0c1526'; panel(x,y,cw,60,8); ctx.fill(); ctx.strokeStyle=can?'#7fe0d3':'#26364f'; ctx.lineWidth=1; ctx.stroke();
+        ctx.fillStyle=has?'#04120f':'#e8eef6'; ctx.font='700 14px Space Grotesk, sans-serif'; ctx.textAlign='left'; ctx.fillText(t.name,x+12,y+12);
+        ctx.fillStyle=has?'#04120f':'#8a97ab'; ctx.font='11px IBM Plex Mono, monospace'; ctx.fillText(has?'researched':('cost '+t.cost),x+12,y+34);
+        if(can)this._btns.push({x,y,w:cw,h:60,fn:()=>this._research(idx)}); } }
+    ctx.textAlign='center'; ctx.fillStyle='#c9a24b'; ctx.font='12px IBM Plex Mono, monospace'; ctx.fillText('each row must be researched left to right   -   [C] or [Esc] to return',VW/2,VH-40); },
+  _mk(x,y,w,h,label,fn,col){ ctx.fillStyle=col?col:'#1a2740'; panel(x,y,w,h,6); ctx.fill(); ctx.fillStyle=col?'#04120f':'#cfd9e8'; ctx.font='700 12px Space Grotesk, sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(label,x+w/2,y+h/2); ctx.textAlign='left'; ctx.textBaseline='alphabetic'; this._btns.push({x,y,w,h,fn}); },
+};
+
+// ============================================================================
 // Stage stubs (Creature..Space) - the seams later slices graft onto
 // ============================================================================
 function makeStub(name,note){ return { saveAs:'world', name, t:0,
@@ -1205,7 +1348,7 @@ const Stages={
   CREATURE:Creature,
   TRIBAL:Tribal,
   CITY:City,
-  CIV:makeStub('Civilization','the whole planet as a board - P5'),
+  CIV:Civ,
   SPACE:makeStub('Space','a galaxy of 300+ stars - P6'),
 };
 
@@ -1256,7 +1399,7 @@ if(saved&&saved.seed){ seedInput.value=saved.seed; Game.traits=saved.traits||[];
 if(urlParam('seed')!=null){ seedInput.value=urlParam('seed'); }
 
 // expose a tiny hook for automated verification (?dev)
-window.__EONS={ Planet, Rng, Game, CGEN, Rhythm, RTS, Creature, Cell, Tribal, City, Stages, setScreen, startWorld,
+window.__EONS={ Planet, Rng, Game, CGEN, Rhythm, RTS, Creature, Cell, Tribal, City, Civ, Stages, setScreen, startWorld,
   biomeHash(){ let h=2166136261>>>0; const b=Planet.biome; for(let i=0;i<b.length;i++){ h^=b[i]; h=Math.imul(h,16777619);} return h>>>0; } };
 
 requestAnimationFrame(frame);
