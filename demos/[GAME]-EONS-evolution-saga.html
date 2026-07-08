@@ -1054,6 +1054,141 @@ const Tribal={ saveAs:'world', name:'Tribal', ecs:null, cam:null, rng:null, aiR:
 };
 
 // ============================================================================
+// SCREEN: City stage  [doc section 15] - RTS kernel part B
+//   districts (housing/workshop/temple/walls), 3 hinterland nodes, coin economy,
+//   2 rival cities, a vehicle designer; fill culture -> declare capital
+//   exit -> Trait Card IV (Builder/Fortifier/Merchant)
+// ============================================================================
+const City={ saveAs:'world', name:'City', ecs:null, rng:null, aiR:null, t:0, mode:'manage',
+  world:{w:1700,h:1050}, center:null, genome:null, res:null, nodes:null, plots:null, cam:null,
+  culture:0, cultureNeed:70, rivals:null, sel:-1, buildSel:-1, vehicle:null, _btns:null, exiting:0, starveT:0,
+  districts:null, raidsRepelled:0, trades:0, subjugations:0, coinEarned:0,
+  ROLES:['farm','quarry','market'], ROLECOL:{farm:'#8fbf5a',quarry:'#d98a5a',market:'#c9a24b'},
+  BUILDS:[{k:'housing',m:8,c:0,col:'#7fbfe0'},{k:'workshop',m:12,c:4,col:'#d98a5a'},{k:'temple',m:16,c:8,col:'#9ad0ff'},{k:'walls',m:10,c:0,col:'#c9a24b'}],
+  VCHASSIS:['cart','chariot','wagon'], VWHEELS:[2,4,6], VPAYLOAD:['goods','ram','ballista'],
+  load(){
+    this.rng=Game.rng.fork('city'); this.aiR=Game.rng.fork('city.ai');
+    this.t=0; this.mode='manage'; this.res={food:34,materials:24,coin:12}; this.culture=0; this.sel=-1; this.buildSel=-1; this.exiting=0; this.starveT=0;
+    this.districts={housing:0,workshop:0,temple:0,walls:0}; this.raidsRepelled=0; this.trades=0; this.subjugations=0; this.coinEarned=0; this.vehicle={chassis:0,wheels:1,payload:0,sel:0};
+    this.genome=(Game.traits[1]&&Game.traits[1].genome)||CGEN.starter(Game.traits,this.rng);
+    this.ecs=makeWorldECS(); const W=this.world.w,H=this.world.h; this.center={x:W/2,y:H/2};
+    this.nodes=[{x:this.center.x-330,y:this.center.y-170,kind:'farm'},{x:this.center.x+340,y:this.center.y-140,kind:'quarry'},{x:this.center.x+30,y:this.center.y+300,kind:'market'}];
+    this.plots=[]; for(let i=0;i<12;i++){ const a=i/12*TAU; this.plots.push({x:this.center.x+Math.cos(a)*160,y:this.center.y+Math.sin(a)*128,district:null}); }
+    for(const r of ['farm','farm','farm','quarry','quarry','market','market','market'])this._spawn(r);
+    const spots=[{x:W*0.14,y:H*0.2},{x:W*0.86,y:H*0.82}];
+    this.rivals=spots.map(s=>({x:s.x,y:s.y,name:CGEN.name(this.rng),relation:this.rng.int(32,54),strength:this.rng.int(3,6),raidCd:this.rng.range(16,28),genome:CGEN.genome(this.rng),state:'rival'}));
+    this.cam={x:W/2,y:H/2,zoom:Math.min(VW/W,VH/H)*0.96};
+    Audio.motif(); toast('a city rises. build districts, fill culture to declare a capital.');
+  },
+  _spawn(role){ return this.ecs.spawn({x:this.center.x+this.rng.range(-40,40),y:this.center.y+this.rng.range(-40,40),vx:0,vy:0,r:this.genome.size*8,kind:'cit',role,state:'toWork',timer:0,ang:0,moving:false,spd:66,eff:1,site:null,id2:this.rng.range(0,TAU)}); },
+  roleCount(r){ let c=0; for(const u of this.ecs.list)if(u.alive&&u.kind==='cit'&&u.role===r)c++; return c; },
+  pop(){ let c=0; for(const u of this.ecs.list)if(u.alive&&u.kind==='cit')c++; return c; },
+  nodeOf(role){ return this.nodes.find(n=>(role==='farm'&&n.kind==='farm')||(role==='quarry'&&n.kind==='quarry')||(role==='market'&&n.kind==='market')); },
+  _setRole(r,delta){ if(delta>0){ let from=null,mx=0; for(const o of this.ROLES){ if(o===r)continue; const c=this.roleCount(o); if(c>mx){mx=c;from=o;} } if(!from)return; const u=this.ecs.list.find(x=>x.alive&&x.kind==='cit'&&x.role===from); if(u){u.role=r;u.state='toWork';u.site=null;} }
+    else { const u=this.ecs.list.find(x=>x.alive&&x.kind==='cit'&&x.role===r); if(!u)return; let to=null,mn=1e9; for(const o of this.ROLES){ if(o===r)continue; const c=this.roleCount(o); if(c<mn){mn=c;to=o;} } u.role=to; u.state='toWork'; u.site=null; } },
+  vehStat(){ const cap=(this.vehicle.wheels+1)+this.vehicle.chassis, atk=this.VPAYLOAD[this.vehicle.payload]==='goods'?0:(this.VPAYLOAD[this.vehicle.payload]==='ram'?3:5); return {cap,atk,goods:this.VPAYLOAD[this.vehicle.payload]==='goods'}; },
+  _build(pi){ if(this.buildSel<0){ toast('pick a district from the build menu first'); return; } const p=this.plots[pi]; if(p.district){ toast('that plot is taken'); return; } const b=this.BUILDS[this.buildSel];
+    if(this.res.materials<b.m||this.res.coin<b.c){ toast('need '+b.m+' materials'+(b.c?' + '+b.c+' coin':'')+' for '+b.k); return; }
+    this.res.materials-=b.m; this.res.coin-=b.c; p.district=b.k; this.districts[b.k]++; if(b.k==='housing')this._spawn(this.ROLES[this.rng.int(0,3)]); Audio.blip(320,0.06); toast('built a '+b.k); Game.log('city','build',{d:b.k}); },
+  _trade(){ if(this.sel<0)return; const rv=this.rivals[this.sel]; if(rv.state!=='rival')return; const v=this.vehStat(); const gain=9+(v.goods?v.cap*2:0); this.res.coin+=gain; this.coinEarned+=gain; rv.relation=clamp(rv.relation+15,0,100); this.trades++; toast('caravan to '+rv.name+' returns (+'+gain+' coin)'); Game.log('city','trade',{rv:rv.name}); },
+  _attack(){ if(this.sel<0)return; const rv=this.rivals[this.sel]; if(rv.state!=='rival')return; if(this.res.materials<6){ toast('need 6 materials to raise a war party'); return; } this.res.materials-=6; const v=this.vehStat(); const force=3+v.atk+this.rng.int(0,3);
+    if(force>=rv.strength+1){ rv.state='subjugated'; this.subjugations++; this.res.coin+=14; this.coinEarned+=14; this.res.materials+=10; toast('you subjugate '+rv.name,true); Game.log('city','subjugate',{rv:rv.name}); } else { rv.relation=clamp(rv.relation-20,0,100); toast('the assault on '+rv.name+' is repelled'); } },
+  onkey(k){ if(this.mode==='vehicle'){ if(k==='v'||k==='escape')this.mode='manage'; else if(k==='arrowup'||k==='w')this.vehicle.sel=(this.vehicle.sel+2)%3; else if(k==='arrowdown'||k==='s')this.vehicle.sel=(this.vehicle.sel+1)%3; else if(k==='arrowleft'||k==='a')this._vcyc(-1); else if(k==='arrowright'||k==='d')this._vcyc(1); return; }
+    if(this.exiting)return; if(k==='t')this._trade(); else if(k==='r')this._attack(); else if(k==='v')this.mode='vehicle'; else if(k>='1'&&k<='4')this.buildSel=+k-1; },
+  _vcyc(d){ const s=this.vehicle.sel; if(s===0)this.vehicle.chassis=(this.vehicle.chassis+d+3)%3; else if(s===1)this.vehicle.wheels=(this.vehicle.wheels+d+3)%3; else this.vehicle.payload=(this.vehicle.payload+d+3)%3; },
+  onpointer(){ if(this.exiting)return; if(this._btns)for(const b of this._btns){ if(Input.mx>=b.x&&Input.mx<=b.x+b.w&&Input.my>=b.y&&Input.my<=b.y+b.h){ b.fn(); return; } } if(this.mode==='vehicle')return;
+    const z=this.cam.zoom,wx=this.cam.x+(Input.mx-VW/2)/z,wy=this.cam.y+(Input.my-VH/2)/z;
+    for(let i=0;i<this.plots.length;i++){ if(Math.hypot(this.plots[i].x-wx,this.plots[i].y-wy)<34){ this._build(i); return; } }
+    let s=-1; this.rivals.forEach((rv,i)=>{ if(Math.hypot(rv.x-wx,rv.y-wy)<70)s=i; }); this.sel=s; },
+  _finishExit(){ const b=this.districts.housing+this.districts.workshop+this.districts.temple, f=this.districts.walls*2+this.raidsRepelled+this.subjugations*2, m=this.trades*2+Math.floor(this.coinEarned/40);
+    let card='Builder'; if(f>b&&f>=m)card='Fortifier'; else if(m>b&&m>f)card='Merchant';
+    Game.traits[3]={stage:'city',card,districts:b,walls:this.districts.walls,coin:Math.floor(this.coinEarned)}; Game.log('city','trait',{card}); Game.persist(); toast('Trait Card IV locked: '+card,true); setScreen(Stages.CIV); },
+  update(dt){ this.t+=dt; if(this.mode==='vehicle')return;
+    if(this.exiting){ this.exiting+=dt; if(this.exiting>2.6)this._finishExit(); return; }
+    for(const u of this.ecs.list){ if(!u.alive||u.kind!=='cit')continue; u.eff=1; const node=this.nodeOf(u.role)||this.center;
+      RTS.gather(u,this.center,[node],dt,()=>{ if(u.role==='farm')this.res.food+=3.0; else if(u.role==='quarry')this.res.materials+=2.2; else { this.res.coin+=1.4; this.coinEarned+=1.4; } }); }
+    // districts: workshops convert materials->coin, temples make culture
+    if(this.districts.workshop>0&&this.res.materials>0){ const conv=Math.min(this.res.materials,this.districts.workshop*0.5*dt); this.res.materials-=conv; this.res.coin+=conv*1.6; this.coinEarned+=conv*1.6; }
+    this.culture+=this.districts.temple*0.7*dt;
+    this.res.food-=this.pop()*0.1*dt;
+    if(this.res.food<=0){ this.res.food=0; this.starveT+=dt; if(this.starveT>7){ this.starveT=0; const u=this.ecs.list.find(x=>x.alive&&x.kind==='cit'); if(u){ u.alive=false; toast('a citizen departs, unfed'); } } } else this.starveT=0;
+    for(const rv of this.rivals){ if(rv.state!=='rival')continue; rv.relation=clamp(rv.relation-0.4*dt,0,100); rv.raidCd-=dt;
+      if(rv.relation<28&&rv.raidCd<=0){ rv.raidCd=this.rng.range(18,30); const dmg=rv.strength-this.districts.walls; if(dmg>0){ this.res.coin=Math.max(0,this.res.coin-dmg*3); this.res.materials=Math.max(0,this.res.materials-dmg*2); toast(rv.name+' raids your trade (-'+(dmg*3)+' coin)'); } else { this.raidsRepelled++; toast('your walls repel '+rv.name); } } }
+    this.ecs.cull();
+    if(this.culture>=this.cultureNeed&&!this.exiting){ this.exiting=0.001; toast('your city declares itself a capital',true); }
+  },
+  render(){ const W=this.world.w,H=this.world.h,z=Math.min(VW/W,VH/H)*0.96; this.cam={x:W/2,y:H/2,zoom:z};
+    const bc=BIOME_COL[B.GRASS]; ctx.fillStyle=`rgb(${(bc[0]*0.5)|0},${(bc[1]*0.52)|0},${(bc[2]*0.48)|0})`; ctx.fillRect(0,0,VW,VH);
+    ctx.save(); ctx.translate(VW/2,VH/2); ctx.scale(z,z); ctx.translate(-W/2,-H/2);
+    // roads to nodes
+    ctx.strokeStyle='#00000022'; ctx.lineWidth=10; for(const n of this.nodes){ ctx.beginPath(); ctx.moveTo(this.center.x,this.center.y); ctx.lineTo(n.x,n.y); ctx.stroke(); }
+    for(const n of this.nodes)this._drawNode(n);
+    // town hall
+    ctx.fillStyle='#6b5a44'; ctx.fillRect(this.center.x-26,this.center.y-20,52,40); ctx.fillStyle='#8a7458'; ctx.beginPath(); ctx.moveTo(this.center.x-30,this.center.y-20); ctx.lineTo(this.center.x,this.center.y-42); ctx.lineTo(this.center.x+30,this.center.y-20); ctx.closePath(); ctx.fill();
+    for(let i=0;i<this.plots.length;i++)this._drawPlot(this.plots[i],this.buildSel>=0);
+    for(const u of this.ecs.list){ if(!u.alive||u.kind!=='cit')continue; ctx.save(); ctx.translate(u.x,u.y); ctx.scale(0.6,0.6); CGEN.draw(this.genome,this.t+u.id2*3,u.moving,u.ang); ctx.restore(); ctx.fillStyle=this.ROLECOL[u.role]; ctx.beginPath(); ctx.arc(u.x,u.y-u.r-4,2.6,0,TAU); ctx.fill(); }
+    this.rivals.forEach((rv,i)=>this._drawRival(rv,i===this.sel));
+    ctx.restore();
+    this._hud();
+    if(this.mode==='vehicle')this._vehRender();
+    if(this.exiting){ ctx.fillStyle='rgba(230,240,255,'+clamp(this.exiting/3,0,0.7)+')'; ctx.fillRect(0,0,VW,VH); } },
+  _drawNode(n){ ctx.save(); ctx.translate(n.x,n.y); if(n.kind==='farm'){ ctx.fillStyle='#5a7a30'; for(let i=-1;i<=1;i++)ctx.fillRect(i*16-6,-14,12,28); }
+    else if(n.kind==='quarry'){ ctx.fillStyle='#6b6158'; for(let i=0;i<4;i++){ const a=i/4*TAU; ctx.beginPath(); ctx.arc(Math.cos(a)*10,Math.sin(a)*8,7,0,TAU); ctx.fill(); } }
+    else { ctx.fillStyle='#b58a3a'; ctx.beginPath(); ctx.moveTo(-16,10); ctx.lineTo(0,-14); ctx.lineTo(16,10); ctx.closePath(); ctx.fill(); ctx.fillStyle='#e0c060'; ctx.beginPath(); ctx.arc(0,2,5,0,TAU); ctx.fill(); } ctx.restore(); },
+  _drawPlot(p,hint){ ctx.save(); ctx.translate(p.x,p.y);
+    if(!p.district){ ctx.strokeStyle=hint?'#7fe0d3':'#ffffff33'; ctx.lineWidth=2; ctx.setLineDash([5,5]); ctx.beginPath(); ctx.arc(0,0,24,0,TAU); ctx.stroke(); ctx.setLineDash([]); }
+    else { const b=this.BUILDS.find(x=>x.k===p.district); ctx.fillStyle=b.col;
+      if(p.district==='housing'){ ctx.fillRect(-14,-6,28,20); ctx.beginPath(); ctx.moveTo(-16,-6); ctx.lineTo(0,-20); ctx.lineTo(16,-6); ctx.closePath(); ctx.fill(); }
+      else if(p.district==='workshop'){ ctx.fillRect(-16,-14,32,28); ctx.fillStyle='#00000044'; ctx.beginPath(); ctx.arc(0,0,7,0,TAU); ctx.fill(); }
+      else if(p.district==='temple'){ ctx.fillRect(-18,10,36,5); for(let i=-1;i<=1;i++)ctx.fillRect(i*12-2,-14,5,24); ctx.beginPath(); ctx.moveTo(-20,-14); ctx.lineTo(0,-24); ctx.lineTo(20,-14); ctx.closePath(); ctx.fill(); }
+      else { ctx.fillStyle=b.col; ctx.fillRect(-18,-8,36,18); ctx.fillStyle='#00000033'; for(let i=-2;i<=2;i++)ctx.fillRect(i*7-2,-14,5,7); } }
+    ctx.restore(); },
+  _drawRival(rv,seld){ ctx.save(); ctx.translate(rv.x,rv.y); const col=rv.state==='subjugated'?'#5a4a4a':'#8a97ab';
+    ctx.strokeStyle=seld?'#fff':col; ctx.lineWidth=seld?3:2; ctx.beginPath(); ctx.arc(0,0,58,0,TAU); ctx.stroke();
+    ctx.fillStyle=rv.state==='subjugated'?'#4a4038':'#6b5a44'; for(let i=-1;i<=1;i++){ ctx.fillRect(i*22-9,-6,18,20); ctx.beginPath(); ctx.moveTo(i*22-11,-6); ctx.lineTo(i*22,-18); ctx.lineTo(i*22+9,-6); ctx.closePath(); ctx.fill(); }
+    ctx.fillStyle='#dbe6f3'; ctx.font='700 13px Space Grotesk, sans-serif'; ctx.textAlign='center'; ctx.fillText(rv.name+(rv.state==='subjugated'?' (vassal)':''),0,-66);
+    if(rv.state==='rival'){ ctx.fillStyle='#0e1626'; ctx.fillRect(-30,-60,60,7); ctx.fillStyle='#7fe0d3'; ctx.fillRect(-30,-60,60*rv.relation/100,7); } ctx.restore(); },
+  _hud(){ this._btns=[]; ctx.textAlign='left'; ctx.textBaseline='top';
+    ctx.fillStyle='#0b1220cc'; panel(12,12,236,66,10); ctx.fill();
+    ctx.fillStyle='#8fbf5a'; ctx.font='700 13px Space Grotesk, sans-serif'; ctx.fillText('food '+Math.floor(this.res.food),22,20);
+    ctx.fillStyle='#d98a5a'; ctx.fillText('mat '+Math.floor(this.res.materials),110,20);
+    ctx.fillStyle='#e0c060'; ctx.fillText('coin '+Math.floor(this.res.coin),180,20);
+    ctx.fillStyle='#aebbcd'; ctx.font='11px IBM Plex Mono, monospace'; ctx.fillText('pop '+this.pop(),22,40);
+    meter(22,54,214,'CULTURE -> CAPITAL '+Math.floor(this.culture/this.cultureNeed*100)+'%',this.culture/this.cultureNeed,'#9ad0ff');
+    // build menu bottom-center
+    const bw=118,bx=VW/2-(this.BUILDS.length*bw)/2,by=VH-58;
+    this.BUILDS.forEach((b,i)=>{ const x=bx+i*bw,on=i===this.buildSel; ctx.fillStyle=on?b.col:'#0c1526'; panel(x,by,bw-8,44,7); ctx.fill(); if(on){ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.stroke();}
+      ctx.fillStyle=on?'#04120f':'#dbe6f3'; ctx.font='700 13px Space Grotesk, sans-serif'; ctx.textAlign='center'; ctx.fillText(b.k,x+(bw-8)/2,by+8);
+      ctx.font='10px IBM Plex Mono, monospace'; ctx.fillStyle=on?'#04120f':'#8a97ab'; ctx.fillText(b.m+'m'+(b.c?' '+b.c+'c':'')+'  x'+this.districts[b.k],x+(bw-8)/2,by+26);
+      this._btns.push({x,y:by,w:bw-8,h:44,fn:()=>{ this.buildSel=this.buildSel===i?-1:i; }}); });
+    ctx.textAlign='left';
+    // roles bottom-left
+    const jx=12,jy=VH-134; ctx.fillStyle='#0b1220cc'; panel(jx,jy,200,82,10); ctx.fill(); ctx.fillStyle='#8a97ab'; ctx.font='11px IBM Plex Mono, monospace'; ctx.fillText('citizens',jx+10,jy+7);
+    this.ROLES.forEach((r,i)=>{ const y=jy+22+i*18; ctx.fillStyle=this.ROLECOL[r]; ctx.beginPath(); ctx.arc(jx+15,y+5,4,0,TAU); ctx.fill(); ctx.fillStyle='#dbe6f3'; ctx.font='12px IBM Plex Mono, monospace'; ctx.fillText(r,jx+26,y); ctx.fillText(''+this.roleCount(r),jx+140,y);
+      this._mkBtn(jx+156,y-2,16,15,'-',()=>this._setRole(r,-1)); this._mkBtn(jx+176,y-2,16,15,'+',()=>this._setRole(r,1)); });
+    // rival panel
+    if(this.sel>=0){ const rv=this.rivals[this.sel],px=VW-232,py=VH-150; ctx.fillStyle='#0b1220cc'; panel(px,py,220,86,10); ctx.fill();
+      ctx.fillStyle='#e8eef6'; ctx.font='700 14px Space Grotesk, sans-serif'; ctx.fillText(rv.name,px+12,py+8);
+      ctx.fillStyle='#8a97ab'; ctx.font='11px IBM Plex Mono, monospace'; ctx.fillText(rv.state==='rival'?('relation '+Math.floor(rv.relation)+'  strength '+rv.strength):'vassal',px+12,py+28);
+      if(rv.state==='rival'){ this._mkBtn(px+12,py+46,64,30,'trade',()=>this._trade(),'#8fbf5a'); this._mkBtn(px+80,py+46,64,30,'attack',()=>this._attack(),'#d98a5a'); this._mkBtn(px+148,py+46,60,30,'design',()=>this.mode='vehicle','#9ad0ff'); } }
+    else { this._mkBtn(VW-150,VH-150,138,30,'design vehicle',()=>this.mode='vehicle','#9ad0ff'); }
+    ctx.textAlign='left'; ctx.fillStyle='#59657a'; ctx.font='11px IBM Plex Mono, monospace'; ctx.fillText('pick a district then click an empty plot   -   click a rival to trade or attack   -   temples fill the culture bar',12,VH-16);
+    ctx.fillStyle='#c9a24b'; ctx.font='700 12px Space Grotesk, sans-serif'; ctx.textAlign='right'; ctx.fillText('districts '+(this.districts.housing+this.districts.workshop+this.districts.temple)+'   walls '+this.districts.walls+'   coin '+Math.floor(this.coinEarned),VW-16,16); ctx.textAlign='left'; },
+  _mkBtn(x,y,w,h,label,fn,col){ ctx.fillStyle=col?col:'#1a2740'; panel(x,y,w,h,5); ctx.fill(); ctx.fillStyle=col?'#04120f':'#cfd9e8'; ctx.font='700 12px Space Grotesk, sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(label,x+w/2,y+h/2); ctx.textBaseline='top'; ctx.textAlign='left'; this._btns.push({x,y,w,h,fn}); },
+  _vehRender(){ ctx.fillStyle='rgba(4,8,14,0.9)'; ctx.fillRect(0,0,VW,VH); ctx.textAlign='center'; ctx.fillStyle='#e8eef6'; ctx.font='700 22px Space Grotesk, sans-serif'; ctx.fillText('VEHICLE WORKS - design a cart',VW/2,60);
+    // preview
+    const v=this.vehicle,cx=VW*0.32,cy=VH*0.5; ctx.save(); ctx.translate(cx,cy); ctx.strokeStyle='#c9a24b'; ctx.lineWidth=4; ctx.strokeRect(-60,-24,120,36);
+    const nw=this.VWHEELS[v.wheels]; for(let i=0;i<nw;i++){ ctx.fillStyle='#5a4a38'; ctx.beginPath(); ctx.arc(-50+i*(100/(nw-1)),18,12,0,TAU); ctx.fill(); ctx.fillStyle='#2a2018'; ctx.beginPath(); ctx.arc(-50+i*(100/(nw-1)),18,5,0,TAU); ctx.fill(); }
+    const pl=this.VPAYLOAD[v.payload]; ctx.fillStyle=pl==='goods'?'#8fbf5a':pl==='ram'?'#8a7458':'#9ad0ff'; if(pl==='goods')ctx.fillRect(-40,-40,80,20); else if(pl==='ram'){ ctx.fillRect(-8,-40,16,20); ctx.fillRect(-40,-30,80,8);} else { ctx.beginPath(); ctx.moveTo(-30,-24); ctx.lineTo(0,-48); ctx.lineTo(30,-24); ctx.closePath(); ctx.fill(); } ctx.restore();
+    const rows=[['chassis',this.VCHASSIS[v.chassis]],['wheels',''+this.VWHEELS[v.wheels]],['payload',this.VPAYLOAD[v.payload]]]; const rx=VW*0.55,ry=140,rh=56; this._btns=[];
+    rows.forEach((row,i)=>{ const y=ry+i*rh,on=i===v.sel; ctx.fillStyle=on?'#12203a':'#0c1526'; panel(rx,y,320,rh-8,8); ctx.fill(); if(on){ctx.strokeStyle='#7fe0d3';ctx.stroke();}
+      ctx.textAlign='left'; ctx.fillStyle='#8a97ab'; ctx.font='11px IBM Plex Mono, monospace'; ctx.fillText(row[0],rx+14,y+9); ctx.fillStyle='#e8eef6'; ctx.font='700 15px Space Grotesk, sans-serif'; ctx.fillText(row[1],rx+14,y+26);
+      ['<','>'].forEach((sym,k)=>{ const ax=rx+320-58+k*34,ay=y+(rh-8)/2; ctx.fillStyle='#1a2740'; ctx.beginPath(); ctx.arc(ax,ay,14,0,TAU); ctx.fill(); ctx.fillStyle='#cfd9e8'; ctx.textAlign='center'; ctx.font='700 16px Space Grotesk, sans-serif'; ctx.fillText(sym,ax,ay); this._btns.push({x:ax-14,y:ay-14,w:28,h:28,fn:()=>{ v.sel=i; this._vcyc(k?1:-1); }}); }); });
+    const s=this.vehStat(); ctx.textAlign='left'; ctx.fillStyle='#8fe6d9'; ctx.font='12px IBM Plex Mono, monospace'; ctx.fillText('capacity '+s.cap+'   attack '+s.atk+'   '+(s.goods?'trade caravan':'war engine'),rx,ry+3*rh+10);
+    ctx.textAlign='center'; ctx.fillStyle='#c9a24b'; ctx.font='12px IBM Plex Mono, monospace'; ctx.fillText('goods payload boosts trade, ram/ballista boost raids  -  [V] or [Esc] to leave',VW/2,VH-30); ctx.textAlign='left'; },
+};
+
+// ============================================================================
 // Stage stubs (Creature..Space) - the seams later slices graft onto
 // ============================================================================
 function makeStub(name,note){ return { saveAs:'world', name, t:0,
@@ -1069,7 +1204,7 @@ function makeStub(name,note){ return { saveAs:'world', name, t:0,
 const Stages={
   CREATURE:Creature,
   TRIBAL:Tribal,
-  CITY:makeStub('City','districts and rivals - P4'),
+  CITY:City,
   CIV:makeStub('Civilization','the whole planet as a board - P5'),
   SPACE:makeStub('Space','a galaxy of 300+ stars - P6'),
 };
@@ -1121,7 +1256,7 @@ if(saved&&saved.seed){ seedInput.value=saved.seed; Game.traits=saved.traits||[];
 if(urlParam('seed')!=null){ seedInput.value=urlParam('seed'); }
 
 // expose a tiny hook for automated verification (?dev)
-window.__EONS={ Planet, Rng, Game, CGEN, Rhythm, RTS, Creature, Cell, Tribal, Stages, setScreen, startWorld,
+window.__EONS={ Planet, Rng, Game, CGEN, Rhythm, RTS, Creature, Cell, Tribal, City, Stages, setScreen, startWorld,
   biomeHash(){ let h=2166136261>>>0; const b=Planet.biome; for(let i=0;i<b.length;i++){ h^=b[i]; h=Math.imul(h,16777619);} return h>>>0; } };
 
 requestAnimationFrame(frame);
