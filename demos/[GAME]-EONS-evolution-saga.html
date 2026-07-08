@@ -919,6 +919,141 @@ const Creature={ saveAs:'world', name:'Creature', mode:'roam', ecs:null, player:
 };
 
 // ============================================================================
+// P4: shared RTS kernel (used by Tribal now, City next)  [doc section 13]
+//   worker FSM (go to site -> gather -> return -> deposit), nearest-node pick
+// ============================================================================
+const RTS={
+  moveTo(e,tx,ty,step){ const dx=tx-e.x,dy=ty-e.y,d=Math.hypot(dx,dy); if(d>step){ e.x+=dx/d*step; e.y+=dy/d*step; e.ang=Math.atan2(dy,dx); e.moving=true; return false; } e.moving=false; return true; },
+  nearestNode(x,y,nodes){ let b=null,bd=1e9; for(const n of nodes){ const d=Math.hypot(n.x-x,n.y-y); if(d<bd){bd=d;b=n;} } return b; },
+  // one worker step for a gather job; calls deposit() on a completed round trip
+  gather(u,home,nodes,dt,deposit){ const step=u.spd*u.eff*dt;
+    if(u.state==='toWork'){ if(!u.site)u.site=RTS.nearestNode(u.x,u.y,nodes)||home; if(RTS.moveTo(u,u.site.x,u.site.y,step)){ u.state='work'; u.timer=1.3; } }
+    else if(u.state==='work'){ u.moving=false; u.timer-=dt; if(u.timer<=0){ u.state='toHome'; } }
+    else { if(RTS.moveTo(u,home.x,home.y,step)){ deposit(); u.site=null; u.state='toWork'; } } }
+};
+
+// ============================================================================
+// SCREEN: Tribal stage  [doc section 14] - one-screen RTS-lite
+//   12 members, 4 jobs, food+materials, build the totem, win or crush 3 tribes
+//   fire discovery at 50%, exit -> Trait Card III (Harmonist/Raider/Trader)
+// ============================================================================
+const Tribal={ saveAs:'world', name:'Tribal', ecs:null, cam:null, rng:null, aiR:null, t:0, mode:'manage',
+  world:{w:1700,h:1050}, camp:null, genome:null, units:null, res:null, totem:0, totemNeed:52, fire:false,
+  neighbors:null, sel:-1, won:0, crushed:0, trades:0, exiting:0, starveT:0, _btns:null, foodNodes:null, matNodes:null, guardPts:null,
+  JOBS:['forager','hunter','musician','guard'], JOBCOL:{forager:'#8fbf5a',hunter:'#d98a5a',musician:'#9ad0ff',guard:'#c9a24b'},
+  load(){
+    this.rng=Game.rng.fork('tribal'); this.aiR=Game.rng.fork('tribal.ai');
+    this.t=0; this.mode='manage'; this.res={food:24,materials:0}; this.totem=0; this.fire=false; this.won=0; this.crushed=0; this.trades=0; this.exiting=0; this.starveT=0; this.sel=-1;
+    this.genome=(Game.traits[1]&&Game.traits[1].genome)||CGEN.starter(Game.traits,this.rng);
+    this.ecs=makeWorldECS(); const W=this.world.w,H=this.world.h; this.camp={x:W/2,y:H/2};
+    this.foodNodes=[]; for(let i=0;i<7;i++){ const a=this.rng.range(0,TAU),r=this.rng.range(170,340); this.foodNodes.push({x:this.camp.x+Math.cos(a)*r,y:this.camp.y+Math.sin(a)*r,kind:'food'}); }
+    this.matNodes=[]; for(let i=0;i<6;i++){ const a=this.rng.range(0,TAU),r=this.rng.range(190,370); this.matNodes.push({x:this.camp.x+Math.cos(a)*r,y:this.camp.y+Math.sin(a)*r,kind:'mat'}); }
+    this.guardPts=[]; for(let i=0;i<6;i++){ const a=i/6*TAU; this.guardPts.push({x:this.camp.x+Math.cos(a)*120,y:this.camp.y+Math.sin(a)*120}); }
+    this.units=[]; const jb=['forager','forager','forager','forager','hunter','hunter','hunter','musician','musician','guard','guard','guard'];
+    for(let i=0;i<12;i++)this._spawn(jb[i]);
+    const edges=[{x:W*0.13,y:H*0.22},{x:W*0.87,y:H*0.2},{x:W*0.5,y:H*0.88}];
+    this.neighbors=edges.map(e=>({x:e.x,y:e.y,name:CGEN.name(this.rng),genome:CGEN.genome(this.rng),disp:this.rng.int(18,42),strength:this.rng.int(3,6),state:'wild',raidCd:this.rng.range(14,26)}));
+    this.cam={x:W/2,y:H/2,zoom:Math.min(VW/W,VH/H)*0.96};
+    Audio.motif(); toast('your tribe rises. build the totem; win or crush the neighbors.');
+  },
+  _spawn(job){ const u=this.ecs.spawn({x:this.camp.x+this.rng.range(-40,40),y:this.camp.y+this.rng.range(-40,40),vx:0,vy:0,r:this.genome.size*9,kind:'unit',job,state:'toWork',timer:0,ang:0,moving:false,spd:66,eff:1,site:null,pt:null,id2:this.rng.range(0,TAU)}); return u; },
+  jobCount(j){ let c=0; for(const u of this.ecs.list)if(u.alive&&u.kind==='unit'&&u.job===j)c++; return c; },
+  pop(){ let c=0; for(const u of this.ecs.list)if(u.alive&&u.kind==='unit')c++; return c; },
+  _setJob(j,delta){ if(delta>0){ let from=null,mx=0; for(const o of this.JOBS){ if(o===j)continue; const c=this.jobCount(o); if(c>mx){mx=c;from=o;} } if(!from)return; const u=this.ecs.list.find(x=>x.alive&&x.kind==='unit'&&x.job===from); if(u){u.job=j;u.state='toWork';u.site=null;} }
+    else { const u=this.ecs.list.find(x=>x.alive&&x.kind==='unit'&&x.job===j); if(!u)return; let to=null,mn=1e9; for(const o of this.JOBS){ if(o===j)continue; const c=this.jobCount(o); if(c<mn){mn=c;to=o;} } u.job=to; u.state='toWork'; u.site=null; } },
+  onkey(k){ if(this.mode==='rhythm'){ Rhythm.key(k); return; } if(this.exiting)return;
+    if(k==='p')this._perform(); else if(k==='t')this._trade(); else if(k==='r')this._raid(); },
+  onpointer(){ if(this.mode==='rhythm'){ Rhythm.clickAt(Input.mx); return; } if(this.exiting)return;
+    if(this._btns)for(const b of this._btns){ if(Input.mx>=b.x&&Input.mx<=b.x+b.w&&Input.my>=b.y&&Input.my<=b.y+b.h){ b.fn(); return; } }
+    const z=this.cam.zoom,wx=this.cam.x+(Input.mx-VW/2)/z,wy=this.cam.y+(Input.my-VH/2)/z; let s=-1;
+    this.neighbors.forEach((nb,i)=>{ if(Math.hypot(nb.x-wx,nb.y-wy)<70)s=i; }); this.sel=s; },
+  _perform(){ if(this.sel<0)return; const nb=this.neighbors[this.sel]; if(nb.state!=='wild'){ toast('the '+nb.name+' are already resolved'); return; } if(this.jobCount('musician')<1){ toast('assign a musician first'); return; }
+    const pat=Array.from({length:this.rng.int(3,6)},()=>this.rng.int(0,5)); this.mode='rhythm';
+    Rhythm.start(pat,nb.name,(acc)=>{ this.mode='manage'; if(acc>=0.55){ nb.disp=clamp(nb.disp+45,0,100); toast('the '+nb.name+' warm to your song'); this._maybeWin(nb,'music'); } else toast('the song to the '+nb.name+' falters'); }); },
+  _trade(){ if(this.sel<0)return; const nb=this.neighbors[this.sel]; if(nb.state!=='wild')return; if(this.res.materials<8){ toast('need 8 materials to trade'); return; }
+    this.res.materials-=8; this.res.food+=6; nb.disp=clamp(nb.disp+22,0,100); this.trades++; toast('you trade with the '+nb.name); Game.log('tribal','trade',{nb:nb.name}); this._maybeWin(nb,'trade'); },
+  _raid(){ if(this.sel<0)return; const nb=this.neighbors[this.sel]; if(nb.state!=='wild')return; const str=this.jobCount('guard')*2+this.rng.int(0,4);
+    if(str>=nb.strength+2){ nb.state='crushed'; this.crushed++; this.res.materials+=10; this.res.food+=8; toast('you crush the '+nb.name,true); Game.log('tribal','crush',{nb:nb.name}); }
+    else { const g=this.ecs.list.find(u=>u.alive&&u.kind==='unit'&&u.job==='guard'); if(g)g.alive=false; this.res.food=Math.max(0,this.res.food-6); toast('the raid on the '+nb.name+' fails'); } },
+  _maybeWin(nb,how){ if(nb.disp>=100&&nb.state==='wild'){ nb.state='won'; this.won++; this._spawn('forager'); this._spawn('hunter'); toast('the '+nb.name+' join your tribe',true); Game.log('tribal','win',{nb:nb.name,how}); } },
+  _finishExit(){ let card=this.won>this.crushed?'Harmonist':(this.crushed>this.won?'Raider':'Trader'); if(this.trades>=3&&Math.abs(this.won-this.crushed)<=1)card='Trader';
+    Game.traits[2]={stage:'tribal',card,won:this.won,crushed:this.crushed,trades:this.trades}; Game.log('tribal','trait',{card}); Game.persist(); toast('Trait Card III locked: '+card,true); setScreen(Stages.CITY); },
+  update(dt){ this.t+=dt;
+    if(this.mode==='rhythm'){ Rhythm.update(dt); return; }
+    if(this.exiting){ this.exiting+=dt; if(this.exiting>2.6)this._finishExit(); return; }
+    const musc=this.jobCount('musician'),eff=this.fire?1.25:1;
+    for(const u of this.ecs.list){ if(!u.alive||u.kind!=='unit')continue; u.eff=eff;
+      if(u.job==='forager') RTS.gather(u,this.camp,this.foodNodes,dt,()=>{ this.res.food+=3.2*eff; });
+      else if(u.job==='hunter') RTS.gather(u,this.camp,this.matNodes,dt,()=>{ this.totem=Math.min(this.totemNeed,this.totem+1.5*eff); this.res.materials+=1.0*eff; if(!this.fire&&this.totem>=this.totemNeed*0.5){ this.fire=true; toast('FIRE. the tribe learns to cook and forge.',true); Audio.blip(180,0.12); } });
+      else if(u.job==='musician'){ const tx=this.camp.x+Math.cos(u.id2)*46,ty=this.camp.y+Math.sin(u.id2)*46; RTS.moveTo(u,tx,ty,u.spd*0.5*dt); u.moving=false; }
+      else { if(!u.pt||Math.hypot(u.pt.x-u.x,u.pt.y-u.y)<16)u.pt=this.guardPts[(this.aiR.next()*this.guardPts.length)|0]; RTS.moveTo(u,u.pt.x,u.pt.y,u.spd*0.6*dt); } }
+    // food upkeep
+    this.res.food-=this.pop()*0.12*dt;
+    if(this.res.food<=0){ this.res.food=0; this.starveT+=dt; if(this.starveT>6){ this.starveT=0; const u=this.ecs.list.find(x=>x.alive&&x.kind==='unit'&&x.job!=='guard'); if(u){ u.alive=false; toast('a tribesman leaves, hungry'); } } } else this.starveT=0;
+    // neighbor goodwill + raids
+    for(const nb of this.neighbors){ if(nb.state!=='wild')continue; nb.disp=clamp(nb.disp+musc*0.5*dt,0,100); this._maybeWin(nb,'music');
+      nb.raidCd-=dt; if(nb.disp<20&&nb.raidCd<=0){ nb.raidCd=this.rng.range(16,28); const dmg=nb.strength-this.jobCount('guard'); if(dmg>0){ this.res.food=Math.max(0,this.res.food-dmg*4); toast('the '+nb.name+' raid you (-'+(dmg*4)+' food)'); } } }
+    this.ecs.cull();
+    if(this.totem>=this.totemNeed&&!this.exiting){ this.exiting=0.001; toast('the totem stands - your people are one',true); }
+  },
+  render(){ const W=this.world.w,H=this.world.h,z=Math.min(VW/W,VH/H)*0.96; this.cam={x:W/2,y:H/2,zoom:z};
+    // ground
+    const bc=BIOME_COL[B.GRASS]; ctx.fillStyle=`rgb(${(bc[0]*0.66)|0},${(bc[1]*0.66)|0},${(bc[2]*0.55)|0})`; ctx.fillRect(0,0,VW,VH);
+    ctx.save(); ctx.translate(VW/2,VH/2); ctx.scale(z,z); ctx.translate(-W/2,-H/2);
+    // resource nodes
+    for(const n of this.foodNodes){ ctx.fillStyle='#2f7a34'; ctx.beginPath(); ctx.arc(n.x,n.y-6,13,0,TAU); ctx.fill(); ctx.fillStyle='#c94f6a'; for(let i=0;i<4;i++){ const a=i/4*TAU; ctx.beginPath(); ctx.arc(n.x+Math.cos(a)*7,n.y-6+Math.sin(a)*7,2.4,0,TAU); ctx.fill(); } }
+    for(const n of this.matNodes){ ctx.fillStyle='#6b6158'; ctx.beginPath(); ctx.moveTo(n.x-12,n.y+6); ctx.lineTo(n.x,n.y-12); ctx.lineTo(n.x+12,n.y+6); ctx.closePath(); ctx.fill(); }
+    // camp ring + fire + totem
+    ctx.strokeStyle='#00000030'; ctx.lineWidth=3; ctx.beginPath(); ctx.arc(this.camp.x,this.camp.y,130,0,TAU); ctx.stroke();
+    if(this.fire){ const fl=6+Math.sin(this.t*12)*3; ctx.fillStyle='#ffb347'; ctx.beginPath(); ctx.ellipse(this.camp.x+70,this.camp.y+40,10,14+fl,0,0,TAU); ctx.fill(); ctx.fillStyle='#ff6a2a'; ctx.beginPath(); ctx.ellipse(this.camp.x+70,this.camp.y+44,6,9+fl*0.6,0,0,TAU); ctx.fill(); }
+    this._drawTotem();
+    // units
+    for(const u of this.ecs.list){ if(!u.alive||u.kind!=='unit')continue; ctx.save(); ctx.translate(u.x,u.y); ctx.scale(0.7,0.7); CGEN.draw(this.genome,this.t+u.id2*3,u.moving,u.ang); ctx.restore();
+      ctx.fillStyle=this.JOBCOL[u.job]; ctx.beginPath(); ctx.arc(u.x,u.y-u.r-4,3,0,TAU); ctx.fill(); }
+    // neighbors
+    this.neighbors.forEach((nb,i)=>{ this._drawNeighbor(nb,i===this.sel); });
+    ctx.restore();
+    this._hud();
+    if(this.mode==='rhythm')Rhythm.render();
+    if(this.exiting){ ctx.fillStyle='rgba(230,240,255,'+clamp(this.exiting/3,0,0.7)+')'; ctx.fillRect(0,0,VW,VH); } },
+  _drawTotem(){ const c=this.camp,p=this.totem/this.totemNeed; ctx.save(); ctx.translate(c.x,c.y);
+    ctx.fillStyle='#4a3a28'; ctx.fillRect(-8,-10,16,20);
+    const segs=4; for(let i=0;i<segs;i++){ const on=p>=(i+1)/segs; ctx.fillStyle=on?['#c94f6a','#7fe0d3','#c9a24b','#9ad0ff'][i]:'#2a2018'; ctx.beginPath(); ctx.arc(0,-14-i*20,12,0,TAU); ctx.fill(); if(on){ ctx.strokeStyle='#fff6'; ctx.stroke(); } }
+    ctx.restore(); },
+  _drawNeighbor(nb,seld){ ctx.save(); ctx.translate(nb.x,nb.y);
+    const col=nb.state==='won'?'#7fe0d3':nb.state==='crushed'?'#5a3a3a':'#8a97ab';
+    ctx.strokeStyle=seld?'#fff':col; ctx.lineWidth=seld?3:2; ctx.beginPath(); ctx.arc(0,0,56,0,TAU); ctx.stroke();
+    for(let k=0;k<3;k++){ ctx.fillStyle='#3a2e22'; ctx.beginPath(); ctx.moveTo(-22+k*22,10); ctx.lineTo(-14+k*22,-14); ctx.lineTo(-6+k*22,10); ctx.closePath(); ctx.fill(); }
+    ctx.save(); ctx.scale(0.8,0.8); CGEN.draw(nb.genome,this.t,false,0); ctx.restore();
+    ctx.fillStyle='#dbe6f3'; ctx.font='700 13px Space Grotesk, sans-serif'; ctx.textAlign='center'; ctx.fillText(nb.name+(nb.state!=='wild'?' ('+nb.state+')':''),0,-64);
+    if(nb.state==='wild'){ ctx.fillStyle='#0e1626'; ctx.fillRect(-30,-58,60,7); ctx.fillStyle='#7fe0d3'; ctx.fillRect(-30,-58,60*nb.disp/100,7); }
+    ctx.restore(); },
+  _hud(){ this._btns=[];
+    // resources
+    ctx.fillStyle='#0b1220cc'; panel(12,12,214,64,10); ctx.fill(); ctx.textAlign='left'; ctx.textBaseline='top';
+    ctx.fillStyle='#8fbf5a'; ctx.font='700 14px Space Grotesk, sans-serif'; ctx.fillText('food '+Math.floor(this.res.food),22,22);
+    ctx.fillStyle='#d98a5a'; ctx.fillText('materials '+Math.floor(this.res.materials),22,42);
+    ctx.fillStyle='#aebbcd'; ctx.font='11px IBM Plex Mono, monospace'; ctx.fillText('pop '+this.pop()+(this.fire?'   fire lit':''),120,26);
+    // totem progress
+    meter(22,60,190,'TOTEM '+Math.floor(this.totem/this.totemNeed*100)+'%',this.totem/this.totemNeed,'#c9a24b');
+    // job panel bottom-left
+    const jx=12,jy=VH-118; ctx.fillStyle='#0b1220cc'; panel(jx,jy,214,104,10); ctx.fill();
+    ctx.fillStyle='#8a97ab'; ctx.font='11px IBM Plex Mono, monospace'; ctx.fillText('assign jobs',jx+10,jy+8);
+    this.JOBS.forEach((j,i)=>{ const y=jy+24+i*20; ctx.fillStyle=this.JOBCOL[j]; ctx.beginPath(); ctx.arc(jx+16,y+6,4,0,TAU); ctx.fill();
+      ctx.fillStyle='#dbe6f3'; ctx.font='12px IBM Plex Mono, monospace'; ctx.fillText(j,jx+28,y); ctx.fillText(''+this.jobCount(j),jx+150,y);
+      this._mkBtn(jx+168,y-3,18,16,'-',()=>this._setJob(j,-1)); this._mkBtn(jx+190,y-3,18,16,'+',()=>this._setJob(j,1)); });
+    // neighbor action panel
+    if(this.sel>=0){ const nb=this.neighbors[this.sel],px=VW-232,py=VH-118; ctx.fillStyle='#0b1220cc'; panel(px,py,220,104,10); ctx.fill();
+      ctx.textAlign='left'; ctx.fillStyle='#e8eef6'; ctx.font='700 14px Space Grotesk, sans-serif'; ctx.fillText('the '+nb.name,px+12,py+10);
+      ctx.fillStyle='#8a97ab'; ctx.font='11px IBM Plex Mono, monospace'; ctx.fillText(nb.state==='wild'?('goodwill '+Math.floor(nb.disp)+'   strength '+nb.strength):nb.state,px+12,py+30);
+      if(nb.state==='wild'){ this._mkBtn(px+12,py+50,64,40,'sing',()=>this._perform(),'#9ad0ff'); this._mkBtn(px+80,py+50,64,40,'trade',()=>this._trade(),'#8fbf5a'); this._mkBtn(px+148,py+50,60,40,'raid',()=>this._raid(),'#d98a5a'); } }
+    // hint
+    ctx.textAlign='left'; ctx.fillStyle='#59657a'; ctx.font='11px IBM Plex Mono, monospace'; ctx.fillText('click a neighbor tribe to select   -   sing wins them, raid crushes them   -   fill the totem to advance',12,VH-16);
+    ctx.fillStyle='#c9a24b'; ctx.font='700 12px Space Grotesk, sans-serif'; ctx.textAlign='right'; ctx.fillText('won '+this.won+'   crushed '+this.crushed+'   trades '+this.trades,VW-16,16); },
+  _mkBtn(x,y,w,h,label,fn,col){ ctx.fillStyle=col?col:'#1a2740'; panel(x,y,w,h,5); ctx.fill(); ctx.fillStyle=col?'#04120f':'#cfd9e8'; ctx.font='700 13px Space Grotesk, sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(label,x+w/2,y+h/2); ctx.textBaseline='top'; ctx.textAlign='left'; this._btns.push({x,y,w,h,fn}); }
+};
+
+// ============================================================================
 // Stage stubs (Creature..Space) - the seams later slices graft onto
 // ============================================================================
 function makeStub(name,note){ return { saveAs:'world', name, t:0,
@@ -933,7 +1068,7 @@ function makeStub(name,note){ return { saveAs:'world', name, t:0,
 }; }
 const Stages={
   CREATURE:Creature,
-  TRIBAL:makeStub('Tribal','fire, totems, three neighbours - P4'),
+  TRIBAL:Tribal,
   CITY:makeStub('City','districts and rivals - P4'),
   CIV:makeStub('Civilization','the whole planet as a board - P5'),
   SPACE:makeStub('Space','a galaxy of 300+ stars - P6'),
@@ -986,7 +1121,7 @@ if(saved&&saved.seed){ seedInput.value=saved.seed; Game.traits=saved.traits||[];
 if(urlParam('seed')!=null){ seedInput.value=urlParam('seed'); }
 
 // expose a tiny hook for automated verification (?dev)
-window.__EONS={ Planet, Rng, Game, CGEN, Rhythm, Creature, Cell, Stages, setScreen, startWorld,
+window.__EONS={ Planet, Rng, Game, CGEN, Rhythm, RTS, Creature, Cell, Tribal, Stages, setScreen, startWorld,
   biomeHash(){ let h=2166136261>>>0; const b=Planet.biome; for(let i=0;i<b.length;i++){ h^=b[i]; h=Math.imul(h,16777619);} return h>>>0; } };
 
 requestAnimationFrame(frame);
