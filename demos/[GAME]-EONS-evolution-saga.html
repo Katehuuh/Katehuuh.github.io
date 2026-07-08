@@ -1,0 +1,727 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>EONS - Every world remembers its first note</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='82' font-size='82'%3E%F0%9F%AA%90%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=IBM+Plex+Mono&display=swap" rel="stylesheet">
+<!-- TIER 1 (optional accelerator, save-encoding only; never in the deterministic world path) -->
+<script src="https://cdn.jsdelivr.net/npm/lz-string@1.5.0/libs/lz-string.min.js" onerror="window.__noLZ=1"></script>
+<style>
+  :root{
+    --bg:#05070d; --ink:#e8eef6; --muted:#8a97ab; --accent:#6fd3c7; --accent2:#c9a24b; --panel:#0d1320cc;
+    --sans:'Space Grotesk',system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+    --mono:'IBM Plex Mono',ui-monospace,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(--ink);font-family:var(--sans)}
+  canvas{display:block;width:100vw;height:100vh;touch-action:none}
+  #overlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:10}
+  .card{pointer-events:auto;background:radial-gradient(120% 140% at 30% 0%,#111a2b 0%,#070a12 70%);border:1px solid #1d2942;border-radius:16px;
+    padding:34px 40px;max-width:560px;width:min(92vw,560px);box-shadow:0 30px 80px #000a,0 0 0 1px #ffffff08 inset;text-align:center}
+  h1{font-size:52px;letter-spacing:.18em;margin:0 0 2px;font-weight:700;
+    background:linear-gradient(90deg,#7fe0d3,#c9a24b);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .tag{color:var(--muted);font-size:13px;letter-spacing:.06em;margin:0 0 22px;font-style:italic}
+  .lore{color:#b8c4d6;font-size:14px;line-height:1.6;text-align:left;margin:0 0 22px}
+  .row{display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:wrap}
+  label{font-family:var(--mono);font-size:12px;color:var(--muted)}
+  input{font-family:var(--mono);font-size:15px;background:#060a12;border:1px solid #26365a;color:var(--ink);border-radius:9px;padding:10px 12px;width:190px;outline:none}
+  input:focus{border-color:var(--accent)}
+  button{font-family:var(--sans);font-weight:700;letter-spacing:.05em;font-size:15px;cursor:pointer;color:#04120f;
+    background:linear-gradient(180deg,#8fe6d9,#4bbcab);border:0;border-radius:10px;padding:11px 22px;transition:transform .08s,filter .15s}
+  button:hover{filter:brightness(1.08)}button:active{transform:translateY(1px)}
+  .ghost{background:#0c1526;color:var(--accent);border:1px solid #26365a}
+  .hint{color:#59657a;font-size:12px;font-family:var(--mono);margin-top:16px}
+  #toast{position:fixed;left:50%;top:22px;transform:translateX(-50%);z-index:20;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none}
+  .t{background:var(--panel);border:1px solid #24314e;border-left:3px solid var(--accent);border-radius:8px;padding:9px 15px;font-size:13px;
+    color:#dbe6f3;backdrop-filter:blur(6px);animation:pop .35s ease}
+  .t.gold{border-left-color:var(--accent2)}
+  @keyframes pop{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
+  #dev{position:fixed;left:10px;bottom:10px;z-index:20;font-family:var(--mono);font-size:11px;color:#5f7590;white-space:pre;pointer-events:none;text-shadow:0 1px 2px #000}
+  .hidden{display:none!important}
+  .fade{transition:opacity .5s}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="toast"></div>
+<div id="dev" class="hidden"></div>
+<div id="overlay">
+  <div class="card" id="intro">
+    <h1>EONS</h1>
+    <div class="tag">every world remembers its first note</div>
+    <p class="lore">A Cartographer comet falls into a shallow sea, carrying five notes of the Chord. Where it lands, life blooms. Seed a world, then descend into its tidepool as a single cell and begin the long climb toward the stars.</p>
+    <div class="row">
+      <label for="seed">seed</label>
+      <input id="seed" spellcheck="false" autocomplete="off" placeholder="random">
+      <button id="begin">seed a world</button>
+    </div>
+    <div class="hint">enter a word for a repeatable planet, or leave blank for chance</div>
+  </div>
+</div>
+<script>
+"use strict";
+(function(){
+// ============================================================================
+// EONS - single-file evolution saga. Slice 1: Core + Planet + Cell stage.
+// Sections: util, RNG, Noise, Planet, ECS, Audio, Save, UI, Screens, Cell, boot.
+// Tier 0 (vanilla JS + Canvas2D) runs everything; lz-string is optional save
+// encoding only. RNG/noise are inline + fixed so a seed yields the same world
+// on every machine (that is the whole point of a seed).
+// ============================================================================
+
+// ---- util ------------------------------------------------------------------
+const TAU=Math.PI*2, PI=Math.PI;
+const clamp=(x,a,b)=>x<a?a:x>b?b:x;
+const lerp=(a,b,t)=>a+(b-a)*t;
+const smooth=(a,b,x)=>{ x=clamp((x-a)/(b-a),0,1); return x*x*(3-2*x); };
+const mix=(a,b,t)=>a+(b-a)*t;
+const now=()=>performance.now();
+function urlParam(k){ const m=new RegExp('[?&]'+k+'(=([^&]*))?').exec(location.search); return m?(m[2]!==undefined?decodeURIComponent(m[2]):''):null; }
+
+// ---- CONFIG / FLAGS --------------------------------------------------------
+const CONFIG={ FDT:1/60, mapW:512, mapH:256, saveSlot:'eons.slice1' };
+const FLAGS={ lz:(typeof LZString!=='undefined' && !window.__noLZ), debug:urlParam('dev')!==null };
+
+// ---- RNG (mulberry32 + string hash + fork) ---------------------------------
+function hashStr(s){ let h=2166136261>>>0; s=String(s); for(let i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,16777619); } return h>>>0; }
+function mulberry32(a){ a>>>=0; return function(){ a=(a+0x6D2B79F5)|0; let t=Math.imul(a^(a>>>15),1|a); t=(t+Math.imul(t^(t>>>7),61|t))^t; return ((t^(t>>>14))>>>0)/4294967296; }; }
+function Rng(seed){
+  const s=(typeof seed==='number')?(seed>>>0):hashStr(seed);
+  const n=mulberry32(s);
+  return {
+    seedVal:s, next:n,
+    range:(a,b)=>a+n()*(b-a),
+    int:(a,b)=>a+Math.floor(n()*(b-a)),        // [a,b)
+    pick:arr=>arr[Math.floor(n()*arr.length)|0],
+    chance:p=>n()<p,
+    sign:()=>n()<0.5?-1:1,
+    fork:label=>Rng((s^hashStr(label))>>>0),
+  };
+}
+
+// ---- Noise (improved Perlin 3D + fbm + ridged) -----------------------------
+function makeNoise(seed){
+  const r=mulberry32(seed>>>0), p=new Uint8Array(256);
+  for(let i=0;i<256;i++)p[i]=i;
+  for(let i=255;i>0;i--){ const j=Math.floor(r()*(i+1)); const t=p[i];p[i]=p[j];p[j]=t; }
+  const perm=new Uint8Array(512); for(let i=0;i<512;i++)perm[i]=p[i&255];
+  const fade=t=>t*t*t*(t*(t*6-15)+10);
+  function grad(h,x,y,z){ h&=15; const u=h<8?x:y, v=h<4?y:(h===12||h===14?x:z); return ((h&1)?-u:u)+((h&2)?-v:v); }
+  function noise3(x,y,z){
+    const X=Math.floor(x)&255,Y=Math.floor(y)&255,Z=Math.floor(z)&255;
+    x-=Math.floor(x); y-=Math.floor(y); z-=Math.floor(z);
+    const u=fade(x),v=fade(y),w=fade(z);
+    const A=perm[X]+Y,AA=perm[A]+Z,AB=perm[A+1]+Z,B=perm[X+1]+Y,BA=perm[B]+Z,BB=perm[B+1]+Z;
+    return lerp(
+      lerp(lerp(grad(perm[AA],x,y,z),grad(perm[BA],x-1,y,z),u), lerp(grad(perm[AB],x,y-1,z),grad(perm[BB],x-1,y-1,z),u),v),
+      lerp(lerp(grad(perm[AA+1],x,y,z-1),grad(perm[BA+1],x-1,y,z-1),u), lerp(grad(perm[AB+1],x,y-1,z-1),grad(perm[BB+1],x-1,y-1,z-1),u),v), w);
+  }
+  noise3.fbm=(x,y,z,oct)=>{ oct=oct||4; let a=0,amp=0.5,f=1; for(let i=0;i<oct;i++){ a+=amp*noise3(x*f,y*f,z*f); f*=2; amp*=0.5; } return a; };
+  noise3.ridged=(x,y,z,oct)=>{ oct=oct||3; let a=0,amp=0.5,f=1; for(let i=0;i<oct;i++){ const nn=1-Math.abs(noise3(x*f,y*f,z*f)); a+=amp*nn*nn; f*=2; amp*=0.5; } return a; };
+  return noise3;
+}
+
+// ---- Planet ----------------------------------------------------------------
+// One pipeline: plates -> elevation -> temp -> wind/moisture -> biome -> rivers.
+// Produces typed-array fields + a baked equirect RGB buffer reused by map+globe.
+const B={ DEEP:0,SHALLOW:1,ICE:2,TUNDRA:3,TAIGA:4,GRASS:5,TFOREST:6,RAIN:7,SAVANNA:8,DESERT:9,SHRUB:10,BEACH:11,MOUNTAIN:12,SNOW:13 };
+const BIOME_COL=[
+  [12,38,66],[20,92,140],[220,230,238],[150,166,158],[54,86,66],[142,176,88],[54,120,58],[28,104,52],
+  [190,170,86],[214,196,120],[150,150,92],[228,214,164],[120,112,102],[214,216,224]];
+const BIOME_NAME=['deep ocean','shallow sea','ice','tundra','taiga','grassland','temperate forest','rainforest','savanna','desert','shrubland','beach','mountain','snowcap'];
+
+const Planet={
+  W:0,H:0,elev:null,temp:null,moist:null,biome:null,ocean:null,sea:0,
+  rgb:null,mapCanvas:null,rivers:null,params:null,stats:null,
+  generate(seed,W,H,params){
+    const t0=now();
+    params=Object.assign({seaLevel:null,axialTilt:0.4,greenhouse:0,hydro:1},params||{});
+    this.W=W; this.H=H; this.params=params;
+    const rng=Rng(seed).fork('planet');
+    const N=W*H;
+    const elev=this.elev=new Float32Array(N), temp=this.temp=new Float32Array(N),
+          moist=this.moist=new Float32Array(N), biome=this.biome=new Uint8Array(N), ocean=this.ocean=new Uint8Array(N);
+    // sphere-point cache for the current row (recomputed per j)
+    const nz=makeNoise(rng.fork('elev').seedVal);
+    // --- plates ---
+    const pr=rng.fork('plates'); const P=pr.int(11,15); const plates=[];
+    for(let k=0;k<P;k++){
+      const u=pr.next(),v=pr.next(), th=Math.acos(2*u-1), ph=TAU*v;
+      const x=Math.sin(th)*Math.cos(ph),y=Math.cos(th),z=Math.sin(th)*Math.sin(ph);
+      let dx=pr.range(-1,1),dy=pr.range(-1,1),dz=pr.range(-1,1); // drift, projected to tangent
+      const rad=dx*x+dy*y+dz*z; dx-=rad*x; dy-=rad*y; dz-=rad*z;
+      const dl=Math.hypot(dx,dy,dz)||1; dx/=dl;dy/=dl;dz/=dl;
+      plates.push({x,y,z,dx,dy,dz,oceanic:pr.chance(0.55)});
+    }
+    // --- elevation pass ---
+    let emin=1e9,emax=-1e9;
+    for(let j=0;j<H;j++){
+      const lat=(0.5-(j+0.5)/H)*PI, cl=Math.cos(lat), sy=Math.sin(lat);
+      for(let i=0;i<W;i++){
+        const lon=((i+0.5)/W-0.5)*TAU, sx=cl*Math.cos(lon), sz=cl*Math.sin(lon);
+        // nearest two plates by dot (unit vectors -> larger dot = closer)
+        let a=-2,b=-2,ai=0,bi=0;
+        for(let k=0;k<P;k++){ const pl=plates[k]; const d=pl.x*sx+pl.y*sy+pl.z*sz; if(d>a){b=a;bi=ai;a=d;ai=k;} else if(d>b){b=d;bi=k;} }
+        const pa=plates[ai], pb=plates[bi];
+        const edge=smooth(0.06,0.0, Math.acos(clamp(b,-1,1))-Math.acos(clamp(a,-1,1))); // 1 at boundary
+        // boundary convergence sign from relative drift along a->b
+        let bx=pb.x-pa.x,by=pb.y-pa.y,bz=pb.z-pa.z; const bl=Math.hypot(bx,by,bz)||1; bx/=bl;by/=bl;bz/=bl;
+        const conv=(pa.dx*bx+pa.dy*by+pa.dz*bz)-(pb.dx*bx+pb.dy*by+pb.dz*bz); // >0 converge
+        let e=(pa.oceanic?-0.42:0.22);
+        e+=0.95*nz.fbm(sx*1.25,sy*1.25,sz*1.25,5);
+        e+=0.30*nz.fbm(sx*3.1+11,sy*3.1,sz*3.1,4);
+        if(conv>0) e+=nz.ridged(sx*3.4+5,sy*3.4,sz*3.4,4)*edge*conv*1.05;
+        else e+=edge*conv*0.35; // divergent rift lowers
+        elev[j*W+i]=e; if(e<emin)emin=e; if(e>emax)emax=e;
+      }
+    }
+    // --- sea level via histogram percentile (~42% land) ---
+    let sea;
+    if(params.seaLevel!=null){ sea=params.seaLevel; }
+    else{
+      const BINS=256, hist=new Int32Array(BINS), inv=(BINS-1)/(emax-emin);
+      for(let k=0;k<N;k++) hist[(elev[k]-emin)*inv|0]++;
+      const target=N*0.58; let acc=0,bi=0; for(;bi<BINS;bi++){ acc+=hist[bi]; if(acc>=target)break; }
+      sea=emin+bi/inv;
+    }
+    this.sea=sea;
+    for(let k=0;k<N;k++) ocean[k]=elev[k]<=sea?1:0;
+    // --- temperature ---
+    for(let j=0;j<H;j++){
+      const lat=(0.5-(j+0.5)/H)*PI, sy=Math.sin(lat);
+      for(let i=0;i<W;i++){ const k=j*W+i;
+        let t=34-58*sy*sy + params.greenhouse;
+        if(!ocean[k]) t-=Math.max(0,elev[k]-sea)*26;
+        t+=6*nz(elev[k]*0.0, (i/W)*4.0, (j/H)*4.0)*0.5;
+        temp[k]=t;
+      }
+    }
+    // --- wind + moisture (zonal march, one ring pass per row, with rain shadow) ---
+    for(let j=0;j<H;j++){
+      const lat=(0.5-(j+0.5)/H)*PI, al=Math.abs(Math.sin(lat));
+      const travel=(al<0.34)?-1:(al<0.77?1:-1); // trades W / westerlies E / polar W
+      const base=j*W; let h=0.5, prevE=sea;
+      const start=(travel>0)?0:W-1;
+      for(let s=0;s<W*2;s++){
+        const i=((start+travel*s)%W+W)%W, k=base+i;
+        if(ocean[k]){ h=1; } else {
+          h*=0.90*params.hydro;
+          const climb=Math.max(0,elev[k]-prevE); h-=climb*3.2;
+          h=clamp(h,0,1);
+        }
+        prevE=elev[k];
+        if(s>=W) moist[k]=h; // record on 2nd lap (ring warmed up)
+      }
+    }
+    // --- coast mask + biome ---
+    const isCoast=k=>{ const j=(k/W)|0,i=k%W; const L=j*W+((i-1+W)%W),Rr=j*W+((i+1)%W),U=k-W,D=k+W;
+      return ocean[L]||ocean[Rr]||(U>=0&&ocean[U])||(D<N&&ocean[D]); };
+    const M=[[B.TUNDRA,B.TUNDRA,B.TAIGA,B.TAIGA],[B.SHRUB,B.GRASS,B.TFOREST,B.TFOREST],[B.DESERT,B.SAVANNA,B.SAVANNA,B.RAIN]];
+    let land=0,peaks=[];
+    for(let k=0;k<N;k++){
+      const e=elev[k],t=temp[k],m=moist[k];
+      let bi;
+      if(ocean[k]){ bi=(e<sea-0.16)?B.DEEP:B.SHALLOW; }
+      else{ land++;
+        if(e>sea+0.55){ bi=t<-2?B.SNOW:B.MOUNTAIN; if(e>sea+0.7)peaks.push(k); }
+        else if(t<-11) bi=B.ICE;
+        else if(isCoast(k)&&e<sea+0.035) bi=B.BEACH;
+        else{ const tb=t<2?0:(t<18?1:2), mb=m<0.2?0:(m<0.45?1:(m<0.7?2:3)); bi=M[tb][mb]; }
+      }
+      biome[k]=bi;
+    }
+    // --- rivers: steepest descent droplets from peaks ---
+    const rr=rng.fork('rivers'); const rivers=[]; const flow=new Float32Array(N);
+    // shuffle peaks, cap count
+    for(let i=peaks.length-1;i>0;i--){ const j=rr.int(0,i+1); const t=peaks[i];peaks[i]=peaks[j];peaks[j]=t; }
+    const RMAX=Math.min(70,peaks.length);
+    for(let p=0;p<RMAX;p++){
+      let k=peaks[p]; const path=[]; let guard=0;
+      while(guard++<900){
+        const j=(k/W)|0,i=k%W; path.push([i,j]);
+        if(ocean[k])break;
+        // steepest downhill among 8 neighbours (lon wraps, lat clamps)
+        let best=k,bestE=elev[k];
+        for(let dj=-1;dj<=1;dj++){ const nj=j+dj; if(nj<0||nj>=H)continue;
+          for(let di=-1;di<=1;di++){ if(!di&&!dj)continue; const ni=((i+di)%W+W)%W; const nk=nj*W+ni;
+            if(elev[nk]<bestE){bestE=elev[nk];best=nk;} } }
+        if(best===k)break; // local minimum -> lake terminus
+        flow[best]+=1; k=best;
+      }
+      if(path.length>3) rivers.push(path);
+    }
+    this.rivers=rivers;
+    // --- bake equirect rgb (biome + hillshade + rivers) ---
+    this._bake();
+    this.stats={ genMs:now()-t0, landPct:land/N, plates:P, rivers:rivers.length, seed:String(seed), sea };
+    return this;
+  },
+  _bake(){
+    const W=this.W,H=this.H,N=W*H,elev=this.elev,biome=this.biome,ocean=this.ocean,sea=this.sea;
+    const cv=this.mapCanvas||document.createElement('canvas'); cv.width=W; cv.height=H; this.mapCanvas=cv;
+    const ctx=cv.getContext('2d'); const img=ctx.createImageData(W,H), d=img.data;
+    for(let j=0;j<H;j++)for(let i=0;i<W;i++){ const k=j*W+i, c=BIOME_COL[biome[k]];
+      let sh=1;
+      if(!ocean[k]){ const l=elev[j*W+((i-1+W)%W)],r=elev[j*W+((i+1)%W)],u=elev[Math.max(0,j-1)*W+i],dn=elev[Math.min(H-1,j+1)*W+i];
+        const gx=(l-r),gy=(u-dn); sh=clamp(0.82+(gx+gy)*2.2,0.55,1.25); }
+      else { sh=clamp(0.7+(elev[k]-sea)*0.9,0.6,1.0); } // deeper = darker
+      const o=k*4; d[o]=clamp(c[0]*sh,0,255); d[o+1]=clamp(c[1]*sh,0,255); d[o+2]=clamp(c[2]*sh,0,255); d[o+3]=255;
+    }
+    ctx.putImageData(img,0,0);
+    // rivers + lakes as strokes, then read back so the globe samples them too
+    ctx.strokeStyle='rgba(60,150,220,0.9)'; ctx.lineJoin='round'; ctx.lineCap='round';
+    for(const path of this.rivers){ ctx.beginPath(); let px=null;
+      for(let n=0;n<path.length;n++){ const [i,j]=path[n];
+        if(px!=null && Math.abs(i-px)>W*0.5){ ctx.stroke(); ctx.beginPath(); ctx.moveTo(i+0.5,j+0.5); } // avoid wrap streak
+        else if(n===0) ctx.moveTo(i+0.5,j+0.5); else ctx.lineTo(i+0.5,j+0.5);
+        px=i; }
+      ctx.lineWidth=1.2; ctx.stroke(); }
+    this.rgb=ctx.getImageData(0,0,W,H).data;
+  },
+  // sample baked equirect at lon/lat (radians) -> writes into out[o..o+2]
+  sampleLL(lon,lat,out,o){
+    const W=this.W,H=this.H;
+    let x=((lon/TAU+0.5)*W)|0; x=((x%W)+W)%W;
+    let y=((0.5-lat/PI)*H)|0; y=clamp(y,0,H-1);
+    const k=(y*W+x)*4, s=this.rgb; out[o]=s[k]; out[o+1]=s[k+1]; out[o+2]=s[k+2];
+  }
+};
+
+// ---- Globe (Canvas2D orthographic, precomputed geometry+light LUT) ----------
+function makeGlobe(D){
+  const cv=document.createElement('canvas'); cv.width=D; cv.height=D;
+  const ctx=cv.getContext('2d'); const img=ctx.createImageData(D,D), data=img.data;
+  const R=D/2-1, lat0=0.38*PI/2; // slight tilt
+  const N=D*D; const mask=new Uint8Array(N), gLat=new Float32Array(N), gLon=new Float32Array(N), light=new Float32Array(N);
+  const sinL0=Math.sin(lat0),cosL0=Math.cos(lat0);
+  const sunLon=-0.6, sunLat=0.25; // fixed relative to camera -> stationary terminator
+  const sdx=Math.cos(sunLat)*Math.cos(sunLon), sdy=Math.sin(sunLat), sdz=Math.cos(sunLat)*Math.sin(sunLon);
+  for(let py=0;py<D;py++)for(let px=0;px<D;px++){
+    const idx=py*D+px, X=(px-D/2+0.5)/R, Y=-(py-D/2+0.5)/R, rho=Math.hypot(X,Y);
+    if(rho>1){ mask[idx]=0; continue; }
+    mask[idx]=1; const c=Math.asin(rho), sc=Math.sin(c),cc=Math.cos(c);
+    let lat,lon;
+    if(rho<1e-6){ lat=lat0; lon=0; } else {
+      lat=Math.asin(cc*sinL0+Y*sc*cosL0/rho);
+      lon=Math.atan2(X*sc, rho*cc*cosL0-Y*sc*sinL0);
+    }
+    gLat[idx]=lat; gLon[idx]=lon;
+    const nx=Math.cos(lat)*Math.cos(lon),ny=Math.sin(lat),nz=Math.cos(lat)*Math.sin(lon);
+    light[idx]=clamp(nx*sdx+ny*sdy+nz*sdz,-1,1);
+  }
+  const tmp=[0,0,0];
+  return {
+    canvas:cv, D,
+    draw(lonOffset){
+      for(let i=0;i<N;i++){ const o=i*4;
+        if(!mask[i]){ data[o]=6;data[o+1]=9;data[o+2]=16;data[o+3]=0; continue; }
+        Planet.sampleLL(gLon[i]+lonOffset, gLat[i], tmp,0);
+        const L=light[i], day=smooth(-0.18,0.32,L), l=0.22+0.95*day;
+        // subtle cool rim on the night terminator
+        data[o]=clamp(tmp[0]*l+ (1-day)*4,0,255);
+        data[o+1]=clamp(tmp[1]*l+(1-day)*8,0,255);
+        data[o+2]=clamp(tmp[2]*l+(1-day)*18,0,255);
+        data[o+3]=255;
+      }
+      ctx.putImageData(img,0,0); return cv;
+    }
+  };
+}
+
+// ---- Audio (raw WebAudio; five-note Chord motif) ---------------------------
+const Audio={ ctx:null, chord:null,
+  init(seed){ if(this.ctx)return; try{ this.ctx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){ return; }
+    const tonic=196*Math.pow(2,(hashStr(seed)%12)/12); this.chord=[0,3,7,10,12].map(s=>tonic*Math.pow(2,s/12)); },
+  note(f,t,dur,type,gain){ if(!this.ctx)return; const c=this.ctx,o=c.createOscillator(),g=c.createGain();
+    o.type=type||'sine'; o.frequency.value=f; g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(gain||0.16,t+0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+dur); o.connect(g).connect(c.destination); o.start(t); o.stop(t+dur+0.05); },
+  motif(){ if(!this.ctx||!this.chord)return; const t=this.ctx.currentTime;
+    this.chord.forEach((f,i)=>{ this.note(f,t+i*0.16,0.9,'triangle',0.14); this.note(f/2,t+i*0.16,1.1,'sine',0.07); }); },
+  blip(f,g){ if(!this.ctx)return; this.note(f,this.ctx.currentTime,0.12,'square',g||0.05); }
+};
+
+// ---- Save ------------------------------------------------------------------
+const Save={
+  write(o){ try{ let s=JSON.stringify(o); if(FLAGS.lz)s='LZ'+LZString.compressToUTF16(s); localStorage.setItem(CONFIG.saveSlot,s); }catch(e){} },
+  read(){ try{ let s=localStorage.getItem(CONFIG.saveSlot); if(!s)return null;
+    if(s.slice(0,2)==='LZ') s=LZString.decompressFromUTF16(s.slice(2)); return JSON.parse(s); }catch(e){ return null; } },
+  clear(){ try{ localStorage.removeItem(CONFIG.saveSlot); }catch(e){} }
+};
+
+// ---- Game state ------------------------------------------------------------
+const Game={ seed:'', rng:null, screen:null, traits:[], fragments:[], decisionLog:[],
+  persist(){ Save.write({seed:this.seed,screen:this.screen&&this.screen.saveAs||'world',traits:this.traits,fragments:this.fragments,decisionLog:this.decisionLog.slice(-40)}); },
+  log(stage,type,data){ this.decisionLog.push({stage,type,data,t:Date.now()}); }
+};
+
+// ---- Toasts / dev ----------------------------------------------------------
+const toastEl=document.getElementById('toast'), devEl=document.getElementById('dev');
+function toast(msg,gold){ const d=document.createElement('div'); d.className='t'+(gold?' gold':''); d.textContent=msg; toastEl.appendChild(d);
+  setTimeout(()=>{ d.style.transition='opacity .5s'; d.style.opacity='0'; setTimeout(()=>d.remove(),500); }, 2600); }
+
+// ---- canvas / input --------------------------------------------------------
+const canvas=document.getElementById('c'), ctx=canvas.getContext('2d');
+let VW=0,VH=0,DPR=1;
+function resize(){ DPR=Math.min(window.devicePixelRatio||1,2); VW=window.innerWidth; VH=window.innerHeight;
+  canvas.width=VW*DPR; canvas.height=VH*DPR; ctx.setTransform(DPR,0,0,DPR,0,0); }
+window.addEventListener('resize',resize); resize();
+const Input={ mx:VW/2,my:VH/2,down:false,keys:{} };
+canvas.addEventListener('pointermove',e=>{ Input.mx=e.clientX; Input.my=e.clientY; });
+canvas.addEventListener('pointerdown',e=>{ Input.down=true; Input.mx=e.clientX; Input.my=e.clientY; if(Game.screen&&Game.screen.onpointer)Game.screen.onpointer(e); });
+window.addEventListener('pointerup',()=>Input.down=false);
+window.addEventListener('keydown',e=>{ Input.keys[e.key.toLowerCase()]=true; if(Game.screen&&Game.screen.onkey)Game.screen.onkey(e.key.toLowerCase()); });
+window.addEventListener('keyup',e=>{ Input.keys[e.key.toLowerCase()]=false; });
+
+// ---- draw helpers ----------------------------------------------------------
+function starfield(t){ // deterministic backdrop
+  ctx.fillStyle='#04060c'; ctx.fillRect(0,0,VW,VH);
+  const sr=Rng('stars'); ctx.save();
+  for(let i=0;i<160;i++){ const x=sr.next()*VW,y=sr.next()*VH,r=sr.range(0.4,1.6),tw=0.5+0.5*Math.sin(t*0.001+i);
+    ctx.globalAlpha=0.25+0.6*tw*sr.range(0.4,1); ctx.fillStyle=sr.chance(0.15)?'#bcd4ff':'#fff'; ctx.beginPath(); ctx.arc(x,y,r,0,TAU); ctx.fill(); }
+  ctx.restore(); ctx.globalAlpha=1;
+}
+function panel(x,y,w,h,r){ r=r||10; ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+function meter(x,y,w,label,val,col){ ctx.fillStyle='#0e1626cc'; panel(x,y,w,14,4); ctx.fill();
+  ctx.fillStyle=col; panel(x,y,w*clamp(val,0,1),14,4); ctx.fill();
+  ctx.fillStyle='#cfd9e8'; ctx.font='11px IBM Plex Mono, monospace'; ctx.textAlign='left'; ctx.textBaseline='middle'; ctx.fillText(label,x+6,y+7); }
+
+// ============================================================================
+// SCREEN: World (planet showcase - rotating globe + equirect map)
+// ============================================================================
+const World={
+  saveAs:'world', globe:null, lon:0, t:0,
+  load(){ this.globe=makeGlobe(Math.round(Math.min(VW,VH)*0.52)); this.lon=0; this.t=0; toast('world seeded - '+Game.seed); },
+  update(dt){ this.lon+=dt*0.13; this.t+=dt;
+    if(Input.keys['enter']||Input.keys[' ']){ Input.keys['enter']=false; Input.keys[' ']=false; descend(); } },
+  onkey(k){ if(k==='enter'||k===' ')descend(); if(k==='r'){ reseed(Game.seed+'_'); } },
+  onpointer(){ /* click descend handled by button hit-test in render */ },
+  render(){
+    starfield(this.t*1000);
+    const D=this.globe.D, gx=VW*0.5-D/2, gy=VH*0.5-D/2-10;
+    // glow
+    const gg=ctx.createRadialGradient(VW/2,gy+D/2,D*0.35,VW/2,gy+D/2,D*0.75);
+    gg.addColorStop(0,'#1a3a4a55'); gg.addColorStop(1,'#0000'); ctx.fillStyle=gg; ctx.fillRect(0,0,VW,VH);
+    ctx.drawImage(this.globe.draw(this.lon),gx,gy);
+    // atmosphere ring
+    ctx.strokeStyle='#7fe0d340'; ctx.lineWidth=3; ctx.beginPath(); ctx.arc(VW/2,gy+D/2,D/2+2,0,TAU); ctx.stroke();
+    // mini equirect map bottom-left
+    const mw=Math.min(360,VW*0.34), mh=mw/2, mx=24, my=VH-mh-24;
+    ctx.fillStyle='#000'; panel(mx-4,my-4,mw+8,mh+8,8); ctx.fill();
+    ctx.imageSmoothingEnabled=true; ctx.drawImage(Planet.mapCanvas,mx,my,mw,mh);
+    ctx.strokeStyle='#26364f'; ctx.lineWidth=1; ctx.strokeRect(mx,my,mw,mh);
+    ctx.fillStyle='#7a8aa2'; ctx.font='11px IBM Plex Mono, monospace'; ctx.textAlign='left'; ctx.textBaseline='top';
+    ctx.fillText('equirectangular',mx+2,my-16);
+    // info panel right
+    const s=Planet.stats, ix=VW-260, iy=70;
+    ctx.fillStyle='#0b1220cc'; panel(ix-14,iy-14,250,150,12); ctx.fill(); ctx.strokeStyle='#1d2942'; ctx.stroke();
+    ctx.textAlign='left'; ctx.fillStyle='#8fe6d9'; ctx.font='700 15px Space Grotesk, sans-serif'; ctx.fillText('PLANET',ix,iy);
+    ctx.fillStyle='#aebbcd'; ctx.font='12px IBM Plex Mono, monospace';
+    const lines=['seed   '+s.seed,'land   '+(s.landPct*100).toFixed(1)+'%','plates '+s.plates,'rivers '+s.rivers,'gen    '+s.genMs.toFixed(0)+' ms'];
+    lines.forEach((l,i)=>ctx.fillText(l,ix,iy+26+i*20));
+    // title + prompt
+    ctx.textAlign='center'; ctx.fillStyle='#e8eef6'; ctx.font='700 22px Space Grotesk, sans-serif';
+    ctx.fillText(Game.seed.toUpperCase(),VW/2,40);
+    const pulse=0.6+0.4*Math.sin(this.t*3);
+    ctx.globalAlpha=pulse; ctx.fillStyle='#c9a24b'; ctx.font='700 15px Space Grotesk, sans-serif';
+    ctx.fillText('press  ENTER  to descend into the tidepool',VW/2,gy+D+44); ctx.globalAlpha=1;
+    ctx.fillStyle='#59657a'; ctx.font='11px IBM Plex Mono, monospace';
+    ctx.fillText('R reseed   drag to nothing yet   this is P1: the pipeline every later stage reuses',VW/2,VH-14);
+  }
+};
+
+// ============================================================================
+// ECS-lite (shared by later stages too)
+// ============================================================================
+function makeWorldECS(){ let id=1; const list=[];
+  return { list,
+    spawn(p){ p.id=id++; p.alive=true; list.push(p); return p; },
+    cull(){ for(let i=list.length-1;i>=0;i--) if(!list[i].alive) list.splice(i,1); },
+    near(x,y,r,fn){ const r2=r*r; for(const e of list){ if(!e.alive)continue; const dx=e.x-x,dy=e.y-y; if(dx*dx+dy*dy<=r2) fn(e,Math.sqrt(dx*dx+dy*dy)); } }
+  };
+}
+function seek(e,tx,ty,acc){ const dx=tx-e.x,dy=ty-e.y,d=Math.hypot(dx,dy)||1; e.vx+=dx/d*acc; e.vy+=dy/d*acc; }
+function flee(e,tx,ty,acc){ seek(e,tx,ty,-acc); }
+function wander(e,rng,acc){ e.wa=(e.wa||rng.next()*TAU)+rng.range(-0.4,0.4); e.vx+=Math.cos(e.wa)*acc; e.vy+=Math.sin(e.wa)*acc; }
+
+// ============================================================================
+// SCREEN: Cell stage
+// ============================================================================
+const Cell={
+  saveAs:'world', ecs:null, player:null, cam:null, rng:null, aiR:null,
+  tier:0, dna:0, needDNA:8, mitosis:false, parts:[], mote:0, meat:0, plant:0,
+  bgCols:null, t:0, exiting:0, world:{w:2000,h:1300},
+  TIERS:[6,16,30], // dna thresholds per tier
+  PARTS:[
+    {id:'flagella',name:'flagella',desc:'+speed',col:'#7fe0d3'},
+    {id:'cilia',name:'cilia',desc:'+agility',col:'#9ad0ff'},
+    {id:'spike',name:'spike',desc:'+attack',col:'#ff9a7f'},
+    {id:'poison',name:'poison sac',desc:'repel predators',col:'#c79aff'},
+    {id:'membrane',name:'membrane',desc:'+health',col:'#c9e08f'},
+  ],
+  load(){
+    this.rng=Game.rng.fork('cell.spawn'); this.aiR=Game.rng.fork('cell.ai');
+    this.ecs=makeWorldECS(); this.tier=0; this.dna=0; this.needDNA=this.TIERS[0]; this.mitosis=false; this.parts=[];
+    this.mote=0; this.meat=0; this.plant=0; this.t=0; this.exiting=0;
+    // dominant planet colours for the pool backdrop
+    const s=Planet.rgb; const shallow=BIOME_COL[B.SHALLOW], beach=BIOME_COL[B.BEACH];
+    this.bgCols={ water:`rgb(${shallow[0]},${shallow[1]},${shallow[2]})`, deep:`rgb(${(shallow[0]*0.6)|0},${(shallow[1]*0.7)|0},${(shallow[2]*0.8)|0})`,
+      sand:`rgb(${beach[0]},${beach[1]},${beach[2]})` };
+    this.player=this.ecs.spawn({x:this.world.w/2,y:this.world.h/2,vx:0,vy:0,r:9,kind:'player',hp:100,maxhp:100,
+      speed:120,turn:1,atk:6,poison:0});
+    this.cam={x:this.player.x,y:this.player.y,zoom:2.4,tzoom:2.4};
+    for(let i=0;i<70;i++) this.spawnMote();
+    for(let i=0;i<14;i++) this.spawnPrey();
+    for(let i=0;i<3;i++) this.spawnPredator(['chaser','ambusher','drifter'][i]);
+    Audio.motif(); toast('a single cell, adrift. eat to grow.');
+  },
+  spawnMote(){ this.ecs.spawn({x:this.rng.range(40,this.world.w-40),y:this.rng.range(40,this.world.h-40),vx:0,vy:0,r:3,kind:'mote',
+    hue:this.rng.range(90,150),drift:this.rng.range(0,TAU)}); },
+  spawnPrey(){ this.ecs.spawn({x:this.rng.range(40,this.world.w-40),y:this.rng.range(40,this.world.h-40),vx:0,vy:0,r:this.rng.range(4,7),
+    kind:'prey',hp:12,hue:this.rng.range(180,300)}); },
+  spawnPredator(arch){ this.ecs.spawn({x:this.rng.range(40,this.world.w-40),y:this.rng.range(40,this.world.h-40),vx:0,vy:0,
+    r:this.rng.range(13,17),kind:'pred',arch,hp:40,cool:0,dashing:0,hue:this.rng.range(0,40)}); },
+  onkey(k){ if(this.mitosis){ const i='12345'.indexOf(k); if(i>=0)this.choosePart(i); } },
+  onpointer(){ if(this.mitosis){ // click a radial option
+      const opt=this._hit; if(opt!=null)this.choosePart(opt); } },
+  choosePart(i){ const p=this.PARTS[i]; this.parts.push(p.id);
+    if(p.id==='flagella')this.player.speed*=1.28; if(p.id==='cilia')this.player.turn*=1.5;
+    if(p.id==='spike')this.player.atk+=8; if(p.id==='poison')this.player.poison=1;
+    if(p.id==='membrane'){ this.player.maxhp+=45; this.player.hp=this.player.maxhp; }
+    this.player.r+=2.2; this.tier++; this.mitosis=false; Audio.blip(Audio.chord?Audio.chord[this.tier%5]:440,0.08);
+    toast('mitosis: '+p.name+' ('+p.desc+')');
+    if(this.tier>=3){ this.beginExit(); } else { this.needDNA=this.TIERS[Math.min(this.tier,2)]; this.cam.tzoom=2.4-this.tier*0.55; }
+    Game.log('cell','mitosis',{part:p.id,tier:this.tier});
+  },
+  beginExit(){ this.exiting=0.001; toast('a brain forms. the shore calls.',true); },
+  finishExit(){
+    const total=this.meat+this.plant||1, meatR=this.meat/total;
+    const diet= meatR>0.62?'Carnivore': meatR<0.38?'Herbivore':'Omnivore';
+    Game.traits[0]={stage:'cell',card:diet,meat:this.meat,plant:this.plant};
+    Game.log('cell','trait',{card:diet}); Game.persist();
+    toast('Trait Card I locked: '+diet,true);
+    // hand off to Creature (stub) via the world view for this slice
+    setScreen(Stages.CREATURE);
+  },
+  update(dt){
+    this.t+=dt;
+    if(this.mitosis){ this.cam.zoom=lerp(this.cam.zoom,this.cam.tzoom,dt*3); return; }
+    const pl=this.player, W=this.world.w, H=this.world.h;
+    // ---- exiting animation: rise toward shore then finish ----
+    if(this.exiting){ this.exiting+=dt; pl.vy-=40*dt; this.cam.tzoom=1.1;
+      this.cam.zoom=lerp(this.cam.zoom,this.cam.tzoom,dt*2); this.cam.x=lerp(this.cam.x,pl.x,dt*4); this.cam.y=lerp(this.cam.y,pl.y,dt*4);
+      pl.x+=pl.vx*dt; pl.y+=pl.vy*dt; pl.vx*=0.9; pl.vy*=0.92;
+      if(this.exiting>2.2){ this.exiting=0; this.finishExit(); } return; }
+    // ---- player control (pointer steer + WASD) ----
+    let tx=this.cam.x+(Input.mx-VW/2)/this.cam.zoom, ty=this.cam.y+(Input.my-VH/2)/this.cam.zoom;
+    seek(pl,tx,ty,pl.speed*pl.turn*dt);
+    if(Input.keys['w'])pl.vy-=pl.speed*dt; if(Input.keys['s'])pl.vy+=pl.speed*dt;
+    if(Input.keys['a'])pl.vx-=pl.speed*dt; if(Input.keys['d'])pl.vx+=pl.speed*dt;
+    const sp=Math.hypot(pl.vx,pl.vy), maxsp=pl.speed*1.4; if(sp>maxsp){ pl.vx*=maxsp/sp; pl.vy*=maxsp/sp; }
+    pl.vx*=0.90; pl.vy*=0.90; pl.x=clamp(pl.x+pl.vx*dt,pl.r,W-pl.r); pl.y=clamp(pl.y+pl.vy*dt,pl.r,H-pl.r);
+    // camera follow + zoom ease
+    this.cam.x=lerp(this.cam.x,pl.x,dt*5); this.cam.y=lerp(this.cam.y,pl.y,dt*5); this.cam.zoom=lerp(this.cam.zoom,this.cam.tzoom,dt*3);
+    // ---- entities ----
+    const ai=this.aiR;
+    for(const e of this.ecs.list){ if(!e.alive||e===pl)continue;
+      if(e.kind==='mote'){ e.drift+=dt*0.6; e.x+=Math.cos(e.drift)*4*dt; e.y+=Math.sin(e.drift)*4*dt; }
+      else if(e.kind==='prey'){ const d=Math.hypot(pl.x-e.x,pl.y-e.y);
+        if(d<120) flee(e,pl.x,pl.y,60*dt); else wander(e,ai,18*dt);
+        e.vx*=0.92; e.vy*=0.92; e.x=clamp(e.x+e.vx*dt,e.r,W-e.r); e.y=clamp(e.y+e.vy*dt,e.r,H-e.r); }
+      else if(e.kind==='pred'){ this.updatePredator(e,dt,ai); }
+    }
+    // ---- eating (player overlaps smaller things) ----
+    this.ecs.near(pl.x,pl.y,pl.r+9,(e,d)=>{ if(e===pl||!e.alive)return;
+      if(e.kind==='mote'&&d<pl.r+e.r){ e.alive=false; this.dna++; this.plant++; this.mote++; Audio.blip(520+this.dna*4,0.03); this.spawnMote(); this.checkTier(); }
+      else if(e.kind==='prey'&&d<pl.r&&pl.r>e.r){ e.alive=false; this.dna+=2; this.meat+=2; Audio.blip(300,0.05); this.spawnPrey(); this.checkTier(); }
+    });
+    // ---- predator contact ----
+    this.ecs.near(pl.x,pl.y,pl.r+18,(e,d)=>{ if(e.kind!=='pred'||!e.alive)return;
+      if(d<pl.r+e.r){
+        if(pl.poison){ e.hp-=30*dt; }
+        if(this.parts.includes('spike')){ e.hp-=pl.atk*dt*4; }
+        pl.hp-=14*dt; const kx=(pl.x-e.x),ky=(pl.y-e.y),kl=Math.hypot(kx,ky)||1; pl.vx+=kx/kl*40; pl.vy+=ky/kl*40;
+        if(e.hp<=0){ e.alive=false; this.dna+=3; this.meat+=3; toast('predator devoured'); this.spawnPredator(e.arch); this.checkTier(); }
+      }
+    });
+    if(pl.hp<pl.maxhp) pl.hp=Math.min(pl.maxhp,pl.hp+dt*3); // slow regen
+    if(pl.hp<=0){ pl.hp=pl.maxhp*0.6; this.dna=Math.max(0,this.dna-2); pl.x=W/2; pl.y=H/2; toast('membrane ruptured - you reform, weaker'); }
+    this.ecs.cull();
+  },
+  updatePredator(e,dt,ai){ const pl=this.player, d=Math.hypot(pl.x-e.x,pl.y-e.y); const W=this.world.w,H=this.world.h;
+    if(this.player.poison && d<90){ flee(e,pl.x,pl.y,50*dt); }
+    else if(e.arch==='chaser'){ if(d<420)seek(e,pl.x,pl.y,46*dt); else wander(e,ai,20*dt); }
+    else if(e.arch==='ambusher'){ e.cool-=dt; if(d<160&&e.cool<=0){ e.dashing=0.5; e.cool=2.4; }
+      if(e.dashing>0){ e.dashing-=dt; seek(e,pl.x,pl.y,140*dt); } else wander(e,ai,10*dt); }
+    else { wander(e,ai,26*dt); if(d<200)seek(e,pl.x,pl.y,14*dt); }
+    e.vx*=0.93; e.vy*=0.93; e.x=clamp(e.x+e.vx*dt,e.r,W-e.r); e.y=clamp(e.y+e.vy*dt,e.r,H-e.r);
+  },
+  checkTier(){ if(this.dna>=this.needDNA && this.tier<3 && !this.mitosis && !this.exiting){ this.mitosis=true; this.cam.tzoom=this.cam.zoom*0.86; Audio.blip(660,0.1); } },
+  // ---------- render ----------
+  render(){
+    const cam=this.cam, z=cam.zoom;
+    // pool backdrop (planet-tinted radial + caustics)
+    const g=ctx.createRadialGradient(VW/2,VH*0.36,60,VW/2,VH*0.5,Math.max(VW,VH)*0.75);
+    g.addColorStop(0,this.bgCols.water); g.addColorStop(0.7,this.bgCols.deep); g.addColorStop(1,'#04121c');
+    ctx.fillStyle=g; ctx.fillRect(0,0,VW,VH);
+    // caustics
+    ctx.save(); ctx.globalAlpha=0.06; ctx.strokeStyle='#dffcff'; ctx.lineWidth=2;
+    for(let i=0;i<7;i++){ ctx.beginPath(); for(let x=0;x<=VW;x+=24){ const y=VH*0.5+Math.sin(x*0.01+this.t*0.6+i)*40+i*30-90; if(x===0)ctx.moveTo(x,y); else ctx.lineTo(x,y);} ctx.stroke(); }
+    ctx.restore();
+    // sun shafts hint
+    ctx.save(); ctx.translate(VW/2,VH/2); ctx.scale(z,z); ctx.translate(-cam.x,-cam.y);
+    // world floor edge (shore to the top = -y)
+    ctx.fillStyle=this.bgCols.sand; ctx.globalAlpha=0.5; ctx.fillRect(-100,-140,this.world.w+200,180); ctx.globalAlpha=1;
+    // entities
+    for(const e of this.ecs.list){ if(!e.alive)continue; this.drawEntity(e); }
+    this.drawPlayer(this.player);
+    ctx.restore();
+    // small "home planet" globe in the sky
+    if(!this._sky) this._sky=makeGlobe(96);
+    ctx.save(); ctx.globalAlpha=0.9; ctx.drawImage(this._sky.draw(this.t*0.1),VW-118,24); ctx.restore();
+    ctx.fillStyle='#6a7a92'; ctx.font='10px IBM Plex Mono, monospace'; ctx.textAlign='center'; ctx.fillText('home',VW-70,128);
+    this.hud();
+    if(this.mitosis) this.mitosisUI();
+    if(this.exiting){ ctx.fillStyle='rgba(230,240,255,'+clamp(this.exiting/2.6,0,0.7)+')'; ctx.fillRect(0,0,VW,VH); }
+  },
+  drawEntity(e){ ctx.save(); ctx.translate(e.x,e.y);
+    if(e.kind==='mote'){ ctx.fillStyle=`hsl(${e.hue},70%,60%)`; ctx.globalAlpha=0.9; ctx.beginPath(); ctx.arc(0,0,e.r,0,TAU); ctx.fill();
+      ctx.globalAlpha=0.3; ctx.beginPath(); ctx.arc(0,0,e.r+2,0,TAU); ctx.fill(); }
+    else if(e.kind==='prey'){ ctx.fillStyle=`hsl(${e.hue},55%,58%)`; this.blob(e.r,this.t*3+e.id); ctx.fillStyle='#0006';
+      ctx.beginPath(); ctx.arc(e.r*0.3,-e.r*0.2,e.r*0.25,0,TAU); ctx.fill(); }
+    else if(e.kind==='pred'){ ctx.rotate(Math.atan2(e.vy,e.vx));
+      ctx.fillStyle=`hsl(${e.hue},70%,45%)`; ctx.beginPath();
+      const spikes=9; for(let i=0;i<spikes*2;i++){ const a=i/(spikes*2)*TAU, rr=e.r*(i%2?0.7:1.1); const x=Math.cos(a)*rr,y=Math.sin(a)*rr; i?ctx.lineTo(x,y):ctx.moveTo(x,y);} ctx.closePath(); ctx.fill();
+      ctx.fillStyle='#ffdf6a'; ctx.beginPath(); ctx.arc(e.r*0.4,0,e.r*0.28,0,TAU); ctx.fill();
+      ctx.fillStyle='#000'; ctx.beginPath(); ctx.arc(e.r*0.5,0,e.r*0.12,0,TAU); ctx.fill(); }
+    ctx.restore();
+  },
+  blob(r,ph){ ctx.beginPath(); for(let i=0;i<=16;i++){ const a=i/16*TAU, rr=r*(1+Math.sin(a*3+ph)*0.08); const x=Math.cos(a)*rr,y=Math.sin(a)*rr; i?ctx.lineTo(x,y):ctx.moveTo(x,y);} ctx.closePath(); ctx.fill(); },
+  drawPlayer(pl){ ctx.save(); ctx.translate(pl.x,pl.y); const ang=Math.atan2(pl.vy,pl.vx), spd=Math.hypot(pl.vx,pl.vy);
+    // flagella tail
+    if(this.parts.includes('flagella')){ ctx.strokeStyle='#7fe0d3'; ctx.lineWidth=2.4; ctx.beginPath();
+      for(let i=0;i<=10;i++){ const s=i/10; const bx=-Math.cos(ang)*(pl.r+s*pl.r*2.2), by=-Math.sin(ang)*(pl.r+s*pl.r*2.2)+Math.sin(this.t*10+s*6)*4*s;
+        i?ctx.lineTo(bx,by):ctx.moveTo(bx,by);} ctx.stroke(); }
+    // cilia hairs
+    if(this.parts.includes('cilia')){ ctx.strokeStyle='#9ad0ff'; ctx.lineWidth=1.4;
+      for(let i=0;i<14;i++){ const a=i/14*TAU, w=Math.sin(this.t*12+i)*0.3; ctx.beginPath(); ctx.moveTo(Math.cos(a)*pl.r,Math.sin(a)*pl.r); ctx.lineTo(Math.cos(a+w)*(pl.r+5),Math.sin(a+w)*(pl.r+5)); ctx.stroke(); } }
+    // body
+    const bg=ctx.createRadialGradient(-pl.r*0.3,-pl.r*0.3,1,0,0,pl.r*1.2); bg.addColorStop(0,'#eafff9'); bg.addColorStop(0.6,'#7fe0d3'); bg.addColorStop(1,'#2f9a8b');
+    ctx.fillStyle=bg; this.blob(pl.r,this.t*4);
+    // membrane ring
+    if(this.parts.includes('membrane')){ ctx.strokeStyle='#c9e08f'; ctx.lineWidth=2.2; ctx.beginPath(); ctx.arc(0,0,pl.r+1.5,0,TAU); ctx.stroke(); }
+    // poison aura
+    if(pl.poison){ ctx.globalAlpha=0.18+0.08*Math.sin(this.t*4); ctx.fillStyle='#c79aff'; ctx.beginPath(); ctx.arc(0,0,pl.r+10,0,TAU); ctx.fill(); ctx.globalAlpha=1; }
+    // spike
+    if(this.parts.includes('spike')){ ctx.fillStyle='#ff9a7f'; ctx.save(); ctx.rotate(ang); ctx.beginPath(); ctx.moveTo(pl.r*0.6,-4); ctx.lineTo(pl.r+9,0); ctx.lineTo(pl.r*0.6,4); ctx.closePath(); ctx.fill(); ctx.restore(); }
+    // nucleus
+    ctx.fillStyle='#1c6f65'; ctx.beginPath(); ctx.arc(0,0,pl.r*0.34,0,TAU); ctx.fill();
+    ctx.restore();
+  },
+  hud(){ const pl=this.player;
+    meter(16,16,190,'DNA '+this.dna+'/'+this.needDNA,this.dna/this.needDNA,'#7fe0d3');
+    meter(16,36,190,'HEALTH',pl.hp/pl.maxhp,'#ff9a7f');
+    // diet balance
+    const total=this.meat+this.plant||1; const mr=this.meat/total;
+    ctx.fillStyle='#0e1626cc'; panel(16,56,190,14,4); ctx.fill();
+    ctx.fillStyle='#8fbf5a'; panel(16,56,190*(1-mr),14,4); ctx.fill();
+    ctx.fillStyle='#d98a5a'; panel(16+190*(1-mr),56,190*mr,14,4); ctx.fill();
+    ctx.fillStyle='#04120f'; ctx.font='10px IBM Plex Mono, monospace'; ctx.textAlign='left'; ctx.textBaseline='middle';
+    ctx.fillText('plant',20,63); ctx.textAlign='right'; ctx.fillText('meat',204,63); ctx.textAlign='left';
+    ctx.fillStyle='#8a97ab'; ctx.font='11px IBM Plex Mono, monospace'; ctx.textBaseline='top';
+    ctx.fillText('tier '+(this.tier+1)+'/3   parts: '+(this.parts.join(', ')||'none'),16,78);
+    ctx.fillStyle='#59657a'; ctx.fillText('steer with mouse or WASD - eat green motes and smaller cells - dodge spiky predators',16,VH-22);
+  },
+  mitosisUI(){ ctx.fillStyle='rgba(4,8,14,0.7)'; ctx.fillRect(0,0,VW,VH);
+    ctx.fillStyle='#e8eef6'; ctx.font='700 24px Space Grotesk, sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText('MITOSIS - choose an adaptation',VW/2,VH*0.5-140);
+    const cx=VW/2,cy=VH*0.5+10,R=Math.min(VW,VH)*0.26; this._hit=null;
+    for(let i=0;i<5;i++){ const a=-PI/2+i/5*TAU, x=cx+Math.cos(a)*R, y=cy+Math.sin(a)*R, p=this.PARTS[i];
+      const dx=Input.mx-x,dy=Input.my-y, hover=dx*dx+dy*dy<52*52; if(hover)this._hit=i;
+      ctx.fillStyle=hover?p.col:'#0e1626'; ctx.strokeStyle=p.col; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(x,y,50,0,TAU); ctx.fill(); ctx.stroke();
+      ctx.fillStyle=hover?'#04120f':'#dbe6f3'; ctx.font='700 14px Space Grotesk, sans-serif'; ctx.fillText(p.name,x,y-6);
+      ctx.font='11px IBM Plex Mono, monospace'; ctx.fillStyle=hover?'#04120f':'#8a97ab'; ctx.fillText(p.desc,x,y+12);
+      ctx.fillStyle=p.col; ctx.font='10px IBM Plex Mono, monospace'; ctx.fillText('['+(i+1)+']',x,y+30);
+    }
+    ctx.fillStyle='#8a97ab'; ctx.font='12px IBM Plex Mono, monospace'; ctx.fillText('click a nucleus or press 1-5',cx,cy+R+60);
+  }
+};
+
+// ============================================================================
+// Stage stubs (Creature..Space) - the seams later slices graft onto
+// ============================================================================
+function makeStub(name,note){ return { saveAs:'world', name, t:0,
+  load(){ this.t=0; toast(name+' stage - coming in a later slice'); },
+  update(dt){ this.t+=dt; if(Input.keys['enter']){ Input.keys['enter']=false; setScreen(World); } },
+  onkey(k){ if(k==='enter')setScreen(World); },
+  render(){ starfield(this.t*1000); ctx.textAlign='center'; ctx.fillStyle='#e8eef6'; ctx.font='700 30px Space Grotesk, sans-serif';
+    ctx.fillText(name.toUpperCase(),VW/2,VH/2-40);
+    ctx.fillStyle='#8a97ab'; ctx.font='14px IBM Plex Mono, monospace'; ctx.fillText(note,VW/2,VH/2+2);
+    if(Game.traits[0]){ ctx.fillStyle='#c9a24b'; ctx.fillText('carried trait: '+Game.traits[0].card,VW/2,VH/2+30); }
+    ctx.fillStyle='#59657a'; ctx.fillText('press ENTER to return to the world view',VW/2,VH/2+70); }
+}; }
+const Stages={
+  CREATURE:makeStub('Creature','roam the biome, befriend or hunt - P3'),
+  TRIBAL:makeStub('Tribal','fire, totems, three neighbours - P4'),
+  CITY:makeStub('City','districts and rivals - P4'),
+  CIV:makeStub('Civilization','the whole planet as a board - P5'),
+  SPACE:makeStub('Space','a galaxy of 300+ stars - P6'),
+};
+
+// ============================================================================
+// Screen management + loop
+// ============================================================================
+function setScreen(s){ Game.screen=s; if(s.load)s.load(); Game.persist(); }
+function descend(){ setScreen(Cell); }
+function reseed(seed){ startWorld(seed); }
+function startWorld(seed){
+  Game.seed=seed; Game.rng=Rng(seed);
+  Planet.generate(seed,CONFIG.mapW,CONFIG.mapH,{});
+  setScreen(World);
+}
+
+let last=now(), acc=0;
+function frame(){ const t=now(); let dt=(t-last)/1000; last=t; if(dt>0.25)dt=0.25; acc+=dt;
+  let steps=0; while(acc>=CONFIG.FDT && steps<5){ if(Game.screen&&Game.screen.update)Game.screen.update(CONFIG.FDT); acc-=CONFIG.FDT; steps++; }
+  if(steps>=5)acc=0;
+  if(Game.screen&&Game.screen.render)Game.screen.render();
+  if(FLAGS.debug){ const s=Planet.stats; devEl.textContent=
+    'screen '+(Game.screen&&(Game.screen.saveAs||Game.screen.name)||'-')+'\n'+
+    'seed   '+Game.seed+'\n'+(s?('gen    '+s.genMs.toFixed(1)+'ms\nland   '+(s.landPct*100).toFixed(1)+'%\n'):'')+
+    (Cell.ecs?('ents   '+Cell.ecs.list.length+'\ndna    '+Cell.dna+'\n'):'')+'fps    '+(1/Math.max(dt,1e-3)).toFixed(0);
+  }
+  requestAnimationFrame(frame);
+}
+
+// ============================================================================
+// Boot
+// ============================================================================
+const intro=document.getElementById('intro'), overlay=document.getElementById('overlay'), seedInput=document.getElementById('seed');
+function randomSeed(){ const w=['vekk','luma','orin','thal','mira','nyx','sol','kael','vora','esh','arda','zed']; return w[Math.floor(Math.random()*w.length)]+Math.floor(Math.random()*900+100); }
+function begin(){
+  const seed=(seedInput.value.trim())||randomSeed();
+  Audio.init(seed); Audio.motif();
+  if(FLAGS.debug)devEl.classList.remove('hidden');
+  overlay.classList.add('hidden');
+  startWorld(seed);
+}
+document.getElementById('begin').addEventListener('click',begin);
+seedInput.addEventListener('keydown',e=>{ if(e.key==='Enter')begin(); });
+
+// resume hint from save (does not auto-start; world regenerates from seed)
+const saved=Save.read();
+if(saved&&saved.seed){ seedInput.value=saved.seed; Game.traits=saved.traits||[]; Game.decisionLog=saved.decisionLog||[];
+  if(saved.traits&&saved.traits[0]){ intro.querySelector('.hint').textContent='resume seed '+saved.seed+' - carried trait: '+saved.traits[0].card; } }
+if(urlParam('seed')!=null){ seedInput.value=urlParam('seed'); }
+
+// expose a tiny hook for automated verification (?dev)
+window.__EONS={ Planet, Rng, Game, startWorld, biomeHash(){ let h=2166136261>>>0; const b=Planet.biome; for(let i=0;i<b.length;i++){ h^=b[i]; h=Math.imul(h,16777619);} return h>>>0; } };
+
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
