@@ -1,5 +1,13 @@
 {
   "models": {
+    "grok-4.5": {
+      "display_name": "grok-4.5",
+      "python_render": "assets/grok-4.5-python.jpg",
+      "svg": "assets/grok-4.5-svg.jpg",
+      "python_source": "assets/grok-4.5.py",
+      "svg_source": "assets/grok-4.5.svg",
+      "_first_seen": "2026-07-09T23:37:50+00:00"
+    },
     "claude-sonnet-5": {
       "display_name": "claude-sonnet-5",
       "python_render": "assets/claude-sonnet-5-python.jpg",
