@@ -1332,24 +1332,179 @@ const Civ={ saveAs:'world', name:'Civilization', rng:null, t:0, mode:'map', turn
 };
 
 // ============================================================================
-// Stage stubs (Creature..Space) - the seams later slices graft onto
+// P6 (part A): Space  [doc sections 3 + 17] - the galaxy strategy layer
+//   spiral galaxy, fleet explore, colonize + terraform (climate model),
+//   colony economy, alien empires (Civ diplomacy pattern), trait->space powers.
+//   Null arc + Archive endgame + Echo NG+ are P6b.
 // ============================================================================
-function makeStub(name,note){ return { saveAs:'world', name, t:0,
-  load(){ this.t=0; toast(name+' stage - coming in a later slice'); },
-  update(dt){ this.t+=dt; if(Input.keys['enter']){ Input.keys['enter']=false; setScreen(World); } },
-  onkey(k){ if(k==='enter')setScreen(World); },
-  render(){ starfield(this.t*1000); ctx.textAlign='center'; ctx.fillStyle='#e8eef6'; ctx.font='700 30px Space Grotesk, sans-serif';
-    ctx.fillText(name.toUpperCase(),VW/2,VH/2-40);
-    ctx.fillStyle='#8a97ab'; ctx.font='14px IBM Plex Mono, monospace'; ctx.fillText(note,VW/2,VH/2+2);
-    if(Game.traits[0]){ ctx.fillStyle='#c9a24b'; ctx.fillText('carried trait: '+Game.traits[0].card,VW/2,VH/2+30); }
-    ctx.fillStyle='#59657a'; ctx.fillText('press ENTER to return to the world view',VW/2,VH/2+70); }
-}; }
+const STAR_CLS=[['O','#9bb0ff',0.9],['B','#aec6ff',0.7],['A','#dfe6ff',0.5],['F','#fff4e8',0.2],['G','#ffe9a8',0.0],['K','#ffc078',-0.3],['M','#ff9a6a',-0.6]];
+const GOODS=['ore','isotopes','silica','biogel','crystal','alloy','spice','vapor','circuitry','pelts','amber','plasma'];
+const POWER={Herbivore:["Gaia's Favor",'terraforming is cheaper'],Carnivore:['Apex Doctrine','+fleet damage'],Omnivore:['Generalist','+10% all yields'],
+  Social:['Chorus','warmer diplomacy'],Predator:['Dread','aliens fear your fleets'],Adaptive:['Wanderer','longer jump range'],
+  Harmonist:['Festival','+colony happiness'],Raider:['Plunder','+war spoils'],Trader:['Silk Roads','+route income'],
+  Builder:['Arcology','+colony output'],Fortifier:['Bastion','+planet defense'],Merchant:['Franchise','cheaper colonies'],
+  Cultural:['Broadcast','peaceful conversion'],Military:['Warfleet','+fleet strength'],Economic:['Monopoly','+Lume value']};
+const Space={ saveAs:'space', name:'Space', rng:null, t:0, mode:'galaxy', turn:1, stars:null, empires:null, player:null,
+  fleet:null, selStar:-1, curPlanet:null, view:null, res:null, powers:null, reachedCore:false, msg:'', _btns:null, coreStar:-1,
+  load(){ this.rng=Game.rng.fork('space'); this.t=0; this.turn=1; this.mode='galaxy'; this.selStar=-1; this.curPlanet=null; this.reachedCore=false;
+    this.powers=this._powers(); this.res={energy:30,minerals:20,research:0,lume:5};
+    this._genGalaxy(); Audio.motif(); toast('the long climb reaches the stars. explore, terraform, and grow toward the core.'); },
+  _powers(){ const cards=(Game.traits||[]).map(t=>t&&t.card), has=c=>cards.indexOf(c)>=0; return {
+    terraform:has('Herbivore')?0.6:1, fleetDmg:has('Carnivore')?1.25:1, yield:has('Omnivore')?1.1:1, diplo:has('Social')?15:0,
+    dread:has('Predator'), jump:has('Adaptive')?2:1, happy:has('Harmonist')?12:0, plunder:has('Raider')?1.5:1, route:has('Trader')?1.3:1,
+    cap:has('Builder')?1.3:1, defense:has('Fortifier')?1.5:1, colonize:has('Merchant')?0.7:1, convert:has('Cultural'), fleetSlots:has('Military')?2:1, lumeVal:has('Economic')?1.5:1,
+    list:cards.filter(Boolean).map(c=>POWER[c]).filter(Boolean) }; },
+  _genGalaxy(){ const rng=this.rng, N=150, arms=rng.int(2,4), stars=this.stars=[];
+    for(let i=0;i<N;i++){ const tt=Math.pow(rng.next(),0.62), r=tt*1.0, arm=i%arms, ang=tt*4.2+arm*(TAU/arms)+rng.range(-0.35,0.35);
+      let x=Math.cos(ang)*r+rng.range(-0.05,0.05), y=Math.sin(ang)*r+rng.range(-0.05,0.05);
+      const rr=Math.hypot(x,y), ring=rr<0.28?2:rr<0.62?1:0, cls=rng.next()<0.5?5+rng.int(0,2):rng.int(0,7);
+      stars.push({id:i,x,y,cls:Math.min(cls,6),ring,planets:[],explored:false,owner:-1,anomaly:null,fragment:false,neighbors:new Set(),name:CGEN.name(rng)}); }
+    // hyperlanes: nearest up to 3 within distance
+    for(const s of stars){ const near=stars.filter(o=>o!==s).map(o=>({o,d:Math.hypot(o.x-s.x,o.y-s.y)})).sort((a,b)=>a.d-b.d).slice(0,3);
+      for(const {o,d} of near)if(d<0.28){ s.neighbors.add(o.id); o.neighbors.add(s.id); } }
+    // ensure connectivity-ish: link isolated stars to nearest
+    for(const s of stars)if(s.neighbors.size===0){ let best=null,bd=1e9; for(const o of stars)if(o!==s){ const d=Math.hypot(o.x-s.x,o.y-s.y); if(d<bd){bd=d;best=o;} } if(best){ s.neighbors.add(best.id); best.neighbors.add(s.id); } }
+    // planets per star
+    for(const s of stars){ const np=rng.int(1,5); for(let p=0;p<np;p++){ const orbit=(p+1)/(np+1); const temp=STAR_CLS[s.cls][2]-orbit*0.9+0.4;
+      s.planets.push({name:s.name+' '+'IVXLC'[p]||(p+1),orbit,size:rng.range(0.6,1.4),temp,hydro:rng.range(0,0.9),atmo:rng.range(0,0.6),colony:null,tf:{heat:0,hydro:0,atmo:0}}); } }
+    // core objective star (deepest ring, near center)
+    let cs=stars[0],cd=1e9; for(const s of stars){ const d=Math.hypot(s.x,s.y); if(d<cd){cd=d;cs=s;} } cs.isCore=true; this.coreStar=cs.id;
+    // home star: rim, far from core, decent planet
+    const rim=stars.filter(s=>s.ring===0); let home=rng.pick(rim)||stars[0];
+    home.explored=true; home.owner=0; for(const nb of home.neighbors)stars[nb].explored=true;
+    // colonize the best home planet as the homeworld
+    let hp=home.planets[0]; for(const pl of home.planets)if(this._habit(pl)>this._habit(hp))hp=pl; this._colonize(home,hp,true);
+    // empires
+    const NE=clamp(Math.round(N/22),6,10); const used=new Set([home.id]); this.empires=[{id:0,name:'You',color:'#7fe0d3',rgb:[127,224,211],pers:this._playerPers(),home:home.id,att:{},alive:true,isPlayer:true,fleetStr:6}];
+    for(let e=1;e<NE;e++){ let st=null; for(let tr=0;tr<200;tr++){ const c=rng.pick(stars); if(!used.has(c.id)&&c.ring<2){ st=c; break; } } if(!st)break; used.add(st.id); st.explored=false; st.owner=e;
+      const col=CGEN.PAL[rng.int(0,CGEN.PAL.length)][0]; let bp=st.planets[0]; for(const pl of st.planets)if(this._habit(pl)>this._habit(bp))bp=pl; this._colonize(st,bp,false,e);
+      this.empires.push({id:e,name:CGEN.name(rng)+(rng.chance(0.5)?' Combine':' Reach'),color:col,rgb:hexRgb(col),pers:this._randPers(),home:st.id,att:{},alive:true,fleetStr:rng.int(3,7)}); }
+    for(const a of this.empires)for(const b of this.empires)if(a!==b)a.att[b.id]=clamp(20+this.powers.diplo+Math.round(-60*Math.abs(a.pers.mil-b.pers.mil)),-100,100);
+    this.player=this.empires[0]; this.fleet={star:home.id,str:6+this.powers.fleetSlots*2,moved:false};
+    // scatter anomalies + fragments on unexplored stars
+    for(const s of stars){ if(s.owner>=0)continue; if(rng.chance(0.22))s.anomaly=rng.pick(['ancient ruin','derelict hulk','dust nebula','signal echo']); }
+    const frs=stars.filter(s=>s.owner<0&&s.ring>=1); for(let f=0;f<3&&f<frs.length;f++){ rng.pick(frs).fragment=true; }
+    this.view={z:1,cx:0,cy:0}; },
+  _playerPers(){ let m=1,c=1,e=1; const map={Carnivore:'m',Predator:'m',Raider:'m',Fortifier:'m',Military:'m',Herbivore:'c',Social:'c',Harmonist:'c',Cultural:'c',Omnivore:'e',Adaptive:'e',Trader:'e',Builder:'e',Merchant:'e',Economic:'e'};
+    for(const t of (Game.traits||[])){ const k=t&&map[t.card]; if(k==='m')m++;else if(k==='c')c++;else if(k==='e')e++; } const s=m+c+e; return {mil:m/s,cul:c/s,eco:e/s}; },
+  _randPers(){ let m=this.rng.range(.2,1),c=this.rng.range(.2,1),e=this.rng.range(.2,1),s=m+c+e; return {mil:m/s,cul:c/s,eco:e/s}; },
+  _habit(pl){ const temp=pl.temp+pl.tf.heat*0.35+pl.tf.atmo*0.1, hyd=clamp(pl.hydro+pl.tf.hydro*0.3,0,1);
+    const comfort=1-Math.min(1,Math.abs(temp-0.35)*1.8), water=hyd>0.25?1:hyd*3; const h=comfort*0.7+water*0.3;
+    return h>0.72?3:h>0.5?2:h>0.32?1:0; },
+  _colonize(star,pl,isHome,owner){ owner=owner===undefined?0:owner; if(pl.colony)return false; const cost=Math.round(18*this.powers.colonize);
+    if(owner===0&&!isHome){ if(this._habit(pl)<1){ toast('this world is uninhabitable - terraform it first'); return false; } if(this.res.minerals<cost){ toast('need '+cost+' minerals to colonize'); return false; } this.res.minerals-=cost; }
+    pl.colony={owner,pop:isHome?4:1,ind:0.4,res:0.3,cul:0.3,happy:60,export:this.rng.int(0,GOODS.length),route:0}; if(owner===0){ star.owner=0; } if(!star.owner&&star.owner!==0)star.owner=owner; star.owner=owner; if(owner===0&&!isHome)toast('colony founded on '+pl.name,true); return true; },
+  colonies(owner){ const out=[]; for(const s of this.stars)for(const pl of s.planets)if(pl.colony&&pl.colony.owner===owner)out.push({s,pl}); return out; },
+  _income(){ let en=0,mi=0,re=0,lu=0; for(const {s,pl} of this.colonies(0)){ const c=pl.colony, base=c.pop*(1+this._habit(pl)*0.3)*this.powers.yield*this.powers.cap*(c.happy/60);
+    mi+=base*c.ind*2; re+=base*c.res*1.6; en+=base*0.6+base*c.cul*0.5; if(s.ring>=1)lu+=1; c.route+=0.02; if(c.route>=2)en+=2*this.powers.route;
+    c.happy=clamp(c.happy+(c.cul>0.3?0.5:-0.3)+this.powers.happy*0.05,20,100); if(c.pop<8*this.powers.cap&&c.happy>55)c.pop+=0.03; }
+    this.res.energy+=Math.round(en); this.res.minerals+=Math.round(mi); this.res.research+=Math.round(re); this.res.lume+=lu; this._lastInc={en:Math.round(en),mi:Math.round(mi),re:Math.round(re),lu}; },
+  _explore(star){ if(star.explored)return; star.explored=true; for(const nb of star.neighbors)this.stars[nb].explored=true;
+    if(star.fragment&&Game.fragments.indexOf('space:'+star.id)<0){ Game.fragments.push('space:'+star.id); toast('a Chord Fragment lies in the '+star.name+' ruins',true); star.fragment=false; }
+    else if(star.anomaly){ const r=this.rng; if(r.chance(0.5)){ const g=r.int(4,12); this.res.research+=g; toast(star.anomaly+': +'+g+' research'); } else { const g=r.int(2,6); this.res.lume+=g; toast(star.anomaly+': +'+g+' Lume'); } star.anomaly=null; }
+    if(star.isCore&&!this.reachedCore){ this.reachedCore=true; toast('you reach the silent core. something ancient stirs... (the Null arc arrives in the next pass)',true); } },
+  _moveFleet(toId){ const to=this.stars[toId], from=this.stars[this.fleet.star]; const reach=from.neighbors.has(toId)||(this.powers.jump>1&&Math.hypot(to.x-from.x,to.y-from.y)<0.34);
+    if(!reach){ toast('no hyperlane to that star'); return; }
+    if(to.owner>0&&this.player.att[to.owner]!=null){ // contest
+      const enemy=this.empires[to.owner], estr=enemy.fleetStr*(to.planets.some(p=>p.colony)?this.powers.defense:1)/this.powers.defense;
+      if(this.fleet.str*this.powers.fleetDmg>estr){ toast('your fleet breaks the '+enemy.name+' at '+to.name); for(const pl of to.planets)if(pl.colony&&pl.colony.owner===to.owner){ pl.colony.owner=0; this.res.lume+=Math.round(3*this.powers.plunder); } to.owner=0; enemy.fleetStr=Math.max(1,enemy.fleetStr-2); }
+      else { this.fleet.str=Math.max(1,this.fleet.str-2); toast('the '+enemy.name+' repel your fleet'); return; } }
+    this.fleet.star=toId; this._explore(to); this.selStar=toId; },
+  _terraform(tool){ const pl=this.curPlanet; if(!pl)return; const cost=Math.round(6*this.powers.terraform); if(this.res.energy<cost){ toast('need '+cost+' energy'); return; } this.res.energy-=cost;
+    if(tool==='heat')pl.tf.heat=clamp(pl.tf.heat+0.3,-1.2,1.2); else if(tool==='cool')pl.tf.heat=clamp(pl.tf.heat-0.3,-1.2,1.2); else if(tool==='hydro')pl.tf.hydro=clamp(pl.tf.hydro+0.35,0,1.5); else pl.tf.atmo=clamp(pl.tf.atmo+0.3,0,1.5);
+    Audio.blip(360,0.05); },
+  _endTurn(){ this._income(); for(const e of this.empires){ if(!e.alive||e.isPlayer)continue; this._aiEmpire(e); }
+    for(const a of this.empires){ if(!a.alive)continue; for(const b of this.empires){ if(a===b)continue; a.att[b.id]=clamp((a.att[b.id]||0)+0.3,-100,100); } }
+    this.fleet.moved=false; this.turn++;
+    if(this.reachedCore&&this.turn%1===0){} },
+  _aiEmpire(e){ // grow a colony's pop, occasionally expand fleet
+    const cols=this.colonies(e.id); for(const {pl} of cols){ if(pl.colony.pop<7)pl.colony.pop+=0.04; }
+    if(this.rng.chance(0.3))e.fleetStr+=0.4; },
+  onkey(k){ if(this.mode==='planet'){ if(k==='escape')this.mode='galaxy'; return; } if(this.mode==='system'){ if(k==='escape')this.mode='galaxy'; return; }
+    if(k==='enter'||k===' ')this._endTurn(); },
+  onpointer(){ if(this._btns)for(const b of this._btns){ if(Input.mx>=b.x&&Input.mx<=b.x+b.w&&Input.my>=b.y&&Input.my<=b.y+b.h){ b.fn(); return; } }
+    if(this.mode==='planet')return;
+    if(this.mode==='system'){ const s=this.stars[this.selStar>=0?this.selStar:this.fleet.star]; for(const pl of s.planets){ if(pl._sx!=null&&Math.hypot(pl._sx-Input.mx,pl._sy-Input.my)<26){ this.curPlanet=pl; this.mode='planet'; return; } } return; }
+    // galaxy: nearest star to click
+    const v=this.view; let best=-1,bd=26; for(const s of this.stars){ const sp=this._sp(s); const d=Math.hypot(sp.x-Input.mx,sp.y-Input.my); if(d<bd){bd=d;best=s.id;} }
+    if(best<0){ this.selStar=-1; return; }
+    const s=this.stars[best];
+    if(this.selStar===best && s.explored){ this.mode='system'; return; } // second click opens system
+    if(best!==this.fleet.star && (this.stars[this.fleet.star].neighbors.has(best)||(this.powers.jump>1))) this._moveFleet(best);
+    this.selStar=best; },
+  _sp(s){ const v=this.view, R=Math.min(VW,VH-120)*0.46*v.z, cx=VW/2+v.cx, cy=(VH-40)/2+40+v.cy; return {x:cx+s.x*R,y:cy+s.y*R}; },
+  update(dt){ this.t+=dt; },
+  render(){ ctx.fillStyle='#04060c'; ctx.fillRect(0,0,VW,VH); starfield(this.t*1000);
+    if(this.mode==='galaxy')this._galaxy(); else if(this.mode==='system')this._system(); else this._planet();
+    this._hud(); },
+  _galaxy(){ // lanes
+    ctx.strokeStyle='#1a2740'; ctx.lineWidth=1; for(const s of this.stars){ if(!s.explored)continue; const a=this._sp(s); for(const nb of s.neighbors){ if(nb<s.id)continue; const t=this.stars[nb]; if(!t.explored)continue; const b=this._sp(t); ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke(); } }
+    for(const s of this.stars){ const p=this._sp(s); if(!s.explored){ ctx.fillStyle='#2a3550'; ctx.beginPath(); ctx.arc(p.x,p.y,1.6,0,TAU); ctx.fill(); continue; }
+      if(s.owner>=0){ const e=this.empires[s.owner]; ctx.strokeStyle=e.color; ctx.lineWidth=1.5; ctx.beginPath(); ctx.arc(p.x,p.y,8,0,TAU); ctx.stroke(); }
+      ctx.fillStyle=STAR_CLS[s.cls][1]; ctx.beginPath(); ctx.arc(p.x,p.y,s.isCore?5:3.2,0,TAU); ctx.fill();
+      if(s.isCore){ ctx.strokeStyle='#c79aff'; ctx.lineWidth=1.5; ctx.beginPath(); ctx.arc(p.x,p.y,10+Math.sin(this.t*3)*2,0,TAU); ctx.stroke(); }
+      if(s.fragment){ ctx.fillStyle='#ffd86a'; ctx.font='11px IBM Plex Mono, monospace'; ctx.textAlign='center'; ctx.fillText('*',p.x,p.y-8); }
+      if(s.anomaly){ ctx.fillStyle='#9ad0ff'; ctx.font='10px IBM Plex Mono, monospace'; ctx.textAlign='center'; ctx.fillText('?',p.x,p.y-8); } }
+    // fleet
+    const fp=this._sp(this.stars[this.fleet.star]); ctx.fillStyle='#7fe0d3'; ctx.strokeStyle='#fff'; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(fp.x,fp.y-9); ctx.lineTo(fp.x+6,fp.y+6); ctx.lineTo(fp.x-6,fp.y+6); ctx.closePath(); ctx.fill(); ctx.stroke();
+    if(this.selStar>=0){ const p=this._sp(this.stars[this.selStar]); ctx.strokeStyle='#fff'; ctx.lineWidth=1.5; ctx.beginPath(); ctx.arc(p.x,p.y,13,0,TAU); ctx.stroke(); } },
+  _system(){ const s=this.stars[this.selStar>=0?this.selStar:this.fleet.star], cx=VW/2, cy=VH/2; this._btns=this._btns||[];
+    ctx.fillStyle=STAR_CLS[s.cls][1]; ctx.shadowColor=STAR_CLS[s.cls][1]; ctx.shadowBlur=40; ctx.beginPath(); ctx.arc(cx,cy,26,0,TAU); ctx.fill(); ctx.shadowBlur=0;
+    s.planets.forEach((pl,i)=>{ const r=90+i*66, a=this.t*0.2*(1/(i+1))+i*1.7, px=cx+Math.cos(a)*r, py=cy+Math.sin(a)*r*0.6;
+      ctx.strokeStyle='#ffffff12'; ctx.beginPath(); ctx.ellipse(cx,cy,r,r*0.6,0,0,TAU); ctx.stroke();
+      this._drawPlanet(px,py,pl,10+pl.size*7); pl._sx=px; pl._sy=py; });
+    ctx.fillStyle='#e8eef6'; ctx.font='700 20px Space Grotesk, sans-serif'; ctx.textAlign='center'; ctx.fillText(s.name+' system',cx,54);
+    ctx.fillStyle='#8a97ab'; ctx.font='12px IBM Plex Mono, monospace'; ctx.fillText('click a planet to inspect / terraform / colonize   -   [Esc] back to the galaxy',cx,VH-30); },
+  _planet(){ const pl=this.curPlanet; if(!pl){ this.mode='system'; return; } const cx=VW*0.32, cy=VH*0.5; this._drawPlanet(cx,cy,pl,110); },
+  _drawPlanet(x,y,pl,r){ const temp=pl.temp+pl.tf.heat*0.35, hyd=clamp(pl.hydro+pl.tf.hydro*0.3,0,1), h=this._habit(pl);
+    let base = temp>0.6?[180,90,60]:temp>0.2?[90,140,90]:[150,160,180]; if(h>=2)base=[70,130,90];
+    const g=ctx.createRadialGradient(x-r*0.3,y-r*0.3,r*0.2,x,y,r); g.addColorStop(0,`rgb(${base[0]+40},${base[1]+40},${base[2]+40})`); g.addColorStop(1,`rgb(${base[0]*0.4|0},${base[1]*0.4|0},${base[2]*0.5|0})`);
+    ctx.fillStyle=g; ctx.beginPath(); ctx.arc(x,y,r,0,TAU); ctx.fill();
+    if(hyd>0.3){ ctx.fillStyle=`rgba(40,90,150,${clamp(hyd,0,0.7)})`; for(let i=0;i<4;i++){ const a=i*1.9; ctx.beginPath(); ctx.ellipse(x+Math.cos(a)*r*0.4,y+Math.sin(a)*r*0.4,r*0.35,r*0.22,a,0,TAU); ctx.fill(); } }
+    if(pl.colony){ ctx.strokeStyle=this.empires[pl.colony.owner].color; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(x,y,r+4,0,TAU); ctx.stroke(); } },
+  _hud(){ this._btns=[]; ctx.textAlign='left'; ctx.textBaseline='middle'; ctx.fillStyle='#0b1220cc'; panel(0,0,VW,40,0); ctx.fill();
+    ctx.fillStyle='#e8eef6'; ctx.font='700 14px Space Grotesk, sans-serif'; ctx.fillText('turn '+this.turn,14,20);
+    ctx.font='12px IBM Plex Mono, monospace'; const R=this.res;
+    ctx.fillStyle='#ffe9a8'; ctx.fillText('energy '+Math.floor(R.energy),84,20); ctx.fillStyle='#d98a5a'; ctx.fillText('minerals '+Math.floor(R.minerals),186,20); ctx.fillStyle='#9ad0ff'; ctx.fillText('research '+Math.floor(R.research),300,20); ctx.fillStyle='#c79aff'; ctx.fillText('lume '+Math.floor(R.lume),412,20);
+    ctx.fillStyle='#7fe0d3'; ctx.fillText('colonies '+this.colonies(0).length+'   fragments '+Game.fragments.length+'/6',492,20);
+    this._mk(VW-116,6,104,28,'end turn [E]',()=>this._endTurn(),'#7fe0d3');
+    if(this.mode!=='galaxy')this._mk(VW-230,6,106,28,'galaxy map',()=>this.mode='galaxy','#9ad0ff');
+    // trait powers strip
+    ctx.textAlign='right'; ctx.fillStyle='#8a97ab'; ctx.font='10px IBM Plex Mono, monospace';
+    this.powers.list.slice(0,5).forEach((p,i)=>ctx.fillText(p[0],VW-16,52+i*15)); ctx.textAlign='left';
+    // galaxy: selected star info + travel hint
+    if(this.mode==='galaxy'&&this.selStar>=0){ const s=this.stars[this.selStar],px=12,py=VH-108; ctx.fillStyle='#0b1220cc'; panel(px,py,260,96,10); ctx.fill(); ctx.textBaseline='top';
+      ctx.fillStyle='#e8eef6'; ctx.font='700 14px Space Grotesk, sans-serif'; ctx.fillText(s.name+(s.isCore?' (the core)':''),px+12,py+10);
+      ctx.fillStyle='#8a97ab'; ctx.font='11px IBM Plex Mono, monospace';
+      ctx.fillText('class '+STAR_CLS[s.cls][0]+'   '+(s.explored?s.planets.length+' planets':'unexplored')+(s.owner>0?'   ['+this.empires[s.owner].name+']':''),px+12,py+30);
+      ctx.fillText(s.id===this.fleet.star?'your fleet is here':(this.stars[this.fleet.star].neighbors.has(s.id)?'click again to send your fleet':'no direct lane'),px+12,py+50);
+      if(s.explored)this._mk(px+12,py+66,120,22,'open system',()=>{ this.selStar=s.id; this.mode='system'; },'#9ad0ff'); }
+    // system: nothing extra. planet: terraform+colony panel
+    if(this.mode==='planet'&&this.curPlanet){ const pl=this.curPlanet,px=VW-330,py=110; ctx.fillStyle='#0b1220cc'; panel(px,py,318,300,12); ctx.fill(); ctx.textBaseline='top';
+      const h=this._habit(pl),temp=pl.temp+pl.tf.heat*0.35; ctx.fillStyle='#e8eef6'; ctx.font='700 17px Space Grotesk, sans-serif'; ctx.fillText(pl.name,px+16,py+14);
+      ctx.fillStyle='#8a97ab'; ctx.font='12px IBM Plex Mono, monospace'; ctx.fillText('habitability T'+h+'   temp '+(temp>0.6?'hot':temp>0.2?'temperate':'cold')+'   water '+Math.round(clamp(pl.hydro+pl.tf.hydro*0.3,0,1)*100)+'%',px+16,py+40);
+      ctx.fillStyle='#aebbcd'; ctx.fillText('terraform ('+Math.round(6*this.powers.terraform)+' energy each)',px+16,py+64);
+      this._mk(px+16,py+82,66,30,'warm',()=>this._terraform('heat'),'#ff9a7f'); this._mk(px+88,py+82,66,30,'cool',()=>this._terraform('cool'),'#9ad0ff'); this._mk(px+160,py+82,66,30,'+water',()=>this._terraform('hydro'),'#7fbfe0'); this._mk(px+232,py+82,70,30,'+atmo',()=>this._terraform('atmo'),'#c9a24b');
+      if(!pl.colony){ const cost=Math.round(18*this.powers.colonize); this._mk(px+16,py+130,286,36,h>=1?('colonize ('+cost+' minerals)'):'terraform to T1 to colonize',()=>{ if(this._colonize(this.stars[this.selStar],pl))this.mode='planet'; },h>=1?'#7fe0d3':'#26364f'); }
+      else { const c=pl.colony; ctx.fillStyle='#7fe0d3'; ctx.font='700 13px Space Grotesk, sans-serif'; ctx.fillText('COLONY  pop '+c.pop.toFixed(1)+'   happy '+Math.round(c.happy)+'   exports '+GOODS[c.export],px+16,py+128);
+        ctx.fillStyle='#8a97ab'; ctx.font='11px IBM Plex Mono, monospace'; ctx.fillText('focus (click to shift):',px+16,py+150);
+        [['ind','industry','#d98a5a'],['res','research','#9ad0ff'],['cul','culture','#c79aff']].forEach((f,i)=>{ const y=py+168+i*26; ctx.fillStyle=f[2]; ctx.fillText(f[1],px+16,y+4); ctx.fillStyle='#0e1626'; ctx.fillRect(px+120,y,150,12); ctx.fillStyle=f[2]; ctx.fillRect(px+120,y,150*c[f[0]],12);
+          this._mk(px+274,y-2,16,16,'+',()=>this._shift(c,f[0]),f[2]); }); }
+      ctx.fillStyle='#59657a'; ctx.font='11px IBM Plex Mono, monospace'; ctx.fillText('[Esc] back to system',px+16,py+274); }
+    ctx.fillStyle='#59657a'; ctx.font='11px IBM Plex Mono, monospace'; ctx.textBaseline='alphabetic'; if(this.mode==='galaxy')ctx.fillText('click a star to select, click again to travel your fleet there (explores it). reach the core. * = Chord Fragment, ? = anomaly.',12,VH-8); },
+  _shift(c,key){ const others=['ind','res','cul'].filter(x=>x!==key); c[key]=clamp(c[key]+0.15,0,1); const rem=1-c[key]; const os=others.reduce((a,x)=>a+c[x],0)||1; others.forEach(x=>c[x]=c[x]/os*rem); },
+  _mk(x,y,w,h,label,fn,col){ ctx.fillStyle=col?col:'#1a2740'; panel(x,y,w,h,6); ctx.fill(); ctx.fillStyle=(col&&col!=='#26364f')?'#04120f':'#cfd9e8'; ctx.font='700 12px Space Grotesk, sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(label,x+w/2,y+h/2); ctx.textAlign='left'; ctx.textBaseline='alphabetic'; if(col!=='#26364f')this._btns.push({x,y,w,h,fn}); },
+};
+
+// ============================================================================
+// Stage registry - every stage is a real object now (Cell through Space)
+// ============================================================================
 const Stages={
   CREATURE:Creature,
   TRIBAL:Tribal,
   CITY:City,
   CIV:Civ,
-  SPACE:makeStub('Space','a galaxy of 300+ stars - P6'),
+  SPACE:Space,
 };
 
 // ============================================================================
@@ -1399,7 +1554,7 @@ if(saved&&saved.seed){ seedInput.value=saved.seed; Game.traits=saved.traits||[];
 if(urlParam('seed')!=null){ seedInput.value=urlParam('seed'); }
 
 // expose a tiny hook for automated verification (?dev)
-window.__EONS={ Planet, Rng, Game, CGEN, Rhythm, RTS, Creature, Cell, Tribal, City, Civ, Stages, setScreen, startWorld,
+window.__EONS={ Planet, Rng, Game, CGEN, Rhythm, RTS, Creature, Cell, Tribal, City, Civ, Space, Stages, setScreen, startWorld,
   biomeHash(){ let h=2166136261>>>0; const b=Planet.biome; for(let i=0;i<b.length;i++){ h^=b[i]; h=Math.imul(h,16777619);} return h>>>0; } };
 
 requestAnimationFrame(frame);
