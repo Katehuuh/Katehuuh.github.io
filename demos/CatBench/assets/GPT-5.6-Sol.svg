@@ -1,0 +1,731 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  width="800"
+  height="800"
+  viewBox="0 0 800 800"
+  role="img"
+  aria-labelledby="title desc"
+>
+  <title id="title">Cute orange tabby kitten</title>
+  <desc id="desc">
+    A detailed illustration of a fluffy orange kitten with large green eyes,
+    white paws, a heart-shaped collar tag, a curled tail, and a ball of yarn.
+  </desc>
+
+  <defs>
+    <linearGradient id="background" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#CFEFFF"/>
+      <stop offset="48%" stop-color="#F5DDFC"/>
+      <stop offset="100%" stop-color="#FFE5C8"/>
+    </linearGradient>
+
+    <radialGradient id="halo" cx="50%" cy="43%" r="58%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.92"/>
+      <stop offset="65%" stop-color="#FFFFFF" stop-opacity="0.38"/>
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+
+    <linearGradient id="fur" x1="10%" y1="5%" x2="90%" y2="100%">
+      <stop offset="0%" stop-color="#FFD69B"/>
+      <stop offset="45%" stop-color="#F7AE61"/>
+      <stop offset="100%" stop-color="#E88242"/>
+    </linearGradient>
+
+    <linearGradient id="furLight" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFE6BC"/>
+      <stop offset="100%" stop-color="#F6B86D"/>
+    </linearGradient>
+
+    <linearGradient id="cream" x1="20%" y1="0%" x2="70%" y2="100%">
+      <stop offset="0%" stop-color="#FFFDF4"/>
+      <stop offset="100%" stop-color="#F6E0BD"/>
+    </linearGradient>
+
+    <linearGradient id="innerEar" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFD2D2"/>
+      <stop offset="100%" stop-color="#EB8E9F"/>
+    </linearGradient>
+
+    <radialGradient id="iris" cx="35%" cy="28%" r="75%">
+      <stop offset="0%" stop-color="#DFFFF0"/>
+      <stop offset="26%" stop-color="#83DFC1"/>
+      <stop offset="66%" stop-color="#39A78D"/>
+      <stop offset="100%" stop-color="#17655F"/>
+    </radialGradient>
+
+    <radialGradient id="blush">
+      <stop offset="0%" stop-color="#F58C9E" stop-opacity="0.7"/>
+      <stop offset="100%" stop-color="#F58C9E" stop-opacity="0"/>
+    </radialGradient>
+
+    <linearGradient id="collar" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#25B9BB"/>
+      <stop offset="50%" stop-color="#68DDD0"/>
+      <stop offset="100%" stop-color="#15959F"/>
+    </linearGradient>
+
+    <linearGradient id="heart" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FF9CAB"/>
+      <stop offset="100%" stop-color="#EE5576"/>
+    </linearGradient>
+
+    <linearGradient id="gold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFF19B"/>
+      <stop offset="55%" stop-color="#F7BD3B"/>
+      <stop offset="100%" stop-color="#D88B18"/>
+    </linearGradient>
+
+    <radialGradient id="yarn" cx="35%" cy="25%" r="75%">
+      <stop offset="0%" stop-color="#D7B4FF"/>
+      <stop offset="55%" stop-color="#A36FE0"/>
+      <stop offset="100%" stop-color="#7046B4"/>
+    </radialGradient>
+
+    <filter id="lift" x="-30%" y="-30%" width="160%" height="170%">
+      <feDropShadow
+        dx="0"
+        dy="10"
+        stdDeviation="10"
+        flood-color="#754F67"
+        flood-opacity="0.24"
+      />
+    </filter>
+
+    <filter id="eyeGlow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="3" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <clipPath id="yarnClip">
+      <circle cx="147" cy="663" r="55"/>
+    </clipPath>
+
+    <symbol id="sparkle" viewBox="0 0 40 40">
+      <path d="M20 1 C22 13 27 18 39 20 C27 22 22 27 20 39 C18 27 13 22 1 20 C13 18 18 13 20 1Z"/>
+    </symbol>
+
+    <style>
+      .outline {
+        stroke: #75432F;
+        stroke-width: 7;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+
+      .stripe {
+        fill: none;
+        stroke: #AF6038;
+        stroke-width: 12;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+
+      .fine-fur {
+        fill: none;
+        stroke: #FFE0AA;
+        stroke-width: 5;
+        stroke-linecap: round;
+      }
+
+      .whisker {
+        fill: none;
+        stroke: #65483E;
+        stroke-width: 4;
+        stroke-linecap: round;
+        opacity: 0.72;
+      }
+
+      .toe-line {
+        fill: none;
+        stroke: #C6876C;
+        stroke-width: 4;
+        stroke-linecap: round;
+      }
+    </style>
+  </defs>
+
+  <!-- Background -->
+  <rect x="12" y="12" width="776" height="776" rx="48" fill="url(#background)"/>
+  <rect
+    x="24"
+    y="24"
+    width="752"
+    height="752"
+    rx="38"
+    fill="none"
+    stroke="#FFFFFF"
+    stroke-width="4"
+    opacity="0.55"
+  />
+
+  <circle cx="400" cy="355" r="310" fill="url(#halo)"/>
+
+  <g fill="#FFFFFF" opacity="0.82">
+    <use href="#sparkle" x="92" y="110" width="34" height="34"/>
+    <use href="#sparkle" x="660" y="106" width="25" height="25"/>
+    <use href="#sparkle" x="692" y="306" width="36" height="36"/>
+    <use href="#sparkle" x="105" y="387" width="22" height="22"/>
+    <use href="#sparkle" x="615" y="398" width="18" height="18"/>
+  </g>
+
+  <g fill="#F593B2" opacity="0.66">
+    <path d="M151 185 C141 171 119 180 124 197 C129 212 151 225 151 225 C151 225 173 212 178 197 C183 180 161 171 151 185Z"/>
+    <path d="M686 414 C679 404 663 410 667 422 C670 432 686 441 686 441 C686 441 702 432 705 422 C709 410 693 404 686 414Z"/>
+  </g>
+
+  <!-- Faint paw-print decorations -->
+  <g fill="#A879AD" opacity="0.13" transform="translate(92 278) rotate(-18)">
+    <ellipse cx="0" cy="17" rx="22" ry="18"/>
+    <circle cx="-24" cy="-5" r="10"/>
+    <circle cx="-7" cy="-15" r="10"/>
+    <circle cx="12" cy="-14" r="10"/>
+    <circle cx="28" cy="-1" r="9"/>
+  </g>
+
+  <g fill="#A879AD" opacity="0.12" transform="translate(672 674) rotate(18)">
+    <ellipse cx="0" cy="17" rx="22" ry="18"/>
+    <circle cx="-24" cy="-5" r="10"/>
+    <circle cx="-7" cy="-15" r="10"/>
+    <circle cx="12" cy="-14" r="10"/>
+    <circle cx="28" cy="-1" r="9"/>
+  </g>
+
+  <!-- Butterfly -->
+  <g transform="translate(654 210) rotate(10)">
+    <path
+      d="M-4 5 C-37 -27 -53 0 -30 19 C-19 28 -8 21 -2 12Z"
+      fill="#FF9DB9"
+      stroke="#87506A"
+      stroke-width="3"
+    />
+    <path
+      d="M4 5 C37 -27 53 0 30 19 C19 28 8 21 2 12Z"
+      fill="#FFD16C"
+      stroke="#87506A"
+      stroke-width="3"
+    />
+    <path
+      d="M-2 12 C-27 18 -27 40 -8 33 C0 30 2 21 2 14Z"
+      fill="#C8A2F2"
+      stroke="#87506A"
+      stroke-width="3"
+    />
+    <path
+      d="M2 12 C27 18 27 40 8 33 C0 30 -2 21 -2 14Z"
+      fill="#8DDCCC"
+      stroke="#87506A"
+      stroke-width="3"
+    />
+    <ellipse cx="0" cy="13" rx="4" ry="16" fill="#65435B"/>
+    <path d="M-1 0 Q-8 -10 -13 -7 M1 0 Q8 -10 13 -7" fill="none" stroke="#65435B" stroke-width="2"/>
+  </g>
+
+  <path
+    d="M617 242 C600 258 608 277 627 278 C642 279 646 293 634 302"
+    fill="none"
+    stroke="#97779C"
+    stroke-width="3"
+    stroke-dasharray="3 10"
+    stroke-linecap="round"
+    opacity="0.45"
+  />
+
+  <!-- Ground shadow -->
+  <ellipse cx="410" cy="708" rx="255" ry="39" fill="#76526F" opacity="0.2"/>
+
+  <!-- Curled tail behind the body -->
+  <g>
+    <path
+      d="M500 630 C581 702 704 676 718 589 C728 526 679 474 635 493 C600 508 603 548 640 564"
+      fill="none"
+      stroke="#75432F"
+      stroke-width="92"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+    <path
+      d="M500 630 C581 702 704 676 718 589 C728 526 679 474 635 493 C600 508 603 548 640 564"
+      fill="none"
+      stroke="url(#fur)"
+      stroke-width="78"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+
+    <path
+      d="M523 641 C588 684 666 667 690 618"
+      fill="none"
+      stroke="#FFD8A0"
+      stroke-width="13"
+      stroke-linecap="round"
+      opacity="0.48"
+    />
+
+    <path d="M576 641 Q586 662 576 682" class="stripe"/>
+    <path d="M631 641 Q649 657 664 670" class="stripe"/>
+    <path d="M684 598 Q703 605 717 599" class="stripe"/>
+    <path d="M687 532 Q704 541 716 555" class="stripe"/>
+
+    <path
+      d="M614 520 C610 540 623 557 640 564"
+      fill="none"
+      stroke="#A45835"
+      stroke-width="29"
+      stroke-linecap="round"
+    />
+  </g>
+
+  <!-- Body -->
+  <g>
+    <path
+      d="M329 421
+         C289 445 273 497 271 560
+         C245 596 244 647 270 675
+         C295 704 347 706 400 700
+         C453 706 505 704 530 675
+         C556 647 555 596 529 560
+         C527 497 511 445 471 421
+         C430 401 370 401 329 421Z"
+      fill="url(#fur)"
+      class="outline"
+      filter="url(#lift)"
+    />
+
+    <!-- Body tabby markings -->
+    <path d="M278 510 C304 513 324 527 337 545" class="stripe"/>
+    <path d="M267 552 C297 554 318 566 331 584" class="stripe"/>
+    <path d="M263 597 C292 596 313 608 327 625" class="stripe"/>
+
+    <path d="M522 510 C496 513 476 527 463 545" class="stripe"/>
+    <path d="M533 552 C503 554 482 566 469 584" class="stripe"/>
+    <path d="M537 597 C508 596 487 608 473 625" class="stripe"/>
+
+    <!-- Soft belly -->
+    <ellipse
+      cx="400"
+      cy="584"
+      rx="84"
+      ry="111"
+      fill="url(#cream)"
+      stroke="#D9A36F"
+      stroke-width="4"
+    />
+
+    <!-- Fluffy chest bib -->
+    <path
+      d="M348 438
+         C363 425 383 427 400 438
+         C417 427 437 425 452 438
+         C461 458 457 477 449 493
+         L460 503 L442 511
+         L449 528 L428 523
+         L418 548 L400 532
+         L382 548 L372 523
+         L351 528 L358 511
+         L340 503 L351 493
+         C343 477 339 458 348 438Z"
+      fill="url(#cream)"
+      stroke="#D9A36F"
+      stroke-width="4"
+      stroke-linejoin="round"
+    />
+
+    <path d="M287 475 C276 499 274 526 276 543" class="fine-fur"/>
+    <path d="M513 475 C524 499 526 526 524 543" class="fine-fur"/>
+  </g>
+
+  <!-- Front legs -->
+  <g>
+    <path
+      d="M318 488
+         C305 528 304 594 307 648
+         C308 672 322 688 347 688
+         C371 688 384 673 381 649
+         L374 518
+         C372 493 355 478 338 479
+         C329 480 322 483 318 488Z"
+      fill="url(#furLight)"
+      class="outline"
+    />
+
+    <path
+      d="M482 488
+         C495 528 496 594 493 648
+         C492 672 478 688 453 688
+         C429 688 416 673 419 649
+         L426 518
+         C428 493 445 478 462 479
+         C471 480 478 483 482 488Z"
+      fill="url(#furLight)"
+      class="outline"
+    />
+
+    <path d="M311 535 Q342 546 374 532" class="stripe"/>
+    <path d="M308 572 Q343 583 377 568" class="stripe"/>
+    <path d="M489 535 Q458 546 426 532" class="stripe"/>
+    <path d="M492 572 Q457 583 423 568" class="stripe"/>
+
+    <!-- White socks and paws -->
+    <path
+      d="M307 637
+         Q344 622 380 637
+         L381 651
+         C384 676 371 697 347 698
+         C323 698 309 683 307 660Z"
+      fill="url(#cream)"
+      stroke="#75432F"
+      stroke-width="5"
+      stroke-linejoin="round"
+    />
+
+    <path
+      d="M493 637
+         Q456 622 420 637
+         L419 651
+         C416 676 429 697 453 698
+         C477 698 491 683 493 660Z"
+      fill="url(#cream)"
+      stroke="#75432F"
+      stroke-width="5"
+      stroke-linejoin="round"
+    />
+
+    <path d="M329 670 Q333 680 330 687" class="toe-line"/>
+    <path d="M347 668 Q350 680 347 689" class="toe-line"/>
+    <path d="M365 670 Q361 680 364 687" class="toe-line"/>
+
+    <path d="M471 670 Q467 680 470 687" class="toe-line"/>
+    <path d="M453 668 Q450 680 453 689" class="toe-line"/>
+    <path d="M435 670 Q439 680 436 687" class="toe-line"/>
+  </g>
+
+  <!-- Collar beneath the head -->
+  <path
+    d="M307 438 Q400 469 493 438 L488 480 Q400 507 312 480Z"
+    fill="url(#collar)"
+    class="outline"
+  />
+  <path
+    d="M320 458 Q400 481 480 458"
+    fill="none"
+    stroke="#B4FFF1"
+    stroke-width="5"
+    stroke-linecap="round"
+    opacity="0.7"
+  />
+
+  <!-- Ears -->
+  <g>
+    <path
+      d="M275 264
+         C260 227 254 167 279 112
+         C285 98 299 99 309 111
+         L371 205
+         C338 216 307 235 275 264Z"
+      fill="url(#fur)"
+      class="outline"
+      filter="url(#lift)"
+    />
+
+    <path
+      d="M525 264
+         C540 227 546 167 521 112
+         C515 98 501 99 491 111
+         L429 205
+         C462 216 493 235 525 264Z"
+      fill="url(#fur)"
+      class="outline"
+      filter="url(#lift)"
+    />
+
+    <path
+      d="M284 220 C279 185 283 151 294 132 L343 207 C320 208 301 214 284 220Z"
+      fill="url(#innerEar)"
+      stroke="#C56E7B"
+      stroke-width="4"
+      stroke-linejoin="round"
+    />
+
+    <path
+      d="M516 220 C521 185 517 151 506 132 L457 207 C480 208 499 214 516 220Z"
+      fill="url(#innerEar)"
+      stroke="#C56E7B"
+      stroke-width="4"
+      stroke-linejoin="round"
+    />
+
+    <path d="M292 207 L304 179 L310 208 L324 182 L329 211" class="fine-fur"/>
+    <path d="M508 207 L496 179 L490 208 L476 182 L471 211" class="fine-fur"/>
+  </g>
+
+  <!-- Head -->
+  <path
+    d="M400 190
+       C338 186 291 207 261 245
+       C231 282 222 329 232 365
+       C236 383 246 399 261 412
+       L248 425 L274 427 L267 442
+       C298 460 346 470 400 468
+       C454 470 502 460 533 442
+       L526 427 L552 425 L539 412
+       C554 399 564 383 568 365
+       C578 329 569 282 539 245
+       C509 207 462 186 400 190Z"
+    fill="url(#fur)"
+    class="outline"
+    filter="url(#lift)"
+  />
+
+  <!-- Forehead and cheek markings -->
+  <g>
+    <path d="M400 196 C400 218 400 239 399 260" class="stripe"/>
+    <path d="M364 201 C367 224 377 244 390 260" class="stripe"/>
+    <path d="M436 201 C433 224 423 244 410 260" class="stripe"/>
+
+    <path d="M247 302 C273 304 291 315 307 329" class="stripe"/>
+    <path d="M238 341 C265 342 286 350 302 364" class="stripe"/>
+    <path d="M247 378 C271 377 288 384 300 396" class="stripe"/>
+
+    <path d="M553 302 C527 304 509 315 493 329" class="stripe"/>
+    <path d="M562 341 C535 342 514 350 498 364" class="stripe"/>
+    <path d="M553 378 C529 377 512 384 500 396" class="stripe"/>
+  </g>
+
+  <!-- Fur highlights -->
+  <g class="fine-fur" opacity="0.75">
+    <path d="M301 235 C322 212 345 201 369 197"/>
+    <path d="M499 235 C478 212 455 201 431 197"/>
+    <path d="M258 389 L276 381"/>
+    <path d="M253 407 L276 397"/>
+    <path d="M542 389 L524 381"/>
+    <path d="M547 407 L524 397"/>
+  </g>
+
+  <!-- Eyebrows -->
+  <path
+    d="M292 273 Q329 250 362 272"
+    fill="none"
+    stroke="#865038"
+    stroke-width="6"
+    stroke-linecap="round"
+  />
+  <path
+    d="M508 273 Q471 250 438 272"
+    fill="none"
+    stroke="#865038"
+    stroke-width="6"
+    stroke-linecap="round"
+  />
+
+  <!-- Blush -->
+  <ellipse cx="272" cy="388" rx="40" ry="22" fill="url(#blush)"/>
+  <ellipse cx="528" cy="388" rx="40" ry="22" fill="url(#blush)"/>
+
+  <!-- Whiskers behind the muzzle -->
+  <g>
+    <path d="M344 397 C291 383 237 383 185 394" class="whisker"/>
+    <path d="M340 411 C284 408 231 421 181 444" class="whisker"/>
+    <path d="M344 426 C294 438 250 457 215 481" class="whisker"/>
+
+    <path d="M456 397 C509 383 563 383 615 394" class="whisker"/>
+    <path d="M460 411 C516 408 569 421 619 444" class="whisker"/>
+    <path d="M456 426 C506 438 550 457 585 481" class="whisker"/>
+  </g>
+
+  <!-- Large glossy eyes -->
+  <g transform="rotate(-4 330 328)">
+    <ellipse
+      cx="330"
+      cy="328"
+      rx="52"
+      ry="61"
+      fill="#FFFDF7"
+      stroke="#654235"
+      stroke-width="7"
+    />
+    <ellipse cx="333" cy="331" rx="38" ry="49" fill="#204F49"/>
+    <ellipse cx="333" cy="331" rx="32" ry="43" fill="url(#iris)"/>
+    <ellipse cx="336" cy="335" rx="14" ry="31" fill="#152E2E"/>
+    <circle cx="316" cy="307" r="12" fill="#FFFFFF" filter="url(#eyeGlow)"/>
+    <circle cx="343" cy="326" r="6" fill="#FFFFFF" opacity="0.9"/>
+    <ellipse cx="326" cy="359" rx="12" ry="5" fill="#BFFFF0" opacity="0.62"/>
+  </g>
+
+  <g transform="rotate(4 470 328)">
+    <ellipse
+      cx="470"
+      cy="328"
+      rx="52"
+      ry="61"
+      fill="#FFFDF7"
+      stroke="#654235"
+      stroke-width="7"
+    />
+    <ellipse cx="467" cy="331" rx="38" ry="49" fill="#204F49"/>
+    <ellipse cx="467" cy="331" rx="32" ry="43" fill="url(#iris)"/>
+    <ellipse cx="464" cy="335" rx="14" ry="31" fill="#152E2E"/>
+    <circle cx="450" cy="307" r="12" fill="#FFFFFF" filter="url(#eyeGlow)"/>
+    <circle cx="477" cy="326" r="6" fill="#FFFFFF" opacity="0.9"/>
+    <ellipse cx="474" cy="359" rx="12" ry="5" fill="#BFFFF0" opacity="0.62"/>
+  </g>
+
+  <!-- Tiny eyelashes -->
+  <path d="M282 303 L267 296 M285 292 L274 282" class="whisker"/>
+  <path d="M518 303 L533 296 M515 292 L526 282" class="whisker"/>
+
+  <!-- Muzzle and chin -->
+  <ellipse
+    cx="400"
+    cy="429"
+    rx="35"
+    ry="22"
+    fill="url(#cream)"
+    stroke="#D69A72"
+    stroke-width="3"
+  />
+  <ellipse
+    cx="370"
+    cy="401"
+    rx="44"
+    ry="34"
+    fill="url(#cream)"
+    stroke="#D69A72"
+    stroke-width="3"
+  />
+  <ellipse
+    cx="430"
+    cy="401"
+    rx="44"
+    ry="34"
+    fill="url(#cream)"
+    stroke="#D69A72"
+    stroke-width="3"
+  />
+
+  <!-- Tongue -->
+  <path
+    d="M387 416 Q400 424 413 416 C413 435 387 435 387 416Z"
+    fill="#F48698"
+    stroke="#75432F"
+    stroke-width="4"
+    stroke-linejoin="round"
+  />
+  <path d="M400 423 L400 432" fill="none" stroke="#C95F73" stroke-width="2"/>
+
+  <!-- Nose and smile -->
+  <path
+    d="M385 389 Q400 378 415 389 Q414 399 400 405 Q386 399 385 389Z"
+    fill="#EE8794"
+    stroke="#75432F"
+    stroke-width="5"
+    stroke-linejoin="round"
+  />
+  <path
+    d="M390 389 Q397 385 403 387"
+    fill="none"
+    stroke="#FFD3D8"
+    stroke-width="3"
+    stroke-linecap="round"
+  />
+  <path d="M400 404 L400 411" fill="none" stroke="#75432F" stroke-width="4" stroke-linecap="round"/>
+  <path
+    d="M400 411 Q389 422 376 416 M400 411 Q411 422 424 416"
+    fill="none"
+    stroke="#75432F"
+    stroke-width="4"
+    stroke-linecap="round"
+  />
+
+  <!-- Whisker freckles -->
+  <g fill="#B8795F">
+    <circle cx="351" cy="396" r="3.5"/>
+    <circle cx="343" cy="407" r="3"/>
+    <circle cx="355" cy="414" r="2.7"/>
+    <circle cx="449" cy="396" r="3.5"/>
+    <circle cx="457" cy="407" r="3"/>
+    <circle cx="445" cy="414" r="2.7"/>
+  </g>
+
+  <!-- Collar ring and heart tag -->
+  <circle cx="400" cy="470" r="11" fill="url(#gold)" stroke="#75432F" stroke-width="5"/>
+  <path d="M400 480 L400 486" fill="none" stroke="#A66C20" stroke-width="5" stroke-linecap="round"/>
+  <path
+    d="M400 516
+       C393 508 378 498 378 487
+       C378 476 391 472 400 482
+       C409 472 422 476 422 487
+       C422 498 407 508 400 516Z"
+    fill="url(#heart)"
+    stroke="#75432F"
+    stroke-width="5"
+    stroke-linejoin="round"
+  />
+  <path
+    d="M387 486 Q391 480 396 485"
+    fill="none"
+    stroke="#FFD4DA"
+    stroke-width="3"
+    stroke-linecap="round"
+  />
+
+  <!-- Yarn string -->
+  <path
+    d="M181 651 C221 620 254 682 309 653 C325 645 335 651 336 663"
+    fill="none"
+    stroke="#65428E"
+    stroke-width="8"
+    stroke-linecap="round"
+  />
+  <path
+    d="M181 651 C221 620 254 682 309 653 C325 645 335 651 336 663"
+    fill="none"
+    stroke="#B98BEF"
+    stroke-width="4"
+    stroke-linecap="round"
+  />
+
+  <!-- Ball of yarn -->
+  <ellipse cx="147" cy="711" rx="65" ry="16" fill="#76526F" opacity="0.18"/>
+  <circle
+    cx="147"
+    cy="663"
+    r="55"
+    fill="url(#yarn)"
+    stroke="#65428E"
+    stroke-width="7"
+    filter="url(#lift)"
+  />
+
+  <g
+    clip-path="url(#yarnClip)"
+    fill="none"
+    stroke-linecap="round"
+  >
+    <path d="M91 648 C118 625 166 621 204 645" stroke="#E6CBFF" stroke-width="7"/>
+    <path d="M93 676 C121 651 173 649 204 673" stroke="#D4ADFF" stroke-width="6"/>
+    <path d="M111 614 C145 636 170 670 177 712" stroke="#7D4CB8" stroke-width="7"/>
+    <path d="M148 607 C126 634 118 676 128 718" stroke="#C59AFA" stroke-width="6"/>
+    <path d="M184 620 C157 642 143 682 145 720" stroke="#8350BD" stroke-width="6"/>
+    <path d="M97 693 C129 680 168 681 196 697" stroke="#E0C1FF" stroke-width="6"/>
+    <path d="M98 632 C131 650 164 651 198 635" stroke="#8D58C7" stroke-width="5"/>
+  </g>
+
+  <path
+    d="M111 630 Q131 612 151 620"
+    fill="none"
+    stroke="#F2E2FF"
+    stroke-width="5"
+    stroke-linecap="round"
+    opacity="0.75"
+  />
+
+  <!-- Small finishing sparkles -->
+  <g fill="#FFFFFF" opacity="0.8">
+    <use href="#sparkle" x="205" y="568" width="18" height="18"/>
+    <use href="#sparkle" x="563" y="655" width="22" height="22"/>
+  </g>
+</svg>
