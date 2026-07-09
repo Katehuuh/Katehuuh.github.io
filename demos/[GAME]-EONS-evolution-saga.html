@@ -3,11 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>EONS - Every world remembers its first note</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='82' font-size='82'%3E%F0%9F%AA%90%3C/text%3E%3C/svg%3E">
+<title>EONS - a galaxy gone silent</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='82' font-size='82'%3E%F0%9F%9A%80%3C/text%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=IBM+Plex+Mono&display=swap" rel="stylesheet">
-<!-- TIER 1 (optional accelerator, save-encoding only; never in the deterministic world path) -->
 <script src="https://cdn.jsdelivr.net/npm/lz-string@1.5.0/libs/lz-string.min.js" onerror="window.__noLZ=1"></script>
 <style>
   :root{
@@ -32,7 +31,6 @@
   button{font-family:var(--sans);font-weight:700;letter-spacing:.05em;font-size:15px;cursor:pointer;color:#04120f;
     background:linear-gradient(180deg,#8fe6d9,#4bbcab);border:0;border-radius:10px;padding:11px 22px;transition:transform .08s,filter .15s}
   button:hover{filter:brightness(1.08)}button:active{transform:translateY(1px)}
-  .ghost{background:#0c1526;color:var(--accent);border:1px solid #26365a}
   .hint{color:#59657a;font-size:12px;font-family:var(--mono);margin-top:16px}
   #toast{position:fixed;left:50%;top:22px;transform:translateX(-50%);z-index:20;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none}
   .t{background:var(--panel);border:1px solid #24314e;border-left:3px solid var(--accent);border-radius:8px;padding:9px 15px;font-size:13px;
@@ -41,7 +39,6 @@
   @keyframes pop{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
   #dev{position:fixed;left:10px;bottom:10px;z-index:20;font-family:var(--mono);font-size:11px;color:#5f7590;white-space:pre;pointer-events:none;text-shadow:0 1px 2px #000}
   .hidden{display:none!important}
-  .fade{transition:opacity .5s}
 </style>
 </head>
 <body>
@@ -51,287 +48,51 @@
 <div id="overlay">
   <div class="card" id="intro">
     <h1>EONS</h1>
-    <div class="tag">every world remembers its first note</div>
-    <p class="lore">A Cartographer comet falls into a shallow sea, carrying five notes of the Chord. Where it lands, life blooms. Seed a world, then descend into its tidepool as a single cell and begin the long climb toward the stars.</p>
+    <div class="tag">a galaxy gone silent</div>
+    <p class="lore">The Cartographers seeded life across the stars, then vanished. In their place came the Null, machine swarms that worship silence and spread from the galactic core. Take your fleet from the rim, explore and terraform and grow, gather the six Chord Fragments, and reach the Archive at the core before the Null reach you.</p>
     <div class="row">
       <label for="seed">seed</label>
       <input id="seed" spellcheck="false" autocomplete="off" placeholder="random">
-      <button id="begin">seed a world</button>
+      <button id="begin">seed a galaxy</button>
     </div>
-    <div class="hint">enter a word for a repeatable planet, or leave blank for chance</div>
+    <div class="hint">enter a word for a repeatable galaxy, or leave blank for chance</div>
   </div>
 </div>
 <script>
 "use strict";
 (function(){
 // ============================================================================
-// EONS - single-file evolution saga. Slice 1: Core + Planet + Cell stage.
-// Sections: util, RNG, Noise, Planet, ECS, Audio, Save, UI, Screens, Cell, boot.
-// Tier 0 (vanilla JS + Canvas2D) runs everything; lz-string is optional save
-// encoding only. RNG/noise are inline + fixed so a seed yields the same world
-// on every machine (that is the whole point of a seed).
+// EONS - a single-file space 4X. Seed a spiral galaxy, explore, colonize,
+// terraform, out-play the alien empires, survive the Null, reach the Archive.
+// Vanilla JS + Canvas2D. lz-string is optional save encoding only.
 // ============================================================================
 
 // ---- util ------------------------------------------------------------------
 const TAU=Math.PI*2, PI=Math.PI;
 const clamp=(x,a,b)=>x<a?a:x>b?b:x;
 const lerp=(a,b,t)=>a+(b-a)*t;
-const smooth=(a,b,x)=>{ x=clamp((x-a)/(b-a),0,1); return x*x*(3-2*x); };
-const mix=(a,b,t)=>a+(b-a)*t;
 const now=()=>performance.now();
 function urlParam(k){ const m=new RegExp('[?&]'+k+'(=([^&]*))?').exec(location.search); return m?(m[2]!==undefined?decodeURIComponent(m[2]):''):null; }
+function hexRgb(h){ return [parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)]; }
 
-// ---- CONFIG / FLAGS --------------------------------------------------------
-const CONFIG={ FDT:1/60, mapW:512, mapH:256, saveSlot:'eons.slice1' };
+const CONFIG={ FDT:1/60, saveSlot:'eons.space' };
 const FLAGS={ lz:(typeof LZString!=='undefined' && !window.__noLZ), debug:urlParam('dev')!==null };
 
 // ---- RNG (mulberry32 + string hash + fork) ---------------------------------
 function hashStr(s){ let h=2166136261>>>0; s=String(s); for(let i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,16777619); } return h>>>0; }
 function mulberry32(a){ a>>>=0; return function(){ a=(a+0x6D2B79F5)|0; let t=Math.imul(a^(a>>>15),1|a); t=(t+Math.imul(t^(t>>>7),61|t))^t; return ((t^(t>>>14))>>>0)/4294967296; }; }
-function Rng(seed){
-  const s=(typeof seed==='number')?(seed>>>0):hashStr(seed);
-  const n=mulberry32(s);
-  return {
-    seedVal:s, next:n,
-    range:(a,b)=>a+n()*(b-a),
-    int:(a,b)=>a+Math.floor(n()*(b-a)),        // [a,b)
-    pick:arr=>arr[Math.floor(n()*arr.length)|0],
-    chance:p=>n()<p,
-    sign:()=>n()<0.5?-1:1,
-    fork:label=>Rng((s^hashStr(label))>>>0),
-  };
-}
+function Rng(seed){ const s=(typeof seed==='number')?(seed>>>0):hashStr(seed); const n=mulberry32(s);
+  return { seedVal:s, next:n, range:(a,b)=>a+n()*(b-a), int:(a,b)=>a+Math.floor(n()*(b-a)), pick:arr=>arr[Math.floor(n()*arr.length)|0], chance:p=>n()<p, fork:label=>Rng((s^hashStr(label))>>>0) }; }
 
-// ---- Noise (improved Perlin 3D + fbm + ridged) -----------------------------
-function makeNoise(seed){
-  const r=mulberry32(seed>>>0), p=new Uint8Array(256);
-  for(let i=0;i<256;i++)p[i]=i;
-  for(let i=255;i>0;i--){ const j=Math.floor(r()*(i+1)); const t=p[i];p[i]=p[j];p[j]=t; }
-  const perm=new Uint8Array(512); for(let i=0;i<512;i++)perm[i]=p[i&255];
-  const fade=t=>t*t*t*(t*(t*6-15)+10);
-  function grad(h,x,y,z){ h&=15; const u=h<8?x:y, v=h<4?y:(h===12||h===14?x:z); return ((h&1)?-u:u)+((h&2)?-v:v); }
-  function noise3(x,y,z){
-    const X=Math.floor(x)&255,Y=Math.floor(y)&255,Z=Math.floor(z)&255;
-    x-=Math.floor(x); y-=Math.floor(y); z-=Math.floor(z);
-    const u=fade(x),v=fade(y),w=fade(z);
-    const A=perm[X]+Y,AA=perm[A]+Z,AB=perm[A+1]+Z,B=perm[X+1]+Y,BA=perm[B]+Z,BB=perm[B+1]+Z;
-    return lerp(
-      lerp(lerp(grad(perm[AA],x,y,z),grad(perm[BA],x-1,y,z),u), lerp(grad(perm[AB],x,y-1,z),grad(perm[BB],x-1,y-1,z),u),v),
-      lerp(lerp(grad(perm[AA+1],x,y,z-1),grad(perm[BA+1],x-1,y,z-1),u), lerp(grad(perm[AB+1],x,y-1,z-1),grad(perm[BB+1],x-1,y-1,z-1),u),v), w);
-  }
-  noise3.fbm=(x,y,z,oct)=>{ oct=oct||4; let a=0,amp=0.5,f=1; for(let i=0;i<oct;i++){ a+=amp*noise3(x*f,y*f,z*f); f*=2; amp*=0.5; } return a; };
-  noise3.ridged=(x,y,z,oct)=>{ oct=oct||3; let a=0,amp=0.5,f=1; for(let i=0;i<oct;i++){ const nn=1-Math.abs(noise3(x*f,y*f,z*f)); a+=amp*nn*nn; f*=2; amp*=0.5; } return a; };
-  return noise3;
-}
-
-// ---- Planet ----------------------------------------------------------------
-// One pipeline: plates -> elevation -> temp -> wind/moisture -> biome -> rivers.
-// Produces typed-array fields + a baked equirect RGB buffer reused by map+globe.
-const B={ DEEP:0,SHALLOW:1,ICE:2,TUNDRA:3,TAIGA:4,GRASS:5,TFOREST:6,RAIN:7,SAVANNA:8,DESERT:9,SHRUB:10,BEACH:11,MOUNTAIN:12,SNOW:13 };
-const BIOME_COL=[
-  [12,38,66],[20,92,140],[220,230,238],[150,166,158],[54,86,66],[142,176,88],[54,120,58],[28,104,52],
-  [190,170,86],[214,196,120],[150,150,92],[228,214,164],[120,112,102],[214,216,224]];
-const BIOME_NAME=['deep ocean','shallow sea','ice','tundra','taiga','grassland','temperate forest','rainforest','savanna','desert','shrubland','beach','mountain','snowcap'];
-
-const Planet={
-  W:0,H:0,elev:null,temp:null,moist:null,biome:null,ocean:null,sea:0,
-  rgb:null,mapCanvas:null,rivers:null,params:null,stats:null,
-  generate(seed,W,H,params){
-    const t0=now();
-    params=Object.assign({seaLevel:null,axialTilt:0.4,greenhouse:0,hydro:1},params||{});
-    this.W=W; this.H=H; this.params=params;
-    const rng=Rng(seed).fork('planet');
-    const N=W*H;
-    const elev=this.elev=new Float32Array(N), temp=this.temp=new Float32Array(N),
-          moist=this.moist=new Float32Array(N), biome=this.biome=new Uint8Array(N), ocean=this.ocean=new Uint8Array(N),
-          boundary=this.boundary=new Float32Array(N); // signed plate-boundary strength (>0 convergent/volcanic) - used by Civ events + Lume
-    // sphere-point cache for the current row (recomputed per j)
-    const nz=makeNoise(rng.fork('elev').seedVal);
-    // --- plates ---
-    const pr=rng.fork('plates'); const P=pr.int(11,15); const plates=[];
-    for(let k=0;k<P;k++){
-      const u=pr.next(),v=pr.next(), th=Math.acos(2*u-1), ph=TAU*v;
-      const x=Math.sin(th)*Math.cos(ph),y=Math.cos(th),z=Math.sin(th)*Math.sin(ph);
-      let dx=pr.range(-1,1),dy=pr.range(-1,1),dz=pr.range(-1,1); // drift, projected to tangent
-      const rad=dx*x+dy*y+dz*z; dx-=rad*x; dy-=rad*y; dz-=rad*z;
-      const dl=Math.hypot(dx,dy,dz)||1; dx/=dl;dy/=dl;dz/=dl;
-      plates.push({x,y,z,dx,dy,dz,oceanic:pr.chance(0.55)});
-    }
-    // --- elevation pass ---
-    let emin=1e9,emax=-1e9;
-    for(let j=0;j<H;j++){
-      const lat=(0.5-(j+0.5)/H)*PI, cl=Math.cos(lat), sy=Math.sin(lat);
-      for(let i=0;i<W;i++){
-        const lon=((i+0.5)/W-0.5)*TAU, sx=cl*Math.cos(lon), sz=cl*Math.sin(lon);
-        // nearest two plates by dot (unit vectors -> larger dot = closer)
-        let a=-2,b=-2,ai=0,bi=0;
-        for(let k=0;k<P;k++){ const pl=plates[k]; const d=pl.x*sx+pl.y*sy+pl.z*sz; if(d>a){b=a;bi=ai;a=d;ai=k;} else if(d>b){b=d;bi=k;} }
-        const pa=plates[ai], pb=plates[bi];
-        const edge=smooth(0.06,0.0, Math.acos(clamp(b,-1,1))-Math.acos(clamp(a,-1,1))); // 1 at boundary
-        // boundary convergence sign from relative drift along a->b
-        let bx=pb.x-pa.x,by=pb.y-pa.y,bz=pb.z-pa.z; const bl=Math.hypot(bx,by,bz)||1; bx/=bl;by/=bl;bz/=bl;
-        const conv=(pa.dx*bx+pa.dy*by+pa.dz*bz)-(pb.dx*bx+pb.dy*by+pb.dz*bz); // >0 converge
-        let e=(pa.oceanic?-0.42:0.22);
-        e+=0.95*nz.fbm(sx*1.25,sy*1.25,sz*1.25,5);
-        e+=0.30*nz.fbm(sx*3.1+11,sy*3.1,sz*3.1,4);
-        if(conv>0) e+=nz.ridged(sx*3.4+5,sy*3.4,sz*3.4,4)*edge*conv*1.05;
-        else e+=edge*conv*0.35; // divergent rift lowers
-        boundary[j*W+i]=conv*edge;
-        elev[j*W+i]=e; if(e<emin)emin=e; if(e>emax)emax=e;
-      }
-    }
-    // --- sea level via histogram percentile (~42% land) ---
-    let sea;
-    if(params.seaLevel!=null){ sea=params.seaLevel; }
-    else{
-      const BINS=256, hist=new Int32Array(BINS), inv=(BINS-1)/(emax-emin);
-      for(let k=0;k<N;k++) hist[(elev[k]-emin)*inv|0]++;
-      const target=N*0.58; let acc=0,bi=0; for(;bi<BINS;bi++){ acc+=hist[bi]; if(acc>=target)break; }
-      sea=emin+bi/inv;
-    }
-    this.sea=sea;
-    for(let k=0;k<N;k++) ocean[k]=elev[k]<=sea?1:0;
-    // --- temperature ---
-    for(let j=0;j<H;j++){
-      const lat=(0.5-(j+0.5)/H)*PI, sy=Math.sin(lat);
-      for(let i=0;i<W;i++){ const k=j*W+i;
-        let t=34-58*sy*sy + params.greenhouse;
-        if(!ocean[k]) t-=Math.max(0,elev[k]-sea)*26;
-        t+=6*nz(elev[k]*0.0, (i/W)*4.0, (j/H)*4.0)*0.5;
-        temp[k]=t;
-      }
-    }
-    // --- wind + moisture (zonal march, one ring pass per row, with rain shadow) ---
-    for(let j=0;j<H;j++){
-      const lat=(0.5-(j+0.5)/H)*PI, al=Math.abs(Math.sin(lat));
-      const travel=(al<0.34)?-1:(al<0.77?1:-1); // trades W / westerlies E / polar W
-      const base=j*W; let h=0.5, prevE=sea;
-      const start=(travel>0)?0:W-1;
-      for(let s=0;s<W*2;s++){
-        const i=((start+travel*s)%W+W)%W, k=base+i;
-        if(ocean[k]){ h=1; } else {
-          h*=0.90*params.hydro;
-          const climb=Math.max(0,elev[k]-prevE); h-=climb*3.2;
-          h=clamp(h,0,1);
-        }
-        prevE=elev[k];
-        if(s>=W) moist[k]=h; // record on 2nd lap (ring warmed up)
-      }
-    }
-    // --- coast mask + biome ---
-    const isCoast=k=>{ const j=(k/W)|0,i=k%W; const L=j*W+((i-1+W)%W),Rr=j*W+((i+1)%W),U=k-W,D=k+W;
-      return ocean[L]||ocean[Rr]||(U>=0&&ocean[U])||(D<N&&ocean[D]); };
-    const M=[[B.TUNDRA,B.TUNDRA,B.TAIGA,B.TAIGA],[B.SHRUB,B.GRASS,B.TFOREST,B.TFOREST],[B.DESERT,B.SAVANNA,B.SAVANNA,B.RAIN]];
-    let land=0,peaks=[];
-    for(let k=0;k<N;k++){
-      const e=elev[k],t=temp[k],m=moist[k];
-      let bi;
-      if(ocean[k]){ bi=(e<sea-0.16)?B.DEEP:B.SHALLOW; }
-      else{ land++;
-        if(e>sea+0.55){ bi=t<-2?B.SNOW:B.MOUNTAIN; if(e>sea+0.7)peaks.push(k); }
-        else if(t<-11) bi=B.ICE;
-        else if(isCoast(k)&&e<sea+0.035) bi=B.BEACH;
-        else{ const tb=t<2?0:(t<18?1:2), mb=m<0.2?0:(m<0.45?1:(m<0.7?2:3)); bi=M[tb][mb]; }
-      }
-      biome[k]=bi;
-    }
-    // --- rivers: steepest descent droplets from peaks ---
-    const rr=rng.fork('rivers'); const rivers=[]; const flow=new Float32Array(N);
-    // shuffle peaks, cap count
-    for(let i=peaks.length-1;i>0;i--){ const j=rr.int(0,i+1); const t=peaks[i];peaks[i]=peaks[j];peaks[j]=t; }
-    const RMAX=Math.min(70,peaks.length);
-    for(let p=0;p<RMAX;p++){
-      let k=peaks[p]; const path=[]; let guard=0;
-      while(guard++<900){
-        const j=(k/W)|0,i=k%W; path.push([i,j]);
-        if(ocean[k])break;
-        // steepest downhill among 8 neighbours (lon wraps, lat clamps)
-        let best=k,bestE=elev[k];
-        for(let dj=-1;dj<=1;dj++){ const nj=j+dj; if(nj<0||nj>=H)continue;
-          for(let di=-1;di<=1;di++){ if(!di&&!dj)continue; const ni=((i+di)%W+W)%W; const nk=nj*W+ni;
-            if(elev[nk]<bestE){bestE=elev[nk];best=nk;} } }
-        if(best===k)break; // local minimum -> lake terminus
-        flow[best]+=1; k=best;
-      }
-      if(path.length>3) rivers.push(path);
-    }
-    this.rivers=rivers;
-    // --- bake equirect rgb (biome + hillshade + rivers) ---
-    this._bake();
-    this.stats={ genMs:now()-t0, landPct:land/N, plates:P, rivers:rivers.length, seed:String(seed), sea };
-    return this;
-  },
-  _bake(){
-    const W=this.W,H=this.H,N=W*H,elev=this.elev,biome=this.biome,ocean=this.ocean,sea=this.sea;
-    const cv=this.mapCanvas||document.createElement('canvas'); cv.width=W; cv.height=H; this.mapCanvas=cv;
-    const ctx=cv.getContext('2d'); const img=ctx.createImageData(W,H), d=img.data;
-    for(let j=0;j<H;j++)for(let i=0;i<W;i++){ const k=j*W+i, c=BIOME_COL[biome[k]];
-      let sh=1;
-      if(!ocean[k]){ const l=elev[j*W+((i-1+W)%W)],r=elev[j*W+((i+1)%W)],u=elev[Math.max(0,j-1)*W+i],dn=elev[Math.min(H-1,j+1)*W+i];
-        const gx=(l-r),gy=(u-dn); sh=clamp(0.82+(gx+gy)*2.2,0.55,1.25); }
-      else { sh=clamp(0.7+(elev[k]-sea)*0.9,0.6,1.0); } // deeper = darker
-      const o=k*4; d[o]=clamp(c[0]*sh,0,255); d[o+1]=clamp(c[1]*sh,0,255); d[o+2]=clamp(c[2]*sh,0,255); d[o+3]=255;
-    }
-    ctx.putImageData(img,0,0);
-    // rivers + lakes as strokes, then read back so the globe samples them too
-    ctx.strokeStyle='rgba(60,150,220,0.9)'; ctx.lineJoin='round'; ctx.lineCap='round';
-    for(const path of this.rivers){ ctx.beginPath(); let px=null;
-      for(let n=0;n<path.length;n++){ const [i,j]=path[n];
-        if(px!=null && Math.abs(i-px)>W*0.5){ ctx.stroke(); ctx.beginPath(); ctx.moveTo(i+0.5,j+0.5); } // avoid wrap streak
-        else if(n===0) ctx.moveTo(i+0.5,j+0.5); else ctx.lineTo(i+0.5,j+0.5);
-        px=i; }
-      ctx.lineWidth=1.2; ctx.stroke(); }
-    this.rgb=ctx.getImageData(0,0,W,H).data;
-  },
-  // sample baked equirect at lon/lat (radians) -> writes into out[o..o+2]
-  sampleLL(lon,lat,out,o){
-    const W=this.W,H=this.H;
-    let x=((lon/TAU+0.5)*W)|0; x=((x%W)+W)%W;
-    let y=((0.5-lat/PI)*H)|0; y=clamp(y,0,H-1);
-    const k=(y*W+x)*4, s=this.rgb; out[o]=s[k]; out[o+1]=s[k+1]; out[o+2]=s[k+2];
-  }
+// ---- names + palettes (procedural, no assets) ------------------------------
+const CGEN={
+  PAL:[['#6fae7a','#3c7a52','#c9e0b6'],['#b5723e','#7a4a26','#e8c79a'],['#5a86b8','#345a86','#bcd4ec'],
+    ['#b06a8a','#6f3448','#e6bccb'],['#8a7bb0','#584a7a','#d6cbe8'],['#c0a03e','#7a6420','#eadf9a'],
+    ['#4aa6a0','#2c6a66','#b6e0dc'],['#b04a4a','#7a2c2c','#e6bcbc'],['#7a9a4a','#4a6420','#d6e6b0'],
+    ['#5a6a7a','#34424a','#c0ccd6'],['#c07a3e','#7a4a20','#eacfa0'],['#9a5ab0','#5a347a','#dcc0e8']],
+  SYL:['ka','vo','thu','mi','ra','nex','sur','lo','pha','ent','zi','gor','ael','un','ki','na','dru','esh'],
+  name(rng){ let n=this.SYL[rng.int(0,this.SYL.length)]+this.SYL[rng.int(0,this.SYL.length)]; if(rng.chance(0.4))n+=this.SYL[rng.int(0,this.SYL.length)]; return n[0].toUpperCase()+n.slice(1); }
 };
-
-// ---- Globe (Canvas2D orthographic, precomputed geometry+light LUT) ----------
-function makeGlobe(D){
-  const cv=document.createElement('canvas'); cv.width=D; cv.height=D;
-  const ctx=cv.getContext('2d'); const img=ctx.createImageData(D,D), data=img.data;
-  const R=D/2-1, lat0=0.38*PI/2; // slight tilt
-  const N=D*D; const mask=new Uint8Array(N), gLat=new Float32Array(N), gLon=new Float32Array(N), light=new Float32Array(N);
-  const sinL0=Math.sin(lat0),cosL0=Math.cos(lat0);
-  const sunLon=-0.6, sunLat=0.25; // fixed relative to camera -> stationary terminator
-  const sdx=Math.cos(sunLat)*Math.cos(sunLon), sdy=Math.sin(sunLat), sdz=Math.cos(sunLat)*Math.sin(sunLon);
-  for(let py=0;py<D;py++)for(let px=0;px<D;px++){
-    const idx=py*D+px, X=(px-D/2+0.5)/R, Y=-(py-D/2+0.5)/R, rho=Math.hypot(X,Y);
-    if(rho>1){ mask[idx]=0; continue; }
-    mask[idx]=1; const c=Math.asin(rho), sc=Math.sin(c),cc=Math.cos(c);
-    let lat,lon;
-    if(rho<1e-6){ lat=lat0; lon=0; } else {
-      lat=Math.asin(cc*sinL0+Y*sc*cosL0/rho);
-      lon=Math.atan2(X*sc, rho*cc*cosL0-Y*sc*sinL0);
-    }
-    gLat[idx]=lat; gLon[idx]=lon;
-    const nx=Math.cos(lat)*Math.cos(lon),ny=Math.sin(lat),nz=Math.cos(lat)*Math.sin(lon);
-    light[idx]=clamp(nx*sdx+ny*sdy+nz*sdz,-1,1);
-  }
-  const tmp=[0,0,0];
-  return {
-    canvas:cv, D,
-    draw(lonOffset){
-      for(let i=0;i<N;i++){ const o=i*4;
-        if(!mask[i]){ data[o]=6;data[o+1]=9;data[o+2]=16;data[o+3]=0; continue; }
-        Planet.sampleLL(gLon[i]+lonOffset, gLat[i], tmp,0);
-        const L=light[i], day=smooth(-0.18,0.32,L), l=0.22+0.95*day;
-        // subtle cool rim on the night terminator
-        data[o]=clamp(tmp[0]*l+ (1-day)*4,0,255);
-        data[o+1]=clamp(tmp[1]*l+(1-day)*8,0,255);
-        data[o+2]=clamp(tmp[2]*l+(1-day)*18,0,255);
-        data[o+3]=255;
-      }
-      ctx.putImageData(img,0,0); return cv;
-    }
-  };
-}
 
 // ---- Audio (raw WebAudio; five-note Chord motif) ---------------------------
 const Audio={ ctx:null, chord:null,
@@ -348,15 +109,13 @@ const Audio={ ctx:null, chord:null,
 // ---- Save ------------------------------------------------------------------
 const Save={
   write(o){ try{ let s=JSON.stringify(o); if(FLAGS.lz)s='LZ'+LZString.compressToUTF16(s); localStorage.setItem(CONFIG.saveSlot,s); }catch(e){} },
-  read(){ try{ let s=localStorage.getItem(CONFIG.saveSlot); if(!s)return null;
-    if(s.slice(0,2)==='LZ') s=LZString.decompressFromUTF16(s.slice(2)); return JSON.parse(s); }catch(e){ return null; } },
-  clear(){ try{ localStorage.removeItem(CONFIG.saveSlot); }catch(e){} }
+  read(){ try{ let s=localStorage.getItem(CONFIG.saveSlot); if(!s)return null; if(s.slice(0,2)==='LZ') s=LZString.decompressFromUTF16(s.slice(2)); return JSON.parse(s); }catch(e){ return null; } }
 };
 
 // ---- Game state ------------------------------------------------------------
 const Game={ seed:'', rng:null, screen:null, traits:[], fragments:[], decisionLog:[], overlay:null,
-  persist(){ Save.write({seed:this.seed,screen:this.screen&&this.screen.saveAs||'world',traits:this.traits,fragments:this.fragments,decisionLog:this.decisionLog.slice(-40)}); },
-  log(stage,type,data){ this.decisionLog.push({stage,type,data,t:Date.now()}); Chronicle.note(stage,type,data); Ach.check(stage,type,data); }
+  persist(){ Save.write({seed:this.seed,traits:this.traits,fragments:this.fragments}); },
+  log(stage,type,data){ this.decisionLog.push({stage,type,data}); Chronicle.note(stage,type,data); Ach.check(stage,type,data); }
 };
 
 // ---- Toasts / dev ----------------------------------------------------------
@@ -380,8 +139,7 @@ window.addEventListener('keydown',e=>{ const kk=e.key.toLowerCase(); Input.keys[
 window.addEventListener('keyup',e=>{ Input.keys[e.key.toLowerCase()]=false; });
 
 // ---- draw helpers ----------------------------------------------------------
-function starfield(t){ // deterministic backdrop
-  ctx.fillStyle='#04060c'; ctx.fillRect(0,0,VW,VH);
+function starfield(t){ ctx.fillStyle='#04060c'; ctx.fillRect(0,0,VW,VH);
   const sr=Rng('stars'); ctx.save();
   for(let i=0;i<160;i++){ const x=sr.next()*VW,y=sr.next()*VH,r=sr.range(0.4,1.6),tw=0.5+0.5*Math.sin(t*0.001+i);
     ctx.globalAlpha=0.25+0.6*tw*sr.range(0.4,1); ctx.fillStyle=sr.chance(0.15)?'#bcd4ff':'#fff'; ctx.beginPath(); ctx.arc(x,y,r,0,TAU); ctx.fill(); }
@@ -389,970 +147,28 @@ function starfield(t){ // deterministic backdrop
 }
 function panel(x,y,w,h,r){ r=r||10; ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
   ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
-function meter(x,y,w,label,val,col){ ctx.fillStyle='#0e1626cc'; panel(x,y,w,14,4); ctx.fill();
-  ctx.fillStyle=col; panel(x,y,w*clamp(val,0,1),14,4); ctx.fill();
-  ctx.fillStyle='#cfd9e8'; ctx.font='11px IBM Plex Mono, monospace'; ctx.textAlign='left'; ctx.textBaseline='middle'; ctx.fillText(label,x+6,y+7); }
 
 // ============================================================================
-// SCREEN: World (planet showcase - rotating globe + equirect map)
-// ============================================================================
-const World={
-  saveAs:'world', globe:null, lon:0, t:0,
-  load(){ this.globe=makeGlobe(Math.round(Math.min(VW,VH)*0.52)); this.lon=0; this.t=0; toast('world seeded - '+Game.seed); },
-  update(dt){ this.lon+=dt*0.13; this.t+=dt;
-    if(Input.keys['enter']||Input.keys[' ']){ Input.keys['enter']=false; Input.keys[' ']=false; descend(); } },
-  onkey(k){ if(k==='enter'||k===' ')descend(); if(k==='r'){ reseed(Game.seed+'_'); } },
-  onpointer(){ /* click descend handled by button hit-test in render */ },
-  render(){
-    starfield(this.t*1000);
-    const D=this.globe.D, gx=VW*0.5-D/2, gy=VH*0.5-D/2-10;
-    // glow
-    const gg=ctx.createRadialGradient(VW/2,gy+D/2,D*0.35,VW/2,gy+D/2,D*0.75);
-    gg.addColorStop(0,'#1a3a4a55'); gg.addColorStop(1,'#0000'); ctx.fillStyle=gg; ctx.fillRect(0,0,VW,VH);
-    ctx.drawImage(this.globe.draw(this.lon),gx,gy);
-    // atmosphere ring
-    ctx.strokeStyle='#7fe0d340'; ctx.lineWidth=3; ctx.beginPath(); ctx.arc(VW/2,gy+D/2,D/2+2,0,TAU); ctx.stroke();
-    // mini equirect map bottom-left
-    const mw=Math.min(360,VW*0.34), mh=mw/2, mx=24, my=VH-mh-24;
-    ctx.fillStyle='#000'; panel(mx-4,my-4,mw+8,mh+8,8); ctx.fill();
-    ctx.imageSmoothingEnabled=true; ctx.drawImage(Planet.mapCanvas,mx,my,mw,mh);
-    ctx.strokeStyle='#26364f'; ctx.lineWidth=1; ctx.strokeRect(mx,my,mw,mh);
-    ctx.fillStyle='#7a8aa2'; ctx.font='11px IBM Plex Mono, monospace'; ctx.textAlign='left'; ctx.textBaseline='top';
-    ctx.fillText('equirectangular',mx+2,my-16);
-    // info panel right
-    const s=Planet.stats, ix=VW-260, iy=70;
-    ctx.fillStyle='#0b1220cc'; panel(ix-14,iy-14,250,150,12); ctx.fill(); ctx.strokeStyle='#1d2942'; ctx.stroke();
-    ctx.textAlign='left'; ctx.fillStyle='#8fe6d9'; ctx.font='700 15px Space Grotesk, sans-serif'; ctx.fillText('PLANET',ix,iy);
-    ctx.fillStyle='#aebbcd'; ctx.font='12px IBM Plex Mono, monospace';
-    const lines=['seed   '+s.seed,'land   '+(s.landPct*100).toFixed(1)+'%','plates '+s.plates,'rivers '+s.rivers,'gen    '+s.genMs.toFixed(0)+' ms'];
-    lines.forEach((l,i)=>ctx.fillText(l,ix,iy+26+i*20));
-    // title + prompt
-    ctx.textAlign='center'; ctx.fillStyle='#e8eef6'; ctx.font='700 22px Space Grotesk, sans-serif';
-    ctx.fillText(Game.seed.toUpperCase(),VW/2,40);
-    const pulse=0.6+0.4*Math.sin(this.t*3);
-    ctx.globalAlpha=pulse; ctx.fillStyle='#c9a24b'; ctx.font='700 15px Space Grotesk, sans-serif';
-    ctx.fillText('press  ENTER  to descend into the tidepool',VW/2,gy+D+44); ctx.globalAlpha=1;
-    ctx.fillStyle='#59657a'; ctx.font='11px IBM Plex Mono, monospace';
-    ctx.fillText('R reseed   drag to nothing yet   this is P1: the pipeline every later stage reuses',VW/2,VH-14);
-  }
-};
-
-// ============================================================================
-// ECS-lite (shared by later stages too)
-// ============================================================================
-function makeWorldECS(){ let id=1; const list=[];
-  return { list,
-    spawn(p){ p.id=id++; p.alive=true; list.push(p); return p; },
-    cull(){ for(let i=list.length-1;i>=0;i--) if(!list[i].alive) list.splice(i,1); },
-    near(x,y,r,fn){ const r2=r*r; for(const e of list){ if(!e.alive)continue; const dx=e.x-x,dy=e.y-y; if(dx*dx+dy*dy<=r2) fn(e,Math.sqrt(dx*dx+dy*dy)); } }
-  };
-}
-function seek(e,tx,ty,acc){ const dx=tx-e.x,dy=ty-e.y,d=Math.hypot(dx,dy)||1; e.vx+=dx/d*acc; e.vy+=dy/d*acc; }
-function flee(e,tx,ty,acc){ seek(e,tx,ty,-acc); }
-function wander(e,rng,acc){ e.wa=(e.wa||rng.next()*TAU)+rng.range(-0.4,0.4); e.vx+=Math.cos(e.wa)*acc; e.vy+=Math.sin(e.wa)*acc; }
-
-// ============================================================================
-// SCREEN: Cell stage
-// ============================================================================
-const Cell={
-  saveAs:'world', ecs:null, player:null, cam:null, rng:null, aiR:null,
-  tier:0, dna:0, needDNA:8, mitosis:false, parts:[], mote:0, meat:0, plant:0,
-  bgCols:null, t:0, exiting:0, world:{w:2000,h:1300},
-  TIERS:[3,6,10], // dna thresholds per tier (compact pacing: ~30-40s)
-  PARTS:[
-    {id:'flagella',name:'flagella',desc:'+speed',col:'#7fe0d3'},
-    {id:'cilia',name:'cilia',desc:'+agility',col:'#9ad0ff'},
-    {id:'spike',name:'spike',desc:'+attack',col:'#ff9a7f'},
-    {id:'poison',name:'poison sac',desc:'repel predators',col:'#c79aff'},
-    {id:'membrane',name:'membrane',desc:'+health',col:'#c9e08f'},
-  ],
-  load(){
-    this.rng=Game.rng.fork('cell.spawn'); this.aiR=Game.rng.fork('cell.ai');
-    this.ecs=makeWorldECS(); this.tier=0; this.dna=0; this.needDNA=this.TIERS[0]; this.mitosis=false; this.parts=[];
-    this.mote=0; this.meat=0; this.plant=0; this.t=0; this.exiting=0;
-    // dominant planet colours for the pool backdrop
-    const s=Planet.rgb; const shallow=BIOME_COL[B.SHALLOW], beach=BIOME_COL[B.BEACH];
-    this.bgCols={ water:`rgb(${shallow[0]},${shallow[1]},${shallow[2]})`, deep:`rgb(${(shallow[0]*0.6)|0},${(shallow[1]*0.7)|0},${(shallow[2]*0.8)|0})`,
-      sand:`rgb(${beach[0]},${beach[1]},${beach[2]})` };
-    this.player=this.ecs.spawn({x:this.world.w/2,y:this.world.h/2,vx:0,vy:0,r:9,kind:'player',hp:100,maxhp:100,
-      speed:120,turn:1,atk:6,poison:0});
-    this.cam={x:this.player.x,y:this.player.y,zoom:2.4,tzoom:2.4};
-    for(let i=0;i<70;i++) this.spawnMote();
-    for(let i=0;i<14;i++) this.spawnPrey();
-    for(let i=0;i<3;i++) this.spawnPredator(['chaser','ambusher','drifter'][i]);
-    Audio.motif(); toast('a single cell, adrift. eat to grow.');
-  },
-  spawnMote(){ this.ecs.spawn({x:this.rng.range(40,this.world.w-40),y:this.rng.range(40,this.world.h-40),vx:0,vy:0,r:3,kind:'mote',
-    hue:this.rng.range(90,150),drift:this.rng.range(0,TAU)}); },
-  spawnPrey(){ this.ecs.spawn({x:this.rng.range(40,this.world.w-40),y:this.rng.range(40,this.world.h-40),vx:0,vy:0,r:this.rng.range(4,7),
-    kind:'prey',hp:12,hue:this.rng.range(180,300)}); },
-  spawnPredator(arch){ this.ecs.spawn({x:this.rng.range(40,this.world.w-40),y:this.rng.range(40,this.world.h-40),vx:0,vy:0,
-    r:this.rng.range(13,17),kind:'pred',arch,hp:40,cool:0,dashing:0,hue:this.rng.range(0,40)}); },
-  onkey(k){ if(this.mitosis){ const i='12345'.indexOf(k); if(i>=0)this.choosePart(i); } },
-  onpointer(){ if(this.mitosis){ // click a radial option
-      const opt=this._hit; if(opt!=null)this.choosePart(opt); } },
-  choosePart(i){ const p=this.PARTS[i]; this.parts.push(p.id);
-    if(p.id==='flagella')this.player.speed*=1.28; if(p.id==='cilia')this.player.turn*=1.5;
-    if(p.id==='spike')this.player.atk+=8; if(p.id==='poison')this.player.poison=1;
-    if(p.id==='membrane'){ this.player.maxhp+=45; this.player.hp=this.player.maxhp; }
-    this.player.r+=2.2; this.tier++; this.mitosis=false; Audio.blip(Audio.chord?Audio.chord[this.tier%5]:440,0.08);
-    toast('mitosis: '+p.name+' ('+p.desc+')');
-    if(this.tier>=3){ this.beginExit(); } else { this.needDNA=this.TIERS[Math.min(this.tier,2)]; this.cam.tzoom=2.4-this.tier*0.55; }
-    Game.log('cell','mitosis',{part:p.id,tier:this.tier});
-  },
-  beginExit(){ this.exiting=0.001; toast('a brain forms. the shore calls.',true); },
-  finishExit(){
-    const total=this.meat+this.plant||1, meatR=this.meat/total;
-    const diet= meatR>0.62?'Carnivore': meatR<0.38?'Herbivore':'Omnivore';
-    Game.traits[0]={stage:'cell',card:diet,meat:this.meat,plant:this.plant};
-    Game.log('cell','trait',{card:diet}); Game.persist();
-    toast('Trait Card I locked: '+diet,true);
-    // hand off to Creature (stub) via the world view for this slice
-    setScreen(Stages.CREATURE);
-  },
-  update(dt){
-    this.t+=dt;
-    if(this.mitosis){ this.cam.zoom=lerp(this.cam.zoom,this.cam.tzoom,dt*3); return; }
-    const pl=this.player, W=this.world.w, H=this.world.h;
-    // ---- exiting animation: rise toward shore then finish ----
-    if(this.exiting){ this.exiting+=dt; pl.vy-=40*dt; this.cam.tzoom=1.1;
-      this.cam.zoom=lerp(this.cam.zoom,this.cam.tzoom,dt*2); this.cam.x=lerp(this.cam.x,pl.x,dt*4); this.cam.y=lerp(this.cam.y,pl.y,dt*4);
-      pl.x+=pl.vx*dt; pl.y+=pl.vy*dt; pl.vx*=0.9; pl.vy*=0.92;
-      if(this.exiting>2.2){ this.exiting=0; this.finishExit(); } return; }
-    // ---- player control (pointer steer + WASD) ----
-    let tx=this.cam.x+(Input.mx-VW/2)/this.cam.zoom, ty=this.cam.y+(Input.my-VH/2)/this.cam.zoom;
-    seek(pl,tx,ty,pl.speed*pl.turn*dt);
-    if(Input.keys['w'])pl.vy-=pl.speed*dt; if(Input.keys['s'])pl.vy+=pl.speed*dt;
-    if(Input.keys['a'])pl.vx-=pl.speed*dt; if(Input.keys['d'])pl.vx+=pl.speed*dt;
-    const sp=Math.hypot(pl.vx,pl.vy), maxsp=pl.speed*1.4; if(sp>maxsp){ pl.vx*=maxsp/sp; pl.vy*=maxsp/sp; }
-    pl.vx*=0.90; pl.vy*=0.90; pl.x=clamp(pl.x+pl.vx*dt,pl.r,W-pl.r); pl.y=clamp(pl.y+pl.vy*dt,pl.r,H-pl.r);
-    // camera follow + zoom ease
-    this.cam.x=lerp(this.cam.x,pl.x,dt*5); this.cam.y=lerp(this.cam.y,pl.y,dt*5); this.cam.zoom=lerp(this.cam.zoom,this.cam.tzoom,dt*3);
-    // ---- entities ----
-    const ai=this.aiR;
-    for(const e of this.ecs.list){ if(!e.alive||e===pl)continue;
-      if(e.kind==='mote'){ e.drift+=dt*0.6; e.x+=Math.cos(e.drift)*4*dt; e.y+=Math.sin(e.drift)*4*dt; }
-      else if(e.kind==='prey'){ const d=Math.hypot(pl.x-e.x,pl.y-e.y);
-        if(d<120) flee(e,pl.x,pl.y,60*dt); else wander(e,ai,18*dt);
-        e.vx*=0.92; e.vy*=0.92; e.x=clamp(e.x+e.vx*dt,e.r,W-e.r); e.y=clamp(e.y+e.vy*dt,e.r,H-e.r); }
-      else if(e.kind==='pred'){ this.updatePredator(e,dt,ai); }
-    }
-    // ---- eating (player overlaps smaller things) ----
-    this.ecs.near(pl.x,pl.y,pl.r+9,(e,d)=>{ if(e===pl||!e.alive)return;
-      if(e.kind==='mote'&&d<pl.r+e.r){ e.alive=false; this.dna++; this.plant++; this.mote++; Audio.blip(520+this.dna*4,0.03); this.spawnMote(); this.checkTier(); }
-      else if(e.kind==='prey'&&d<pl.r&&pl.r>e.r){ e.alive=false; this.dna+=2; this.meat+=2; Audio.blip(300,0.05); this.spawnPrey(); this.checkTier(); }
-    });
-    // ---- predator contact ----
-    this.ecs.near(pl.x,pl.y,pl.r+18,(e,d)=>{ if(e.kind!=='pred'||!e.alive)return;
-      if(d<pl.r+e.r){
-        if(pl.poison){ e.hp-=30*dt; }
-        if(this.parts.includes('spike')){ e.hp-=pl.atk*dt*4; }
-        pl.hp-=14*dt; const kx=(pl.x-e.x),ky=(pl.y-e.y),kl=Math.hypot(kx,ky)||1; pl.vx+=kx/kl*40; pl.vy+=ky/kl*40;
-        if(e.hp<=0){ e.alive=false; this.dna+=3; this.meat+=3; toast('predator devoured'); if(Game.fragments.indexOf('cell')<0){ Game.fragments.push('cell'); toast('a Chord Fragment shimmers in the husk',true); } Game.log('cell','predator',{}); this.spawnPredator(e.arch); this.checkTier(); }
-      }
-    });
-    if(pl.hp<pl.maxhp) pl.hp=Math.min(pl.maxhp,pl.hp+dt*3); // slow regen
-    if(pl.hp<=0){ pl.hp=pl.maxhp*0.6; this.dna=Math.max(0,this.dna-2); pl.x=W/2; pl.y=H/2; toast('membrane ruptured - you reform, weaker'); }
-    this.ecs.cull();
-  },
-  updatePredator(e,dt,ai){ const pl=this.player, d=Math.hypot(pl.x-e.x,pl.y-e.y); const W=this.world.w,H=this.world.h;
-    if(this.player.poison && d<90){ flee(e,pl.x,pl.y,50*dt); }
-    else if(e.arch==='chaser'){ if(d<420)seek(e,pl.x,pl.y,46*dt); else wander(e,ai,20*dt); }
-    else if(e.arch==='ambusher'){ e.cool-=dt; if(d<160&&e.cool<=0){ e.dashing=0.5; e.cool=2.4; }
-      if(e.dashing>0){ e.dashing-=dt; seek(e,pl.x,pl.y,140*dt); } else wander(e,ai,10*dt); }
-    else { wander(e,ai,26*dt); if(d<200)seek(e,pl.x,pl.y,14*dt); }
-    e.vx*=0.93; e.vy*=0.93; e.x=clamp(e.x+e.vx*dt,e.r,W-e.r); e.y=clamp(e.y+e.vy*dt,e.r,H-e.r);
-  },
-  checkTier(){ if(this.dna>=this.needDNA && this.tier<3 && !this.mitosis && !this.exiting){ this.mitosis=true; this.cam.tzoom=this.cam.zoom*0.86; Audio.blip(660,0.1); } },
-  // ---------- render ----------
-  render(){
-    const cam=this.cam, z=cam.zoom;
-    // pool backdrop (planet-tinted radial + caustics)
-    const g=ctx.createRadialGradient(VW/2,VH*0.36,60,VW/2,VH*0.5,Math.max(VW,VH)*0.75);
-    g.addColorStop(0,this.bgCols.water); g.addColorStop(0.7,this.bgCols.deep); g.addColorStop(1,'#04121c');
-    ctx.fillStyle=g; ctx.fillRect(0,0,VW,VH);
-    // caustics
-    ctx.save(); ctx.globalAlpha=0.06; ctx.strokeStyle='#dffcff'; ctx.lineWidth=2;
-    for(let i=0;i<7;i++){ ctx.beginPath(); for(let x=0;x<=VW;x+=24){ const y=VH*0.5+Math.sin(x*0.01+this.t*0.6+i)*40+i*30-90; if(x===0)ctx.moveTo(x,y); else ctx.lineTo(x,y);} ctx.stroke(); }
-    ctx.restore();
-    // sun shafts hint
-    ctx.save(); ctx.translate(VW/2,VH/2); ctx.scale(z,z); ctx.translate(-cam.x,-cam.y);
-    // world floor edge (shore to the top = -y)
-    ctx.fillStyle=this.bgCols.sand; ctx.globalAlpha=0.5; ctx.fillRect(-100,-140,this.world.w+200,180); ctx.globalAlpha=1;
-    // entities
-    for(const e of this.ecs.list){ if(!e.alive)continue; this.drawEntity(e); }
-    this.drawPlayer(this.player);
-    ctx.restore();
-    // small "home planet" globe in the sky
-    if(!this._sky) this._sky=makeGlobe(96);
-    ctx.save(); ctx.globalAlpha=0.9; ctx.drawImage(this._sky.draw(this.t*0.1),VW-118,24); ctx.restore();
-    ctx.fillStyle='#6a7a92'; ctx.font='10px IBM Plex Mono, monospace'; ctx.textAlign='center'; ctx.fillText('home',VW-70,128);
-    this.hud();
-    if(this.mitosis) this.mitosisUI();
-    if(this.exiting){ ctx.fillStyle='rgba(230,240,255,'+clamp(this.exiting/2.6,0,0.7)+')'; ctx.fillRect(0,0,VW,VH); }
-  },
-  drawEntity(e){ ctx.save(); ctx.translate(e.x,e.y);
-    if(e.kind==='mote'){ ctx.fillStyle=`hsl(${e.hue},70%,60%)`; ctx.globalAlpha=0.9; ctx.beginPath(); ctx.arc(0,0,e.r,0,TAU); ctx.fill();
-      ctx.globalAlpha=0.3; ctx.beginPath(); ctx.arc(0,0,e.r+2,0,TAU); ctx.fill(); }
-    else if(e.kind==='prey'){ ctx.fillStyle=`hsl(${e.hue},55%,58%)`; this.blob(e.r,this.t*3+e.id); ctx.fillStyle='#0006';
-      ctx.beginPath(); ctx.arc(e.r*0.3,-e.r*0.2,e.r*0.25,0,TAU); ctx.fill(); }
-    else if(e.kind==='pred'){ ctx.rotate(Math.atan2(e.vy,e.vx));
-      ctx.fillStyle=`hsl(${e.hue},70%,45%)`; ctx.beginPath();
-      const spikes=9; for(let i=0;i<spikes*2;i++){ const a=i/(spikes*2)*TAU, rr=e.r*(i%2?0.7:1.1); const x=Math.cos(a)*rr,y=Math.sin(a)*rr; i?ctx.lineTo(x,y):ctx.moveTo(x,y);} ctx.closePath(); ctx.fill();
-      ctx.fillStyle='#ffdf6a'; ctx.beginPath(); ctx.arc(e.r*0.4,0,e.r*0.28,0,TAU); ctx.fill();
-      ctx.fillStyle='#000'; ctx.beginPath(); ctx.arc(e.r*0.5,0,e.r*0.12,0,TAU); ctx.fill(); }
-    ctx.restore();
-  },
-  blob(r,ph){ ctx.beginPath(); for(let i=0;i<=16;i++){ const a=i/16*TAU, rr=r*(1+Math.sin(a*3+ph)*0.08); const x=Math.cos(a)*rr,y=Math.sin(a)*rr; i?ctx.lineTo(x,y):ctx.moveTo(x,y);} ctx.closePath(); ctx.fill(); },
-  drawPlayer(pl){ ctx.save(); ctx.translate(pl.x,pl.y); const ang=Math.atan2(pl.vy,pl.vx), spd=Math.hypot(pl.vx,pl.vy);
-    // flagella tail
-    if(this.parts.includes('flagella')){ ctx.strokeStyle='#7fe0d3'; ctx.lineWidth=2.4; ctx.beginPath();
-      for(let i=0;i<=10;i++){ const s=i/10; const bx=-Math.cos(ang)*(pl.r+s*pl.r*2.2), by=-Math.sin(ang)*(pl.r+s*pl.r*2.2)+Math.sin(this.t*10+s*6)*4*s;
-        i?ctx.lineTo(bx,by):ctx.moveTo(bx,by);} ctx.stroke(); }
-    // cilia hairs
-    if(this.parts.includes('cilia')){ ctx.strokeStyle='#9ad0ff'; ctx.lineWidth=1.4;
-      for(let i=0;i<14;i++){ const a=i/14*TAU, w=Math.sin(this.t*12+i)*0.3; ctx.beginPath(); ctx.moveTo(Math.cos(a)*pl.r,Math.sin(a)*pl.r); ctx.lineTo(Math.cos(a+w)*(pl.r+5),Math.sin(a+w)*(pl.r+5)); ctx.stroke(); } }
-    // body
-    const bg=ctx.createRadialGradient(-pl.r*0.3,-pl.r*0.3,1,0,0,pl.r*1.2); bg.addColorStop(0,'#eafff9'); bg.addColorStop(0.6,'#7fe0d3'); bg.addColorStop(1,'#2f9a8b');
-    ctx.fillStyle=bg; this.blob(pl.r,this.t*4);
-    // membrane ring
-    if(this.parts.includes('membrane')){ ctx.strokeStyle='#c9e08f'; ctx.lineWidth=2.2; ctx.beginPath(); ctx.arc(0,0,pl.r+1.5,0,TAU); ctx.stroke(); }
-    // poison aura
-    if(pl.poison){ ctx.globalAlpha=0.18+0.08*Math.sin(this.t*4); ctx.fillStyle='#c79aff'; ctx.beginPath(); ctx.arc(0,0,pl.r+10,0,TAU); ctx.fill(); ctx.globalAlpha=1; }
-    // spike
-    if(this.parts.includes('spike')){ ctx.fillStyle='#ff9a7f'; ctx.save(); ctx.rotate(ang); ctx.beginPath(); ctx.moveTo(pl.r*0.6,-4); ctx.lineTo(pl.r+9,0); ctx.lineTo(pl.r*0.6,4); ctx.closePath(); ctx.fill(); ctx.restore(); }
-    // nucleus
-    ctx.fillStyle='#1c6f65'; ctx.beginPath(); ctx.arc(0,0,pl.r*0.34,0,TAU); ctx.fill();
-    ctx.restore();
-  },
-  hud(){ const pl=this.player;
-    meter(16,16,190,'DNA '+this.dna+'/'+this.needDNA,this.dna/this.needDNA,'#7fe0d3');
-    meter(16,36,190,'HEALTH',pl.hp/pl.maxhp,'#ff9a7f');
-    // diet balance
-    const total=this.meat+this.plant||1; const mr=this.meat/total;
-    ctx.fillStyle='#0e1626cc'; panel(16,56,190,14,4); ctx.fill();
-    ctx.fillStyle='#8fbf5a'; panel(16,56,190*(1-mr),14,4); ctx.fill();
-    ctx.fillStyle='#d98a5a'; panel(16+190*(1-mr),56,190*mr,14,4); ctx.fill();
-    ctx.fillStyle='#04120f'; ctx.font='10px IBM Plex Mono, monospace'; ctx.textAlign='left'; ctx.textBaseline='middle';
-    ctx.fillText('plant',20,63); ctx.textAlign='right'; ctx.fillText('meat',204,63); ctx.textAlign='left';
-    ctx.fillStyle='#8a97ab'; ctx.font='11px IBM Plex Mono, monospace'; ctx.textBaseline='top';
-    ctx.fillText('tier '+(this.tier+1)+'/3   parts: '+(this.parts.join(', ')||'none'),16,78);
-    ctx.fillStyle='#59657a'; ctx.fillText('steer with mouse or WASD - eat green motes and smaller cells - dodge spiky predators',16,VH-22);
-  },
-  mitosisUI(){ ctx.fillStyle='rgba(4,8,14,0.7)'; ctx.fillRect(0,0,VW,VH);
-    ctx.fillStyle='#e8eef6'; ctx.font='700 24px Space Grotesk, sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
-    ctx.fillText('MITOSIS - choose an adaptation',VW/2,VH*0.5-140);
-    const cx=VW/2,cy=VH*0.5+10,R=Math.min(VW,VH)*0.26; this._hit=null;
-    for(let i=0;i<5;i++){ const a=-PI/2+i/5*TAU, x=cx+Math.cos(a)*R, y=cy+Math.sin(a)*R, p=this.PARTS[i];
-      const dx=Input.mx-x,dy=Input.my-y, hover=dx*dx+dy*dy<52*52; if(hover)this._hit=i;
-      ctx.fillStyle=hover?p.col:'#0e1626'; ctx.strokeStyle=p.col; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(x,y,50,0,TAU); ctx.fill(); ctx.stroke();
-      ctx.fillStyle=hover?'#04120f':'#dbe6f3'; ctx.font='700 14px Space Grotesk, sans-serif'; ctx.fillText(p.name,x,y-6);
-      ctx.font='11px IBM Plex Mono, monospace'; ctx.fillStyle=hover?'#04120f':'#8a97ab'; ctx.fillText(p.desc,x,y+12);
-      ctx.fillStyle=p.col; ctx.font='10px IBM Plex Mono, monospace'; ctx.fillText('['+(i+1)+']',x,y+30);
-    }
-    ctx.fillStyle='#8a97ab'; ctx.font='12px IBM Plex Mono, monospace'; ctx.fillText('click a nucleus or press 1-5',cx,cy+R+60);
-  }
-};
-
-// ============================================================================
-// P3: Creature parts engine (the diversity multiplier)  [doc section 5]
-//   genome = body x mouth x limbs x sensors x decor x palette x size
-//   stats derived, never hand-tuned; draw = layered vector shapes + wiggle
-// ============================================================================
-const CGEN=(function(){
-  const BODIES=['ovoid','blob','segmented','finned','saurian','insectoid','serpentine','tuber'];
-  const MOUTHS=['beak','maw','tusks','proboscis','mandibles','fangs','filter','snout'];
-  const LIMBS=['legs4','legs2','fins','tentacles','wings','hooves','claws','none'];
-  const SENSORS=['eyes2','eyesMany','antennae','eyestalks','frill','whiskers'];
-  const DECOR=['spots','stripes','spikes','plates','fur','glow'];
-  const PAL=[['#6fae7a','#3c7a52','#c9e0b6'],['#b5723e','#7a4a26','#e8c79a'],['#5a86b8','#345a86','#bcd4ec'],
-    ['#b06a8a','#6f3448','#e6bccb'],['#8a7bb0','#584a7a','#d6cbe8'],['#c0a03e','#7a6420','#eadf9a'],
-    ['#4aa6a0','#2c6a66','#b6e0dc'],['#b04a4a','#7a2c2c','#e6bcbc'],['#7a9a4a','#4a6420','#d6e6b0'],
-    ['#5a6a7a','#34424a','#c0ccd6'],['#c07a3e','#7a4a20','#eacfa0'],['#9a5ab0','#5a347a','#dcc0e8']];
-  const SYL=['ka','vo','thu','mi','ra','nex','sur','lo','pha','ent','zi','gor','ael','un','ki','na','dru','esh'];
-  function name(rng){ let n=rng.pick(SYL)+rng.pick(SYL); if(rng.chance(0.4))n+=rng.pick(SYL); return n[0].toUpperCase()+n.slice(1); }
-  function genome(rng,bias){ const g={ body:rng.int(0,BODIES.length),mouth:rng.int(0,MOUTHS.length),limbs:rng.int(0,LIMBS.length),
-      sensors:rng.int(0,SENSORS.length),decor:rng.int(0,DECOR.length),palette:rng.int(0,PAL.length),size:rng.range(0.8,1.7) };
-    if(bias)bias(g,rng); return g; }
-  const SPEED={legs4:1.15,legs2:1.0,fins:1.2,tentacles:0.85,wings:1.4,hooves:1.35,claws:1.05,none:0.55};
-  const BITE={beak:0.9,maw:1.4,tusks:1.3,proboscis:0.4,mandibles:1.2,fangs:1.6,filter:0.2,snout:0.8};
-  function stats(g){ return {
-      speed:58*SPEED[LIMBS[g.limbs]]*Math.pow(g.size,-0.25),
-      bite:5*BITE[MOUTHS[g.mouth]]*g.size,
-      charm:0.6+(DECOR[g.decor]==='glow'?1.4:0)+(SENSORS[g.sensors]==='frill'?0.6:0)+(SENSORS[g.sensors]==='eyestalks'?0.3:0),
-      sense:1+(SENSORS[g.sensors]==='eyesMany'?1.2:0)+(SENSORS[g.sensors]==='antennae'?0.5:0),
-      hp:28*g.size+(DECOR[g.decor]==='plates'?22:0)+(BODIES[g.body]==='saurian'?12:0) }; }
-  function biomeBias(bid){ return (g,r)=>{
-      if(bid===B.SHALLOW||bid===B.DEEP||bid===B.BEACH){ g.limbs=LIMBS.indexOf(r.chance(0.5)?'fins':'tentacles'); g.body=BODIES.indexOf(r.chance(0.5)?'finned':'serpentine'); }
-      else if(bid===B.ICE||bid===B.TUNDRA||bid===B.TAIGA){ g.decor=DECOR.indexOf(r.chance(0.6)?'fur':'plates'); g.limbs=LIMBS.indexOf(r.chance(0.7)?'legs4':'hooves'); }
-      else if(bid===B.DESERT||bid===B.SAVANNA){ g.decor=DECOR.indexOf(r.chance(0.5)?'spikes':'plates'); g.limbs=LIMBS.indexOf(r.chance(0.5)?'hooves':'legs4'); }
-      else { g.limbs=LIMBS.indexOf(r.chance(0.4)?'tentacles':'legs4'); if(r.chance(0.35))g.decor=DECOR.indexOf('glow'); } }; }
-  function starter(traits,rng){ const g=genome(rng); const d=traits&&traits[0]&&traits[0].card;
-    g.limbs=LIMBS.indexOf('legs4'); g.size=1.15; g.body=BODIES.indexOf('saurian'); g.sensors=SENSORS.indexOf('eyes2'); g.palette=2;
-    if(d==='Carnivore'){ g.mouth=MOUTHS.indexOf('fangs'); g.decor=DECOR.indexOf('spikes'); }
-    else if(d==='Herbivore'){ g.mouth=MOUTHS.indexOf('beak'); g.decor=DECOR.indexOf('spots'); }
-    else { g.mouth=MOUTHS.indexOf('snout'); g.decor=DECOR.indexOf('stripes'); }
-    return g; }
-  // --- drawing helpers (creature faces +x; caller translates to world pos) ---
-  function ell(x,y,rx,ry){ ctx.beginPath(); ctx.ellipse(x,y,rx,ry,0,0,TAU); ctx.fill(); }
-  function tri(x1,y1,x2,y2,x3,y3){ ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.lineTo(x3,y3); ctx.closePath(); ctx.fill(); }
-  function body(g,s,P){ ctx.fillStyle=P[0]; const b=BODIES[g.body];
-    if(b==='ovoid'){ ell(0,0,s*1.2,s*0.8); }
-    else if(b==='blob'){ ctx.beginPath(); for(let i=0;i<=18;i++){const a=i/18*TAU,rr=s*(1+Math.sin(a*3)*0.12); const x=Math.cos(a)*rr,y=Math.sin(a)*rr; i?ctx.lineTo(x,y):ctx.moveTo(x,y);} ctx.closePath(); ctx.fill(); }
-    else if(b==='segmented'){ for(let k=2;k>=0;k--){ ctx.fillStyle=k?P[0]:P[1]; ell(-k*s*0.7,0,s*0.72,s*0.68);} }
-    else if(b==='finned'){ ell(0,0,s*1.3,s*0.68); ctx.fillStyle=P[1]; tri(0,-s*0.55,s*0.4,-s*1.2,-s*0.5,-s*0.55); tri(-s*1.15,0,-s*1.7,-s*0.5,-s*1.7,s*0.5); }
-    else if(b==='saurian'){ ell(0,0,s*1.25,s*0.72); ctx.beginPath(); ctx.moveTo(-s,0); ctx.lineTo(-s*2.2,s*0.12); ctx.lineTo(-s,-s*0.32); ctx.closePath(); ctx.fill(); }
-    else if(b==='insectoid'){ ell(s*0.35,0,s*0.55,s*0.5); ctx.fillStyle=P[1]; ell(-s*0.6,0,s*0.9,s*0.68); }
-    else if(b==='serpentine'){ ctx.strokeStyle=P[0]; ctx.lineWidth=s*0.85; ctx.lineCap='round'; ctx.beginPath(); for(let i=0;i<=20;i++){const x=(i/20-0.62)*s*3.2,y=Math.sin(i*0.55)*s*0.5; i?ctx.lineTo(x,y):ctx.moveTo(x,y);} ctx.stroke(); }
-    else { ctx.beginPath(); for(let i=0;i<=12;i++){const a=i/12*TAU,rr=s*(0.9+Math.sin(a*4+1)*0.22); const x=Math.cos(a)*rr,y=Math.sin(a)*rr*0.85; i?ctx.lineTo(x,y):ctx.moveTo(x,y);} ctx.closePath(); ctx.fill(); }
-  }
-  function limbs(g,s,t,step,P){ const l=LIMBS[g.limbs]; ctx.strokeStyle=P[1]; ctx.fillStyle=P[1]; ctx.lineWidth=s*0.16; ctx.lineCap='round';
-    if(l==='legs4'||l==='hooves'||l==='claws'||l==='legs2'){ const n=l==='legs2'?2:4; for(let i=0;i<n;i++){ const side=i%2?1:-1, fx=(i<2?0.5:-0.5)*s, ph=step*(i<2?1:-1);
-        const ex=fx+ph*s*0.3, ey=side*s*0.95; ctx.beginPath(); ctx.moveTo(fx,side*s*0.4); ctx.lineTo(ex,ey); ctx.stroke();
-        if(l==='hooves'){ ctx.beginPath(); ctx.arc(ex,ey,s*0.1,0,TAU); ctx.fill(); }
-        else if(l==='claws'){ tri(ex,ey,ex-s*0.12,ey+s*0.16,ex+s*0.12,ey+s*0.16); } } }
-    else if(l==='fins'){ for(const side of[-1,1]){ ctx.save(); ctx.rotate(side*(0.2+Math.sin(t*6)*0.15)); ctx.fillStyle=P[1]+'cc'; tri(0,side*s*0.4,s*0.2,side*s*1.3,-s*0.5,side*s*1.0); ctx.restore(); } }
-    else if(l==='tentacles'){ for(let i=0;i<6;i++){ const side=i%2?1:-1; ctx.beginPath(); ctx.moveTo(-s*0.5+i*s*0.15,0); for(let k=1;k<=4;k++){ ctx.lineTo(-s*0.5+i*s*0.15+Math.sin(t*4+i+k)*s*0.12, side*k*s*0.26);} ctx.stroke(); } }
-    else if(l==='wings'){ const f=Math.sin(t*8)*0.4; for(const side of[-1,1]){ ctx.save(); ctx.rotate(side*f); ctx.fillStyle=P[1]+'aa'; tri(0,side*s*0.2,s*0.3,side*s*1.6,-s*1.0,side*s*0.9); ctx.restore(); } }
-  }
-  function decor(g,s){ const d=DECOR[g.decor];
-    if(d==='spots'){ ctx.fillStyle='#0003'; for(let i=0;i<6;i++){ const a=i/6*TAU; ctx.beginPath(); ctx.arc(Math.cos(a)*s*0.5,Math.sin(a)*s*0.4,s*0.12,0,TAU); ctx.fill(); } }
-    else if(d==='stripes'){ ctx.strokeStyle='#0003'; ctx.lineWidth=s*0.12; for(let i=-2;i<=2;i++){ ctx.beginPath(); ctx.moveTo(i*s*0.35,-s*0.55); ctx.lineTo(i*s*0.35,s*0.55); ctx.stroke(); } }
-    else if(d==='spikes'){ ctx.fillStyle='#0006'; for(let i=-2;i<=2;i++) tri(i*s*0.35,-s*0.55,i*s*0.35-s*0.13,-s*0.55,i*s*0.35,-s*1.0); }
-    else if(d==='plates'){ ctx.strokeStyle='#0004'; ctx.lineWidth=s*0.1; for(let i=-1;i<=1;i++){ ctx.beginPath(); ctx.arc(i*s*0.5,0,s*0.5,PI*1.1,PI*1.9); ctx.stroke(); } }
-    else if(d==='fur'){ ctx.strokeStyle='#0002'; ctx.lineWidth=1.5; for(let i=0;i<20;i++){ const a=i/20*TAU; ctx.beginPath(); ctx.moveTo(Math.cos(a)*s,Math.sin(a)*s*0.8); ctx.lineTo(Math.cos(a)*s*1.2,Math.sin(a)*s*1.0); ctx.stroke(); } }
-  }
-  function eye(x,y,r){ ctx.fillStyle='#f5f5f5'; ctx.beginPath(); ctx.arc(x,y,r,0,TAU); ctx.fill(); ctx.fillStyle='#111'; ctx.beginPath(); ctx.arc(x+r*0.2,y,r*0.5,0,TAU); ctx.fill(); }
-  function mouth(g,s,P){ const m=MOUTHS[g.mouth],fx=s*1.05;
-    if(m==='beak'){ ctx.fillStyle=P[1]; tri(fx,0,fx+s*0.5,-s*0.15,fx+s*0.5,s*0.15); }
-    else if(m==='maw'){ ctx.fillStyle='#5a1a1a'; ctx.beginPath(); ctx.arc(fx*0.85,0,s*0.32,-1,1); ctx.fill(); }
-    else if(m==='tusks'){ ctx.strokeStyle='#eee'; ctx.lineWidth=s*0.12; ctx.beginPath(); ctx.moveTo(fx*0.7,s*0.2); ctx.lineTo(fx+s*0.2,s*0.5); ctx.moveTo(fx*0.7,-s*0.2); ctx.lineTo(fx+s*0.2,-s*0.5); ctx.stroke(); }
-    else if(m==='fangs'){ ctx.fillStyle='#eee'; tri(fx*0.85,-s*0.05,fx+s*0.15,-s*0.1,fx+s*0.2,s*0.05); tri(fx*0.85,s*0.1,fx+s*0.1,s*0.25,fx+s*0.2,s*0.1); }
-    else if(m==='proboscis'){ ctx.strokeStyle=P[1]; ctx.lineWidth=s*0.1; ctx.beginPath(); ctx.moveTo(fx*0.7,0); ctx.lineTo(fx+s*0.7,0); ctx.stroke(); }
-    else if(m==='mandibles'){ ctx.strokeStyle='#2a2a2a'; ctx.lineWidth=s*0.1; ctx.beginPath(); ctx.moveTo(fx*0.8,-s*0.1); ctx.lineTo(fx+s*0.3,-s*0.3); ctx.moveTo(fx*0.8,s*0.1); ctx.lineTo(fx+s*0.3,s*0.3); ctx.stroke(); }
-  }
-  function sensors(g,s,t,P){ const se=SENSORS[g.sensors],fx=s*0.6;
-    if(se==='eyesMany'){ for(let i=0;i<5;i++){ const a=i/5*TAU; eye(fx+Math.cos(a)*s*0.2,Math.sin(a)*s*0.3,s*0.08);} }
-    else if(se==='antennae'){ ctx.strokeStyle='#222'; ctx.lineWidth=s*0.06; for(const sd of[-1,1]){ ctx.beginPath(); ctx.moveTo(fx,sd*s*0.2); ctx.quadraticCurveTo(fx+s*0.4,sd*s*0.6,fx+s*0.3+Math.sin(t*3)*s*0.1,sd*s*0.9); ctx.stroke(); } eye(fx,-s*0.2,s*0.1); eye(fx,s*0.2,s*0.1); }
-    else if(se==='eyestalks'){ ctx.strokeStyle=P[0]; ctx.lineWidth=s*0.1; for(const sd of[-1,1]){ ctx.beginPath(); ctx.moveTo(fx*0.6,sd*s*0.2); ctx.lineTo(fx+s*0.3,sd*s*0.7); ctx.stroke(); eye(fx+s*0.3,sd*s*0.7,s*0.13);} }
-    else if(se==='frill'){ ctx.fillStyle=P[1]+'aa'; ctx.beginPath(); ctx.moveTo(fx*0.5,0); for(let i=0;i<=8;i++){const a=-1+i/8*2; ctx.lineTo(fx*0.5+Math.cos(a)*s*1.1,Math.sin(a)*s*1.1);} ctx.fill(); eye(fx,-s*0.2,s*0.12); eye(fx,s*0.2,s*0.12); }
-    else if(se==='whiskers'){ ctx.strokeStyle='#0005'; ctx.lineWidth=1.5; for(const sd of[-1,1])for(let k=0;k<3;k++){ ctx.beginPath(); ctx.moveTo(fx,sd*s*0.15); ctx.lineTo(fx+s*0.7,sd*s*0.15+ (k-1)*s*0.25); ctx.stroke(); } eye(fx,-s*0.25,s*0.13); eye(fx,s*0.25,s*0.13); }
-    else { eye(fx,-s*0.25,s*0.14); eye(fx,s*0.25,s*0.14); }
-  }
-  function draw(g,t,moving,ang){ const P=PAL[g.palette],s=g.size*11; ctx.save(); if(ang!=null)ctx.rotate(ang);
-    if(DECOR[g.decor]==='glow'){ const gl=ctx.createRadialGradient(0,0,s*0.3,0,0,s*2.2); gl.addColorStop(0,P[1]+'66'); gl.addColorStop(1,'#0000'); ctx.fillStyle=gl; ctx.beginPath(); ctx.arc(0,0,s*2.2,0,TAU); ctx.fill(); }
-    const step=moving?Math.sin(t*11):0;
-    limbs(g,s,t,step,P); body(g,s,P); decor(g,s); mouth(g,s,P); sensors(g,s,t,P);
-    ctx.restore(); }
-  return {BODIES,MOUTHS,LIMBS,SENSORS,DECOR,PAL,name,genome,stats,biomeBias,starter,draw};
-})();
-
-// ---- Rhythm mini-game (befriend via the five Chord notes) [doc section 6] --
-const BEAT=0.62;
-const Rhythm={ active:false, seq:null, t:0, hits:null, onDone:null, targetName:'',
-  start(pattern,nm,onDone){ this.active=true; this.seq=pattern; this.t=-1.3; this.hits=new Array(pattern.length).fill(null); this.onDone=onDone; this.targetName=nm||'the creature';
-    if(Audio.ctx&&Audio.chord){ const base=Audio.ctx.currentTime+0.15; pattern.forEach((n,i)=>Audio.note(Audio.chord[n],base+i*BEAT,0.3,'sine',0.12)); } },
-  key(k){ const lane='12345'.indexOf(k); if(lane>=0)this.judge(lane); },
-  clickAt(mx){ const w=Math.min(VW*0.7,560),x0=VW/2-w/2,lane=Math.floor((mx-x0)/(w/5)); if(lane>=0&&lane<5)this.judge(lane); },
-  judge(lane){ let best=-1,bestErr=1e9; for(let i=0;i<this.seq.length;i++){ if(this.hits[i]||this.seq[i]!==lane)continue; const err=Math.abs(this.t-i*BEAT); if(err<bestErr){bestErr=err;best=i;} }
-    if(best<0||bestErr>0.35){ Audio.blip(120,0.05); return; }
-    this.hits[best]=bestErr<0.09?'perfect':(bestErr<0.2?'good':'ok'); if(Audio.chord)Audio.note(Audio.chord[lane],Audio.ctx.currentTime,0.25,'triangle',0.15); },
-  update(dt){ if(!this.active)return; this.t+=dt; if(this.t>(this.seq.length-1)*BEAT+0.7)this.finish(); },
-  finish(){ this.active=false; let score=0,perf=0; for(const h of this.hits){ if(h==='perfect'){score+=1;perf++;} else if(h==='good')score+=0.7; else if(h==='ok')score+=0.4; }
-    const acc=score/this.seq.length, cb=this.onDone; this.onDone=null; if(cb)cb(acc,perf===this.seq.length); },
-  render(){ if(!this.active)return; const w=Math.min(VW*0.7,560),x0=VW/2-w/2,lane=w/5,hitY=VH*0.66,SP=175;
-    ctx.fillStyle='rgba(4,8,14,0.82)'; ctx.fillRect(0,0,VW,VH);
-    ctx.textAlign='center'; ctx.fillStyle='#e8eef6'; ctx.font='700 22px Space Grotesk, sans-serif'; ctx.fillText('sing the Chord to the '+this.targetName,VW/2,VH*0.28);
-    ctx.font='13px IBM Plex Mono, monospace'; ctx.fillStyle='#8a97ab'; ctx.fillText('press 1-5 (or click a lane) as each note meets the line',VW/2,VH*0.28+26);
-    ctx.strokeStyle='#7fe0d3'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(x0,hitY); ctx.lineTo(x0+w,hitY); ctx.stroke();
-    for(let l=0;l<5;l++){ const cx=x0+lane*(l+0.5); ctx.fillStyle='#0e1626'; ctx.beginPath(); ctx.arc(cx,hitY,16,0,TAU); ctx.fill(); ctx.strokeStyle='#3a4a66'; ctx.stroke(); ctx.fillStyle='#8a97ab'; ctx.font='12px IBM Plex Mono, monospace'; ctx.fillText(l+1,cx,hitY+34); }
-    for(let i=0;i<this.seq.length;i++){ const yy=hitY-(i*BEAT-this.t)*SP; if(yy<-20||yy>VH)continue; const cx=x0+lane*(this.seq[i]+0.5),h=this.hits[i];
-      ctx.globalAlpha=h?0.45:1; ctx.fillStyle=h==='perfect'?'#8fe6a0':h==='good'?'#c9d24b':h==='ok'?'#c9a24b':'#7fbfe0'; ctx.beginPath(); ctx.arc(cx,yy,13,0,TAU); ctx.fill(); ctx.globalAlpha=1; } }
-};
-
-// ============================================================================
-// SCREEN: Creature stage  [doc section 12]
-//   roam a biome, befriend (rhythm) or hunt (bite/charge/spit), evolve at nest
-//   exit at 3 allies or 3 dominations -> Trait Card II (Social/Predator/Adaptive)
-// ============================================================================
-const Creature={ saveAs:'world', name:'Creature', mode:'roam', ecs:null, player:null, cam:null, rng:null, aiR:null,
-  biome:0, ground:'#3a5a3a', flora:null, nest:null, world:{w:2400,h:1600}, t:0,
-  species:null, allies:0, dominations:0, edits:0, dna:6, exiting:0, editSel:0, pg:null, pstat:null, _editBtns:null,
-  PARTCATS:['body','mouth','limbs','sensors','decor','palette'],
-  load(){
-    this.rng=Game.rng.fork('creature'); this.aiR=Game.rng.fork('creature.ai');
-    this.mode='roam'; this.t=0; this.allies=0; this.dominations=0; this.edits=0; this.dna=6; this.exiting=0; this.editSel=0;
-    this.ecs=makeWorldECS();
-    this.biome=this._pickBiome(); const c=BIOME_COL[this.biome]; this.ground=`rgb(${(c[0]*0.72)|0},${(c[1]*0.72)|0},${(c[2]*0.6)|0})`;
-    this.flora=[]; for(let i=0;i<130;i++) this.flora.push({x:this.rng.range(0,this.world.w),y:this.rng.range(0,this.world.h),k:this.rng.int(0,3),s:this.rng.range(0.7,1.7),c:this.rng.range(0,TAU)});
-    this.nest={x:this.world.w/2,y:this.world.h/2};
-    this.pg=CGEN.starter(Game.traits,this.rng); this.pstat=CGEN.stats(this.pg);
-    this.player=this.ecs.spawn({x:this.nest.x,y:this.nest.y-70,vx:0,vy:0,r:this.pg.size*12,kind:'player',ang:0,hp:this.pstat.hp,maxhp:this.pstat.hp,atkcool:0,dash:0});
-    const bias=CGEN.biomeBias(this.biome); this.species=[]; const ns=this.rng.int(6,10);
-    for(let s=0;s<ns;s++){ const g=CGEN.genome(this.rng,bias), st=CGEN.stats(g);
-      const sp={id:s,genome:g,stat:st,name:CGEN.name(this.rng),disp:'wild',hostileT:0,predator:st.bite>7&&this.rng.chance(0.6),members:[]};
-      const cx=this.rng.range(220,this.world.w-220),cy=this.rng.range(220,this.world.h-220),n=this.rng.int(3,6);
-      for(let m=0;m<n;m++){ const e=this.ecs.spawn({x:cx+this.rng.range(-80,80),y:cy+this.rng.range(-80,80),vx:0,vy:0,r:g.size*12,kind:'crt',sp,ang:this.rng.range(0,TAU),hp:st.hp,home:{x:cx,y:cy},alpha:m===0,moving:false}); sp.members.push(e); }
-      this.species.push(sp); }
-    this.cam={x:this.player.x,y:this.player.y,zoom:1.4}; Audio.motif();
-    toast('the shore gives way to land. sing [E] or hunt [F] the fauna.');
-  },
-  _pickBiome(){ const cnt={},b=Planet.biome,land=[B.GRASS,B.TFOREST,B.RAIN,B.SAVANNA,B.TAIGA,B.SHRUB];
-    for(let i=0;i<b.length;i+=7){ if(land.indexOf(b[i])>=0)cnt[b[i]]=(cnt[b[i]]||0)+1; }
-    let best=B.GRASS,bv=-1; for(const k in cnt)if(cnt[k]>bv){bv=cnt[k];best=+k;} return best; },
-  _nearestCreature(range){ let best=null,bd=range; for(const e of this.ecs.list){ if(!e.alive||e.kind!=='crt')continue; const d=Math.hypot(this.player.x-e.x,this.player.y-e.y); if(d<bd){bd=d;best=e;} } return best; },
-  _nearNest(){ return Math.hypot(this.player.x-this.nest.x,this.player.y-this.nest.y)<74; },
-  onkey(k){ if(this.mode==='rhythm'){ Rhythm.key(k); return; }
-    if(this.mode==='editor'){ this._editKey(k); return; }
-    if(this.exiting)return;
-    if(k==='e')this._befriend(); else if(k==='f')this._attack(); else if(k==='g')this._spit();
-    else if(k==='shift'){ if(this.player.dash<=0)this.player.dash=0.35; }
-    else if(k==='b'){ if(this._nearNest())this.mode='editor'; else toast('return to the nest to evolve'); } },
-  onpointer(){ if(this.mode==='rhythm'){ Rhythm.clickAt(Input.mx); return; }
-    if(this.mode==='editor'){ this._editClick(); return; }
-    if(this.mode==='roam'&&!this.exiting)this._attack(); },
-  _befriend(){ const near=this._nearestCreature(150); if(!near){ toast('no creature close enough to sing to'); return; }
-    const sp=near.sp; if(sp.disp==='ally'){ toast('the '+sp.name+' already sing with you'); return; } if(sp.disp==='dominated'){ toast('the '+sp.name+' are already yours'); return; }
-    const len=sp.predator?4:3, pat=Array.from({length:len},()=>this.rng.int(0,5)), thresh=sp.predator?0.8:0.55;
-    this.mode='rhythm'; Rhythm.start(pat,sp.name,(acc,perfect)=>{ this.mode='roam';
-      if(acc>=thresh){ sp.disp='ally'; sp.members.forEach(m=>m.friendly=true); this.allies++; this.dna+=4; toast('the '+sp.name+' are now your kin ('+this.allies+'/3)',true);
-        if(perfect&&Game.fragments.indexOf('creature')<0){ Game.fragments.push('creature'); toast('Chord Fragment recovered - a perfect song',true); }
-        Game.log('creature','befriend',{sp:sp.name,acc:+acc.toFixed(2)}); this._checkExit(); }
-      else { sp.disp='hostile'; sp.hostileT=8; toast('the '+sp.name+' reject the song and turn on you'); } }); },
-  _attack(){ if(this.player.atkcool>0)return; this.player.atkcool=0.4; const tgt=this._nearestCreature(this.player.r+40); if(!tgt)return;
-    const sp=tgt.sp; tgt.hp-=this.pstat.bite*(this.player.dash>0?1.9:1); if(sp.disp!=='dominated'){ sp.disp=sp.disp==='ally'?'wild':'hostile'; sp.hostileT=8; } sp.members.forEach(m=>{if(m!==tgt)m.friendly=false;});
-    Audio.blip(160,0.06); this._hurt(tgt); },
-  _spit(){ if(this.player.atkcool>0)return; this.player.atkcool=0.5; const a=this.player.ang;
-    this.ecs.spawn({x:this.player.x+Math.cos(a)*this.player.r,y:this.player.y+Math.sin(a)*this.player.r,vx:Math.cos(a)*280,vy:Math.sin(a)*280,r:4,kind:'spit',life:1.1,dmg:this.pstat.bite*0.7}); Audio.blip(300,0.05); },
-  _hurt(tgt){ const sp=tgt.sp; if(tgt.hp>0)return; tgt.alive=false; sp.members=sp.members.filter(m=>m!==tgt); this.dna+=3;
-    if((tgt.alpha||sp.members.length===0)&&sp.disp!=='dominated'){ sp.disp='dominated'; sp.members.forEach(m=>{m.flee=true;m.friendly=false;}); this.dominations++; toast('the '+sp.name+' bow to you ('+this.dominations+'/3)',true); Game.log('creature','dominate',{sp:sp.name}); this._checkExit(); } },
-  _checkExit(){ if(this.exiting)return; if(this.allies>=3||this.dominations>=3){ this.exiting=0.001; toast('your pack forms - sapience dawns',true); } },
-  _finishExit(){ let card=this.allies>this.dominations?'Social':(this.dominations>this.allies?'Predator':'Adaptive');
-    if(this.edits>=4&&Math.abs(this.allies-this.dominations)<=1)card='Adaptive';
-    Game.traits[1]={stage:'creature',card,allies:this.allies,dominations:this.dominations,edits:this.edits,genome:this.pg};
-    Game.log('creature','trait',{card}); Game.persist(); toast('Trait Card II locked: '+card,true); setScreen(Stages.TRIBAL); },
-  update(dt){ this.t+=dt;
-    if(this.mode==='rhythm'){ Rhythm.update(dt); return; }
-    if(this.mode==='editor')return;
-    const pl=this.player,W=this.world.w,H=this.world.h;
-    if(this.exiting){ this.exiting+=dt; this.cam.zoom=lerp(this.cam.zoom,2.3,dt*2); pl.vy-=18*dt; pl.x+=pl.vx*dt; pl.y+=pl.vy*dt; pl.vx*=0.9; pl.vy*=0.9; if(this.exiting>2.4)this._finishExit(); return; }
-    pl.atkcool=Math.max(0,pl.atkcool-dt); pl.dash=Math.max(0,pl.dash-dt);
-    let tx=this.cam.x+(Input.mx-VW/2)/this.cam.zoom, ty=this.cam.y+(Input.my-VH/2)/this.cam.zoom;
-    if(Math.hypot(tx-pl.x,ty-pl.y)>10)pl.ang=Math.atan2(ty-pl.y,tx-pl.x);
-    const acc=this.pstat.speed*dt*3.2; let mvx=0,mvy=0;
-    if(Input.keys['w'])mvy--; if(Input.keys['s'])mvy++; if(Input.keys['a'])mvx--; if(Input.keys['d'])mvx++;
-    if(Input.down){ mvx+=Math.cos(pl.ang); mvy+=Math.sin(pl.ang); }
-    const ml=Math.hypot(mvx,mvy); if(ml>0){ pl.vx+=mvx/ml*acc; pl.vy+=mvy/ml*acc; }
-    if(pl.dash>0){ pl.vx+=Math.cos(pl.ang)*acc*1.4; pl.vy+=Math.sin(pl.ang)*acc*1.4; }
-    const psp=Math.hypot(pl.vx,pl.vy),ms=this.pstat.speed*(pl.dash>0?2.6:1.3); if(psp>ms){ pl.vx*=ms/psp; pl.vy*=ms/psp; }
-    pl.vx*=0.86; pl.vy*=0.86; pl.x=clamp(pl.x+pl.vx*dt,pl.r,W-pl.r); pl.y=clamp(pl.y+pl.vy*dt,pl.r,H-pl.r);
-    this.cam.x=lerp(this.cam.x,pl.x,dt*5); this.cam.y=lerp(this.cam.y,pl.y,dt*5);
-    for(const sp of this.species)if(sp.hostileT>0)sp.hostileT-=dt;
-    const ai=this.aiR;
-    for(const e of this.ecs.list){ if(!e.alive)continue;
-      if(e.kind==='crt'){ const sp=e.sp,d=Math.hypot(pl.x-e.x,pl.y-e.y);
-        if(sp.disp==='ally'||e.friendly){ if(d>90)seek(e,pl.x,pl.y,sp.stat.speed*dt*2); else wander(e,ai,sp.stat.speed*dt*0.5); }
-        else if(sp.disp==='hostile'||(sp.predator&&d<180&&sp.disp!=='dominated')){ seek(e,pl.x,pl.y,sp.stat.speed*dt*2.2); if(d<e.r+pl.r+6)pl.hp-=sp.stat.bite*dt; }
-        else if(sp.disp==='dominated'||e.flee){ if(d<230)flee(e,pl.x,pl.y,sp.stat.speed*dt*2.6); else wander(e,ai,sp.stat.speed*dt); }
-        else { const dh=Math.hypot(e.home.x-e.x,e.home.y-e.y); if(dh>190)seek(e,e.home.x,e.home.y,sp.stat.speed*dt); else wander(e,ai,sp.stat.speed*dt*0.8); }
-        e.vx*=0.9; e.vy*=0.9; const spd=Math.hypot(e.vx,e.vy); if(spd>0.6)e.ang=Math.atan2(e.vy,e.vx); e.moving=spd>4;
-        e.x=clamp(e.x+e.vx*dt,e.r,W-e.r); e.y=clamp(e.y+e.vy*dt,e.r,H-e.r); }
-      else if(e.kind==='spit'){ e.life-=dt; e.x+=e.vx*dt; e.y+=e.vy*dt; if(e.life<=0){ e.alive=false; continue; }
-        this.ecs.near(e.x,e.y,e.r+14,(o)=>{ if(o.kind!=='crt'||!o.alive||!e.alive)return; o.hp-=e.dmg; e.alive=false; const sp=o.sp; if(sp.disp!=='dominated'){sp.disp=sp.disp==='ally'?'wild':'hostile';sp.hostileT=6;} this._hurt(o); }); }
-    }
-    this.ecs.cull();
-    if(pl.hp<=0){ pl.hp=pl.maxhp*0.5; pl.x=this.nest.x; pl.y=this.nest.y; toast('wounded, you retreat to the nest'); }
-    else if(pl.hp<pl.maxhp)pl.hp=Math.min(pl.maxhp,pl.hp+dt*2);
-  },
-  // ---- editor (nest genome-edit) ----
-  _editKey(k){ if(k==='b'||k==='escape'){ this.mode='roam'; this.pstat=CGEN.stats(this.pg); this.player.maxhp=this.pstat.hp; this.player.hp=Math.min(this.player.hp,this.pstat.hp); this.player.r=this.pg.size*12; return; }
-    if(k==='arrowup'||k==='w')this.editSel=(this.editSel+this.PARTCATS.length-1)%this.PARTCATS.length;
-    else if(k==='arrowdown'||k==='s')this.editSel=(this.editSel+1)%this.PARTCATS.length;
-    else if(k==='arrowleft'||k==='a')this._cycle(-1);
-    else if(k==='arrowright'||k==='d'||k==='enter')this._cycle(1); },
-  _cycle(dir){ if(this.dna<2){ toast('need 2 DNA to mutate'); return; } const cat=this.PARTCATS[this.editSel];
-    const L={body:CGEN.BODIES.length,mouth:CGEN.MOUTHS.length,limbs:CGEN.LIMBS.length,sensors:CGEN.SENSORS.length,decor:CGEN.DECOR.length,palette:CGEN.PAL.length};
-    this.pg[cat]=(this.pg[cat]+dir+L[cat])%L[cat]; this.dna-=2; this.edits++; this.pstat=CGEN.stats(this.pg); Audio.blip(440,0.05); },
-  _editClick(){ if(!this._editBtns)return; for(const b of this._editBtns){ if(Input.mx>=b.x&&Input.mx<=b.x+b.w&&Input.my>=b.y&&Input.my<=b.y+b.h){ this.editSel=b.cat; this._cycle(b.dir); return; } } },
-  // ---- render ----
-  render(){ const cam=this.cam,z=cam.zoom;
-    ctx.fillStyle=this.ground; ctx.fillRect(0,0,VW,VH);
-    ctx.save(); ctx.translate(VW/2,VH/2); ctx.scale(z,z); ctx.translate(-cam.x,-cam.y);
-    for(const f of this.flora)this._drawFlora(f);
-    this._drawNest();
-    for(const e of this.ecs.list){ if(!e.alive)continue;
-      if(e.kind==='crt'){ ctx.save(); ctx.translate(e.x,e.y); const sp=e.sp;
-        if(sp.disp==='ally'){ ctx.strokeStyle='#7fe0d3'; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(0,0,e.r*1.5,0,TAU); ctx.stroke(); }
-        else if(sp.disp==='hostile'){ ctx.strokeStyle='#ff6a4a'; ctx.lineWidth=2; ctx.setLineDash([4,4]); ctx.beginPath(); ctx.arc(0,0,e.r*1.5,0,TAU); ctx.stroke(); ctx.setLineDash([]); }
-        CGEN.draw(sp.genome,this.t+e.id*1.7,e.moving,e.ang); ctx.restore(); }
-      else if(e.kind==='spit'){ ctx.fillStyle='#b6e07f'; ctx.beginPath(); ctx.arc(e.x,e.y,e.r,0,TAU); ctx.fill(); } }
-    ctx.save(); ctx.translate(this.player.x,this.player.y); if(this.player.dash>0){ ctx.strokeStyle='#ffd86a'; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(0,0,this.player.r*1.7,0,TAU); ctx.stroke(); }
-    CGEN.draw(this.pg,this.t,Math.hypot(this.player.vx,this.player.vy)>4,this.player.ang); ctx.restore();
-    ctx.restore();
-    this._hud();
-    if(this.mode==='rhythm')Rhythm.render();
-    if(this.mode==='editor')this._editRender();
-    if(this.exiting){ ctx.fillStyle='rgba(230,240,255,'+clamp(this.exiting/2.8,0,0.7)+')'; ctx.fillRect(0,0,VW,VH); } },
-  _drawFlora(f){ ctx.save(); ctx.translate(f.x,f.y); const s=f.s*9;
-    if(f.k===0){ ctx.strokeStyle='#3f6b3a'; ctx.lineWidth=2; for(let i=-1;i<=1;i++){ ctx.beginPath(); ctx.moveTo(i*3,0); ctx.lineTo(i*3+Math.sin(this.t+f.c)*2,-s); ctx.stroke(); } }
-    else if(f.k===1){ ctx.fillStyle='#2f5a30'; ctx.beginPath(); ctx.arc(0,-s*0.4,s*0.7,0,TAU); ctx.fill(); }
-    else { ctx.fillStyle='#5a4632'; ctx.fillRect(-2,-s*0.6,4,s*0.6); ctx.fillStyle='#356b3a'; ctx.beginPath(); ctx.arc(0,-s*0.95,s*0.85,0,TAU); ctx.fill(); }
-    ctx.restore(); },
-  _drawNest(){ ctx.save(); ctx.translate(this.nest.x,this.nest.y); const near=this._nearNest();
-    ctx.fillStyle='#2a2018'; ctx.beginPath(); ctx.ellipse(0,0,54,40,0,0,TAU); ctx.fill();
-    ctx.strokeStyle=near?'#7fe0d3':'#5a4a38'; ctx.lineWidth=4; for(let i=0;i<10;i++){ const a=i/10*TAU; ctx.beginPath(); ctx.arc(Math.cos(a)*48,Math.sin(a)*34,5,0,TAU); ctx.stroke(); }
-    ctx.fillStyle=near?'#7fe0d3':'#8a97ab'; ctx.font='11px IBM Plex Mono, monospace'; ctx.textAlign='center'; ctx.fillText(near?'[B] evolve':'nest',0,-52); ctx.restore(); },
-  _hud(){ const pl=this.player;
-    meter(16,16,190,'HP',pl.hp/pl.maxhp,'#ff9a7f'); meter(16,36,190,'DNA '+this.dna,clamp(this.dna/20,0,1),'#7fe0d3');
-    ctx.fillStyle='#dbe6f3'; ctx.font='700 13px Space Grotesk, sans-serif'; ctx.textAlign='left'; ctx.textBaseline='top';
-    ctx.fillText('allies '+this.allies+'/3     dominations '+this.dominations+'/3',16,58);
-    ctx.fillStyle='#8a97ab'; ctx.font='11px IBM Plex Mono, monospace';
-    ctx.fillText('[hold mouse / WASD] move    [E] sing    [F] bite    [G] spit    [Shift] charge    [B] nest-evolve',16,VH-22); },
-  _editRender(){ ctx.fillStyle='rgba(4,8,14,0.9)'; ctx.fillRect(0,0,VW,VH);
-    ctx.textAlign='center'; ctx.fillStyle='#e8eef6'; ctx.font='700 22px Space Grotesk, sans-serif'; ctx.fillText('THE NEST - evolve your form',VW/2,58);
-    ctx.save(); ctx.translate(VW*0.3,VH*0.54); ctx.scale(3.4,3.4); CGEN.draw(this.pg,this.t,true,0); ctx.restore();
-    const rx=VW*0.52,ry=120,rh=52,rw=340; this._editBtns=[]; const vals={body:CGEN.BODIES,mouth:CGEN.MOUTHS,limbs:CGEN.LIMBS,sensors:CGEN.SENSORS,decor:CGEN.DECOR,palette:null};
-    this.PARTCATS.forEach((cat,i)=>{ const y=ry+i*rh,on=i===this.editSel;
-      ctx.fillStyle=on?'#12203a':'#0c1526'; panel(rx,y,rw,rh-8,8); ctx.fill(); if(on){ ctx.strokeStyle='#7fe0d3'; ctx.stroke(); }
-      ctx.textAlign='left'; ctx.fillStyle='#8a97ab'; ctx.font='11px IBM Plex Mono, monospace'; ctx.fillText(cat,rx+14,y+9);
-      ctx.fillStyle='#e8eef6'; ctx.font='700 15px Space Grotesk, sans-serif'; ctx.fillText(cat==='palette'?('palette '+(this.pg.palette+1)):vals[cat][this.pg[cat]],rx+14,y+26);
-      ['<','>'].forEach((sym,k)=>{ const ax=rx+rw-58+k*34,ay=y+(rh-8)/2; ctx.fillStyle='#1a2740'; ctx.beginPath(); ctx.arc(ax,ay,14,0,TAU); ctx.fill(); ctx.fillStyle='#cfd9e8'; ctx.textAlign='center'; ctx.font='700 16px Space Grotesk, sans-serif'; ctx.fillText(sym,ax,ay); this._editBtns.push({x:ax-14,y:ay-14,w:28,h:28,cat:i,dir:k?1:-1}); }); });
-    const st=CGEN.stats(this.pg); ctx.textAlign='left'; ctx.fillStyle='#8fe6d9'; ctx.font='12px IBM Plex Mono, monospace';
-    ['speed '+st.speed.toFixed(0),'bite '+st.bite.toFixed(1),'charm '+st.charm.toFixed(1),'sense '+st.sense.toFixed(1),'hp '+st.hp.toFixed(0)].forEach((l,i)=>ctx.fillText(l,rx,ry+6*rh+12+i*18));
-    ctx.textAlign='center'; ctx.fillStyle='#c9a24b'; ctx.font='12px IBM Plex Mono, monospace'; ctx.fillText('DNA '+this.dna+'  -  each mutation costs 2  -  arrows/click to change, [B] or [Esc] to leave',VW/2,VH-28); }
-};
-
-// ============================================================================
-// P4: shared RTS kernel (used by Tribal now, City next)  [doc section 13]
-//   worker FSM (go to site -> gather -> return -> deposit), nearest-node pick
-// ============================================================================
-const RTS={
-  moveTo(e,tx,ty,step){ const dx=tx-e.x,dy=ty-e.y,d=Math.hypot(dx,dy); if(d>step){ e.x+=dx/d*step; e.y+=dy/d*step; e.ang=Math.atan2(dy,dx); e.moving=true; return false; } e.moving=false; return true; },
-  nearestNode(x,y,nodes){ let b=null,bd=1e9; for(const n of nodes){ const d=Math.hypot(n.x-x,n.y-y); if(d<bd){bd=d;b=n;} } return b; },
-  // one worker step for a gather job; calls deposit() on a completed round trip
-  gather(u,home,nodes,dt,deposit){ const step=u.spd*u.eff*dt;
-    if(u.state==='toWork'){ if(!u.site)u.site=RTS.nearestNode(u.x,u.y,nodes)||home; if(RTS.moveTo(u,u.site.x,u.site.y,step)){ u.state='work'; u.timer=1.3; } }
-    else if(u.state==='work'){ u.moving=false; u.timer-=dt; if(u.timer<=0){ u.state='toHome'; } }
-    else { if(RTS.moveTo(u,home.x,home.y,step)){ deposit(); u.site=null; u.state='toWork'; } } }
-};
-
-// ============================================================================
-// SCREEN: Tribal stage  [doc section 14] - one-screen RTS-lite
-//   12 members, 4 jobs, food+materials, build the totem, win or crush 3 tribes
-//   fire discovery at 50%, exit -> Trait Card III (Harmonist/Raider/Trader)
-// ============================================================================
-const Tribal={ saveAs:'world', name:'Tribal', ecs:null, cam:null, rng:null, aiR:null, t:0, mode:'manage',
-  world:{w:1700,h:1050}, camp:null, genome:null, units:null, res:null, totem:0, totemNeed:20, fire:false,
-  neighbors:null, sel:-1, won:0, crushed:0, trades:0, exiting:0, starveT:0, _btns:null, foodNodes:null, matNodes:null, guardPts:null,
-  JOBS:['forager','hunter','musician','guard'], JOBCOL:{forager:'#8fbf5a',hunter:'#d98a5a',musician:'#9ad0ff',guard:'#c9a24b'},
-  load(){
-    this.rng=Game.rng.fork('tribal'); this.aiR=Game.rng.fork('tribal.ai');
-    this.t=0; this.mode='manage'; this.res={food:24,materials:0}; this.totem=0; this.fire=false; this.won=0; this.crushed=0; this.trades=0; this.exiting=0; this.starveT=0; this.sel=-1;
-    this.genome=(Game.traits[1]&&Game.traits[1].genome)||CGEN.starter(Game.traits,this.rng);
-    this.ecs=makeWorldECS(); const W=this.world.w,H=this.world.h; this.camp={x:W/2,y:H/2};
-    this.foodNodes=[]; for(let i=0;i<7;i++){ const a=this.rng.range(0,TAU),r=this.rng.range(170,340); this.foodNodes.push({x:this.camp.x+Math.cos(a)*r,y:this.camp.y+Math.sin(a)*r,kind:'food'}); }
-    this.matNodes=[]; for(let i=0;i<6;i++){ const a=this.rng.range(0,TAU),r=this.rng.range(190,370); this.matNodes.push({x:this.camp.x+Math.cos(a)*r,y:this.camp.y+Math.sin(a)*r,kind:'mat'}); }
-    this.guardPts=[]; for(let i=0;i<6;i++){ const a=i/6*TAU; this.guardPts.push({x:this.camp.x+Math.cos(a)*120,y:this.camp.y+Math.sin(a)*120}); }
-    this.units=[]; const jb=['forager','forager','forager','forager','hunter','hunter','hunter','musician','musician','guard','guard','guard'];
-    for(let i=0;i<12;i++)this._spawn(jb[i]);
-    const edges=[{x:W*0.13,y:H*0.22},{x:W*0.87,y:H*0.2},{x:W*0.5,y:H*0.88}];
-    this.neighbors=edges.map(e=>({x:e.x,y:e.y,name:CGEN.name(this.rng),genome:CGEN.genome(this.rng),disp:this.rng.int(18,42),strength:this.rng.int(3,6),state:'wild',raidCd:this.rng.range(14,26)}));
-    this.cam={x:W/2,y:H/2,zoom:Math.min(VW/W,VH/H)*0.96};
-    Audio.motif(); toast('your tribe rises. build the totem; win or crush the neighbors.');
-  },
-  _spawn(job){ const u=this.ecs.spawn({x:this.camp.x+this.rng.range(-40,40),y:this.camp.y+this.rng.range(-40,40),vx:0,vy:0,r:this.genome.size*9,kind:'unit',job,state:'toWork',timer:0,ang:0,moving:false,spd:66,eff:1,site:null,pt:null,id2:this.rng.range(0,TAU)}); return u; },
-  jobCount(j){ let c=0; for(const u of this.ecs.list)if(u.alive&&u.kind==='unit'&&u.job===j)c++; return c; },
-  pop(){ let c=0; for(const u of this.ecs.list)if(u.alive&&u.kind==='unit')c++; return c; },
-  _setJob(j,delta){ if(delta>0){ let from=null,mx=0; for(const o of this.JOBS){ if(o===j)continue; const c=this.jobCount(o); if(c>mx){mx=c;from=o;} } if(!from)return; const u=this.ecs.list.find(x=>x.alive&&x.kind==='unit'&&x.job===from); if(u){u.job=j;u.state='toWork';u.site=null;} }
-    else { const u=this.ecs.list.find(x=>x.alive&&x.kind==='unit'&&x.job===j); if(!u)return; let to=null,mn=1e9; for(const o of this.JOBS){ if(o===j)continue; const c=this.jobCount(o); if(c<mn){mn=c;to=o;} } u.job=to; u.state='toWork'; u.site=null; } },
-  onkey(k){ if(this.mode==='rhythm'){ Rhythm.key(k); return; } if(this.exiting)return;
-    if(k==='p')this._perform(); else if(k==='t')this._trade(); else if(k==='r')this._raid(); },
-  onpointer(){ if(this.mode==='rhythm'){ Rhythm.clickAt(Input.mx); return; } if(this.exiting)return;
-    if(this._btns)for(const b of this._btns){ if(Input.mx>=b.x&&Input.mx<=b.x+b.w&&Input.my>=b.y&&Input.my<=b.y+b.h){ b.fn(); return; } }
-    const z=this.cam.zoom,wx=this.cam.x+(Input.mx-VW/2)/z,wy=this.cam.y+(Input.my-VH/2)/z; let s=-1;
-    this.neighbors.forEach((nb,i)=>{ if(Math.hypot(nb.x-wx,nb.y-wy)<70)s=i; }); this.sel=s; },
-  _perform(){ if(this.sel<0)return; const nb=this.neighbors[this.sel]; if(nb.state!=='wild'){ toast('the '+nb.name+' are already resolved'); return; } if(this.jobCount('musician')<1){ toast('assign a musician first'); return; }
-    const pat=Array.from({length:this.rng.int(3,6)},()=>this.rng.int(0,5)); this.mode='rhythm';
-    Rhythm.start(pat,nb.name,(acc)=>{ this.mode='manage'; if(acc>=0.55){ nb.disp=clamp(nb.disp+45,0,100); toast('the '+nb.name+' warm to your song'); this._maybeWin(nb,'music'); } else toast('the song to the '+nb.name+' falters'); }); },
-  _trade(){ if(this.sel<0)return; const nb=this.neighbors[this.sel]; if(nb.state!=='wild')return; if(this.res.materials<8){ toast('need 8 materials to trade'); return; }
-    this.res.materials-=8; this.res.food+=6; nb.disp=clamp(nb.disp+22,0,100); this.trades++; toast('you trade with the '+nb.name); Game.log('tribal','trade',{nb:nb.name}); this._maybeWin(nb,'trade'); },
-  _raid(){ if(this.sel<0)return; const nb=this.neighbors[this.sel]; if(nb.state!=='wild')return; const str=this.jobCount('guard')*2+this.rng.int(0,4);
-    if(str>=nb.strength+2){ nb.state='crushed'; this.crushed++; this.res.materials+=10; this.res.food+=8; toast('you crush the '+nb.name,true); Game.log('tribal','crush',{nb:nb.name}); }
-    else { const g=this.ecs.list.find(u=>u.alive&&u.kind==='unit'&&u.job==='guard'); if(g)g.alive=false; this.res.food=Math.max(0,this.res.food-6); toast('the raid on the '+nb.name+' fails'); } },
-  _maybeWin(nb,how){ if(nb.disp>=100&&nb.state==='wild'){ nb.state='won'; this.won++; this._spawn('forager'); this._spawn('hunter'); toast('the '+nb.name+' join your tribe',true); Game.log('tribal','win',{nb:nb.name,how}); } },
-  _finishExit(){ let card=this.won>this.crushed?'Harmonist':(this.crushed>this.won?'Raider':'Trader'); if(this.trades>=3&&Math.abs(this.won-this.crushed)<=1)card='Trader';
-    Game.traits[2]={stage:'tribal',card,won:this.won,crushed:this.crushed,trades:this.trades}; Game.log('tribal','trait',{card}); Game.persist(); toast('Trait Card III locked: '+card,true); setScreen(Stages.CITY); },
-  update(dt){ this.t+=dt;
-    if(this.mode==='rhythm'){ Rhythm.update(dt); return; }
-    if(this.exiting){ this.exiting+=dt; if(this.exiting>2.6)this._finishExit(); return; }
-    const musc=this.jobCount('musician'),eff=this.fire?1.25:1;
-    for(const u of this.ecs.list){ if(!u.alive||u.kind!=='unit')continue; u.eff=eff;
-      if(u.job==='forager') RTS.gather(u,this.camp,this.foodNodes,dt,()=>{ this.res.food+=3.2*eff; });
-      else if(u.job==='hunter') RTS.gather(u,this.camp,this.matNodes,dt,()=>{ this.totem=Math.min(this.totemNeed,this.totem+1.5*eff); this.res.materials+=1.0*eff; if(!this.fire&&this.totem>=this.totemNeed*0.5){ this.fire=true; toast('FIRE. the tribe learns to cook and forge.',true); Audio.blip(180,0.12); if(Game.fragments.indexOf('tribal')<0){ Game.fragments.push('tribal'); toast('the first fire reveals a Chord Fragment in the embers',true); } Game.log('tribal','fire',{}); } });
-      else if(u.job==='musician'){ const tx=this.camp.x+Math.cos(u.id2)*46,ty=this.camp.y+Math.sin(u.id2)*46; RTS.moveTo(u,tx,ty,u.spd*0.5*dt); u.moving=false; }
-      else { if(!u.pt||Math.hypot(u.pt.x-u.x,u.pt.y-u.y)<16)u.pt=this.guardPts[(this.aiR.next()*this.guardPts.length)|0]; RTS.moveTo(u,u.pt.x,u.pt.y,u.spd*0.6*dt); } }
-    // food upkeep
-    this.res.food-=this.pop()*0.12*dt;
-    if(this.res.food<=0){ this.res.food=0; this.starveT+=dt; if(this.starveT>6){ this.starveT=0; const u=this.ecs.list.find(x=>x.alive&&x.kind==='unit'&&x.job!=='guard'); if(u){ u.alive=false; toast('a tribesman leaves, hungry'); } } } else this.starveT=0;
-    // neighbor goodwill + raids
-    for(const nb of this.neighbors){ if(nb.state!=='wild')continue; nb.disp=clamp(nb.disp+musc*0.5*dt,0,100); this._maybeWin(nb,'music');
-      nb.raidCd-=dt; if(nb.disp<20&&nb.raidCd<=0){ nb.raidCd=this.rng.range(16,28); const dmg=nb.strength-this.jobCount('guard'); if(dmg>0){ this.res.food=Math.max(0,this.res.food-dmg*4); toast('the '+nb.name+' raid you (-'+(dmg*4)+' food)'); } } }
-    this.ecs.cull();
-    if(this.totem>=this.totemNeed&&!this.exiting){ this.exiting=0.001; toast('the totem stands - your people are one',true); }
-  },
-  render(){ const W=this.world.w,H=this.world.h,z=Math.min(VW/W,VH/H)*0.96; this.cam={x:W/2,y:H/2,zoom:z};
-    // ground
-    const bc=BIOME_COL[B.GRASS]; ctx.fillStyle=`rgb(${(bc[0]*0.66)|0},${(bc[1]*0.66)|0},${(bc[2]*0.55)|0})`; ctx.fillRect(0,0,VW,VH);
-    ctx.save(); ctx.translate(VW/2,VH/2); ctx.scale(z,z); ctx.translate(-W/2,-H/2);
-    // resource nodes
-    for(const n of this.foodNodes){ ctx.fillStyle='#2f7a34'; ctx.beginPath(); ctx.arc(n.x,n.y-6,13,0,TAU); ctx.fill(); ctx.fillStyle='#c94f6a'; for(let i=0;i<4;i++){ const a=i/4*TAU; ctx.beginPath(); ctx.arc(n.x+Math.cos(a)*7,n.y-6+Math.sin(a)*7,2.4,0,TAU); ctx.fill(); } }
-    for(const n of this.matNodes){ ctx.fillStyle='#6b6158'; ctx.beginPath(); ctx.moveTo(n.x-12,n.y+6); ctx.lineTo(n.x,n.y-12); ctx.lineTo(n.x+12,n.y+6); ctx.closePath(); ctx.fill(); }
-    // camp ring + fire + totem
-    ctx.strokeStyle='#00000030'; ctx.lineWidth=3; ctx.beginPath(); ctx.arc(this.camp.x,this.camp.y,130,0,TAU); ctx.stroke();
-    if(this.fire){ const fl=6+Math.sin(this.t*12)*3; ctx.fillStyle='#ffb347'; ctx.beginPath(); ctx.ellipse(this.camp.x+70,this.camp.y+40,10,14+fl,0,0,TAU); ctx.fill(); ctx.fillStyle='#ff6a2a'; ctx.beginPath(); ctx.ellipse(this.camp.x+70,this.camp.y+44,6,9+fl*0.6,0,0,TAU); ctx.fill(); }
-    this._drawTotem();
-    // units
-    for(const u of this.ecs.list){ if(!u.alive||u.kind!=='unit')continue; ctx.save(); ctx.translate(u.x,u.y); ctx.scale(0.7,0.7); CGEN.draw(this.genome,this.t+u.id2*3,u.moving,u.ang); ctx.restore();
-      ctx.fillStyle=this.JOBCOL[u.job]; ctx.beginPath(); ctx.arc(u.x,u.y-u.r-4,3,0,TAU); ctx.fill(); }
-    // neighbors
-    this.neighbors.forEach((nb,i)=>{ this._drawNeighbor(nb,i===this.sel); });
-    ctx.restore();
-    this._hud();
-    if(this.mode==='rhythm')Rhythm.render();
-    if(this.exiting){ ctx.fillStyle='rgba(230,240,255,'+clamp(this.exiting/3,0,0.7)+')'; ctx.fillRect(0,0,VW,VH); } },
-  _drawTotem(){ const c=this.camp,p=this.totem/this.totemNeed; ctx.save(); ctx.translate(c.x,c.y);
-    ctx.fillStyle='#4a3a28'; ctx.fillRect(-8,-10,16,20);
-    const segs=4; for(let i=0;i<segs;i++){ const on=p>=(i+1)/segs; ctx.fillStyle=on?['#c94f6a','#7fe0d3','#c9a24b','#9ad0ff'][i]:'#2a2018'; ctx.beginPath(); ctx.arc(0,-14-i*20,12,0,TAU); ctx.fill(); if(on){ ctx.strokeStyle='#fff6'; ctx.stroke(); } }
-    ctx.restore(); },
-  _drawNeighbor(nb,seld){ ctx.save(); ctx.translate(nb.x,nb.y);
-    const col=nb.state==='won'?'#7fe0d3':nb.state==='crushed'?'#5a3a3a':'#8a97ab';
-    ctx.strokeStyle=seld?'#fff':col; ctx.lineWidth=seld?3:2; ctx.beginPath(); ctx.arc(0,0,56,0,TAU); ctx.stroke();
-    for(let k=0;k<3;k++){ ctx.fillStyle='#3a2e22'; ctx.beginPath(); ctx.moveTo(-22+k*22,10); ctx.lineTo(-14+k*22,-14); ctx.lineTo(-6+k*22,10); ctx.closePath(); ctx.fill(); }
-    ctx.save(); ctx.scale(0.8,0.8); CGEN.draw(nb.genome,this.t,false,0); ctx.restore();
-    ctx.fillStyle='#dbe6f3'; ctx.font='700 13px Space Grotesk, sans-serif'; ctx.textAlign='center'; ctx.fillText(nb.name+(nb.state!=='wild'?' ('+nb.state+')':''),0,-64);
-    if(nb.state==='wild'){ ctx.fillStyle='#0e1626'; ctx.fillRect(-30,-58,60,7); ctx.fillStyle='#7fe0d3'; ctx.fillRect(-30,-58,60*nb.disp/100,7); }
-    ctx.restore(); },
-  _hud(){ this._btns=[];
-    // resources
-    ctx.fillStyle='#0b1220cc'; panel(12,12,214,64,10); ctx.fill(); ctx.textAlign='left'; ctx.textBaseline='top';
-    ctx.fillStyle='#8fbf5a'; ctx.font='700 14px Space Grotesk, sans-serif'; ctx.fillText('food '+Math.floor(this.res.food),22,22);
-    ctx.fillStyle='#d98a5a'; ctx.fillText('materials '+Math.floor(this.res.materials),22,42);
-    ctx.fillStyle='#aebbcd'; ctx.font='11px IBM Plex Mono, monospace'; ctx.fillText('pop '+this.pop()+(this.fire?'   fire lit':''),120,26);
-    // totem progress
-    meter(22,60,190,'TOTEM '+Math.floor(this.totem/this.totemNeed*100)+'%',this.totem/this.totemNeed,'#c9a24b');
-    // job panel bottom-left
-    const jx=12,jy=VH-118; ctx.fillStyle='#0b1220cc'; panel(jx,jy,214,104,10); ctx.fill();
-    ctx.fillStyle='#8a97ab'; ctx.font='11px IBM Plex Mono, monospace'; ctx.fillText('assign jobs',jx+10,jy+8);
-    this.JOBS.forEach((j,i)=>{ const y=jy+24+i*20; ctx.fillStyle=this.JOBCOL[j]; ctx.beginPath(); ctx.arc(jx+16,y+6,4,0,TAU); ctx.fill();
-      ctx.fillStyle='#dbe6f3'; ctx.font='12px IBM Plex Mono, monospace'; ctx.fillText(j,jx+28,y); ctx.fillText(''+this.jobCount(j),jx+150,y);
-      this._mkBtn(jx+168,y-3,18,16,'-',()=>this._setJob(j,-1)); this._mkBtn(jx+190,y-3,18,16,'+',()=>this._setJob(j,1)); });
-    // neighbor action panel
-    if(this.sel>=0){ const nb=this.neighbors[this.sel],px=VW-232,py=VH-118; ctx.fillStyle='#0b1220cc'; panel(px,py,220,104,10); ctx.fill();
-      ctx.textAlign='left'; ctx.fillStyle='#e8eef6'; ctx.font='700 14px Space Grotesk, sans-serif'; ctx.fillText('the '+nb.name,px+12,py+10);
-      ctx.fillStyle='#8a97ab'; ctx.font='11px IBM Plex Mono, monospace'; ctx.fillText(nb.state==='wild'?('goodwill '+Math.floor(nb.disp)+'   strength '+nb.strength):nb.state,px+12,py+30);
-      if(nb.state==='wild'){ this._mkBtn(px+12,py+50,64,40,'sing',()=>this._perform(),'#9ad0ff'); this._mkBtn(px+80,py+50,64,40,'trade',()=>this._trade(),'#8fbf5a'); this._mkBtn(px+148,py+50,60,40,'raid',()=>this._raid(),'#d98a5a'); } }
-    // hint
-    ctx.textAlign='left'; ctx.fillStyle='#59657a'; ctx.font='11px IBM Plex Mono, monospace'; ctx.fillText('click a neighbor tribe to select   -   sing wins them, raid crushes them   -   fill the totem to advance',12,VH-16);
-    ctx.fillStyle='#c9a24b'; ctx.font='700 12px Space Grotesk, sans-serif'; ctx.textAlign='right'; ctx.fillText('won '+this.won+'   crushed '+this.crushed+'   trades '+this.trades,VW-16,16); },
-  _mkBtn(x,y,w,h,label,fn,col){ ctx.fillStyle=col?col:'#1a2740'; panel(x,y,w,h,5); ctx.fill(); ctx.fillStyle=col?'#04120f':'#cfd9e8'; ctx.font='700 13px Space Grotesk, sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(label,x+w/2,y+h/2); ctx.textBaseline='top'; ctx.textAlign='left'; this._btns.push({x,y,w,h,fn}); }
-};
-
-// ============================================================================
-// SCREEN: City stage  [doc section 15] - RTS kernel part B
-//   districts (housing/workshop/temple/walls), 3 hinterland nodes, coin economy,
-//   2 rival cities, a vehicle designer; fill culture -> declare capital
-//   exit -> Trait Card IV (Builder/Fortifier/Merchant)
-// ============================================================================
-const City={ saveAs:'world', name:'City', ecs:null, rng:null, aiR:null, t:0, mode:'manage',
-  world:{w:1700,h:1050}, center:null, genome:null, res:null, nodes:null, plots:null, cam:null,
-  culture:0, cultureNeed:26, rivals:null, sel:-1, buildSel:-1, vehicle:null, _btns:null, exiting:0, starveT:0,
-  districts:null, raidsRepelled:0, trades:0, subjugations:0, coinEarned:0,
-  ROLES:['farm','quarry','market'], ROLECOL:{farm:'#8fbf5a',quarry:'#d98a5a',market:'#c9a24b'},
-  BUILDS:[{k:'housing',m:8,c:0,col:'#7fbfe0'},{k:'workshop',m:12,c:4,col:'#d98a5a'},{k:'temple',m:16,c:8,col:'#9ad0ff'},{k:'walls',m:10,c:0,col:'#c9a24b'}],
-  VCHASSIS:['cart','chariot','wagon'], VWHEELS:[2,4,6], VPAYLOAD:['goods','ram','ballista'],
-  load(){
-    this.rng=Game.rng.fork('city'); this.aiR=Game.rng.fork('city.ai');
-    this.t=0; this.mode='manage'; this.res={food:44,materials:46,coin:26}; this.culture=0; this.sel=-1; this.buildSel=-1; this.exiting=0; this.starveT=0;
-    this.districts={housing:0,workshop:0,temple:0,walls:0}; this.raidsRepelled=0; this.trades=0; this.subjugations=0; this.coinEarned=0; this.vehicle={chassis:0,wheels:1,payload:0,sel:0};
-    this.genome=(Game.traits[1]&&Game.traits[1].genome)||CGEN.starter(Game.traits,this.rng);
-    this.ecs=makeWorldECS(); const W=this.world.w,H=this.world.h; this.center={x:W/2,y:H/2};
-    this.nodes=[{x:this.center.x-330,y:this.center.y-170,kind:'farm'},{x:this.center.x+340,y:this.center.y-140,kind:'quarry'},{x:this.center.x+30,y:this.center.y+300,kind:'market'}];
-    this.plots=[]; for(let i=0;i<12;i++){ const a=i/12*TAU; this.plots.push({x:this.center.x+Math.cos(a)*160,y:this.center.y+Math.sin(a)*128,district:null}); }
-    for(const r of ['farm','farm','farm','quarry','quarry','market','market','market'])this._spawn(r);
-    const spots=[{x:W*0.14,y:H*0.2},{x:W*0.86,y:H*0.82}];
-    this.rivals=spots.map(s=>({x:s.x,y:s.y,name:CGEN.name(this.rng),relation:this.rng.int(32,54),strength:this.rng.int(3,6),raidCd:this.rng.range(16,28),genome:CGEN.genome(this.rng),state:'rival'}));
-    this.cam={x:W/2,y:H/2,zoom:Math.min(VW/W,VH/H)*0.96};
-    Audio.motif(); toast('a city rises. build districts, fill culture to declare a capital.');
-  },
-  _spawn(role){ return this.ecs.spawn({x:this.center.x+this.rng.range(-40,40),y:this.center.y+this.rng.range(-40,40),vx:0,vy:0,r:this.genome.size*8,kind:'cit',role,state:'toWork',timer:0,ang:0,moving:false,spd:66,eff:1,site:null,id2:this.rng.range(0,TAU)}); },
-  roleCount(r){ let c=0; for(const u of this.ecs.list)if(u.alive&&u.kind==='cit'&&u.role===r)c++; return c; },
-  pop(){ let c=0; for(const u of this.ecs.list)if(u.alive&&u.kind==='cit')c++; return c; },
-  nodeOf(role){ return this.nodes.find(n=>(role==='farm'&&n.kind==='farm')||(role==='quarry'&&n.kind==='quarry')||(role==='market'&&n.kind==='market')); },
-  _setRole(r,delta){ if(delta>0){ let from=null,mx=0; for(const o of this.ROLES){ if(o===r)continue; const c=this.roleCount(o); if(c>mx){mx=c;from=o;} } if(!from)return; const u=this.ecs.list.find(x=>x.alive&&x.kind==='cit'&&x.role===from); if(u){u.role=r;u.state='toWork';u.site=null;} }
-    else { const u=this.ecs.list.find(x=>x.alive&&x.kind==='cit'&&x.role===r); if(!u)return; let to=null,mn=1e9; for(const o of this.ROLES){ if(o===r)continue; const c=this.roleCount(o); if(c<mn){mn=c;to=o;} } u.role=to; u.state='toWork'; u.site=null; } },
-  vehStat(){ const cap=(this.vehicle.wheels+1)+this.vehicle.chassis, atk=this.VPAYLOAD[this.vehicle.payload]==='goods'?0:(this.VPAYLOAD[this.vehicle.payload]==='ram'?3:5); return {cap,atk,goods:this.VPAYLOAD[this.vehicle.payload]==='goods'}; },
-  _build(pi){ if(this.buildSel<0){ toast('pick a district from the build menu first'); return; } const p=this.plots[pi]; if(p.district){ toast('that plot is taken'); return; } const b=this.BUILDS[this.buildSel];
-    if(this.res.materials<b.m||this.res.coin<b.c){ toast('need '+b.m+' materials'+(b.c?' + '+b.c+' coin':'')+' for '+b.k); return; }
-    this.res.materials-=b.m; this.res.coin-=b.c; p.district=b.k; this.districts[b.k]++; if(b.k==='housing')this._spawn(this.ROLES[this.rng.int(0,3)]); Audio.blip(320,0.06); toast('built a '+b.k); Game.log('city','build',{d:b.k});
-    if(b.k==='temple'&&this.districts.temple===1&&Game.fragments.indexOf('city')<0){ Game.fragments.push('city'); toast('your first temple enshrines a Chord Fragment',true); } },
-  _trade(){ if(this.sel<0)return; const rv=this.rivals[this.sel]; if(rv.state!=='rival')return; const v=this.vehStat(); const gain=9+(v.goods?v.cap*2:0); this.res.coin+=gain; this.coinEarned+=gain; rv.relation=clamp(rv.relation+15,0,100); this.trades++; toast('caravan to '+rv.name+' returns (+'+gain+' coin)'); Game.log('city','trade',{rv:rv.name}); },
-  _attack(){ if(this.sel<0)return; const rv=this.rivals[this.sel]; if(rv.state!=='rival')return; if(this.res.materials<6){ toast('need 6 materials to raise a war party'); return; } this.res.materials-=6; const v=this.vehStat(); const force=3+v.atk+this.rng.int(0,3);
-    if(force>=rv.strength+1){ rv.state='subjugated'; this.subjugations++; this.res.coin+=14; this.coinEarned+=14; this.res.materials+=10; toast('you subjugate '+rv.name,true); Game.log('city','subjugate',{rv:rv.name}); } else { rv.relation=clamp(rv.relation-20,0,100); toast('the assault on '+rv.name+' is repelled'); } },
-  onkey(k){ if(this.mode==='vehicle'){ if(k==='v'||k==='escape')this.mode='manage'; else if(k==='arrowup'||k==='w')this.vehicle.sel=(this.vehicle.sel+2)%3; else if(k==='arrowdown'||k==='s')this.vehicle.sel=(this.vehicle.sel+1)%3; else if(k==='arrowleft'||k==='a')this._vcyc(-1); else if(k==='arrowright'||k==='d')this._vcyc(1); return; }
-    if(this.exiting)return; if(k==='t')this._trade(); else if(k==='r')this._attack(); else if(k==='v')this.mode='vehicle'; else if(k>='1'&&k<='4')this.buildSel=+k-1; },
-  _vcyc(d){ const s=this.vehicle.sel; if(s===0)this.vehicle.chassis=(this.vehicle.chassis+d+3)%3; else if(s===1)this.vehicle.wheels=(this.vehicle.wheels+d+3)%3; else this.vehicle.payload=(this.vehicle.payload+d+3)%3; },
-  onpointer(){ if(this.exiting)return; if(this._btns)for(const b of this._btns){ if(Input.mx>=b.x&&Input.mx<=b.x+b.w&&Input.my>=b.y&&Input.my<=b.y+b.h){ b.fn(); return; } } if(this.mode==='vehicle')return;
-    const z=this.cam.zoom,wx=this.cam.x+(Input.mx-VW/2)/z,wy=this.cam.y+(Input.my-VH/2)/z;
-    for(let i=0;i<this.plots.length;i++){ if(Math.hypot(this.plots[i].x-wx,this.plots[i].y-wy)<34){ this._build(i); return; } }
-    let s=-1; this.rivals.forEach((rv,i)=>{ if(Math.hypot(rv.x-wx,rv.y-wy)<70)s=i; }); this.sel=s; },
-  _finishExit(){ const b=this.districts.housing+this.districts.workshop+this.districts.temple, f=this.districts.walls*2+this.raidsRepelled+this.subjugations*2, m=this.trades*2+Math.floor(this.coinEarned/40);
-    let card='Builder'; if(f>b&&f>=m)card='Fortifier'; else if(m>b&&m>f)card='Merchant';
-    Game.traits[3]={stage:'city',card,districts:b,walls:this.districts.walls,coin:Math.floor(this.coinEarned)}; Game.log('city','trait',{card}); Game.persist(); toast('Trait Card IV locked: '+card,true); setScreen(Stages.CIV); },
-  update(dt){ this.t+=dt; if(this.mode==='vehicle')return;
-    if(this.exiting){ this.exiting+=dt; if(this.exiting>2.6)this._finishExit(); return; }
-    for(const u of this.ecs.list){ if(!u.alive||u.kind!=='cit')continue; u.eff=1; const node=this.nodeOf(u.role)||this.center;
-      RTS.gather(u,this.center,[node],dt,()=>{ if(u.role==='farm')this.res.food+=3.0; else if(u.role==='quarry')this.res.materials+=2.2; else { this.res.coin+=1.4; this.coinEarned+=1.4; } }); }
-    // districts: workshops convert materials->coin, temples make culture
-    if(this.districts.workshop>0&&this.res.materials>0){ const conv=Math.min(this.res.materials,this.districts.workshop*0.5*dt); this.res.materials-=conv; this.res.coin+=conv*1.6; this.coinEarned+=conv*1.6; }
-    this.culture+=this.districts.temple*1.1*dt;
-    this.res.food-=this.pop()*0.1*dt;
-    if(this.res.food<=0){ this.res.food=0; this.starveT+=dt; if(this.starveT>7){ this.starveT=0; const u=this.ecs.list.find(x=>x.alive&&x.kind==='cit'); if(u){ u.alive=false; toast('a citizen departs, unfed'); } } } else this.starveT=0;
-    for(const rv of this.rivals){ if(rv.state!=='rival')continue; rv.relation=clamp(rv.relation-0.4*dt,0,100); rv.raidCd-=dt;
-      if(rv.relation<28&&rv.raidCd<=0){ rv.raidCd=this.rng.range(18,30); const dmg=rv.strength-this.districts.walls; if(dmg>0){ this.res.coin=Math.max(0,this.res.coin-dmg*3); this.res.materials=Math.max(0,this.res.materials-dmg*2); toast(rv.name+' raids your trade (-'+(dmg*3)+' coin)'); } else { this.raidsRepelled++; toast('your walls repel '+rv.name); } } }
-    this.ecs.cull();
-    if(this.culture>=this.cultureNeed&&!this.exiting){ this.exiting=0.001; toast('your city declares itself a capital',true); }
-  },
-  render(){ const W=this.world.w,H=this.world.h,z=Math.min(VW/W,VH/H)*0.96; this.cam={x:W/2,y:H/2,zoom:z};
-    const bc=BIOME_COL[B.GRASS]; ctx.fillStyle=`rgb(${(bc[0]*0.5)|0},${(bc[1]*0.52)|0},${(bc[2]*0.48)|0})`; ctx.fillRect(0,0,VW,VH);
-    ctx.save(); ctx.translate(VW/2,VH/2); ctx.scale(z,z); ctx.translate(-W/2,-H/2);
-    // roads to nodes
-    ctx.strokeStyle='#00000022'; ctx.lineWidth=10; for(const n of this.nodes){ ctx.beginPath(); ctx.moveTo(this.center.x,this.center.y); ctx.lineTo(n.x,n.y); ctx.stroke(); }
-    for(const n of this.nodes)this._drawNode(n);
-    // town hall
-    ctx.fillStyle='#6b5a44'; ctx.fillRect(this.center.x-26,this.center.y-20,52,40); ctx.fillStyle='#8a7458'; ctx.beginPath(); ctx.moveTo(this.center.x-30,this.center.y-20); ctx.lineTo(this.center.x,this.center.y-42); ctx.lineTo(this.center.x+30,this.center.y-20); ctx.closePath(); ctx.fill();
-    for(let i=0;i<this.plots.length;i++)this._drawPlot(this.plots[i],this.buildSel>=0);
-    for(const u of this.ecs.list){ if(!u.alive||u.kind!=='cit')continue; ctx.save(); ctx.translate(u.x,u.y); ctx.scale(0.6,0.6); CGEN.draw(this.genome,this.t+u.id2*3,u.moving,u.ang); ctx.restore(); ctx.fillStyle=this.ROLECOL[u.role]; ctx.beginPath(); ctx.arc(u.x,u.y-u.r-4,2.6,0,TAU); ctx.fill(); }
-    this.rivals.forEach((rv,i)=>this._drawRival(rv,i===this.sel));
-    ctx.restore();
-    this._hud();
-    if(this.mode==='vehicle')this._vehRender();
-    if(this.exiting){ ctx.fillStyle='rgba(230,240,255,'+clamp(this.exiting/3,0,0.7)+')'; ctx.fillRect(0,0,VW,VH); } },
-  _drawNode(n){ ctx.save(); ctx.translate(n.x,n.y); if(n.kind==='farm'){ ctx.fillStyle='#5a7a30'; for(let i=-1;i<=1;i++)ctx.fillRect(i*16-6,-14,12,28); }
-    else if(n.kind==='quarry'){ ctx.fillStyle='#6b6158'; for(let i=0;i<4;i++){ const a=i/4*TAU; ctx.beginPath(); ctx.arc(Math.cos(a)*10,Math.sin(a)*8,7,0,TAU); ctx.fill(); } }
-    else { ctx.fillStyle='#b58a3a'; ctx.beginPath(); ctx.moveTo(-16,10); ctx.lineTo(0,-14); ctx.lineTo(16,10); ctx.closePath(); ctx.fill(); ctx.fillStyle='#e0c060'; ctx.beginPath(); ctx.arc(0,2,5,0,TAU); ctx.fill(); } ctx.restore(); },
-  _drawPlot(p,hint){ ctx.save(); ctx.translate(p.x,p.y);
-    if(!p.district){ ctx.strokeStyle=hint?'#7fe0d3':'#ffffff33'; ctx.lineWidth=2; ctx.setLineDash([5,5]); ctx.beginPath(); ctx.arc(0,0,24,0,TAU); ctx.stroke(); ctx.setLineDash([]); }
-    else { const b=this.BUILDS.find(x=>x.k===p.district); ctx.fillStyle=b.col;
-      if(p.district==='housing'){ ctx.fillRect(-14,-6,28,20); ctx.beginPath(); ctx.moveTo(-16,-6); ctx.lineTo(0,-20); ctx.lineTo(16,-6); ctx.closePath(); ctx.fill(); }
-      else if(p.district==='workshop'){ ctx.fillRect(-16,-14,32,28); ctx.fillStyle='#00000044'; ctx.beginPath(); ctx.arc(0,0,7,0,TAU); ctx.fill(); }
-      else if(p.district==='temple'){ ctx.fillRect(-18,10,36,5); for(let i=-1;i<=1;i++)ctx.fillRect(i*12-2,-14,5,24); ctx.beginPath(); ctx.moveTo(-20,-14); ctx.lineTo(0,-24); ctx.lineTo(20,-14); ctx.closePath(); ctx.fill(); }
-      else { ctx.fillStyle=b.col; ctx.fillRect(-18,-8,36,18); ctx.fillStyle='#00000033'; for(let i=-2;i<=2;i++)ctx.fillRect(i*7-2,-14,5,7); } }
-    ctx.restore(); },
-  _drawRival(rv,seld){ ctx.save(); ctx.translate(rv.x,rv.y); const col=rv.state==='subjugated'?'#5a4a4a':'#8a97ab';
-    ctx.strokeStyle=seld?'#fff':col; ctx.lineWidth=seld?3:2; ctx.beginPath(); ctx.arc(0,0,58,0,TAU); ctx.stroke();
-    ctx.fillStyle=rv.state==='subjugated'?'#4a4038':'#6b5a44'; for(let i=-1;i<=1;i++){ ctx.fillRect(i*22-9,-6,18,20); ctx.beginPath(); ctx.moveTo(i*22-11,-6); ctx.lineTo(i*22,-18); ctx.lineTo(i*22+9,-6); ctx.closePath(); ctx.fill(); }
-    ctx.fillStyle='#dbe6f3'; ctx.font='700 13px Space Grotesk, sans-serif'; ctx.textAlign='center'; ctx.fillText(rv.name+(rv.state==='subjugated'?' (vassal)':''),0,-66);
-    if(rv.state==='rival'){ ctx.fillStyle='#0e1626'; ctx.fillRect(-30,-60,60,7); ctx.fillStyle='#7fe0d3'; ctx.fillRect(-30,-60,60*rv.relation/100,7); } ctx.restore(); },
-  _hud(){ this._btns=[]; ctx.textAlign='left'; ctx.textBaseline='top';
-    ctx.fillStyle='#0b1220cc'; panel(12,12,236,66,10); ctx.fill();
-    ctx.fillStyle='#8fbf5a'; ctx.font='700 13px Space Grotesk, sans-serif'; ctx.fillText('food '+Math.floor(this.res.food),22,20);
-    ctx.fillStyle='#d98a5a'; ctx.fillText('mat '+Math.floor(this.res.materials),110,20);
-    ctx.fillStyle='#e0c060'; ctx.fillText('coin '+Math.floor(this.res.coin),180,20);
-    ctx.fillStyle='#aebbcd'; ctx.font='11px IBM Plex Mono, monospace'; ctx.fillText('pop '+this.pop(),22,40);
-    meter(22,54,214,'CULTURE -> CAPITAL '+Math.floor(this.culture/this.cultureNeed*100)+'%',this.culture/this.cultureNeed,'#9ad0ff');
-    // build menu bottom-center
-    const bw=118,bx=VW/2-(this.BUILDS.length*bw)/2,by=VH-58;
-    this.BUILDS.forEach((b,i)=>{ const x=bx+i*bw,on=i===this.buildSel; ctx.fillStyle=on?b.col:'#0c1526'; panel(x,by,bw-8,44,7); ctx.fill(); if(on){ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.stroke();}
-      ctx.fillStyle=on?'#04120f':'#dbe6f3'; ctx.font='700 13px Space Grotesk, sans-serif'; ctx.textAlign='center'; ctx.fillText(b.k,x+(bw-8)/2,by+8);
-      ctx.font='10px IBM Plex Mono, monospace'; ctx.fillStyle=on?'#04120f':'#8a97ab'; ctx.fillText(b.m+'m'+(b.c?' '+b.c+'c':'')+'  x'+this.districts[b.k],x+(bw-8)/2,by+26);
-      this._btns.push({x,y:by,w:bw-8,h:44,fn:()=>{ this.buildSel=this.buildSel===i?-1:i; }}); });
-    ctx.textAlign='left';
-    // roles bottom-left
-    const jx=12,jy=VH-134; ctx.fillStyle='#0b1220cc'; panel(jx,jy,200,82,10); ctx.fill(); ctx.fillStyle='#8a97ab'; ctx.font='11px IBM Plex Mono, monospace'; ctx.fillText('citizens',jx+10,jy+7);
-    this.ROLES.forEach((r,i)=>{ const y=jy+22+i*18; ctx.fillStyle=this.ROLECOL[r]; ctx.beginPath(); ctx.arc(jx+15,y+5,4,0,TAU); ctx.fill(); ctx.fillStyle='#dbe6f3'; ctx.font='12px IBM Plex Mono, monospace'; ctx.fillText(r,jx+26,y); ctx.fillText(''+this.roleCount(r),jx+140,y);
-      this._mkBtn(jx+156,y-2,16,15,'-',()=>this._setRole(r,-1)); this._mkBtn(jx+176,y-2,16,15,'+',()=>this._setRole(r,1)); });
-    // rival panel
-    if(this.sel>=0){ const rv=this.rivals[this.sel],px=VW-232,py=VH-150; ctx.fillStyle='#0b1220cc'; panel(px,py,220,86,10); ctx.fill();
-      ctx.fillStyle='#e8eef6'; ctx.font='700 14px Space Grotesk, sans-serif'; ctx.fillText(rv.name,px+12,py+8);
-      ctx.fillStyle='#8a97ab'; ctx.font='11px IBM Plex Mono, monospace'; ctx.fillText(rv.state==='rival'?('relation '+Math.floor(rv.relation)+'  strength '+rv.strength):'vassal',px+12,py+28);
-      if(rv.state==='rival'){ this._mkBtn(px+12,py+46,64,30,'trade',()=>this._trade(),'#8fbf5a'); this._mkBtn(px+80,py+46,64,30,'attack',()=>this._attack(),'#d98a5a'); this._mkBtn(px+148,py+46,60,30,'design',()=>this.mode='vehicle','#9ad0ff'); } }
-    else { this._mkBtn(VW-150,VH-150,138,30,'design vehicle',()=>this.mode='vehicle','#9ad0ff'); }
-    ctx.textAlign='left'; ctx.fillStyle='#59657a'; ctx.font='11px IBM Plex Mono, monospace'; ctx.fillText('pick a district then click an empty plot   -   click a rival to trade or attack   -   temples fill the culture bar',12,VH-16);
-    ctx.fillStyle='#c9a24b'; ctx.font='700 12px Space Grotesk, sans-serif'; ctx.textAlign='right'; ctx.fillText('districts '+(this.districts.housing+this.districts.workshop+this.districts.temple)+'   walls '+this.districts.walls+'   coin '+Math.floor(this.coinEarned),VW-16,16); ctx.textAlign='left'; },
-  _mkBtn(x,y,w,h,label,fn,col){ ctx.fillStyle=col?col:'#1a2740'; panel(x,y,w,h,5); ctx.fill(); ctx.fillStyle=col?'#04120f':'#cfd9e8'; ctx.font='700 12px Space Grotesk, sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(label,x+w/2,y+h/2); ctx.textBaseline='top'; ctx.textAlign='left'; this._btns.push({x,y,w,h,fn}); },
-  _vehRender(){ ctx.fillStyle='rgba(4,8,14,0.9)'; ctx.fillRect(0,0,VW,VH); ctx.textAlign='center'; ctx.fillStyle='#e8eef6'; ctx.font='700 22px Space Grotesk, sans-serif'; ctx.fillText('VEHICLE WORKS - design a cart',VW/2,60);
-    // preview
-    const v=this.vehicle,cx=VW*0.32,cy=VH*0.5; ctx.save(); ctx.translate(cx,cy); ctx.strokeStyle='#c9a24b'; ctx.lineWidth=4; ctx.strokeRect(-60,-24,120,36);
-    const nw=this.VWHEELS[v.wheels]; for(let i=0;i<nw;i++){ ctx.fillStyle='#5a4a38'; ctx.beginPath(); ctx.arc(-50+i*(100/(nw-1)),18,12,0,TAU); ctx.fill(); ctx.fillStyle='#2a2018'; ctx.beginPath(); ctx.arc(-50+i*(100/(nw-1)),18,5,0,TAU); ctx.fill(); }
-    const pl=this.VPAYLOAD[v.payload]; ctx.fillStyle=pl==='goods'?'#8fbf5a':pl==='ram'?'#8a7458':'#9ad0ff'; if(pl==='goods')ctx.fillRect(-40,-40,80,20); else if(pl==='ram'){ ctx.fillRect(-8,-40,16,20); ctx.fillRect(-40,-30,80,8);} else { ctx.beginPath(); ctx.moveTo(-30,-24); ctx.lineTo(0,-48); ctx.lineTo(30,-24); ctx.closePath(); ctx.fill(); } ctx.restore();
-    const rows=[['chassis',this.VCHASSIS[v.chassis]],['wheels',''+this.VWHEELS[v.wheels]],['payload',this.VPAYLOAD[v.payload]]]; const rx=VW*0.55,ry=140,rh=56; this._btns=[];
-    rows.forEach((row,i)=>{ const y=ry+i*rh,on=i===v.sel; ctx.fillStyle=on?'#12203a':'#0c1526'; panel(rx,y,320,rh-8,8); ctx.fill(); if(on){ctx.strokeStyle='#7fe0d3';ctx.stroke();}
-      ctx.textAlign='left'; ctx.fillStyle='#8a97ab'; ctx.font='11px IBM Plex Mono, monospace'; ctx.fillText(row[0],rx+14,y+9); ctx.fillStyle='#e8eef6'; ctx.font='700 15px Space Grotesk, sans-serif'; ctx.fillText(row[1],rx+14,y+26);
-      ['<','>'].forEach((sym,k)=>{ const ax=rx+320-58+k*34,ay=y+(rh-8)/2; ctx.fillStyle='#1a2740'; ctx.beginPath(); ctx.arc(ax,ay,14,0,TAU); ctx.fill(); ctx.fillStyle='#cfd9e8'; ctx.textAlign='center'; ctx.font='700 16px Space Grotesk, sans-serif'; ctx.fillText(sym,ax,ay); this._btns.push({x:ax-14,y:ay-14,w:28,h:28,fn:()=>{ v.sel=i; this._vcyc(k?1:-1); }}); }); });
-    const s=this.vehStat(); ctx.textAlign='left'; ctx.fillStyle='#8fe6d9'; ctx.font='12px IBM Plex Mono, monospace'; ctx.fillText('capacity '+s.cap+'   attack '+s.atk+'   '+(s.goods?'trade caravan':'war engine'),rx,ry+3*rh+10);
-    ctx.textAlign='center'; ctx.fillStyle='#c9a24b'; ctx.font='12px IBM Plex Mono, monospace'; ctx.fillText('goods payload boosts trade, ram/ballista boost raids  -  [V] or [Esc] to leave',VW/2,VH-30); ctx.textAlign='left'; },
-};
-
-// ============================================================================
-// P5: Civilization  [doc section 16] - the whole planet as a province board
-//   provinces segmented from real geography; 6-10 AI nations from the trait
-//   matrix; economy (gold/research/Lume) + 9-node tech + stack combat +
-//   diplomacy + planet-driven events; unify 60% -> Trait Card V
-// ============================================================================
-const CIV_TECH=[
-  {row:0,name:'Bronze Arms',cost:16},{row:0,name:'Iron Ranks',cost:40},{row:0,name:'Siegecraft',cost:74},
-  {row:1,name:'Sacred Rites',cost:16},{row:1,name:'Academies',cost:40},{row:1,name:'Broadcast',cost:74},
-  {row:2,name:'Roadworks',cost:16},{row:2,name:'Markets',cost:40},{row:2,name:'Guilds',cost:74} ];
-const CIV_ROWCOL=['#ff9a7f','#9ad0ff','#c9a24b'], CIV_ROWNAME=['military','culture','economy'];
-function hexRgb(h){ return [parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)]; }
-const Civ={ saveAs:'world', name:'Civilization', rng:null, t:0, mode:'map', turn:1,
-  W:0,H:0, prov:null, provs:null, nations:null, player:null, sel:-1, selNation:-1, board:null, boardDirty:true, view:null, exiting:0, endInfo:'', _btns:null,
-  load(){ this.rng=Game.rng.fork('civ'); this.t=0; this.turn=1; this.mode='map'; this.sel=-1; this.selNation=-1; this.exiting=0; this.boardDirty=true;
-    this._segment(); this._makeNations(); this.view={z:1,bx:0,by:0,bw:0,bh:0}; Audio.motif(); toast('the age of nations - unify the world by sword, song, or coin.'); },
-  _segment(){ const P=Planet,W=P.W,H=P.H,N=W*H,rng=this.rng; this.W=W; this.H=H;
-    const land=[]; for(let k=0;k<N;k++)if(!P.ocean[k])land.push(k);
-    const NP=clamp(Math.round(land.length/1900),16,26), seeds=[]; for(let i=0;i<NP;i++)seeds.push(land[rng.int(0,land.length)]);
-    const prov=this.prov=new Int16Array(N).fill(-1);
-    for(const k of land){ const j=(k/W)|0,i=k%W; let best=0,bd=1e18; for(let s=0;s<NP;s++){ const sk=seeds[s],sj=(sk/W)|0,si=sk%W; let di=Math.abs(i-si); di=Math.min(di,W-di); const dj=j-sj,d=di*di+dj*dj; if(d<bd){bd=d;best=s;} } prov[k]=best; }
-    const provs=this.provs=[]; for(let s=0;s<NP;s++)provs.push({id:s,cells:[],si:0,sj:0,bc:{},owner:-1,capital:false,lume:false,volcano:false,army:0,dev:1,drought:0,gainedBy:null,neighbors:new Set()});
-    for(const k of land){ const p=provs[prov[k]]; p.cells.push(k); p.si+=k%W; p.sj+=(k/W)|0; const b=P.biome[k]; p.bc[b]=(p.bc[b]||0)+1; if(P.boundary[k]>0.32)p.volcano=true; if(P.boundary[k]<-0.18||P.boundary[k]>0.5)p.lume=true; }
-    for(const p of provs){ const n=p.cells.length||1; p.si/=n; p.sj/=n; p.size=n; let mb=B.GRASS,mc=-1; for(const b in p.bc)if(p.bc[b]>mc){mc=p.bc[b];mb=+b;} p.biome=mb; p.terrainDef=(mb===B.MOUNTAIN||mb===B.SNOW)?1.6:(mb===B.TFOREST||mb===B.TAIGA||mb===B.RAIN)?1.3:1.0; }
-    for(let j=0;j<H;j++)for(let i=0;i<W;i++){ const k=j*W+i,pk=prov[k]; if(pk<0)continue; const rk=j*W+((i+1)%W),dk=(j+1)*W+i;
-      if(prov[rk]>=0&&prov[rk]!==pk){ provs[pk].neighbors.add(prov[rk]); provs[prov[rk]].neighbors.add(pk); }
-      if(j+1<H&&prov[dk]>=0&&prov[dk]!==pk){ provs[pk].neighbors.add(prov[dk]); provs[prov[dk]].neighbors.add(pk); } }
-    for(const p of provs)p.army=rng.int(1,3); },
-  yield(p){ const b=p.biome, g=(b===B.GRASS||b===B.SAVANNA||b===B.SHRUB||b===B.BEACH)?3:(b===B.TFOREST||b===B.RAIN)?2:(b===B.DESERT||b===B.TUNDRA||b===B.ICE)?1:2, c=(b===B.TFOREST||b===B.RAIN||b===B.TAIGA)?2:1;
-    return {g:(g+p.dev-1)*(p.drought>0?0.4:1),c}; },
-  _playerPers(){ let mil=1,cul=1,eco=1; const map={Carnivore:'mil',Predator:'mil',Raider:'mil',Fortifier:'mil',Herbivore:'cul',Social:'cul',Harmonist:'cul',Cultural:'cul',Omnivore:'eco',Adaptive:'eco',Trader:'eco',Builder:'eco',Merchant:'eco'};
-    for(const t of (Game.traits||[])){ const k=t&&map[t.card]; if(k==='mil')mil++;else if(k==='cul')cul++;else if(k==='eco')eco++; } const s=mil+cul+eco; return {mil:mil/s,cul:cul/s,eco:eco/s}; },
-  _randPers(){ let m=this.rng.range(0.2,1),c=this.rng.range(0.2,1),e=this.rng.range(0.2,1),s=m+c+e; return {mil:m/s,cul:c/s,eco:e/s}; },
-  _makeNations(){ const rng=this.rng,NP=this.provs.length,NN=clamp(Math.round(NP/8),6,10),used=new Set();
-    const pickCap=()=>{ for(let i=0;i<300;i++){ const p=this.provs[rng.int(0,NP)]; if(!used.has(p.id)&&p.size>5){ used.add(p.id); return p; } } for(const p of this.provs)if(!used.has(p.id)){used.add(p.id);return p;} return this.provs[0]; };
-    this.nations=[]; for(let n=0;n<NN;n++){ const cap=pickCap(),col=CGEN.PAL[rng.int(0,CGEN.PAL.length)][0];
-      const nat={id:n,name:CGEN.name(rng),color:col,rgb:hexRgb(col),pers:n===0?this._playerPers():this._randPers(),gold:14,research:0,lume:0,tech:new Set(),milT:0,culT:0,ecoT:0,atWar:new Set(),att:{},capital:cap.id,alive:true,battlesWon:0,converts:0,goldEarned:0,isPlayer:n===0};
-      cap.owner=n; cap.capital=true; cap.army=n===0?12:8; cap.dev=3; this.nations.push(nat); }
-    for(const nat of this.nations){ let c=0,need=nat.id===0?3:2; for(const nb of this.provs[nat.capital].neighbors){ if(c>=need)break; const p=this.provs[nb]; if(p.owner<0){ p.owner=nat.id; p.army=4; c++; } } }
-    for(const a of this.nations)for(const b of this.nations)if(a!==b)a.att[b.id]=clamp(24+Math.round(-70*Math.abs(a.pers.mil-b.pers.mil)+30),-100,100);
-    this.player=this.nations[0]; },
-  count(id){ let c=0; for(const p of this.provs)if(p.owner===id)c++; return c; },
-  _income(nat){ let g=0,c=0,lu=0; for(const p of this.provs){ if(p.owner!==nat.id)continue; const y=this.yield(p); g+=y.g; c+=y.c; if(p.lume)lu++; }
-    g=Math.round(g*(1+nat.ecoT*0.15)); c=Math.round(c*(1+nat.culT*0.2)); nat.gold+=g; nat.goldEarned+=g; nat.research+=c; nat.lume+=lu; nat._g=g; nat._c=c; },
-  _canTech(idx){ const t=CIV_TECH[idx]; return !this.player.tech.has(idx) && (idx%3===0||this.player.tech.has(idx-1)) && this.player.research>=t.cost; },
-  _research(idx){ if(!this._canTech(idx))return; const t=CIV_TECH[idx]; this.player.research-=t.cost; this.player.tech.add(idx); if(t.row===0)this.player.milT++;else if(t.row===1)this.player.culT++;else this.player.ecoT++; Audio.blip(500,0.06); toast('researched '+t.name,true); },
-  _recruit(){ const p=this.provs[this.sel]; if(!p||p.owner!==0){ toast('select one of your provinces'); return; } if(this.player.gold<5){ toast('need 5 gold'); return; } this.player.gold-=5; p.army+=3+this.player.milT; Audio.blip(200,0.05); },
-  _develop(){ const p=this.provs[this.sel]; if(!p||p.owner!==0)return; if(this.player.gold<10){ toast('need 10 gold'); return; } this.player.gold-=10; p.dev++; toast('province developed'); },
-  _act(target){ const s=this.provs[this.sel],t=this.provs[target]; if(!s||s.owner!==0||!s.neighbors.has(target))return; if(s.army<=1){ toast('no army to move'); return; }
-    const move=s.army-1;
-    if(t.owner===0){ t.army+=move; s.army=1; return; }
-    if(t.owner>0&&!this.player.atWar.has(t.owner))this._war(0,t.owner);
-    const atk=move*(1+this.player.milT*0.2), def=t.army*t.terrainDef;
-    if(atk>def){ const prev=t.owner; t.owner=0; t.capital=false; t.gainedBy='war'; t.army=Math.max(1,Math.round(move-def/(1+this.player.milT*0.2))); s.army=1; this.player.battlesWon++; this.boardDirty=true; toast('province captured'); if(prev>=0)this._checkAlive(prev); this._checkVictory(); }
-    else { s.army=Math.max(1,1+Math.round(move-def*0.6)); t.army=Math.max(1,Math.round(t.army-atk/t.terrainDef)); toast('the assault is repelled'); } },
-  _war(a,b){ this.nations[a].atWar.add(b); this.nations[b].atWar.add(a); this.nations[a].att[b]=Math.min(this.nations[a].att[b]||0,-30); this.nations[b].att[a]=Math.min(this.nations[b].att[a]||0,-30); },
-  _peace(){ const b=this.selNation; if(b<0)return; this.player.atWar.delete(b); this.nations[b].atWar.delete(0); toast('peace with the '+this.nations[b].name); },
-  _gift(){ const b=this.selNation; if(b<0)return; if(this.player.gold<8){ toast('need 8 gold'); return; } this.player.gold-=8; this.nations[b].att[0]=clamp((this.nations[b].att[0]||0)+18,-100,100); toast('a gift sways the '+this.nations[b].name); },
-  _declare(){ const b=this.selNation; if(b<0)return; this._war(0,b); toast('war declared on the '+this.nations[b].name); },
-  _checkAlive(id){ if(id<0)return; const n=this.nations[id]; if(!n.alive)return; if(!this.provs.some(p=>p.owner===id)){ n.alive=false; if(id!==0)toast('the '+n.name+' fall'); } },
-  _aiTurn(nat){ const aff=CIV_TECH.map((t,i)=>i).filter(i=>!nat.tech.has(i)&&(i%3===0||nat.tech.has(i-1))&&nat.research>=CIV_TECH[i].cost);
-    if(aff.length){ aff.sort((x,y)=>this._tw(nat,y)-this._tw(nat,x)); const i=aff[0],t=CIV_TECH[i]; nat.research-=t.cost; nat.tech.add(i); if(t.row===0)nat.milT++;else if(t.row===1)nat.culT++;else nat.ecoT++; }
-    const mine=this.provs.filter(p=>p.owner===nat.id); if(!mine.length)return;
-    if(nat.gold>=6){ nat.gold-=6; this.rng.pick(mine).army+=2+nat.milT; }
-    for(const p of mine){ if(p.army<4)continue; for(const nb of p.neighbors){ const t=this.provs[nb]; if(t.owner===nat.id)continue;
-      const atk=(p.army-1)*(1+nat.milT*0.2), def=t.army*t.terrainDef;
-      const go = t.owner<0 ? this.rng.next()<0.7 : (this.rng.next()<nat.pers.mil*0.7 && (nat.att[t.owner]<-10||this.rng.next()<0.25));
-      if(go&&atk>def*1.15){ if(t.owner>0&&!nat.atWar.has(t.owner))this._war(nat.id,t.owner); const prev=t.owner; t.owner=nat.id; t.capital=false; t.gainedBy='war'; t.army=Math.max(1,Math.round((p.army-1)-def)); p.army=1; nat.battlesWon++; this.boardDirty=true; if(prev>=0)this._checkAlive(prev); break; } } } },
-  _tw(nat,i){ const r=CIV_TECH[i].row; return (r===0?nat.pers.mil:r===1?nat.pers.cul:nat.pers.eco)+this.rng.range(0,0.2); },
-  _diploTick(){ for(const a of this.nations){ if(!a.alive)continue; for(const b of this.nations){ if(a===b||!b.alive)continue; a.att[b.id]=clamp((a.att[b.id]||0)+(a.atWar.has(b.id)?-1.5:0.4),-100,100); } } },
-  _flips(){ for(const p of this.provs){ let bn=-1,bc=0; for(const nb of p.neighbors){ const t=this.provs[nb]; if(t.owner<0)continue; const n=this.nations[t.owner]; if(n.culT>bc){bc=n.culT;bn=t.owner;} }
-    if(bn<0||p.owner===bn||bc<2)continue; const n=this.nations[bn]; if(!this.nations[p.owner<0?bn:p.owner]) continue;
-    if(this.rng.chance(0.018*n.culT*(p.owner<0?2:1)*(this.player.atWar.has(bn)?0.3:1))){ const prev=p.owner; if(prev>=0&&this.nations[prev].isPlayer)continue; p.owner=bn; p.gainedBy='culture'; p.capital=false; n.converts++; this.boardDirty=true; if(bn===0)toast('a province joins your culture'); if(prev>=0)this._checkAlive(prev); } } },
-  _events(){ for(const p of this.provs){ if(p.owner<0)continue;
-    if(p.volcano&&this.rng.chance(0.012)){ p.dev=Math.max(1,p.dev-1); p.army=Math.max(0,p.army-2); if(p.owner===0)toast('a volcano erupts in your lands'); }
-    if((p.biome===B.DESERT||p.biome===B.SAVANNA)&&this.rng.chance(0.01)){ p.drought=4; if(p.owner===0)toast('drought grips a province'); }
-    if(p.drought>0)p.drought--; } },
-  _endTurn(){ if(this.exiting)return; for(const n of this.nations)if(n.alive)this._income(n);
-    if(Game.fragments.indexOf('civ')<0&&this.provs.some(p=>p.owner===0&&p.lume)){ Game.fragments.push('civ'); toast('a Lume vein in your realm resonates - a Chord Fragment',true); }
-    for(const n of this.nations)if(n.alive&&!n.isPlayer)this._aiTurn(n); this._diploTick(); this._flips(); this._events(); this.turn++; this._checkVictory(); },
-  _checkVictory(){ if(this.exiting)return; const total=this.provs.length,pc=this.count(0);
-    if(pc/total>=0.6){ this.exiting=0.001; this.endInfo='you unify '+Math.round(pc/total*100)+'% of the world'; }
-    else if(pc===0){ this.exiting=0.001; this.endInfo='your civilization has fallen'; } },
-  _finishExit(){ const p=this.player, mil=p.battlesWon+p.milT*2, cul=p.converts+p.culT*3, eco=Math.floor(p.goldEarned/40)+p.ecoT*2;
-    let card='Military'; if(cul>=mil&&cul>=eco)card='Cultural'; else if(eco>mil&&eco>cul)card='Economic';
-    Game.traits[4]={stage:'civ',card,battlesWon:p.battlesWon,converts:p.converts,gold:Math.floor(p.goldEarned)}; Game.log('civ','trait',{card}); Game.persist(); toast('Trait Card V locked: '+card,true); setScreen(Stages.SPACE); },
-  onkey(k){ if(this.exiting)return; if(k==='enter'||k===' ')this._endTurn(); else if(k==='c')this.mode=this.mode==='tech'?'map':'tech'; else if(k==='escape')this.mode='map'; },
-  onpointer(){ if(this._btns)for(const b of this._btns){ if(Input.mx>=b.x&&Input.mx<=b.x+b.w&&Input.my>=b.y&&Input.my<=b.y+b.h){ b.fn(); return; } } if(this.mode==='tech'||this.exiting)return;
-    const v=this.view; if(Input.mx>=v.bx&&Input.mx<=v.bx+v.bw&&Input.my>=v.by&&Input.my<=v.by+v.bh){ const ci=((Input.mx-v.bx)/v.bw*this.W)|0,cj=((Input.my-v.by)/v.bh*this.H)|0,pk=this.prov[cj*this.W+ci];
-      if(pk<0){ this.sel=-1; this.selNation=-1; return; }
-      if(this.sel>=0&&pk!==this.sel&&this.provs[this.sel].owner===0&&this.provs[this.sel].neighbors.has(pk))this._act(pk);
-      else { this.sel=pk; this.selNation=this.provs[pk].owner>0?this.provs[pk].owner:-1; } } },
-  update(dt){ this.t+=dt; if(this.exiting){ this.exiting+=dt; if(this.exiting>2.8)this._finishExit(); } },
-  _star(x,y,r){ ctx.beginPath(); ctx.moveTo(x,y-r); ctx.lineTo(x+r*0.6,y); ctx.lineTo(x,y+r); ctx.lineTo(x-r*0.6,y); ctx.closePath(); ctx.fill(); ctx.stroke(); },
-  _bakeBoard(){ const W=this.W,H=this.H,cv=this.board||document.createElement('canvas'); cv.width=W; cv.height=H; this.board=cv; const cx=cv.getContext('2d'),img=cx.createImageData(W,H),d=img.data;
-    for(let k=0;k<W*H;k++){ const pk=this.prov[k]; let r,g,b; if(pk<0){ const c=BIOME_COL[Planet.biome[k]]; r=c[0]*0.45;g=c[1]*0.5;b=c[2]*0.62; }
-      else { const p=this.provs[pk],bc=BIOME_COL[p.biome]; if(p.owner<0){ r=bc[0]*0.72;g=bc[1]*0.72;b=bc[2]*0.6; } else { const oc=this.nations[p.owner].rgb; r=lerp(bc[0],oc[0],0.55);g=lerp(bc[1],oc[1],0.55);b=lerp(bc[2],oc[2],0.55); if(p.lume){r=lerp(r,180,0.15);b=lerp(b,255,0.15);} } }
-      const o=k*4; d[o]=r;d[o+1]=g;d[o+2]=b;d[o+3]=255; }
-    for(let j=0;j<H;j++)for(let i=0;i<W;i++){ const k=j*W+i,pk=this.prov[k]; if(pk<0)continue; const rk=j*W+((i+1)%W);
-      if(this.prov[rk]>=0){ const o1=this.provs[pk].owner,o2=this.provs[this.prov[rk]].owner,o=k*4; if(o1!==o2){ d[o]*=0.35;d[o+1]*=0.35;d[o+2]*=0.35; } else if(this.prov[rk]!==pk){ d[o]*=0.8;d[o+1]*=0.8;d[o+2]*=0.8; } } }
-    cx.putImageData(img,0,0); this.boardDirty=false; },
-  render(){ ctx.fillStyle='#05070d'; ctx.fillRect(0,0,VW,VH); if(this.boardDirty)this._bakeBoard();
-    const z=Math.min(VW/this.W,(VH-150)/this.H)*0.98, bw=this.W*z, bh=this.H*z, bx=(VW-bw)/2, by=54; this.view={z,bx,by,bw,bh};
-    ctx.imageSmoothingEnabled=false; ctx.drawImage(this.board,bx,by,bw,bh); ctx.imageSmoothingEnabled=true;
-    ctx.strokeStyle='#1d2942'; ctx.strokeRect(bx,by,bw,bh);
-    for(const p of this.provs){ if(p.owner<0&&p.army<=0)continue; const sx=bx+(p.si/this.W)*bw, sy=by+(p.sj/this.H)*bh;
-      if(p.capital&&p.owner>=0){ ctx.fillStyle=this.nations[p.owner].color; ctx.strokeStyle='#fff'; ctx.lineWidth=1.2; this._star(sx,sy,6); }
-      if(p.army>0){ ctx.fillStyle='#000a'; ctx.fillRect(sx-8,sy-6,16,12); ctx.fillStyle=p.owner===0?'#7fe0d3':(p.owner<0?'#aeb8c8':'#ff9a7f'); ctx.font='10px IBM Plex Mono, monospace'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(p.army,sx,sy); } }
-    if(this.sel>=0){ const p=this.provs[this.sel],sx=bx+(p.si/this.W)*bw,sy=by+(p.sj/this.H)*bh; ctx.strokeStyle='#fff'; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(sx,sy,12,0,TAU); ctx.stroke();
-      if(p.owner===0)for(const nb of p.neighbors){ const t=this.provs[nb],tx=bx+(t.si/this.W)*bw,ty=by+(t.sj/this.H)*bh; ctx.strokeStyle=t.owner===0?'#7fe0d3aa':'#ff9a7faa'; ctx.lineWidth=1.5; ctx.beginPath(); ctx.arc(tx,ty,9,0,TAU); ctx.stroke(); } }
-    this._hud(); if(this.mode==='tech')this._techRender();
-    if(this.exiting){ ctx.fillStyle='rgba(8,12,20,'+clamp(this.exiting/3,0,0.82)+')'; ctx.fillRect(0,0,VW,VH); ctx.fillStyle='#e8eef6'; ctx.font='700 26px Space Grotesk, sans-serif'; ctx.textAlign='center'; ctx.fillText(this.endInfo,VW/2,VH/2); } },
-  _hud(){ this._btns=[]; const P=this.player; ctx.textAlign='left'; ctx.textBaseline='middle';
-    ctx.fillStyle='#0b1220cc'; panel(0,0,VW,44,0); ctx.fill();
-    ctx.fillStyle='#e8eef6'; ctx.font='700 15px Space Grotesk, sans-serif'; ctx.fillText('turn '+this.turn,16,22);
-    ctx.font='13px IBM Plex Mono, monospace'; ctx.fillStyle='#e0c060'; ctx.fillText('gold '+Math.floor(P.gold),96,22); ctx.fillStyle='#9ad0ff'; ctx.fillText('research '+Math.floor(P.research),190,22); ctx.fillStyle='#c79aff'; ctx.fillText('lume '+P.lume,320,22);
-    const total=this.provs.length; ctx.fillStyle='#7fe0d3'; ctx.fillText('provinces '+this.count(0)+'/'+total+' ('+Math.round(this.count(0)/total*100)+'% - unify 60%)',410,22);
-    this._mk(VW-118,8,106,28,'end turn [E]',()=>this._endTurn(),'#7fe0d3'); this._mk(VW-232,8,108,28,'tech [C]',()=>this.mode='tech','#9ad0ff');
-    // selected province panel
-    if(this.sel>=0){ const p=this.provs[this.sel],px=12,py=VH-118; ctx.fillStyle='#0b1220cc'; panel(px,py,250,104,10); ctx.fill();
-      const own=p.owner<0?'neutral':(p.owner===0?'you':'the '+this.nations[p.owner].name); ctx.fillStyle='#e8eef6'; ctx.font='700 14px Space Grotesk, sans-serif'; ctx.textBaseline='top'; ctx.fillText(BIOME_NAME[p.biome]+(p.capital?' (capital)':''),px+12,py+10);
-      ctx.fillStyle='#8a97ab'; ctx.font='11px IBM Plex Mono, monospace'; ctx.fillText(own+'   army '+p.army+'   dev '+p.dev+(p.lume?'   +Lume':'')+(p.volcano?'   volcanic':''),px+12,py+30);
-      if(p.owner===0){ this._mk(px+12,py+52,72,34,'recruit 6g',()=>this._recruit(),'#ff9a7f'); this._mk(px+92,py+52,72,34,'develop 10g',()=>this._develop(),'#c9a24b'); ctx.fillStyle='#59657a'; ctx.fillText('click a ringed neighbour to move/attack',px+12,py+92); } }
-    // selected rival diplomacy
-    if(this.selNation>0){ const n=this.nations[this.selNation],px=VW-262,py=VH-118; ctx.fillStyle='#0b1220cc'; panel(px,py,250,104,10); ctx.fill();
-      ctx.fillStyle=n.color; ctx.font='700 14px Space Grotesk, sans-serif'; ctx.textBaseline='top'; ctx.fillText('the '+n.name,px+12,py+10);
-      ctx.fillStyle='#8a97ab'; ctx.font='11px IBM Plex Mono, monospace'; ctx.fillText('attitude '+Math.round(n.att[0]||0)+'   '+(this.player.atWar.has(n.id)?'AT WAR':'at peace')+'   '+this.count(n.id)+' provinces',px+12,py+30);
-      this._mk(px+12,py+52,70,34,'gift 8g',()=>this._gift(),'#8fbf5a'); if(this.player.atWar.has(n.id))this._mk(px+90,py+52,74,34,'make peace',()=>this._peace(),'#9ad0ff'); else this._mk(px+90,py+52,74,34,'declare war',()=>this._declare(),'#ff9a7f'); }
-    ctx.fillStyle='#59657a'; ctx.font='11px IBM Plex Mono, monospace'; ctx.textBaseline='alphabetic'; ctx.fillText('click a province to select; end turns to grow. events strike volcanic and arid lands. culture and coin can win without war.',12,VH-8); },
-  _techRender(){ ctx.fillStyle='rgba(4,8,14,0.92)'; ctx.fillRect(0,0,VW,VH); this._btns=[]; ctx.textAlign='center'; ctx.textBaseline='top';
-    ctx.fillStyle='#e8eef6'; ctx.font='700 22px Space Grotesk, sans-serif'; ctx.fillText('TECH - research '+Math.floor(this.player.research),VW/2,40);
-    const cw=200,gap=24,x0=VW/2-(cw*1.5+gap),y0=110,rh=90;
-    for(let r=0;r<3;r++){ ctx.fillStyle=CIV_ROWCOL[r]; ctx.textAlign='left'; ctx.font='700 13px Space Grotesk, sans-serif'; ctx.fillText(CIV_ROWNAME[r],x0,y0+r*rh-18);
-      for(let c=0;c<3;c++){ const idx=r*3+c,t=CIV_TECH[idx],x=x0+c*(cw+gap),y=y0+r*rh,has=this.player.tech.has(idx),can=this._canTech(idx);
-        ctx.fillStyle=has?CIV_ROWCOL[r]:can?'#12203a':'#0c1526'; panel(x,y,cw,60,8); ctx.fill(); ctx.strokeStyle=can?'#7fe0d3':'#26364f'; ctx.lineWidth=1; ctx.stroke();
-        ctx.fillStyle=has?'#04120f':'#e8eef6'; ctx.font='700 14px Space Grotesk, sans-serif'; ctx.textAlign='left'; ctx.fillText(t.name,x+12,y+12);
-        ctx.fillStyle=has?'#04120f':'#8a97ab'; ctx.font='11px IBM Plex Mono, monospace'; ctx.fillText(has?'researched':('cost '+t.cost),x+12,y+34);
-        if(can)this._btns.push({x,y,w:cw,h:60,fn:()=>this._research(idx)}); } }
-    ctx.textAlign='center'; ctx.fillStyle='#c9a24b'; ctx.font='12px IBM Plex Mono, monospace'; ctx.fillText('each row must be researched left to right   -   [C] or [Esc] to return',VW/2,VH-40); },
-  _mk(x,y,w,h,label,fn,col){ ctx.fillStyle=col?col:'#1a2740'; panel(x,y,w,h,6); ctx.fill(); ctx.fillStyle=col?'#04120f':'#cfd9e8'; ctx.font='700 12px Space Grotesk, sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(label,x+w/2,y+h/2); ctx.textAlign='left'; ctx.textBaseline='alphabetic'; this._btns.push({x,y,w,h,fn}); },
-};
-
-// ============================================================================
-// P6 (part A): Space  [doc sections 3 + 17] - the galaxy strategy layer
-//   spiral galaxy, fleet explore, colonize + terraform (climate model),
-//   colony economy, alien empires (Civ diplomacy pattern), trait->space powers.
-//   Null arc + Archive endgame + Echo NG+ are P6b.
+// The galaxy - data tables
 // ============================================================================
 const STAR_CLS=[['O','#9bb0ff',0.9],['B','#aec6ff',0.7],['A','#dfe6ff',0.5],['F','#fff4e8',0.2],['G','#ffe9a8',0.0],['K','#ffc078',-0.3],['M','#ff9a6a',-0.6]];
 const GOODS=['ore','isotopes','silica','biogel','crystal','alloy','spice','vapor','circuitry','pelts','amber','plasma'];
+// empire archetype (rolled from the seed) -> named space power
 const POWER={Herbivore:["Gaia's Favor",'terraforming is cheaper'],Carnivore:['Apex Doctrine','+fleet damage'],Omnivore:['Generalist','+10% all yields'],
   Social:['Chorus','warmer diplomacy'],Predator:['Dread','aliens fear your fleets'],Adaptive:['Wanderer','longer jump range'],
   Harmonist:['Festival','+colony happiness'],Raider:['Plunder','+war spoils'],Trader:['Silk Roads','+route income'],
   Builder:['Arcology','+colony output'],Fortifier:['Bastion','+planet defense'],Merchant:['Franchise','cheaper colonies'],
   Cultural:['Broadcast','peaceful conversion'],Military:['Warfleet','+fleet strength'],Economic:['Monopoly','+Lume value']};
+
+// ============================================================================
+// SPACE - the whole game: galaxy, explore, colonize, terraform, diplomacy,
+// the Null arc, the Archive ending on Chord Fragments, and Echo NG+.
+// ============================================================================
 const Space={ saveAs:'space', name:'Space', rng:null, t:0, mode:'galaxy', turn:1, stars:null, empires:null, player:null,
   fleet:null, selStar:-1, curPlanet:null, view:null, res:null, powers:null, reachedCore:false, msg:'', _btns:null, coreStar:-1, nullAct:0, nullThreat:0, ending:null, elder:null,
   load(){ this.rng=Game.rng.fork('space'); this.t=0; this.turn=1; this.mode='galaxy'; this.selStar=-1; this.curPlanet=null; this.reachedCore=false; this.nullAct=0; this.nullThreat=0; this.ending=null; this.elder=null;
     this.powers=this._powers(); this.res={energy:30,minerals:20,research:0,lume:5};
-    this._genGalaxy(); Audio.motif(); toast('the long climb reaches the stars. explore, terraform, grow - and reach the silent core.'); },
+    this._genGalaxy(); Audio.motif(); toast('the long silence. explore, terraform, grow - and reach the core.'); },
   _powers(){ const cards=(Game.traits||[]).map(t=>t&&t.card), has=c=>cards.indexOf(c)>=0; return {
     terraform:has('Herbivore')?0.6:1, fleetDmg:has('Carnivore')?1.25:1, yield:has('Omnivore')?1.1:1, diplo:has('Social')?15:0,
     dread:has('Predator'), jump:has('Adaptive')?2:1, happy:has('Harmonist')?12:0, plunder:has('Raider')?1.5:1, route:has('Trader')?1.3:1,
@@ -1363,32 +179,23 @@ const Space={ saveAs:'space', name:'Space', rng:null, t:0, mode:'galaxy', turn:1
       let x=Math.cos(ang)*r+rng.range(-0.05,0.05), y=Math.sin(ang)*r+rng.range(-0.05,0.05);
       const rr=Math.hypot(x,y), ring=rr<0.28?2:rr<0.62?1:0, cls=rng.next()<0.5?5+rng.int(0,2):rng.int(0,7);
       stars.push({id:i,x,y,cls:Math.min(cls,6),ring,planets:[],explored:false,owner:-1,anomaly:null,fragment:false,neighbors:new Set(),name:CGEN.name(rng)}); }
-    // hyperlanes: nearest up to 3 within distance
     for(const s of stars){ const near=stars.filter(o=>o!==s).map(o=>({o,d:Math.hypot(o.x-s.x,o.y-s.y)})).sort((a,b)=>a.d-b.d).slice(0,3);
       for(const {o,d} of near)if(d<0.28){ s.neighbors.add(o.id); o.neighbors.add(s.id); } }
-    // ensure connectivity-ish: link isolated stars to nearest
     for(const s of stars)if(s.neighbors.size===0){ let best=null,bd=1e9; for(const o of stars)if(o!==s){ const d=Math.hypot(o.x-s.x,o.y-s.y); if(d<bd){bd=d;best=o;} } if(best){ s.neighbors.add(best.id); best.neighbors.add(s.id); } }
-    // planets per star
     for(const s of stars){ const np=rng.int(1,5); for(let p=0;p<np;p++){ const orbit=(p+1)/(np+1); const temp=STAR_CLS[s.cls][2]-orbit*0.9+0.4;
-      s.planets.push({name:s.name+' '+'IVXLC'[p]||(p+1),orbit,size:rng.range(0.6,1.4),temp,hydro:rng.range(0,0.9),atmo:rng.range(0,0.6),colony:null,tf:{heat:0,hydro:0,atmo:0}}); } }
-    // core objective star (deepest ring, near center)
+      s.planets.push({name:s.name+' '+('IVXLC'[p]||(p+1)),orbit,size:rng.range(0.6,1.4),temp,hydro:rng.range(0,0.9),atmo:rng.range(0,0.6),colony:null,tf:{heat:0,hydro:0,atmo:0}}); } }
     let cs=stars[0],cd=1e9; for(const s of stars){ const d=Math.hypot(s.x,s.y); if(d<cd){cd=d;cs=s;} } cs.isCore=true; this.coreStar=cs.id;
-    // home star: rim, far from core, decent planet
     const rim=stars.filter(s=>s.ring===0); let home=rng.pick(rim)||stars[0];
     home.explored=true; home.owner=0; for(const nb of home.neighbors)stars[nb].explored=true;
-    // colonize the best home planet as the homeworld
     let hp=home.planets[0]; for(const pl of home.planets)if(this._habit(pl)>this._habit(hp))hp=pl; this._colonize(home,hp,true);
-    // empires
     const NE=clamp(Math.round(N/22),6,10); const used=new Set([home.id]); this.empires=[{id:0,name:'You',color:'#7fe0d3',rgb:[127,224,211],pers:this._playerPers(),home:home.id,att:{},alive:true,isPlayer:true,fleetStr:6}];
     for(let e=1;e<NE;e++){ let st=null; for(let tr=0;tr<200;tr++){ const c=rng.pick(stars); if(!used.has(c.id)&&c.ring<2){ st=c; break; } } if(!st)break; used.add(st.id); st.explored=false; st.owner=e;
       const col=CGEN.PAL[rng.int(0,CGEN.PAL.length)][0]; let bp=st.planets[0]; for(const pl of st.planets)if(this._habit(pl)>this._habit(bp))bp=pl; this._colonize(st,bp,false,e);
       this.empires.push({id:e,name:CGEN.name(rng)+(rng.chance(0.5)?' Combine':' Reach'),color:col,rgb:hexRgb(col),pers:this._randPers(),home:st.id,att:{},alive:true,fleetStr:rng.int(3,7)}); }
     for(const a of this.empires)for(const b of this.empires)if(a!==b)a.att[b.id]=clamp(20+this.powers.diplo+Math.round(-60*Math.abs(a.pers.mil-b.pers.mil)),-100,100);
     this.player=this.empires[0]; this.fleet={star:home.id,str:6+this.powers.fleetSlots*2,moved:false};
-    // scatter anomalies + fragments on unexplored stars
     for(const s of stars){ if(s.owner>=0)continue; if(rng.chance(0.22))s.anomaly=rng.pick(['ancient ruin','derelict hulk','dust nebula','signal echo']); }
-    const frs=stars.filter(s=>s.owner<0&&s.ring>=1); for(let f=0;f<3&&f<frs.length;f++){ rng.pick(frs).fragment=true; }
-    // Echo NG+: an elder race from a previous playthrough already walks this galaxy
+    const frs=stars.filter(s=>s.owner<0&&s.ring>=1); for(let f=0;f<6&&f<frs.length;f++){ rng.pick(frs).fragment=true; }
     const echo=this._importEcho(); if(echo){ let st=null; for(let tr=0;tr<200;tr++){ const c=rng.pick(stars); if(c.owner<0&&c.ring<2){ st=c; break; } }
       if(st){ const id=this.empires.length, col=CGEN.PAL[echo.palette%CGEN.PAL.length][0]; st.owner=id; st.explored=false; let bp=st.planets[0]; for(const pl of st.planets)if(this._habit(pl)>this._habit(bp))bp=pl; this._colonize(st,bp,false,id);
         const eld={id,name:echo.name||'the Ancients',color:col,rgb:hexRgb(col),pers:this._randPers(),home:st.id,att:{},alive:true,fleetStr:9,elder:true};
@@ -1402,20 +209,20 @@ const Space={ saveAs:'space', name:'Space', rng:null, t:0, mode:'galaxy', turn:1
     return h>0.72?3:h>0.5?2:h>0.32?1:0; },
   _colonize(star,pl,isHome,owner){ owner=owner===undefined?0:owner; if(pl.colony)return false; const cost=Math.round(18*this.powers.colonize);
     if(owner===0&&!isHome){ if(this._habit(pl)<1){ toast('this world is uninhabitable - terraform it first'); return false; } if(this.res.minerals<cost){ toast('need '+cost+' minerals to colonize'); return false; } this.res.minerals-=cost; }
-    pl.colony={owner,pop:isHome?4:1,ind:0.4,res:0.3,cul:0.3,happy:60,export:this.rng.int(0,GOODS.length),route:0}; if(owner===0){ star.owner=0; } if(!star.owner&&star.owner!==0)star.owner=owner; star.owner=owner; if(owner===0&&!isHome){ toast('colony founded on '+pl.name,true); Game.log('space','colony',{}); } return true; },
+    pl.colony={owner,pop:isHome?4:1,ind:0.4,res:0.3,cul:0.3,happy:60,export:this.rng.int(0,GOODS.length),route:0}; star.owner=owner; if(owner===0&&!isHome){ toast('colony founded on '+pl.name,true); Game.log('space','colony',{n:this.colonies(0).length}); } return true; },
   colonies(owner){ const out=[]; for(const s of this.stars)for(const pl of s.planets)if(pl.colony&&pl.colony.owner===owner)out.push({s,pl}); return out; },
   _income(){ let en=0,mi=0,re=0,lu=0; for(const {s,pl} of this.colonies(0)){ const c=pl.colony, base=c.pop*(1+this._habit(pl)*0.3)*this.powers.yield*this.powers.cap*(c.happy/60);
     mi+=base*c.ind*2; re+=base*c.res*1.6; en+=base*0.6+base*c.cul*0.5; if(s.ring>=1)lu+=1; c.route+=0.02; if(c.route>=2)en+=2*this.powers.route;
     c.happy=clamp(c.happy+(c.cul>0.3?0.5:-0.3)+this.powers.happy*0.05,20,100); if(c.pop<8*this.powers.cap&&c.happy>55)c.pop+=0.03; }
-    this.res.energy+=Math.round(en); this.res.minerals+=Math.round(mi); this.res.research+=Math.round(re); this.res.lume+=lu; this._lastInc={en:Math.round(en),mi:Math.round(mi),re:Math.round(re),lu}; },
+    this.res.energy+=Math.round(en); this.res.minerals+=Math.round(mi); this.res.research+=Math.round(re); this.res.lume+=lu; },
   _explore(star){ if(star.explored)return; star.explored=true; for(const nb of star.neighbors)this.stars[nb].explored=true;
     if(star.fragment&&Game.fragments.indexOf('space:'+star.id)<0){ Game.fragments.push('space:'+star.id); toast('a Chord Fragment lies in the '+star.name+' ruins',true); star.fragment=false; }
-    else if(star.anomaly){ const r=this.rng; if(r.chance(0.5)){ const g=r.int(4,12); this.res.research+=g; toast(star.anomaly+': +'+g+' research'); } else { const g=r.int(2,6); this.res.lume+=g; toast(star.anomaly+': +'+g+' Lume'); } star.anomaly=null; }
+    else if(star.anomaly){ const r=this.rng; if(r.chance(0.5)){ const g=r.int(4,12); this.res.research+=g; toast(star.anomaly+': +'+g+' research'); } else { const g=r.int(2,6); this.res.lume+=g; toast(star.anomaly+': +'+g+' Lume'); } Game.log('space','anomaly',{}); star.anomaly=null; }
+    Game.log('space','explore',{n:this.stars.filter(s=>s.explored).length});
     if(star.isCore&&!this.ending){ this.reachedCore=true; this._archive(); } },
   _moveFleet(toId){ const to=this.stars[toId], from=this.stars[this.fleet.star]; const reach=from.neighbors.has(toId)||(this.powers.jump>1&&Math.hypot(to.x-from.x,to.y-from.y)<0.34);
     if(!reach){ toast('no hyperlane to that star'); return; }
-    if(to.owner>0&&this.player.att[to.owner]!=null){ // contest
-      const enemy=this.empires[to.owner], estr=enemy.fleetStr*(to.planets.some(p=>p.colony)?this.powers.defense:1)/this.powers.defense;
+    if(to.owner>0&&this.player.att[to.owner]!=null){ const enemy=this.empires[to.owner], estr=enemy.fleetStr;
       if(this.fleet.str*this.powers.fleetDmg>estr){ toast('your fleet breaks the '+enemy.name+' at '+to.name); Game.log('space','battle',{}); for(const pl of to.planets)if(pl.colony&&pl.colony.owner===to.owner){ pl.colony.owner=0; this.res.lume+=Math.round(3*this.powers.plunder); } to.owner=0; enemy.fleetStr=Math.max(1,enemy.fleetStr-2); }
       else { this.fleet.str=Math.max(1,this.fleet.str-2); toast('the '+enemy.name+' repel your fleet'); return; } }
     this.fleet.star=toId; this._explore(to); this.selStar=toId; },
@@ -1429,20 +236,16 @@ const Space={ saveAs:'space', name:'Space', rng:null, t:0, mode:'galaxy', turn:1
     if(this.nullAct>prev){ if(this.nullAct===1){ toast('the Null stir at the rim; signals jam and go dark',true); Game.log('space','null1',{}); } else if(this.nullAct===2)toast('Null sterilizer fleets breach the mid systems',true); else toast('the Null turn their full silence upon the galaxy',true); }
     if(this.nullAct>=2){ const cols=this.colonies(0); if(cols.length){ const {pl}=this.rng.pick(cols); pl.colony.pop-=(this.nullAct-1)*0.7/Math.max(1,this.powers.defense); pl.colony.happy=clamp(pl.colony.happy-7,0,100); if(pl.colony.pop<=0.15){ pl.colony=null; toast('a colony is sterilized and falls silent'); } } }
     this.fleet.moved=false; this.turn++; },
-  _aiEmpire(e){ // grow a colony's pop, occasionally expand fleet
-    const cols=this.colonies(e.id); for(const {pl} of cols){ if(pl.colony.pop<7)pl.colony.pop+=0.04; }
-    if(this.rng.chance(0.3))e.fleetStr+=0.4; },
-  onkey(k){ if(this.mode==='planet'){ if(k==='escape')this.mode='galaxy'; return; } if(this.mode==='system'){ if(k==='escape')this.mode='galaxy'; return; }
+  _aiEmpire(e){ const cols=this.colonies(e.id); for(const {pl} of cols){ if(pl.colony.pop<7)pl.colony.pop+=0.04; } if(this.rng.chance(0.3))e.fleetStr+=0.4; },
+  onkey(k){ if(this.ending)return; if(this.mode==='planet'||this.mode==='system'){ if(k==='escape')this.mode='galaxy'; return; }
     if(k==='enter'||k===' ')this._endTurn(); },
   onpointer(){ if(this._btns)for(const b of this._btns){ if(Input.mx>=b.x&&Input.mx<=b.x+b.w&&Input.my>=b.y&&Input.my<=b.y+b.h){ b.fn(); return; } }
-    if(this.ending)return;
-    if(this.mode==='planet')return;
+    if(this.ending)return; if(this.mode==='planet')return;
     if(this.mode==='system'){ const s=this.stars[this.selStar>=0?this.selStar:this.fleet.star]; for(const pl of s.planets){ if(pl._sx!=null&&Math.hypot(pl._sx-Input.mx,pl._sy-Input.my)<26){ this.curPlanet=pl; this.mode='planet'; return; } } return; }
-    // galaxy: nearest star to click
     const v=this.view; let best=-1,bd=26; for(const s of this.stars){ const sp=this._sp(s); const d=Math.hypot(sp.x-Input.mx,sp.y-Input.my); if(d<bd){bd=d;best=s.id;} }
     if(best<0){ this.selStar=-1; return; }
     const s=this.stars[best];
-    if(this.selStar===best && s.explored){ this.mode='system'; return; } // second click opens system
+    if(this.selStar===best && s.explored){ this.mode='system'; return; }
     if(best!==this.fleet.star && (this.stars[this.fleet.star].neighbors.has(best)||(this.powers.jump>1))) this._moveFleet(best);
     this.selStar=best; },
   _sp(s){ const v=this.view, R=Math.min(VW,VH-120)*0.46*v.z, cx=VW/2+v.cx, cy=(VH-40)/2+40+v.cy; return {x:cx+s.x*R,y:cy+s.y*R}; },
@@ -1475,15 +278,13 @@ const Space={ saveAs:'space', name:'Space', rng:null, t:0, mode:'galaxy', turn:1
     if(this.mode==='galaxy')this._galaxy(); else if(this.mode==='system')this._system(); else this._planet();
     this._hud();
     if(this.nullAct>0){ ctx.fillStyle=this.nullAct>=3?'#ff6a4a':this.nullAct>=2?'#ff9a6a':'#c79aff'; ctx.font='700 12px Space Grotesk, sans-serif'; ctx.textAlign='center'; ctx.fillText('NULL - act '+this.nullAct+' ('+['','rim jamming','sterilizer fleets','core war'][this.nullAct]+')',VW/2,52); ctx.textAlign='left'; } },
-  _galaxy(){ // lanes
-    ctx.strokeStyle='#1a2740'; ctx.lineWidth=1; for(const s of this.stars){ if(!s.explored)continue; const a=this._sp(s); for(const nb of s.neighbors){ if(nb<s.id)continue; const t=this.stars[nb]; if(!t.explored)continue; const b=this._sp(t); ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke(); } }
+  _galaxy(){ ctx.strokeStyle='#1a2740'; ctx.lineWidth=1; for(const s of this.stars){ if(!s.explored)continue; const a=this._sp(s); for(const nb of s.neighbors){ if(nb<s.id)continue; const t=this.stars[nb]; if(!t.explored)continue; const b=this._sp(t); ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke(); } }
     for(const s of this.stars){ const p=this._sp(s); if(!s.explored){ ctx.fillStyle='#2a3550'; ctx.beginPath(); ctx.arc(p.x,p.y,1.6,0,TAU); ctx.fill(); continue; }
       if(s.owner>=0){ const e=this.empires[s.owner]; ctx.strokeStyle=e.color; ctx.lineWidth=1.5; ctx.beginPath(); ctx.arc(p.x,p.y,8,0,TAU); ctx.stroke(); }
       ctx.fillStyle=STAR_CLS[s.cls][1]; ctx.beginPath(); ctx.arc(p.x,p.y,s.isCore?5:3.2,0,TAU); ctx.fill();
       if(s.isCore){ ctx.strokeStyle='#c79aff'; ctx.lineWidth=1.5; ctx.beginPath(); ctx.arc(p.x,p.y,10+Math.sin(this.t*3)*2,0,TAU); ctx.stroke(); }
       if(s.fragment){ ctx.fillStyle='#ffd86a'; ctx.font='11px IBM Plex Mono, monospace'; ctx.textAlign='center'; ctx.fillText('*',p.x,p.y-8); }
       if(s.anomaly){ ctx.fillStyle='#9ad0ff'; ctx.font='10px IBM Plex Mono, monospace'; ctx.textAlign='center'; ctx.fillText('?',p.x,p.y-8); } }
-    // fleet
     const fp=this._sp(this.stars[this.fleet.star]); ctx.fillStyle='#7fe0d3'; ctx.strokeStyle='#fff'; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(fp.x,fp.y-9); ctx.lineTo(fp.x+6,fp.y+6); ctx.lineTo(fp.x-6,fp.y+6); ctx.closePath(); ctx.fill(); ctx.stroke();
     if(this.selStar>=0){ const p=this._sp(this.stars[this.selStar]); ctx.strokeStyle='#fff'; ctx.lineWidth=1.5; ctx.beginPath(); ctx.arc(p.x,p.y,13,0,TAU); ctx.stroke(); } },
   _system(){ const s=this.stars[this.selStar>=0?this.selStar:this.fleet.star], cx=VW/2, cy=VH/2; this._btns=this._btns||[];
@@ -1507,17 +308,14 @@ const Space={ saveAs:'space', name:'Space', rng:null, t:0, mode:'galaxy', turn:1
     ctx.fillStyle='#7fe0d3'; ctx.fillText('colonies '+this.colonies(0).length+'   fragments '+Game.fragments.length+'/6',492,20);
     this._mk(VW-116,6,104,28,'end turn [E]',()=>this._endTurn(),'#7fe0d3');
     if(this.mode!=='galaxy')this._mk(VW-230,6,106,28,'galaxy map',()=>this.mode='galaxy','#9ad0ff');
-    // trait powers strip
     ctx.textAlign='right'; ctx.fillStyle='#8a97ab'; ctx.font='10px IBM Plex Mono, monospace';
     this.powers.list.slice(0,5).forEach((p,i)=>ctx.fillText(p[0],VW-16,52+i*15)); ctx.textAlign='left';
-    // galaxy: selected star info + travel hint
     if(this.mode==='galaxy'&&this.selStar>=0){ const s=this.stars[this.selStar],px=12,py=VH-108; ctx.fillStyle='#0b1220cc'; panel(px,py,260,96,10); ctx.fill(); ctx.textBaseline='top';
       ctx.fillStyle='#e8eef6'; ctx.font='700 14px Space Grotesk, sans-serif'; ctx.fillText(s.name+(s.isCore?' (the core)':''),px+12,py+10);
       ctx.fillStyle='#8a97ab'; ctx.font='11px IBM Plex Mono, monospace';
       ctx.fillText('class '+STAR_CLS[s.cls][0]+'   '+(s.explored?s.planets.length+' planets':'unexplored')+(s.owner>0?'   ['+this.empires[s.owner].name+']':''),px+12,py+30);
       ctx.fillText(s.id===this.fleet.star?'your fleet is here':(this.stars[this.fleet.star].neighbors.has(s.id)?'click again to send your fleet':'no direct lane'),px+12,py+50);
       if(s.explored)this._mk(px+12,py+66,120,22,'open system',()=>{ this.selStar=s.id; this.mode='system'; },'#9ad0ff'); }
-    // system: nothing extra. planet: terraform+colony panel
     if(this.mode==='planet'&&this.curPlanet){ const pl=this.curPlanet,px=VW-330,py=110; ctx.fillStyle='#0b1220cc'; panel(px,py,318,300,12); ctx.fill(); ctx.textBaseline='top';
       const h=this._habit(pl),temp=pl.temp+pl.tf.heat*0.35; ctx.fillStyle='#e8eef6'; ctx.font='700 17px Space Grotesk, sans-serif'; ctx.fillText(pl.name,px+16,py+14);
       ctx.fillStyle='#8a97ab'; ctx.font='12px IBM Plex Mono, monospace'; ctx.fillText('habitability T'+h+'   temp '+(temp>0.6?'hot':temp>0.2?'temperate':'cold')+'   water '+Math.round(clamp(pl.hydro+pl.tf.hydro*0.3,0,1)*100)+'%',px+16,py+40);
@@ -1529,140 +327,95 @@ const Space={ saveAs:'space', name:'Space', rng:null, t:0, mode:'galaxy', turn:1
         [['ind','industry','#d98a5a'],['res','research','#9ad0ff'],['cul','culture','#c79aff']].forEach((f,i)=>{ const y=py+168+i*26; ctx.fillStyle=f[2]; ctx.fillText(f[1],px+16,y+4); ctx.fillStyle='#0e1626'; ctx.fillRect(px+120,y,150,12); ctx.fillStyle=f[2]; ctx.fillRect(px+120,y,150*c[f[0]],12);
           this._mk(px+274,y-2,16,16,'+',()=>this._shift(c,f[0]),f[2]); }); }
       ctx.fillStyle='#59657a'; ctx.font='11px IBM Plex Mono, monospace'; ctx.fillText('[Esc] back to system',px+16,py+274); }
-    ctx.fillStyle='#59657a'; ctx.font='11px IBM Plex Mono, monospace'; ctx.textBaseline='alphabetic'; if(this.mode==='galaxy')ctx.fillText('click a star to select, click again to travel your fleet there (explores it). reach the core. * = Chord Fragment, ? = anomaly.',12,VH-8); },
+    ctx.fillStyle='#59657a'; ctx.font='11px IBM Plex Mono, monospace'; ctx.textBaseline='alphabetic'; if(this.mode==='galaxy')ctx.fillText('click a star to select, click again to send your fleet there (explores it). reach the core. * = Chord Fragment, ? = anomaly.',12,VH-8); },
   _shift(c,key){ const others=['ind','res','cul'].filter(x=>x!==key); c[key]=clamp(c[key]+0.15,0,1); const rem=1-c[key]; const os=others.reduce((a,x)=>a+c[x],0)||1; others.forEach(x=>c[x]=c[x]/os*rem); },
   _mk(x,y,w,h,label,fn,col){ ctx.fillStyle=col?col:'#1a2740'; panel(x,y,w,h,6); ctx.fill(); ctx.fillStyle=(col&&col!=='#26364f')?'#04120f':'#cfd9e8'; ctx.font='700 12px Space Grotesk, sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(label,x+w/2,y+h/2); ctx.textAlign='left'; ctx.textBaseline='alphabetic'; if(col!=='#26364f')this._btns.push({x,y,w,h,fn}); },
 };
 
 // ============================================================================
-// Stage registry - every stage is a real object now (Cell through Space)
-// ============================================================================
-const Stages={
-  CREATURE:Creature,
-  TRIBAL:Tribal,
-  CITY:City,
-  CIV:Civ,
-  SPACE:Space,
-};
-
-// ============================================================================
-// P7: Chronicle (historian codex) + Achievements  [doc sections 8 + 10]
+// The Chronicle (historian codex) + achievements
 // ============================================================================
 const Chronicle={ entries:[],
-  G:{ cell_trait:['In the first shallows, a {card} thing hauled itself onto the sand.','The tidepool gave up one of its own; it had chosen to be {card}.'],
-    creature_befriend:['The {sp} were sung into kinship.','A wary {sp} answered the five notes and drew near.'],
-    creature_dominate:['The {sp} were broken, and made to kneel.'],
-    creature_trait:['A pack coalesced. So began the age of the {card}.'],
-    tribal_win:['The {nb} laid down their spears and joined the song.'],
-    tribal_crush:['The {nb} were scattered like ash on the wind.'],
-    tribal_trait:['Around a new totem, the tribe took its name: the {card}s.'],
-    city_build:['They raised a {d} against the widening sky.'],
-    city_trait:['The city crowned itself a capital of {card}s.'],
-    civ_crush:['Legions took the field, and a province changed its banner.'],
-    civ_trait:['One banner rose over the whole world, {card} and unbowed.'],
-    space_colony:['A seed of the old world took root beneath a stranger sun.'],
+  G:{ space_colony:['A seed of an old world took root beneath a stranger sun.','Another colony lit its first fires against the dark.'],
+    space_battle:['Fleets met in the black, and one did not return.'],
+    space_anomaly:['A drifting relic gave up its long-kept secrets.'],
+    space_terraform3:['A dead world was coaxed to green, and called home.'],
+    space_elder:['An elder race was found, still walking the old paths.'],
     space_archive:['At the silent core, the last Cartographer opened its eyes.'],
     space_genesis:['The completed Song went out, and the dark remembered how to bloom.'] },
   reset(){ this.entries=[]; },
-  note(stage,type,data){ const t=this.G[stage+'_'+type]; if(!t)return; let s=t[this.entries.length%t.length].replace(/\{(\w+)\}/g,(m,k)=>(data&&data[k]!=null)?data[k]:'thing'); this.entries.push(s); if(this.entries.length>80)this.entries.shift(); } };
+  note(stage,type,data){ const t=this.G[stage+'_'+type]; if(!t)return; this.entries.push(t[this.entries.length%t.length]); if(this.entries.length>80)this.entries.shift(); } };
 const ACH=[
- {id:'firstbreath',n:'First Breath',d:'crawl onto land'},{id:'bigfish',n:'Bigger Fish',d:'devour a predator'},
- {id:'herbivore',n:'Peaceable',d:'leave the pool herbivorous'},{id:'apex',n:'Apex',d:'leave the pool carnivorous'},
- {id:'fivenotes',n:'Five Notes',d:'sing a perfect song'},{id:'speak',n:'Speak, Friend',d:'befriend a species'},
- {id:'pack',n:'Sapience',d:'form a pack'},{id:'polymath',n:'Polymath',d:'mutate five times'},
- {id:'prometheus',n:'Prometheus',d:'discover fire'},{id:'woodstock',n:'Woodstock',d:'unite tribes by music alone'},
- {id:'scorched',n:'Scorched Earth',d:'unite tribes by raiding alone'},{id:'cornerstone',n:'Cornerstone',d:'raise your first temple'},
- {id:'ironbank',n:'Iron Bank',d:'bank 300 coin in a city'},{id:'capital',n:'Cornerstone of Empire',d:'declare a capital'},
- {id:'oneworld',n:'One World',d:'unify the planet'},{id:'pax',n:'Pax',d:'unify by culture'},
- {id:'firstcolony',n:'New Horizons',d:'found an off-world colony'},{id:'gardener',n:'Gardener',d:'terraform a world to T3'},
- {id:'warlord',n:'Warlord',d:'win a battle among the stars'},{id:'quiet',n:'The Quiet Ones',d:'survive first Null contact'},
- {id:'corebreach',n:'Core Breach',d:'reach the Archive'},{id:'wholesong',n:'The Whole Song',d:'gather all six fragments'},
- {id:'genesis',n:'Genesis',d:'revive the galaxy'},{id:'silence',n:'Silence Answered',d:'reach the true ending'},
- {id:'echo',n:'Echo',d:'begin again, remembered'},{id:'xeno',n:'Xenophile',d:'meet an elder race'},
- {id:'historian',n:'Historian',d:'witness twenty deeds'},{id:'stargazer',n:'Pale Blue Dot',d:'look back from orbit'} ];
+ {id:'firstcolony',n:'New Horizons',d:'found an off-world colony'},{id:'empire',n:'Colonial Power',d:'hold five colonies'},
+ {id:'explorer',n:'Cartographer',d:'chart twenty stars'},{id:'curious',n:'Curious',d:'resolve an anomaly'},
+ {id:'firstnote',n:'First Note',d:'recover a Chord Fragment'},{id:'gardener',n:'Gardener',d:'terraform a world to T3'},
+ {id:'warlord',n:'Warlord',d:'win a battle among the stars'},{id:'xeno',n:'Xenophile',d:'meet an elder race'},
+ {id:'quiet',n:'The Quiet Ones',d:'survive first Null contact'},{id:'corebreach',n:'Core Breach',d:'reach the Archive'},
+ {id:'wholesong',n:'The Whole Song',d:'gather all six fragments'},{id:'genesis',n:'Genesis',d:'revive the galaxy'},
+ {id:'silence',n:'Silence Answered',d:'reach the true ending'},{id:'echo',n:'Echo',d:'begin again, remembered'} ];
 const Ach={ done:new Set(),
-  init(){ try{ JSON.parse(localStorage.getItem('eons.ach')||'[]').forEach(id=>this.done.add(id)); }catch(e){} },
+  init(){ try{ JSON.parse(localStorage.getItem('eons.ach')||'[]').forEach(id=>{ if(ACH.find(x=>x.id===id))this.done.add(id); }); }catch(e){} },
   unlock(id){ if(this.done.has(id))return; if(!ACH.find(x=>x.id===id))return; this.done.add(id); toast('achievement: '+ACH.find(x=>x.id===id).n,true); Audio.blip(720,0.07); try{ localStorage.setItem('eons.ach',JSON.stringify([...this.done])); }catch(e){} },
-  check(stage,type,d){ d=d||{};
-    if(stage==='cell'&&type==='trait'){ this.unlock('firstbreath'); this.unlock('stargazer'); if(d.card==='Herbivore')this.unlock('herbivore'); if(d.card==='Carnivore')this.unlock('apex'); }
-    if(stage==='cell'&&type==='predator')this.unlock('bigfish');
-    if(stage==='creature'&&type==='befriend'){ this.unlock('speak'); if(d.perfect)this.unlock('fivenotes'); }
-    if(stage==='creature'&&type==='trait'){ this.unlock('pack'); if((d.edits|0)>=5)this.unlock('polymath'); }
-    if(stage==='tribal'&&type==='fire')this.unlock('prometheus');
-    if(stage==='tribal'&&type==='trait'){ if((d.won|0)>=3&&(d.crushed|0)===0)this.unlock('woodstock'); if((d.crushed|0)>=3&&(d.won|0)===0)this.unlock('scorched'); }
-    if(stage==='city'&&type==='build'&&d.d==='temple')this.unlock('cornerstone');
-    if(stage==='city'&&type==='trait'){ this.unlock('capital'); if((d.coin|0)>=300)this.unlock('ironbank'); }
-    if(stage==='civ'&&type==='trait'){ this.unlock('oneworld'); if(d.card==='Cultural')this.unlock('pax'); }
-    if(stage==='space'){ if(type==='colony')this.unlock('firstcolony'); if(type==='terraform3')this.unlock('gardener'); if(type==='battle')this.unlock('warlord'); if(type==='null1')this.unlock('quiet'); if(type==='archive')this.unlock('corebreach'); if(type==='genesis'){ this.unlock('genesis'); this.unlock('silence'); } if(type==='elder')this.unlock('xeno'); }
-    if(stage==='meta'&&type==='echo')this.unlock('echo');
-    if((Game.fragments||[]).length>=6)this.unlock('wholesong');
-    if(Chronicle.entries.length>=20)this.unlock('historian'); } };
+  check(stage,type,d){ d=d||{}; if(stage!=='space'&&stage!=='meta')return;
+    if(type==='colony'){ this.unlock('firstcolony'); if((d.n|0)>=5)this.unlock('empire'); }
+    if(type==='explore'&&(d.n|0)>=20)this.unlock('explorer');
+    if(type==='anomaly')this.unlock('curious');
+    if(type==='terraform3')this.unlock('gardener');
+    if(type==='battle')this.unlock('warlord');
+    if(type==='elder')this.unlock('xeno');
+    if(type==='null1')this.unlock('quiet');
+    if(type==='archive')this.unlock('corebreach');
+    if(type==='genesis'){ this.unlock('genesis'); this.unlock('silence'); }
+    if(type==='echo')this.unlock('echo');
+    if((Game.fragments||[]).length>=1)this.unlock('firstnote');
+    if((Game.fragments||[]).length>=6)this.unlock('wholesong'); } };
 function drawMetaOverlay(){ ctx.save(); ctx.setTransform(DPR,0,0,DPR,0,0); ctx.fillStyle='rgba(4,8,14,0.94)'; ctx.fillRect(0,0,VW,VH); ctx.textBaseline='alphabetic';
   if(Game.overlay==='chronicle'){ ctx.textAlign='center'; ctx.fillStyle='#e8eef6'; ctx.font='700 24px Space Grotesk, sans-serif'; ctx.fillText('THE CHRONICLE',VW/2,54);
     const ent=Chronicle.entries.slice(-26); ctx.textAlign='left'; ctx.font='14px IBM Plex Mono, monospace';
     if(!ent.length){ ctx.textAlign='center'; ctx.fillStyle='#8a97ab'; ctx.fillText('the historian has not yet put quill to page.',VW/2,VH/2); }
     ent.forEach((s,i)=>{ ctx.fillStyle='#aebbcd'; ctx.fillText('- '+s,Math.max(40,VW/2-380),94+i*23); });
-    ctx.textAlign='center'; ctx.fillStyle='#c9a24b'; ctx.font='12px IBM Plex Mono, monospace'; ctx.fillText('a far-future history of your world   -   [H] to close',VW/2,VH-26); }
+    ctx.textAlign='center'; ctx.fillStyle='#c9a24b'; ctx.font='12px IBM Plex Mono, monospace'; ctx.fillText('a far-future history of your galaxy   -   [H] to close',VW/2,VH-26); }
   else { ctx.textAlign='center'; ctx.fillStyle='#e8eef6'; ctx.font='700 24px Space Grotesk, sans-serif'; ctx.fillText('ACHIEVEMENTS   '+Ach.done.size+' / '+ACH.length,VW/2,54);
     ctx.textAlign='left'; const colW=(Math.min(VW,980)-120)/2, x0=VW/2-Math.min(VW,980)/2+40;
-    ACH.forEach((a,i)=>{ const c=i%2, x=x0+c*colW, y=96+((i>>1))*30, got=Ach.done.has(a.id);
+    ACH.forEach((a,i)=>{ const c=i%2, x=x0+c*colW, y=110+((i>>1))*32, got=Ach.done.has(a.id);
       ctx.fillStyle=got?'#7fe0d3':'#33435a'; ctx.font='700 13px Space Grotesk, sans-serif'; ctx.fillText(got?'[+]':'[ ]',x,y);
       ctx.fillStyle=got?'#e8eef6':'#5f7088'; ctx.fillText(a.n,x+34,y); ctx.fillStyle=got?'#8a97ab':'#33435a'; ctx.font='10px IBM Plex Mono, monospace'; ctx.fillText(a.d,x+34,y+13); });
     ctx.textAlign='center'; ctx.fillStyle='#c9a24b'; ctx.font='12px IBM Plex Mono, monospace'; ctx.fillText('[K] to close',VW/2,VH-26); }
   ctx.restore(); }
 
 // ============================================================================
-// Screen management + loop
+// Screen management + loop + boot
 // ============================================================================
 function setScreen(s){ Game.screen=s; if(s.load)s.load(); Game.persist(); }
-function descend(){ setScreen(Cell); }
-function reseed(seed){ startWorld(seed); }
-function startWorld(seed){
-  Game.seed=seed; Game.rng=Rng(seed); Game.traits=[]; Game.fragments=[]; Game.decisionLog=[]; Chronicle.reset();
-  Planet.generate(seed,CONFIG.mapW,CONFIG.mapH,{});
-  setScreen(World);
-}
+// roll a random empire archetype from the seed (one card per old-stage category)
+// so the trait -> space powers still vary per galaxy
+function rollArchetype(seed){ const r=Rng(seed).fork('archetype');
+  const cats=[['Herbivore','Carnivore','Omnivore'],['Social','Predator','Adaptive'],['Harmonist','Raider','Trader'],['Builder','Fortifier','Merchant'],['Cultural','Military','Economic']];
+  return cats.map(c=>({card:r.pick(c)})); }
+function startSpace(seed){ Game.seed=seed; Game.rng=Rng(seed); Game.fragments=[]; Game.decisionLog=[]; Chronicle.reset();
+  Game.traits=rollArchetype(seed); setScreen(Space); }
 
 let last=now(), acc=0;
 function frame(){ const t=now(); let dt=(t-last)/1000; last=t; if(dt>0.25)dt=0.25; acc+=dt;
   let steps=0; while(acc>=CONFIG.FDT && steps<5){ if(Game.screen&&Game.screen.update)Game.screen.update(CONFIG.FDT); acc-=CONFIG.FDT; steps++; }
   if(steps>=5)acc=0;
   if(Game.screen&&Game.screen.render)Game.screen.render();
-  if(Game.screen&&!Game.overlay){ ctx.fillStyle='#5a6a80'; ctx.font='10px IBM Plex Mono, monospace'; ctx.textAlign='right'; ctx.fillText('[H] chronicle  [K] achievements',VW-14,VH-26); ctx.textAlign='left'; }
+  if(Game.screen&&!Game.overlay&&!Space.ending){ ctx.fillStyle='#5a6a80'; ctx.font='10px IBM Plex Mono, monospace'; ctx.textAlign='right'; ctx.fillText('[H] chronicle  [K] achievements',VW-14,VH-26); ctx.textAlign='left'; }
   if(Game.overlay)drawMetaOverlay();
-  if(FLAGS.debug){ const s=Planet.stats; devEl.textContent=
-    'screen '+(Game.screen&&(Game.screen.saveAs||Game.screen.name)||'-')+'\n'+
-    'seed   '+Game.seed+'\n'+(s?('gen    '+s.genMs.toFixed(1)+'ms\nland   '+(s.landPct*100).toFixed(1)+'%\n'):'')+
-    (Cell.ecs?('ents   '+Cell.ecs.list.length+'\ndna    '+Cell.dna+'\n'):'')+'fps    '+(1/Math.max(dt,1e-3)).toFixed(0);
-  }
+  if(FLAGS.debug){ devEl.textContent='seed  '+Game.seed+'\nturn  '+Space.turn+'\nmode  '+Space.mode+'\nfrags '+Game.fragments.length+'/6\nnull  '+Space.nullAct+'\nfps   '+(1/Math.max(dt,1e-3)).toFixed(0); }
   requestAnimationFrame(frame);
 }
 
-// ============================================================================
-// Boot
-// ============================================================================
 const intro=document.getElementById('intro'), overlay=document.getElementById('overlay'), seedInput=document.getElementById('seed');
 function randomSeed(){ const w=['vekk','luma','orin','thal','mira','nyx','sol','kael','vora','esh','arda','zed']; return w[Math.floor(Math.random()*w.length)]+Math.floor(Math.random()*900+100); }
-function begin(){
-  const seed=(seedInput.value.trim())||randomSeed();
-  Audio.init(seed); Audio.motif();
-  if(FLAGS.debug)devEl.classList.remove('hidden');
-  overlay.classList.add('hidden');
-  startWorld(seed);
-}
+function begin(){ const seed=(seedInput.value.trim())||randomSeed();
+  Audio.init(seed); Audio.motif(); if(FLAGS.debug)devEl.classList.remove('hidden'); overlay.classList.add('hidden'); startSpace(seed); }
 document.getElementById('begin').addEventListener('click',begin);
 seedInput.addEventListener('keydown',e=>{ if(e.key==='Enter')begin(); });
+const saved=Save.read(); if(saved&&saved.seed)seedInput.value=saved.seed;
+if(urlParam('seed')!=null)seedInput.value=urlParam('seed');
 
-// resume hint from save (does not auto-start; world regenerates from seed)
-const saved=Save.read();
-if(saved&&saved.seed){ seedInput.value=saved.seed; Game.traits=saved.traits||[]; Game.decisionLog=saved.decisionLog||[];
-  if(saved.traits&&saved.traits[0]){ intro.querySelector('.hint').textContent='resume seed '+saved.seed+' - carried trait: '+saved.traits[0].card; } }
-if(urlParam('seed')!=null){ seedInput.value=urlParam('seed'); }
-
-// expose a tiny hook for automated verification (?dev)
-window.__EONS={ Planet, Rng, Game, CGEN, Rhythm, RTS, Creature, Cell, Tribal, City, Civ, Space, Chronicle, Ach, ACH, Stages, setScreen, startWorld,
-  biomeHash(){ let h=2166136261>>>0; const b=Planet.biome; for(let i=0;i<b.length;i++){ h^=b[i]; h=Math.imul(h,16777619);} return h>>>0; } };
-
+window.__EONS={ Rng, Game, CGEN, Space, Chronicle, Ach, ACH, setScreen, startSpace };
 Ach.init();
 requestAnimationFrame(frame);
 })();
