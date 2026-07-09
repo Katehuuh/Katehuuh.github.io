@@ -354,9 +354,9 @@ const Save={
 };
 
 // ---- Game state ------------------------------------------------------------
-const Game={ seed:'', rng:null, screen:null, traits:[], fragments:[], decisionLog:[],
+const Game={ seed:'', rng:null, screen:null, traits:[], fragments:[], decisionLog:[], overlay:null,
   persist(){ Save.write({seed:this.seed,screen:this.screen&&this.screen.saveAs||'world',traits:this.traits,fragments:this.fragments,decisionLog:this.decisionLog.slice(-40)}); },
-  log(stage,type,data){ this.decisionLog.push({stage,type,data,t:Date.now()}); }
+  log(stage,type,data){ this.decisionLog.push({stage,type,data,t:Date.now()}); Chronicle.note(stage,type,data); Ach.check(stage,type,data); }
 };
 
 // ---- Toasts / dev ----------------------------------------------------------
@@ -374,7 +374,9 @@ const Input={ mx:VW/2,my:VH/2,down:false,keys:{} };
 canvas.addEventListener('pointermove',e=>{ Input.mx=e.clientX; Input.my=e.clientY; });
 canvas.addEventListener('pointerdown',e=>{ Input.down=true; Input.mx=e.clientX; Input.my=e.clientY; if(Game.screen&&Game.screen.onpointer)Game.screen.onpointer(e); });
 window.addEventListener('pointerup',()=>Input.down=false);
-window.addEventListener('keydown',e=>{ Input.keys[e.key.toLowerCase()]=true; if(Game.screen&&Game.screen.onkey)Game.screen.onkey(e.key.toLowerCase()); });
+window.addEventListener('keydown',e=>{ const kk=e.key.toLowerCase(); Input.keys[kk]=true;
+  if(Game.screen){ if(kk==='h'){ Game.overlay=Game.overlay==='chronicle'?null:'chronicle'; return; } if(kk==='k'){ Game.overlay=Game.overlay==='achievements'?null:'achievements'; return; } if(Game.overlay){ Game.overlay=null; return; } }
+  if(Game.screen&&Game.screen.onkey)Game.screen.onkey(kk); });
 window.addEventListener('keyup',e=>{ Input.keys[e.key.toLowerCase()]=false; });
 
 // ---- draw helpers ----------------------------------------------------------
@@ -456,7 +458,7 @@ const Cell={
   saveAs:'world', ecs:null, player:null, cam:null, rng:null, aiR:null,
   tier:0, dna:0, needDNA:8, mitosis:false, parts:[], mote:0, meat:0, plant:0,
   bgCols:null, t:0, exiting:0, world:{w:2000,h:1300},
-  TIERS:[6,16,30], // dna thresholds per tier
+  TIERS:[3,6,10], // dna thresholds per tier (compact pacing: ~30-40s)
   PARTS:[
     {id:'flagella',name:'flagella',desc:'+speed',col:'#7fe0d3'},
     {id:'cilia',name:'cilia',desc:'+agility',col:'#9ad0ff'},
@@ -546,7 +548,7 @@ const Cell={
         if(pl.poison){ e.hp-=30*dt; }
         if(this.parts.includes('spike')){ e.hp-=pl.atk*dt*4; }
         pl.hp-=14*dt; const kx=(pl.x-e.x),ky=(pl.y-e.y),kl=Math.hypot(kx,ky)||1; pl.vx+=kx/kl*40; pl.vy+=ky/kl*40;
-        if(e.hp<=0){ e.alive=false; this.dna+=3; this.meat+=3; toast('predator devoured'); this.spawnPredator(e.arch); this.checkTier(); }
+        if(e.hp<=0){ e.alive=false; this.dna+=3; this.meat+=3; toast('predator devoured'); if(Game.fragments.indexOf('cell')<0){ Game.fragments.push('cell'); toast('a Chord Fragment shimmers in the husk',true); } Game.log('cell','predator',{}); this.spawnPredator(e.arch); this.checkTier(); }
       }
     });
     if(pl.hp<pl.maxhp) pl.hp=Math.min(pl.maxhp,pl.hp+dt*3); // slow regen
@@ -811,7 +813,7 @@ const Creature={ saveAs:'world', name:'Creature', mode:'roam', ecs:null, player:
     if(this.mode==='roam'&&!this.exiting)this._attack(); },
   _befriend(){ const near=this._nearestCreature(150); if(!near){ toast('no creature close enough to sing to'); return; }
     const sp=near.sp; if(sp.disp==='ally'){ toast('the '+sp.name+' already sing with you'); return; } if(sp.disp==='dominated'){ toast('the '+sp.name+' are already yours'); return; }
-    const len=sp.predator?5:this.rng.int(3,5), pat=Array.from({length:len},()=>this.rng.int(0,5)), thresh=sp.predator?0.8:0.55;
+    const len=sp.predator?4:3, pat=Array.from({length:len},()=>this.rng.int(0,5)), thresh=sp.predator?0.8:0.55;
     this.mode='rhythm'; Rhythm.start(pat,sp.name,(acc,perfect)=>{ this.mode='roam';
       if(acc>=thresh){ sp.disp='ally'; sp.members.forEach(m=>m.friendly=true); this.allies++; this.dna+=4; toast('the '+sp.name+' are now your kin ('+this.allies+'/3)',true);
         if(perfect&&Game.fragments.indexOf('creature')<0){ Game.fragments.push('creature'); toast('Chord Fragment recovered - a perfect song',true); }
@@ -940,7 +942,7 @@ const RTS={
 //   fire discovery at 50%, exit -> Trait Card III (Harmonist/Raider/Trader)
 // ============================================================================
 const Tribal={ saveAs:'world', name:'Tribal', ecs:null, cam:null, rng:null, aiR:null, t:0, mode:'manage',
-  world:{w:1700,h:1050}, camp:null, genome:null, units:null, res:null, totem:0, totemNeed:52, fire:false,
+  world:{w:1700,h:1050}, camp:null, genome:null, units:null, res:null, totem:0, totemNeed:20, fire:false,
   neighbors:null, sel:-1, won:0, crushed:0, trades:0, exiting:0, starveT:0, _btns:null, foodNodes:null, matNodes:null, guardPts:null,
   JOBS:['forager','hunter','musician','guard'], JOBCOL:{forager:'#8fbf5a',hunter:'#d98a5a',musician:'#9ad0ff',guard:'#c9a24b'},
   load(){
@@ -986,7 +988,7 @@ const Tribal={ saveAs:'world', name:'Tribal', ecs:null, cam:null, rng:null, aiR:
     const musc=this.jobCount('musician'),eff=this.fire?1.25:1;
     for(const u of this.ecs.list){ if(!u.alive||u.kind!=='unit')continue; u.eff=eff;
       if(u.job==='forager') RTS.gather(u,this.camp,this.foodNodes,dt,()=>{ this.res.food+=3.2*eff; });
-      else if(u.job==='hunter') RTS.gather(u,this.camp,this.matNodes,dt,()=>{ this.totem=Math.min(this.totemNeed,this.totem+1.5*eff); this.res.materials+=1.0*eff; if(!this.fire&&this.totem>=this.totemNeed*0.5){ this.fire=true; toast('FIRE. the tribe learns to cook and forge.',true); Audio.blip(180,0.12); } });
+      else if(u.job==='hunter') RTS.gather(u,this.camp,this.matNodes,dt,()=>{ this.totem=Math.min(this.totemNeed,this.totem+1.5*eff); this.res.materials+=1.0*eff; if(!this.fire&&this.totem>=this.totemNeed*0.5){ this.fire=true; toast('FIRE. the tribe learns to cook and forge.',true); Audio.blip(180,0.12); if(Game.fragments.indexOf('tribal')<0){ Game.fragments.push('tribal'); toast('the first fire reveals a Chord Fragment in the embers',true); } Game.log('tribal','fire',{}); } });
       else if(u.job==='musician'){ const tx=this.camp.x+Math.cos(u.id2)*46,ty=this.camp.y+Math.sin(u.id2)*46; RTS.moveTo(u,tx,ty,u.spd*0.5*dt); u.moving=false; }
       else { if(!u.pt||Math.hypot(u.pt.x-u.x,u.pt.y-u.y)<16)u.pt=this.guardPts[(this.aiR.next()*this.guardPts.length)|0]; RTS.moveTo(u,u.pt.x,u.pt.y,u.spd*0.6*dt); } }
     // food upkeep
@@ -1063,14 +1065,14 @@ const Tribal={ saveAs:'world', name:'Tribal', ecs:null, cam:null, rng:null, aiR:
 // ============================================================================
 const City={ saveAs:'world', name:'City', ecs:null, rng:null, aiR:null, t:0, mode:'manage',
   world:{w:1700,h:1050}, center:null, genome:null, res:null, nodes:null, plots:null, cam:null,
-  culture:0, cultureNeed:70, rivals:null, sel:-1, buildSel:-1, vehicle:null, _btns:null, exiting:0, starveT:0,
+  culture:0, cultureNeed:26, rivals:null, sel:-1, buildSel:-1, vehicle:null, _btns:null, exiting:0, starveT:0,
   districts:null, raidsRepelled:0, trades:0, subjugations:0, coinEarned:0,
   ROLES:['farm','quarry','market'], ROLECOL:{farm:'#8fbf5a',quarry:'#d98a5a',market:'#c9a24b'},
   BUILDS:[{k:'housing',m:8,c:0,col:'#7fbfe0'},{k:'workshop',m:12,c:4,col:'#d98a5a'},{k:'temple',m:16,c:8,col:'#9ad0ff'},{k:'walls',m:10,c:0,col:'#c9a24b'}],
   VCHASSIS:['cart','chariot','wagon'], VWHEELS:[2,4,6], VPAYLOAD:['goods','ram','ballista'],
   load(){
     this.rng=Game.rng.fork('city'); this.aiR=Game.rng.fork('city.ai');
-    this.t=0; this.mode='manage'; this.res={food:34,materials:24,coin:12}; this.culture=0; this.sel=-1; this.buildSel=-1; this.exiting=0; this.starveT=0;
+    this.t=0; this.mode='manage'; this.res={food:44,materials:46,coin:26}; this.culture=0; this.sel=-1; this.buildSel=-1; this.exiting=0; this.starveT=0;
     this.districts={housing:0,workshop:0,temple:0,walls:0}; this.raidsRepelled=0; this.trades=0; this.subjugations=0; this.coinEarned=0; this.vehicle={chassis:0,wheels:1,payload:0,sel:0};
     this.genome=(Game.traits[1]&&Game.traits[1].genome)||CGEN.starter(Game.traits,this.rng);
     this.ecs=makeWorldECS(); const W=this.world.w,H=this.world.h; this.center={x:W/2,y:H/2};
@@ -1091,7 +1093,8 @@ const City={ saveAs:'world', name:'City', ecs:null, rng:null, aiR:null, t:0, mod
   vehStat(){ const cap=(this.vehicle.wheels+1)+this.vehicle.chassis, atk=this.VPAYLOAD[this.vehicle.payload]==='goods'?0:(this.VPAYLOAD[this.vehicle.payload]==='ram'?3:5); return {cap,atk,goods:this.VPAYLOAD[this.vehicle.payload]==='goods'}; },
   _build(pi){ if(this.buildSel<0){ toast('pick a district from the build menu first'); return; } const p=this.plots[pi]; if(p.district){ toast('that plot is taken'); return; } const b=this.BUILDS[this.buildSel];
     if(this.res.materials<b.m||this.res.coin<b.c){ toast('need '+b.m+' materials'+(b.c?' + '+b.c+' coin':'')+' for '+b.k); return; }
-    this.res.materials-=b.m; this.res.coin-=b.c; p.district=b.k; this.districts[b.k]++; if(b.k==='housing')this._spawn(this.ROLES[this.rng.int(0,3)]); Audio.blip(320,0.06); toast('built a '+b.k); Game.log('city','build',{d:b.k}); },
+    this.res.materials-=b.m; this.res.coin-=b.c; p.district=b.k; this.districts[b.k]++; if(b.k==='housing')this._spawn(this.ROLES[this.rng.int(0,3)]); Audio.blip(320,0.06); toast('built a '+b.k); Game.log('city','build',{d:b.k});
+    if(b.k==='temple'&&this.districts.temple===1&&Game.fragments.indexOf('city')<0){ Game.fragments.push('city'); toast('your first temple enshrines a Chord Fragment',true); } },
   _trade(){ if(this.sel<0)return; const rv=this.rivals[this.sel]; if(rv.state!=='rival')return; const v=this.vehStat(); const gain=9+(v.goods?v.cap*2:0); this.res.coin+=gain; this.coinEarned+=gain; rv.relation=clamp(rv.relation+15,0,100); this.trades++; toast('caravan to '+rv.name+' returns (+'+gain+' coin)'); Game.log('city','trade',{rv:rv.name}); },
   _attack(){ if(this.sel<0)return; const rv=this.rivals[this.sel]; if(rv.state!=='rival')return; if(this.res.materials<6){ toast('need 6 materials to raise a war party'); return; } this.res.materials-=6; const v=this.vehStat(); const force=3+v.atk+this.rng.int(0,3);
     if(force>=rv.strength+1){ rv.state='subjugated'; this.subjugations++; this.res.coin+=14; this.coinEarned+=14; this.res.materials+=10; toast('you subjugate '+rv.name,true); Game.log('city','subjugate',{rv:rv.name}); } else { rv.relation=clamp(rv.relation-20,0,100); toast('the assault on '+rv.name+' is repelled'); } },
@@ -1111,7 +1114,7 @@ const City={ saveAs:'world', name:'City', ecs:null, rng:null, aiR:null, t:0, mod
       RTS.gather(u,this.center,[node],dt,()=>{ if(u.role==='farm')this.res.food+=3.0; else if(u.role==='quarry')this.res.materials+=2.2; else { this.res.coin+=1.4; this.coinEarned+=1.4; } }); }
     // districts: workshops convert materials->coin, temples make culture
     if(this.districts.workshop>0&&this.res.materials>0){ const conv=Math.min(this.res.materials,this.districts.workshop*0.5*dt); this.res.materials-=conv; this.res.coin+=conv*1.6; this.coinEarned+=conv*1.6; }
-    this.culture+=this.districts.temple*0.7*dt;
+    this.culture+=this.districts.temple*1.1*dt;
     this.res.food-=this.pop()*0.1*dt;
     if(this.res.food<=0){ this.res.food=0; this.starveT+=dt; if(this.starveT>7){ this.starveT=0; const u=this.ecs.list.find(x=>x.alive&&x.kind==='cit'); if(u){ u.alive=false; toast('a citizen departs, unfed'); } } } else this.starveT=0;
     for(const rv of this.rivals){ if(rv.state!=='rival')continue; rv.relation=clamp(rv.relation-0.4*dt,0,100); rv.raidCd-=dt;
@@ -1208,7 +1211,7 @@ const Civ={ saveAs:'world', name:'Civilization', rng:null, t:0, mode:'map', turn
     this._segment(); this._makeNations(); this.view={z:1,bx:0,by:0,bw:0,bh:0}; Audio.motif(); toast('the age of nations - unify the world by sword, song, or coin.'); },
   _segment(){ const P=Planet,W=P.W,H=P.H,N=W*H,rng=this.rng; this.W=W; this.H=H;
     const land=[]; for(let k=0;k<N;k++)if(!P.ocean[k])land.push(k);
-    const NP=clamp(Math.round(land.length/850),34,80), seeds=[]; for(let i=0;i<NP;i++)seeds.push(land[rng.int(0,land.length)]);
+    const NP=clamp(Math.round(land.length/1900),16,26), seeds=[]; for(let i=0;i<NP;i++)seeds.push(land[rng.int(0,land.length)]);
     const prov=this.prov=new Int16Array(N).fill(-1);
     for(const k of land){ const j=(k/W)|0,i=k%W; let best=0,bd=1e18; for(let s=0;s<NP;s++){ const sk=seeds[s],sj=(sk/W)|0,si=sk%W; let di=Math.abs(i-si); di=Math.min(di,W-di); const dj=j-sj,d=di*di+dj*dj; if(d<bd){bd=d;best=s;} } prov[k]=best; }
     const provs=this.provs=[]; for(let s=0;s<NP;s++)provs.push({id:s,cells:[],si:0,sj:0,bc:{},owner:-1,capital:false,lume:false,volcano:false,army:0,dev:1,drought:0,gainedBy:null,neighbors:new Set()});
@@ -1217,7 +1220,7 @@ const Civ={ saveAs:'world', name:'Civilization', rng:null, t:0, mode:'map', turn
     for(let j=0;j<H;j++)for(let i=0;i<W;i++){ const k=j*W+i,pk=prov[k]; if(pk<0)continue; const rk=j*W+((i+1)%W),dk=(j+1)*W+i;
       if(prov[rk]>=0&&prov[rk]!==pk){ provs[pk].neighbors.add(prov[rk]); provs[prov[rk]].neighbors.add(pk); }
       if(j+1<H&&prov[dk]>=0&&prov[dk]!==pk){ provs[pk].neighbors.add(prov[dk]); provs[prov[dk]].neighbors.add(pk); } }
-    for(const p of provs)p.army=rng.int(1,4); },
+    for(const p of provs)p.army=rng.int(1,3); },
   yield(p){ const b=p.biome, g=(b===B.GRASS||b===B.SAVANNA||b===B.SHRUB||b===B.BEACH)?3:(b===B.TFOREST||b===B.RAIN)?2:(b===B.DESERT||b===B.TUNDRA||b===B.ICE)?1:2, c=(b===B.TFOREST||b===B.RAIN||b===B.TAIGA)?2:1;
     return {g:(g+p.dev-1)*(p.drought>0?0.4:1),c}; },
   _playerPers(){ let mil=1,cul=1,eco=1; const map={Carnivore:'mil',Predator:'mil',Raider:'mil',Fortifier:'mil',Herbivore:'cul',Social:'cul',Harmonist:'cul',Cultural:'cul',Omnivore:'eco',Adaptive:'eco',Trader:'eco',Builder:'eco',Merchant:'eco'};
@@ -1227,8 +1230,8 @@ const Civ={ saveAs:'world', name:'Civilization', rng:null, t:0, mode:'map', turn
     const pickCap=()=>{ for(let i=0;i<300;i++){ const p=this.provs[rng.int(0,NP)]; if(!used.has(p.id)&&p.size>5){ used.add(p.id); return p; } } for(const p of this.provs)if(!used.has(p.id)){used.add(p.id);return p;} return this.provs[0]; };
     this.nations=[]; for(let n=0;n<NN;n++){ const cap=pickCap(),col=CGEN.PAL[rng.int(0,CGEN.PAL.length)][0];
       const nat={id:n,name:CGEN.name(rng),color:col,rgb:hexRgb(col),pers:n===0?this._playerPers():this._randPers(),gold:14,research:0,lume:0,tech:new Set(),milT:0,culT:0,ecoT:0,atWar:new Set(),att:{},capital:cap.id,alive:true,battlesWon:0,converts:0,goldEarned:0,isPlayer:n===0};
-      cap.owner=n; cap.capital=true; cap.army=6; cap.dev=3; this.nations.push(nat); }
-    for(const nat of this.nations){ let c=0; for(const nb of this.provs[nat.capital].neighbors){ if(c>=2)break; const p=this.provs[nb]; if(p.owner<0){ p.owner=nat.id; p.army=3; c++; } } }
+      cap.owner=n; cap.capital=true; cap.army=n===0?12:8; cap.dev=3; this.nations.push(nat); }
+    for(const nat of this.nations){ let c=0,need=nat.id===0?3:2; for(const nb of this.provs[nat.capital].neighbors){ if(c>=need)break; const p=this.provs[nb]; if(p.owner<0){ p.owner=nat.id; p.army=4; c++; } } }
     for(const a of this.nations)for(const b of this.nations)if(a!==b)a.att[b.id]=clamp(24+Math.round(-70*Math.abs(a.pers.mil-b.pers.mil)+30),-100,100);
     this.player=this.nations[0]; },
   count(id){ let c=0; for(const p of this.provs)if(p.owner===id)c++; return c; },
@@ -1236,7 +1239,7 @@ const Civ={ saveAs:'world', name:'Civilization', rng:null, t:0, mode:'map', turn
     g=Math.round(g*(1+nat.ecoT*0.15)); c=Math.round(c*(1+nat.culT*0.2)); nat.gold+=g; nat.goldEarned+=g; nat.research+=c; nat.lume+=lu; nat._g=g; nat._c=c; },
   _canTech(idx){ const t=CIV_TECH[idx]; return !this.player.tech.has(idx) && (idx%3===0||this.player.tech.has(idx-1)) && this.player.research>=t.cost; },
   _research(idx){ if(!this._canTech(idx))return; const t=CIV_TECH[idx]; this.player.research-=t.cost; this.player.tech.add(idx); if(t.row===0)this.player.milT++;else if(t.row===1)this.player.culT++;else this.player.ecoT++; Audio.blip(500,0.06); toast('researched '+t.name,true); },
-  _recruit(){ const p=this.provs[this.sel]; if(!p||p.owner!==0){ toast('select one of your provinces'); return; } if(this.player.gold<6){ toast('need 6 gold'); return; } this.player.gold-=6; p.army+=2+this.player.milT; Audio.blip(200,0.05); },
+  _recruit(){ const p=this.provs[this.sel]; if(!p||p.owner!==0){ toast('select one of your provinces'); return; } if(this.player.gold<5){ toast('need 5 gold'); return; } this.player.gold-=5; p.army+=3+this.player.milT; Audio.blip(200,0.05); },
   _develop(){ const p=this.provs[this.sel]; if(!p||p.owner!==0)return; if(this.player.gold<10){ toast('need 10 gold'); return; } this.player.gold-=10; p.dev++; toast('province developed'); },
   _act(target){ const s=this.provs[this.sel],t=this.provs[target]; if(!s||s.owner!==0||!s.neighbors.has(target))return; if(s.army<=1){ toast('no army to move'); return; }
     const move=s.army-1;
@@ -1268,6 +1271,7 @@ const Civ={ saveAs:'world', name:'Civilization', rng:null, t:0, mode:'map', turn
     if((p.biome===B.DESERT||p.biome===B.SAVANNA)&&this.rng.chance(0.01)){ p.drought=4; if(p.owner===0)toast('drought grips a province'); }
     if(p.drought>0)p.drought--; } },
   _endTurn(){ if(this.exiting)return; for(const n of this.nations)if(n.alive)this._income(n);
+    if(Game.fragments.indexOf('civ')<0&&this.provs.some(p=>p.owner===0&&p.lume)){ Game.fragments.push('civ'); toast('a Lume vein in your realm resonates - a Chord Fragment',true); }
     for(const n of this.nations)if(n.alive&&!n.isPlayer)this._aiTurn(n); this._diploTick(); this._flips(); this._events(); this.turn++; this._checkVictory(); },
   _checkVictory(){ if(this.exiting)return; const total=this.provs.length,pc=this.count(0);
     if(pc/total>=0.6){ this.exiting=0.001; this.endInfo='you unify '+Math.round(pc/total*100)+'% of the world'; }
@@ -1345,10 +1349,10 @@ const POWER={Herbivore:["Gaia's Favor",'terraforming is cheaper'],Carnivore:['Ap
   Builder:['Arcology','+colony output'],Fortifier:['Bastion','+planet defense'],Merchant:['Franchise','cheaper colonies'],
   Cultural:['Broadcast','peaceful conversion'],Military:['Warfleet','+fleet strength'],Economic:['Monopoly','+Lume value']};
 const Space={ saveAs:'space', name:'Space', rng:null, t:0, mode:'galaxy', turn:1, stars:null, empires:null, player:null,
-  fleet:null, selStar:-1, curPlanet:null, view:null, res:null, powers:null, reachedCore:false, msg:'', _btns:null, coreStar:-1,
-  load(){ this.rng=Game.rng.fork('space'); this.t=0; this.turn=1; this.mode='galaxy'; this.selStar=-1; this.curPlanet=null; this.reachedCore=false;
+  fleet:null, selStar:-1, curPlanet:null, view:null, res:null, powers:null, reachedCore:false, msg:'', _btns:null, coreStar:-1, nullAct:0, nullThreat:0, ending:null, elder:null,
+  load(){ this.rng=Game.rng.fork('space'); this.t=0; this.turn=1; this.mode='galaxy'; this.selStar=-1; this.curPlanet=null; this.reachedCore=false; this.nullAct=0; this.nullThreat=0; this.ending=null; this.elder=null;
     this.powers=this._powers(); this.res={energy:30,minerals:20,research:0,lume:5};
-    this._genGalaxy(); Audio.motif(); toast('the long climb reaches the stars. explore, terraform, and grow toward the core.'); },
+    this._genGalaxy(); Audio.motif(); toast('the long climb reaches the stars. explore, terraform, grow - and reach the silent core.'); },
   _powers(){ const cards=(Game.traits||[]).map(t=>t&&t.card), has=c=>cards.indexOf(c)>=0; return {
     terraform:has('Herbivore')?0.6:1, fleetDmg:has('Carnivore')?1.25:1, yield:has('Omnivore')?1.1:1, diplo:has('Social')?15:0,
     dread:has('Predator'), jump:has('Adaptive')?2:1, happy:has('Harmonist')?12:0, plunder:has('Raider')?1.5:1, route:has('Trader')?1.3:1,
@@ -1384,6 +1388,11 @@ const Space={ saveAs:'space', name:'Space', rng:null, t:0, mode:'galaxy', turn:1
     // scatter anomalies + fragments on unexplored stars
     for(const s of stars){ if(s.owner>=0)continue; if(rng.chance(0.22))s.anomaly=rng.pick(['ancient ruin','derelict hulk','dust nebula','signal echo']); }
     const frs=stars.filter(s=>s.owner<0&&s.ring>=1); for(let f=0;f<3&&f<frs.length;f++){ rng.pick(frs).fragment=true; }
+    // Echo NG+: an elder race from a previous playthrough already walks this galaxy
+    const echo=this._importEcho(); if(echo){ let st=null; for(let tr=0;tr<200;tr++){ const c=rng.pick(stars); if(c.owner<0&&c.ring<2){ st=c; break; } }
+      if(st){ const id=this.empires.length, col=CGEN.PAL[echo.palette%CGEN.PAL.length][0]; st.owner=id; st.explored=false; let bp=st.planets[0]; for(const pl of st.planets)if(this._habit(pl)>this._habit(bp))bp=pl; this._colonize(st,bp,false,id);
+        const eld={id,name:echo.name||'the Ancients',color:col,rgb:hexRgb(col),pers:this._randPers(),home:st.id,att:{},alive:true,fleetStr:9,elder:true};
+        for(const a of this.empires){ a.att[id]=8; eld.att[a.id]=8; } this.empires.push(eld); this.elder=eld.name; Game.log('space','elder',{}); toast('an elder race walks here already: '+eld.name+', an echo of a world before',true); } }
     this.view={z:1,cx:0,cy:0}; },
   _playerPers(){ let m=1,c=1,e=1; const map={Carnivore:'m',Predator:'m',Raider:'m',Fortifier:'m',Military:'m',Herbivore:'c',Social:'c',Harmonist:'c',Cultural:'c',Omnivore:'e',Adaptive:'e',Trader:'e',Builder:'e',Merchant:'e',Economic:'e'};
     for(const t of (Game.traits||[])){ const k=t&&map[t.card]; if(k==='m')m++;else if(k==='c')c++;else if(k==='e')e++; } const s=m+c+e; return {mil:m/s,cul:c/s,eco:e/s}; },
@@ -1393,7 +1402,7 @@ const Space={ saveAs:'space', name:'Space', rng:null, t:0, mode:'galaxy', turn:1
     return h>0.72?3:h>0.5?2:h>0.32?1:0; },
   _colonize(star,pl,isHome,owner){ owner=owner===undefined?0:owner; if(pl.colony)return false; const cost=Math.round(18*this.powers.colonize);
     if(owner===0&&!isHome){ if(this._habit(pl)<1){ toast('this world is uninhabitable - terraform it first'); return false; } if(this.res.minerals<cost){ toast('need '+cost+' minerals to colonize'); return false; } this.res.minerals-=cost; }
-    pl.colony={owner,pop:isHome?4:1,ind:0.4,res:0.3,cul:0.3,happy:60,export:this.rng.int(0,GOODS.length),route:0}; if(owner===0){ star.owner=0; } if(!star.owner&&star.owner!==0)star.owner=owner; star.owner=owner; if(owner===0&&!isHome)toast('colony founded on '+pl.name,true); return true; },
+    pl.colony={owner,pop:isHome?4:1,ind:0.4,res:0.3,cul:0.3,happy:60,export:this.rng.int(0,GOODS.length),route:0}; if(owner===0){ star.owner=0; } if(!star.owner&&star.owner!==0)star.owner=owner; star.owner=owner; if(owner===0&&!isHome){ toast('colony founded on '+pl.name,true); Game.log('space','colony',{}); } return true; },
   colonies(owner){ const out=[]; for(const s of this.stars)for(const pl of s.planets)if(pl.colony&&pl.colony.owner===owner)out.push({s,pl}); return out; },
   _income(){ let en=0,mi=0,re=0,lu=0; for(const {s,pl} of this.colonies(0)){ const c=pl.colony, base=c.pop*(1+this._habit(pl)*0.3)*this.powers.yield*this.powers.cap*(c.happy/60);
     mi+=base*c.ind*2; re+=base*c.res*1.6; en+=base*0.6+base*c.cul*0.5; if(s.ring>=1)lu+=1; c.route+=0.02; if(c.route>=2)en+=2*this.powers.route;
@@ -1402,27 +1411,31 @@ const Space={ saveAs:'space', name:'Space', rng:null, t:0, mode:'galaxy', turn:1
   _explore(star){ if(star.explored)return; star.explored=true; for(const nb of star.neighbors)this.stars[nb].explored=true;
     if(star.fragment&&Game.fragments.indexOf('space:'+star.id)<0){ Game.fragments.push('space:'+star.id); toast('a Chord Fragment lies in the '+star.name+' ruins',true); star.fragment=false; }
     else if(star.anomaly){ const r=this.rng; if(r.chance(0.5)){ const g=r.int(4,12); this.res.research+=g; toast(star.anomaly+': +'+g+' research'); } else { const g=r.int(2,6); this.res.lume+=g; toast(star.anomaly+': +'+g+' Lume'); } star.anomaly=null; }
-    if(star.isCore&&!this.reachedCore){ this.reachedCore=true; toast('you reach the silent core. something ancient stirs... (the Null arc arrives in the next pass)',true); } },
+    if(star.isCore&&!this.ending){ this.reachedCore=true; this._archive(); } },
   _moveFleet(toId){ const to=this.stars[toId], from=this.stars[this.fleet.star]; const reach=from.neighbors.has(toId)||(this.powers.jump>1&&Math.hypot(to.x-from.x,to.y-from.y)<0.34);
     if(!reach){ toast('no hyperlane to that star'); return; }
     if(to.owner>0&&this.player.att[to.owner]!=null){ // contest
       const enemy=this.empires[to.owner], estr=enemy.fleetStr*(to.planets.some(p=>p.colony)?this.powers.defense:1)/this.powers.defense;
-      if(this.fleet.str*this.powers.fleetDmg>estr){ toast('your fleet breaks the '+enemy.name+' at '+to.name); for(const pl of to.planets)if(pl.colony&&pl.colony.owner===to.owner){ pl.colony.owner=0; this.res.lume+=Math.round(3*this.powers.plunder); } to.owner=0; enemy.fleetStr=Math.max(1,enemy.fleetStr-2); }
+      if(this.fleet.str*this.powers.fleetDmg>estr){ toast('your fleet breaks the '+enemy.name+' at '+to.name); Game.log('space','battle',{}); for(const pl of to.planets)if(pl.colony&&pl.colony.owner===to.owner){ pl.colony.owner=0; this.res.lume+=Math.round(3*this.powers.plunder); } to.owner=0; enemy.fleetStr=Math.max(1,enemy.fleetStr-2); }
       else { this.fleet.str=Math.max(1,this.fleet.str-2); toast('the '+enemy.name+' repel your fleet'); return; } }
     this.fleet.star=toId; this._explore(to); this.selStar=toId; },
   _terraform(tool){ const pl=this.curPlanet; if(!pl)return; const cost=Math.round(6*this.powers.terraform); if(this.res.energy<cost){ toast('need '+cost+' energy'); return; } this.res.energy-=cost;
     if(tool==='heat')pl.tf.heat=clamp(pl.tf.heat+0.3,-1.2,1.2); else if(tool==='cool')pl.tf.heat=clamp(pl.tf.heat-0.3,-1.2,1.2); else if(tool==='hydro')pl.tf.hydro=clamp(pl.tf.hydro+0.35,0,1.5); else pl.tf.atmo=clamp(pl.tf.atmo+0.3,0,1.5);
-    Audio.blip(360,0.05); },
-  _endTurn(){ this._income(); for(const e of this.empires){ if(!e.alive||e.isPlayer)continue; this._aiEmpire(e); }
+    Audio.blip(360,0.05); if(this._habit(pl)===3)Game.log('space','terraform3',{}); },
+  _endTurn(){ if(this.ending)return; this._income(); for(const e of this.empires){ if(!e.alive||e.isPlayer)continue; this._aiEmpire(e); }
     for(const a of this.empires){ if(!a.alive)continue; for(const b of this.empires){ if(a===b)continue; a.att[b.id]=clamp((a.att[b.id]||0)+0.3,-100,100); } }
-    this.fleet.moved=false; this.turn++;
-    if(this.reachedCore&&this.turn%1===0){} },
+    this.nullThreat+=0.7+this.colonies(0).length*0.12; const prev=this.nullAct;
+    this.nullAct=this.nullThreat>30?3:this.nullThreat>15?2:this.nullThreat>6?1:0;
+    if(this.nullAct>prev){ if(this.nullAct===1){ toast('the Null stir at the rim; signals jam and go dark',true); Game.log('space','null1',{}); } else if(this.nullAct===2)toast('Null sterilizer fleets breach the mid systems',true); else toast('the Null turn their full silence upon the galaxy',true); }
+    if(this.nullAct>=2){ const cols=this.colonies(0); if(cols.length){ const {pl}=this.rng.pick(cols); pl.colony.pop-=(this.nullAct-1)*0.7/Math.max(1,this.powers.defense); pl.colony.happy=clamp(pl.colony.happy-7,0,100); if(pl.colony.pop<=0.15){ pl.colony=null; toast('a colony is sterilized and falls silent'); } } }
+    this.fleet.moved=false; this.turn++; },
   _aiEmpire(e){ // grow a colony's pop, occasionally expand fleet
     const cols=this.colonies(e.id); for(const {pl} of cols){ if(pl.colony.pop<7)pl.colony.pop+=0.04; }
     if(this.rng.chance(0.3))e.fleetStr+=0.4; },
   onkey(k){ if(this.mode==='planet'){ if(k==='escape')this.mode='galaxy'; return; } if(this.mode==='system'){ if(k==='escape')this.mode='galaxy'; return; }
     if(k==='enter'||k===' ')this._endTurn(); },
   onpointer(){ if(this._btns)for(const b of this._btns){ if(Input.mx>=b.x&&Input.mx<=b.x+b.w&&Input.my>=b.y&&Input.my<=b.y+b.h){ b.fn(); return; } }
+    if(this.ending)return;
     if(this.mode==='planet')return;
     if(this.mode==='system'){ const s=this.stars[this.selStar>=0?this.selStar:this.fleet.star]; for(const pl of s.planets){ if(pl._sx!=null&&Math.hypot(pl._sx-Input.mx,pl._sy-Input.my)<26){ this.curPlanet=pl; this.mode='planet'; return; } } return; }
     // galaxy: nearest star to click
@@ -1433,10 +1446,35 @@ const Space={ saveAs:'space', name:'Space', rng:null, t:0, mode:'galaxy', turn:1
     if(best!==this.fleet.star && (this.stars[this.fleet.star].neighbors.has(best)||(this.powers.jump>1))) this._moveFleet(best);
     this.selStar=best; },
   _sp(s){ const v=this.view, R=Math.min(VW,VH-120)*0.46*v.z, cx=VW/2+v.cx, cy=(VH-40)/2+40+v.cy; return {x:cx+s.x*R,y:cy+s.y*R}; },
+  _archive(){ Game.log('space','archive',{}); const whole=Game.fragments.length>=6;
+    this.ending = whole ? {type:'genesis',title:'The Genesis Chord',c:'#7fe0d3',text:[
+      'You reach the Archive, the last Cartographer, patient in the dark.',
+      'You carry all six fragments. The Chord is whole.',
+      'You broadcast the completed Song through the Null jamming web.',
+      'The machines that worship silence hear music at last, and still.',
+      'Across the galaxy, dead worlds remember their first note, and bloom.'] }
+    : {type:'military',title:'The Long Silence',c:'#ff9a7f',text:[
+      'You reach the Archive with the Song unfinished ('+Game.fragments.length+'/6).',
+      'Without the whole Chord, only force can answer the Null.',
+      'You break their fleets over the core, at a terrible and final cost.',
+      'The galaxy is yours, and quiet. Too quiet.',
+      'Somewhere a world you never found still hums a fragment, and waits.'] };
+    if(whole)Game.log('space','genesis',{}); this._exportEcho(); Audio.motif(); },
+  _exportEcho(){ try{ const pool=JSON.parse(localStorage.getItem('eons.pantheon')||'[]'), nm=(Game.traits[4]?'The '+Game.traits[4].card+' Ascendancy':'The First People');
+    pool.push({name:nm,traits:(Game.traits||[]).map(t=>t&&t.card),palette:hashStr(Game.seed)%CGEN.PAL.length,ending:this.ending.type}); localStorage.setItem('eons.pantheon',JSON.stringify(pool.slice(-8))); }catch(e){} },
+  _importEcho(){ try{ const pool=JSON.parse(localStorage.getItem('eons.pantheon')||'[]'); return pool.length?pool[pool.length-1]:null; }catch(e){ return null; } },
+  _endRender(){ const e=this.ending; ctx.textAlign='center';
+    ctx.fillStyle=e.c; ctx.font='700 34px Space Grotesk, sans-serif'; ctx.fillText(e.title,VW/2,VH*0.22);
+    ctx.font='16px IBM Plex Mono, monospace'; ctx.fillStyle='#cbd6e6'; e.text.forEach((l,i)=>ctx.fillText(l,VW/2,VH*0.33+i*30));
+    ctx.fillStyle='#8a97ab'; ctx.font='13px IBM Plex Mono, monospace'; ctx.fillText('fragments '+Game.fragments.length+'/6   -   your run is written in The Chronicle  [H]',VW/2,VH*0.33+e.text.length*30+30);
+    this._btns=[]; this._mk(VW/2-152,VH*0.78,146,42,'New Game + (Echo)',()=>{ Game.log('meta','echo',{}); location.reload(); },e.c);
+    this._mk(VW/2+8,VH*0.78,146,42,'return to menu',()=>location.reload(),'#6a7a90'); ctx.textAlign='left'; },
   update(dt){ this.t+=dt; },
   render(){ ctx.fillStyle='#04060c'; ctx.fillRect(0,0,VW,VH); starfield(this.t*1000);
+    if(this.ending){ this._endRender(); return; }
     if(this.mode==='galaxy')this._galaxy(); else if(this.mode==='system')this._system(); else this._planet();
-    this._hud(); },
+    this._hud();
+    if(this.nullAct>0){ ctx.fillStyle=this.nullAct>=3?'#ff6a4a':this.nullAct>=2?'#ff9a6a':'#c79aff'; ctx.font='700 12px Space Grotesk, sans-serif'; ctx.textAlign='center'; ctx.fillText('NULL - act '+this.nullAct+' ('+['','rim jamming','sterilizer fleets','core war'][this.nullAct]+')',VW/2,52); ctx.textAlign='left'; } },
   _galaxy(){ // lanes
     ctx.strokeStyle='#1a2740'; ctx.lineWidth=1; for(const s of this.stars){ if(!s.explored)continue; const a=this._sp(s); for(const nb of s.neighbors){ if(nb<s.id)continue; const t=this.stars[nb]; if(!t.explored)continue; const b=this._sp(t); ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke(); } }
     for(const s of this.stars){ const p=this._sp(s); if(!s.explored){ ctx.fillStyle='#2a3550'; ctx.beginPath(); ctx.arc(p.x,p.y,1.6,0,TAU); ctx.fill(); continue; }
@@ -1508,13 +1546,79 @@ const Stages={
 };
 
 // ============================================================================
+// P7: Chronicle (historian codex) + Achievements  [doc sections 8 + 10]
+// ============================================================================
+const Chronicle={ entries:[],
+  G:{ cell_trait:['In the first shallows, a {card} thing hauled itself onto the sand.','The tidepool gave up one of its own; it had chosen to be {card}.'],
+    creature_befriend:['The {sp} were sung into kinship.','A wary {sp} answered the five notes and drew near.'],
+    creature_dominate:['The {sp} were broken, and made to kneel.'],
+    creature_trait:['A pack coalesced. So began the age of the {card}.'],
+    tribal_win:['The {nb} laid down their spears and joined the song.'],
+    tribal_crush:['The {nb} were scattered like ash on the wind.'],
+    tribal_trait:['Around a new totem, the tribe took its name: the {card}s.'],
+    city_build:['They raised a {d} against the widening sky.'],
+    city_trait:['The city crowned itself a capital of {card}s.'],
+    civ_crush:['Legions took the field, and a province changed its banner.'],
+    civ_trait:['One banner rose over the whole world, {card} and unbowed.'],
+    space_colony:['A seed of the old world took root beneath a stranger sun.'],
+    space_archive:['At the silent core, the last Cartographer opened its eyes.'],
+    space_genesis:['The completed Song went out, and the dark remembered how to bloom.'] },
+  reset(){ this.entries=[]; },
+  note(stage,type,data){ const t=this.G[stage+'_'+type]; if(!t)return; let s=t[this.entries.length%t.length].replace(/\{(\w+)\}/g,(m,k)=>(data&&data[k]!=null)?data[k]:'thing'); this.entries.push(s); if(this.entries.length>80)this.entries.shift(); } };
+const ACH=[
+ {id:'firstbreath',n:'First Breath',d:'crawl onto land'},{id:'bigfish',n:'Bigger Fish',d:'devour a predator'},
+ {id:'herbivore',n:'Peaceable',d:'leave the pool herbivorous'},{id:'apex',n:'Apex',d:'leave the pool carnivorous'},
+ {id:'fivenotes',n:'Five Notes',d:'sing a perfect song'},{id:'speak',n:'Speak, Friend',d:'befriend a species'},
+ {id:'pack',n:'Sapience',d:'form a pack'},{id:'polymath',n:'Polymath',d:'mutate five times'},
+ {id:'prometheus',n:'Prometheus',d:'discover fire'},{id:'woodstock',n:'Woodstock',d:'unite tribes by music alone'},
+ {id:'scorched',n:'Scorched Earth',d:'unite tribes by raiding alone'},{id:'cornerstone',n:'Cornerstone',d:'raise your first temple'},
+ {id:'ironbank',n:'Iron Bank',d:'bank 300 coin in a city'},{id:'capital',n:'Cornerstone of Empire',d:'declare a capital'},
+ {id:'oneworld',n:'One World',d:'unify the planet'},{id:'pax',n:'Pax',d:'unify by culture'},
+ {id:'firstcolony',n:'New Horizons',d:'found an off-world colony'},{id:'gardener',n:'Gardener',d:'terraform a world to T3'},
+ {id:'warlord',n:'Warlord',d:'win a battle among the stars'},{id:'quiet',n:'The Quiet Ones',d:'survive first Null contact'},
+ {id:'corebreach',n:'Core Breach',d:'reach the Archive'},{id:'wholesong',n:'The Whole Song',d:'gather all six fragments'},
+ {id:'genesis',n:'Genesis',d:'revive the galaxy'},{id:'silence',n:'Silence Answered',d:'reach the true ending'},
+ {id:'echo',n:'Echo',d:'begin again, remembered'},{id:'xeno',n:'Xenophile',d:'meet an elder race'},
+ {id:'historian',n:'Historian',d:'witness twenty deeds'},{id:'stargazer',n:'Pale Blue Dot',d:'look back from orbit'} ];
+const Ach={ done:new Set(),
+  init(){ try{ JSON.parse(localStorage.getItem('eons.ach')||'[]').forEach(id=>this.done.add(id)); }catch(e){} },
+  unlock(id){ if(this.done.has(id))return; if(!ACH.find(x=>x.id===id))return; this.done.add(id); toast('achievement: '+ACH.find(x=>x.id===id).n,true); Audio.blip(720,0.07); try{ localStorage.setItem('eons.ach',JSON.stringify([...this.done])); }catch(e){} },
+  check(stage,type,d){ d=d||{};
+    if(stage==='cell'&&type==='trait'){ this.unlock('firstbreath'); this.unlock('stargazer'); if(d.card==='Herbivore')this.unlock('herbivore'); if(d.card==='Carnivore')this.unlock('apex'); }
+    if(stage==='cell'&&type==='predator')this.unlock('bigfish');
+    if(stage==='creature'&&type==='befriend'){ this.unlock('speak'); if(d.perfect)this.unlock('fivenotes'); }
+    if(stage==='creature'&&type==='trait'){ this.unlock('pack'); if((d.edits|0)>=5)this.unlock('polymath'); }
+    if(stage==='tribal'&&type==='fire')this.unlock('prometheus');
+    if(stage==='tribal'&&type==='trait'){ if((d.won|0)>=3&&(d.crushed|0)===0)this.unlock('woodstock'); if((d.crushed|0)>=3&&(d.won|0)===0)this.unlock('scorched'); }
+    if(stage==='city'&&type==='build'&&d.d==='temple')this.unlock('cornerstone');
+    if(stage==='city'&&type==='trait'){ this.unlock('capital'); if((d.coin|0)>=300)this.unlock('ironbank'); }
+    if(stage==='civ'&&type==='trait'){ this.unlock('oneworld'); if(d.card==='Cultural')this.unlock('pax'); }
+    if(stage==='space'){ if(type==='colony')this.unlock('firstcolony'); if(type==='terraform3')this.unlock('gardener'); if(type==='battle')this.unlock('warlord'); if(type==='null1')this.unlock('quiet'); if(type==='archive')this.unlock('corebreach'); if(type==='genesis'){ this.unlock('genesis'); this.unlock('silence'); } if(type==='elder')this.unlock('xeno'); }
+    if(stage==='meta'&&type==='echo')this.unlock('echo');
+    if((Game.fragments||[]).length>=6)this.unlock('wholesong');
+    if(Chronicle.entries.length>=20)this.unlock('historian'); } };
+function drawMetaOverlay(){ ctx.save(); ctx.setTransform(DPR,0,0,DPR,0,0); ctx.fillStyle='rgba(4,8,14,0.94)'; ctx.fillRect(0,0,VW,VH); ctx.textBaseline='alphabetic';
+  if(Game.overlay==='chronicle'){ ctx.textAlign='center'; ctx.fillStyle='#e8eef6'; ctx.font='700 24px Space Grotesk, sans-serif'; ctx.fillText('THE CHRONICLE',VW/2,54);
+    const ent=Chronicle.entries.slice(-26); ctx.textAlign='left'; ctx.font='14px IBM Plex Mono, monospace';
+    if(!ent.length){ ctx.textAlign='center'; ctx.fillStyle='#8a97ab'; ctx.fillText('the historian has not yet put quill to page.',VW/2,VH/2); }
+    ent.forEach((s,i)=>{ ctx.fillStyle='#aebbcd'; ctx.fillText('- '+s,Math.max(40,VW/2-380),94+i*23); });
+    ctx.textAlign='center'; ctx.fillStyle='#c9a24b'; ctx.font='12px IBM Plex Mono, monospace'; ctx.fillText('a far-future history of your world   -   [H] to close',VW/2,VH-26); }
+  else { ctx.textAlign='center'; ctx.fillStyle='#e8eef6'; ctx.font='700 24px Space Grotesk, sans-serif'; ctx.fillText('ACHIEVEMENTS   '+Ach.done.size+' / '+ACH.length,VW/2,54);
+    ctx.textAlign='left'; const colW=(Math.min(VW,980)-120)/2, x0=VW/2-Math.min(VW,980)/2+40;
+    ACH.forEach((a,i)=>{ const c=i%2, x=x0+c*colW, y=96+((i>>1))*30, got=Ach.done.has(a.id);
+      ctx.fillStyle=got?'#7fe0d3':'#33435a'; ctx.font='700 13px Space Grotesk, sans-serif'; ctx.fillText(got?'[+]':'[ ]',x,y);
+      ctx.fillStyle=got?'#e8eef6':'#5f7088'; ctx.fillText(a.n,x+34,y); ctx.fillStyle=got?'#8a97ab':'#33435a'; ctx.font='10px IBM Plex Mono, monospace'; ctx.fillText(a.d,x+34,y+13); });
+    ctx.textAlign='center'; ctx.fillStyle='#c9a24b'; ctx.font='12px IBM Plex Mono, monospace'; ctx.fillText('[K] to close',VW/2,VH-26); }
+  ctx.restore(); }
+
+// ============================================================================
 // Screen management + loop
 // ============================================================================
 function setScreen(s){ Game.screen=s; if(s.load)s.load(); Game.persist(); }
 function descend(){ setScreen(Cell); }
 function reseed(seed){ startWorld(seed); }
 function startWorld(seed){
-  Game.seed=seed; Game.rng=Rng(seed);
+  Game.seed=seed; Game.rng=Rng(seed); Game.traits=[]; Game.fragments=[]; Game.decisionLog=[]; Chronicle.reset();
   Planet.generate(seed,CONFIG.mapW,CONFIG.mapH,{});
   setScreen(World);
 }
@@ -1524,6 +1628,8 @@ function frame(){ const t=now(); let dt=(t-last)/1000; last=t; if(dt>0.25)dt=0.2
   let steps=0; while(acc>=CONFIG.FDT && steps<5){ if(Game.screen&&Game.screen.update)Game.screen.update(CONFIG.FDT); acc-=CONFIG.FDT; steps++; }
   if(steps>=5)acc=0;
   if(Game.screen&&Game.screen.render)Game.screen.render();
+  if(Game.screen&&!Game.overlay){ ctx.fillStyle='#5a6a80'; ctx.font='10px IBM Plex Mono, monospace'; ctx.textAlign='right'; ctx.fillText('[H] chronicle  [K] achievements',VW-14,VH-26); ctx.textAlign='left'; }
+  if(Game.overlay)drawMetaOverlay();
   if(FLAGS.debug){ const s=Planet.stats; devEl.textContent=
     'screen '+(Game.screen&&(Game.screen.saveAs||Game.screen.name)||'-')+'\n'+
     'seed   '+Game.seed+'\n'+(s?('gen    '+s.genMs.toFixed(1)+'ms\nland   '+(s.landPct*100).toFixed(1)+'%\n'):'')+
@@ -1554,9 +1660,10 @@ if(saved&&saved.seed){ seedInput.value=saved.seed; Game.traits=saved.traits||[];
 if(urlParam('seed')!=null){ seedInput.value=urlParam('seed'); }
 
 // expose a tiny hook for automated verification (?dev)
-window.__EONS={ Planet, Rng, Game, CGEN, Rhythm, RTS, Creature, Cell, Tribal, City, Civ, Space, Stages, setScreen, startWorld,
+window.__EONS={ Planet, Rng, Game, CGEN, Rhythm, RTS, Creature, Cell, Tribal, City, Civ, Space, Chronicle, Ach, ACH, Stages, setScreen, startWorld,
   biomeHash(){ let h=2166136261>>>0; const b=Planet.biome; for(let i=0;i<b.length;i++){ h^=b[i]; h=Math.imul(h,16777619);} return h>>>0; } };
 
+Ach.init();
 requestAnimationFrame(frame);
 })();
 </script>
