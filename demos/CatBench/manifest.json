@@ -1,5 +1,11 @@
 {
   "models": {
+    "gpt-5.6-sol": {
+      "display_name": "GPT-5.6-Sol",
+      "svg": "assets/GPT-5.6-Sol-svg.jpg",
+      "svg_source": "assets/GPT-5.6-Sol.svg",
+      "_first_seen": "2026-07-09T23:44:25+00:00"
+    },
     "grok-4.5": {
       "display_name": "grok-4.5",
       "python_render": "assets/grok-4.5-python.jpg",
