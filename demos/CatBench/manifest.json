@@ -4,11 +4,13 @@
       "display_name": "GPT-5.6-Sol-Pro",
       "svg": "assets/GPT-5.6-Sol-Pro-svg.jpg",
       "svg_source": "assets/GPT-5.6-Sol-Pro.svg",
-      "_first_seen": "2026-07-09T23:55:25+00:00"
+      "_first_seen": "2026-07-09T23:55:36Z"
     },
     "gpt-5.6-sol": {
       "display_name": "GPT-5.6-Sol",
+      "python_render": "assets/GPT-5.6-Sol-python.jpg",
       "svg": "assets/GPT-5.6-Sol-svg.jpg",
+      "python_source": "assets/GPT-5.6-Sol.py",
       "svg_source": "assets/GPT-5.6-Sol.svg",
       "_first_seen": "2026-07-09T23:44:36Z"
     },
