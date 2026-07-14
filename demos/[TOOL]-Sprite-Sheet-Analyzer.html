@@ -6,6 +6,657 @@
     <title>Sprite Sheet Analyzer</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='80' font-size='80'%3E%F0%9F%8E%A8%3C/text%3E%3C/svg%3E">
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Pixel snapper: ported from github.com/Hugo-Dz/spritefusion-pixel-snapper (MIT, Hugo Duprez) -->
+    <script>
+/*
+ * Sprite Fusion Pixel Snapper - standalone JavaScript port.
+ *
+ * Purpose: clean up messy / AI-generated pixel art by (1) k-means quantizing the
+ * palette, (2) detecting the underlying pixel grid from image gradients, and
+ * (3) resampling each grid cell to its most-frequent color (mode) so dithering
+ * is preserved. The output is the image at its true logical pixel-art resolution.
+ *
+ * Ported from github.com/Hugo-Dz/spritefusion-pixel-snapper (MIT, Hugo Duprez).
+ * Only the core image pipeline is ported (no CLI, batch/file IO, or PNG codec).
+ * Determinism comes from a seeded mulberry32 PRNG; exact bit-parity with the
+ * Rust `rand`/ChaCha8 implementation is intentionally NOT preserved.
+ *
+ * API:
+ *   snapPixelArt(rgba, width, height, options) -> {
+ *     rgba,            // Uint8ClampedArray, snapped image, length outW*outH*4
+ *     width, height,   // outW, outH - the logical pixel-art resolution
+ *     pixelSize,       // detected/used step (step_x)
+ *     cols, rows,      // grid cut indices in SOURCE pixels (map cells with these)
+ *     quantizedRgba,   // full-res quantized image, length width*height*4
+ *   }
+ *   rgba: Uint8ClampedArray|Uint8Array, length width*height*4, RGBA row-major.
+ *   options (all optional):
+ *     { kColors=16, pixelSizeOverride=null, seed=42, mergeThinCells=false }.
+ *
+ * Deliberate deviation from the Rust reference (opt-in, default off):
+ *   mergeThinCells - when true, after cut stabilization any grid line that would
+ *   produce a cell narrower than ~0.5 * detected pixelSize is dropped, applied
+ *   symmetrically to both cols and rows (endpoints 0 and `limit` are never
+ *   dropped, and an axis is never reduced below 1 cell). This removes the
+ *   1px "sliver" cells the elastic walker can leave at an edge, so a near-clean
+ *   16x16-pattern-at-8px input yields 16x16 instead of 17x17. Default false
+ *   keeps output bit-for-bit identical to the Rust pipeline.
+ *
+ * Browser usage:
+ *   const { data, width, height } = ctx.getImageData(0, 0, cw, ch);
+ *   const out = snapPixelArt(data, width, height, { kColors: 16 });
+ *   const img = new ImageData(out.rgba, out.width, out.height); // then draw with
+ *   // ctx.imageSmoothingEnabled=false and scale up for a crisp nearest-neighbor view.
+ */
+
+(function () {
+  'use strict';
+
+  // ----- Config defaults (mirror Rust `Config::default`) --------------------
+  var DEFAULTS = {
+    kColors: 16,
+    kSeed: 42,
+    maxKmeansIterations: 15,
+    peakThresholdMultiplier: 0.2,
+    peakDistanceFilter: 4,
+    walkerSearchWindowRatio: 0.35,
+    walkerMinSearchWindow: 2.0,
+    walkerStrengthThreshold: 0.5,
+    minCutsPerAxis: 4,
+    fallbackTargetSegments: 64,
+    maxStepRatio: 1.8,
+    pixelSizeOverride: null
+  };
+
+  // ----- Seeded PRNG + samplers ---------------------------------------------
+
+  // mulberry32: small, fast, deterministic 32-bit PRNG. Returns [0, 1).
+  function mulberry32(seed) {
+    var a = seed >>> 0;
+    return function () {
+      a = (a + 0x6d2b79f5) | 0;
+      var t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  // Uniform integer in [0, upper). Replaces Rust `rng.gen_range(0..upper)`.
+  function sampleIndex(rng, upper) {
+    var i = Math.floor(rng() * upper);
+    if (i >= upper) i = upper - 1; // guard against rng() === 1 rounding edge
+    if (i < 0) i = 0;
+    return i;
+  }
+
+  // Weighted index sample proportional to `weights` (all >= 0, total > 0).
+  // Replaces Rust `WeightedIndex::new(&weights).sample(rng)`.
+  function weightedSample(rng, weights, total) {
+    var r = rng() * total;
+    for (var i = 0; i < weights.length; i++) {
+      r -= weights[i];
+      if (r < 0) return i;
+    }
+    return weights.length - 1; // floating-point slack fallback
+  }
+
+  // Float -> usize cast matching Rust's saturating `as usize` for our ranges:
+  // negatives clamp to 0, positives truncate toward zero (== floor here).
+  function f2u(x) {
+    return x <= 0 ? 0 : Math.floor(x);
+  }
+
+  // ----- 1. Quantization (k-means, k-means++ init) --------------------------
+
+  function quantizeImage(rgba, width, height, k, seed) {
+    var nAll = width * height;
+    var out = new Uint8ClampedArray(rgba.length);
+    out.set(rgba);
+
+    // Collect opaque pixels (alpha != 0) as a flat Float32Array [r,g,b,...].
+    var opaque = new Float32Array(nAll * 3);
+    var nPixels = 0;
+    for (var p = 0; p < nAll; p++) {
+      var base = p * 4;
+      if (rgba[base + 3] === 0) continue;
+      var o = nPixels * 3;
+      opaque[o] = rgba[base];
+      opaque[o + 1] = rgba[base + 1];
+      opaque[o + 2] = rgba[base + 2];
+      nPixels++;
+    }
+    if (nPixels === 0) {
+      return out; // nothing opaque to fit; pass through unchanged
+    }
+
+    var rng = mulberry32(seed);
+    k = Math.min(k, nPixels);
+
+    function distSq(pr, pg, pb, cr, cg, cb) {
+      var dr = pr - cr, dg = pg - cg, db = pb - cb;
+      return dr * dr + dg * dg + db * db;
+    }
+
+    var centroids = new Float32Array(k * 3);
+    var firstIdx = sampleIndex(rng, nPixels);
+    centroids[0] = opaque[firstIdx * 3];
+    centroids[1] = opaque[firstIdx * 3 + 1];
+    centroids[2] = opaque[firstIdx * 3 + 2];
+
+    var distances = new Float64Array(nPixels);
+    for (var d = 0; d < nPixels; d++) distances[d] = Infinity;
+
+    // k-means++ seeding: each new centroid sampled ~ running min sq-distance.
+    for (var c = 1; c < k; c++) {
+      var lastR = centroids[(c - 1) * 3];
+      var lastG = centroids[(c - 1) * 3 + 1];
+      var lastB = centroids[(c - 1) * 3 + 2];
+      var sumSq = 0.0;
+      for (var i = 0; i < nPixels; i++) {
+        var oi = i * 3;
+        var dsq = distSq(opaque[oi], opaque[oi + 1], opaque[oi + 2], lastR, lastG, lastB);
+        if (dsq < distances[i]) distances[i] = dsq;
+        sumSq += distances[i];
+      }
+      var idx;
+      if (sumSq <= 0.0) {
+        idx = sampleIndex(rng, nPixels);
+      } else {
+        idx = weightedSample(rng, distances, sumSq);
+      }
+      centroids[c * 3] = opaque[idx * 3];
+      centroids[c * 3 + 1] = opaque[idx * 3 + 1];
+      centroids[c * 3 + 2] = opaque[idx * 3 + 2];
+    }
+
+    // Lloyd iterations.
+    var prev = new Float32Array(centroids);
+    var sums = new Float64Array(k * 3);
+    var counts = new Int32Array(k);
+    for (var iter = 0; iter < DEFAULTS.maxKmeansIterations; iter++) {
+      sums.fill(0);
+      counts.fill(0);
+
+      for (var m = 0; m < nPixels; m++) {
+        var mo = m * 3;
+        var pr = opaque[mo], pg = opaque[mo + 1], pb = opaque[mo + 2];
+        var minDist = Infinity, bestK = 0;
+        for (var kk = 0; kk < k; kk++) {
+          var ko = kk * 3;
+          var dd = distSq(pr, pg, pb, centroids[ko], centroids[ko + 1], centroids[ko + 2]);
+          if (dd < minDist) { minDist = dd; bestK = kk; }
+        }
+        var so = bestK * 3;
+        sums[so] += pr; sums[so + 1] += pg; sums[so + 2] += pb;
+        counts[bestK]++;
+      }
+
+      for (var q = 0; q < k; q++) {
+        if (counts[q] > 0) {
+          var fc = counts[q];
+          var qo = q * 3;
+          centroids[qo] = sums[qo] / fc;
+          centroids[qo + 1] = sums[qo + 1] / fc;
+          centroids[qo + 2] = sums[qo + 2] / fc;
+        }
+      }
+
+      if (iter > 0) {
+        var maxMove = 0.0;
+        for (var mv = 0; mv < k; mv++) {
+          var mvo = mv * 3;
+          var move = distSq(
+            centroids[mvo], centroids[mvo + 1], centroids[mvo + 2],
+            prev[mvo], prev[mvo + 1], prev[mvo + 2]
+          );
+          if (move > maxMove) maxMove = move;
+        }
+        if (maxMove < 0.01) break;
+      }
+      prev.set(centroids);
+    }
+
+    // Assign every opaque pixel to its nearest centroid (rounded to u8).
+    for (var pp = 0; pp < nAll; pp++) {
+      var pb4 = pp * 4;
+      if (rgba[pb4 + 3] === 0) continue; // transparent passes through
+      var xr = rgba[pb4], xg = rgba[pb4 + 1], xb = rgba[pb4 + 2];
+      var md = Infinity, br = xr, bg = xg, bb = xb;
+      for (var cc = 0; cc < k; cc++) {
+        var cco = cc * 3;
+        var cd = distSq(xr, xg, xb, centroids[cco], centroids[cco + 1], centroids[cco + 2]);
+        if (cd < md) {
+          md = cd;
+          br = Math.round(centroids[cco]);
+          bg = Math.round(centroids[cco + 1]);
+          bb = Math.round(centroids[cco + 2]);
+        }
+      }
+      out[pb4] = br; out[pb4 + 1] = bg; out[pb4 + 2] = bb; // alpha unchanged
+    }
+    return out;
+  }
+
+  // ----- 2. Gradient projection profiles ------------------------------------
+
+  function computeProfiles(rgba, w, h) {
+    if (w < 3 || h < 3) {
+      throw new Error('Image too small (minimum 3x3)');
+    }
+    var colProj = new Float64Array(w);
+    var rowProj = new Float64Array(h);
+
+    function gray(x, y) {
+      var idx = (y * w + x) * 4;
+      if (rgba[idx + 3] === 0) return 0.0;
+      return 0.299 * rgba[idx] + 0.587 * rgba[idx + 1] + 0.114 * rgba[idx + 2];
+    }
+
+    // kernels: [-1, 0, 1]
+    for (var y = 0; y < h; y++) {
+      for (var x = 1; x < w - 1; x++) {
+        colProj[x] += Math.abs(gray(x + 1, y) - gray(x - 1, y));
+      }
+    }
+    for (var x2 = 0; x2 < w; x2++) {
+      for (var y2 = 1; y2 < h - 1; y2++) {
+        rowProj[y2] += Math.abs(gray(x2, y2 + 1) - gray(x2, y2 - 1));
+      }
+    }
+    return { colProj: colProj, rowProj: rowProj };
+  }
+
+  // ----- 3. Step-size estimation from profile peaks -------------------------
+
+  function estimateStepSize(profile) {
+    if (profile.length === 0) return null;
+
+    var maxVal = 0;
+    var seen = false;
+    for (var i = 0; i < profile.length; i++) {
+      if (!seen || profile[i] > maxVal) { maxVal = profile[i]; seen = true; }
+    }
+    if (maxVal === 0.0) return null;
+    var threshold = maxVal * DEFAULTS.peakThresholdMultiplier;
+
+    var peaks = [];
+    for (var j = 1; j < profile.length - 1; j++) {
+      if (profile[j] > threshold && profile[j] > profile[j - 1] && profile[j] > profile[j + 1]) {
+        peaks.push(j);
+      }
+    }
+    if (peaks.length < 2) return null;
+
+    var clean = [peaks[0]];
+    for (var pk = 1; pk < peaks.length; pk++) {
+      if (peaks[pk] - clean[clean.length - 1] > (DEFAULTS.peakDistanceFilter - 1)) {
+        clean.push(peaks[pk]);
+      }
+    }
+    if (clean.length < 2) return null;
+
+    var diffs = [];
+    for (var d = 1; d < clean.length; d++) diffs.push(clean[d] - clean[d - 1]);
+    diffs.sort(function (a, b) { return a - b; });
+    return diffs[Math.floor(diffs.length / 2)]; // median
+  }
+
+  // ----- 4. Resolve step sizes across both axes -----------------------------
+
+  function resolveStepSizes(sx, sy, width, height, pixelSizeOverride) {
+    if (pixelSizeOverride != null) {
+      return [pixelSizeOverride, pixelSizeOverride];
+    }
+    if (sx != null && sy != null) {
+      var ratio = sx > sy ? sx / sy : sy / sx;
+      if (ratio > DEFAULTS.maxStepRatio) {
+        var smaller = Math.min(sx, sy);
+        return [smaller, smaller];
+      }
+      var avg = (sx + sy) / 2.0;
+      return [avg, avg];
+    }
+    if (sx != null) return [sx, sx];
+    if (sy != null) return [sy, sy];
+    var fallback = Math.max(Math.min(width, height) / DEFAULTS.fallbackTargetSegments, 1.0);
+    return [fallback, fallback];
+  }
+
+  // ----- 5. Elastic walker --------------------------------------------------
+
+  function walk(profile, stepSize, limit) {
+    if (profile.length === 0) throw new Error('Cannot walk on empty profile');
+
+    var cuts = [0];
+    var currentPos = 0.0;
+    var searchWindow = Math.max(stepSize * DEFAULTS.walkerSearchWindowRatio, DEFAULTS.walkerMinSearchWindow);
+    var mean = 0.0;
+    for (var i = 0; i < profile.length; i++) mean += profile[i];
+    mean /= profile.length;
+
+    while (currentPos < limit) {
+      var target = currentPos + stepSize;
+      if (target >= limit) {
+        cuts.push(limit);
+        break;
+      }
+      var startSearch = Math.max(f2u(target - searchWindow), f2u(currentPos + 1.0));
+      var endSearch = Math.min(f2u(target + searchWindow), limit);
+
+      if (endSearch <= startSearch) {
+        currentPos = target;
+        continue;
+      }
+      var maxVal = -1.0, maxIdx = startSearch;
+      for (var s = startSearch; s < endSearch; s++) {
+        if (profile[s] > maxVal) { maxVal = profile[s]; maxIdx = s; }
+      }
+      if (maxVal > mean * DEFAULTS.walkerStrengthThreshold) {
+        cuts.push(maxIdx);
+        currentPos = maxIdx;
+      } else {
+        cuts.push(f2u(target));
+        currentPos = target; // note: stays float, only the pushed cut is truncated
+      }
+    }
+    return cuts;
+  }
+
+  // ----- 6. Cut stabilization / regularization ------------------------------
+
+  function sanitizeCuts(cuts, limit) {
+    if (limit === 0) return [0];
+    var hasZero = false, hasLimit = false;
+    for (var i = 0; i < cuts.length; i++) {
+      if (cuts[i] === 0) hasZero = true;
+      if (cuts[i] >= limit) cuts[i] = limit;
+      if (cuts[i] === limit) hasLimit = true;
+    }
+    if (!hasZero) cuts.push(0);
+    if (!hasLimit) cuts.push(limit);
+    cuts.sort(function (a, b) { return a - b; });
+    // dedup (sorted)
+    var out = [];
+    for (var j = 0; j < cuts.length; j++) {
+      if (j === 0 || cuts[j] !== cuts[j - 1]) out.push(cuts[j]);
+    }
+    return out;
+  }
+
+  function snapUniformCuts(profile, limit, targetStep, minRequired) {
+    if (limit === 0) return [0];
+    if (limit === 1) return [0, 1];
+
+    var desiredCells = (isFinite(targetStep) && targetStep > 0.0)
+      ? Math.round(limit / targetStep) : 0;
+    desiredCells = Math.min(Math.max(Math.max(desiredCells, minRequired - 1), 1), limit);
+
+    var cellWidth = limit / desiredCells;
+    var searchWindow = Math.max(cellWidth * DEFAULTS.walkerSearchWindowRatio, DEFAULTS.walkerMinSearchWindow);
+    var mean = 0.0;
+    if (profile.length > 0) {
+      for (var m = 0; m < profile.length; m++) mean += profile[m];
+      mean /= profile.length;
+    }
+
+    var cuts = [0];
+    for (var idx = 1; idx < desiredCells; idx++) {
+      var target = cellWidth * idx;
+      var prev = cuts[cuts.length - 1];
+      if (prev + 1 >= limit) break;
+
+      var start = Math.max(Math.max(Math.floor(target - searchWindow), prev + 1), 0);
+      var end = Math.min(Math.ceil(target + searchWindow), limit - 1);
+      if (end < start) { start = prev + 1; end = start; }
+
+      var lastProfileIdx = profile.length - 1;
+      var bestIdx = Math.min(start, Math.max(lastProfileIdx, 0));
+      var bestVal = -1.0;
+      var scanEnd = Math.min(end, lastProfileIdx);
+      for (var i = start; i <= scanEnd; i++) {
+        var v = i < profile.length ? profile[i] : 0.0;
+        if (v > bestVal) { bestVal = v; bestIdx = i; }
+      }
+      var strengthThreshold = mean * DEFAULTS.walkerStrengthThreshold;
+      if (bestVal < strengthThreshold) {
+        var fallbackIdx = Math.round(target);
+        if (fallbackIdx <= prev) fallbackIdx = prev + 1;
+        if (fallbackIdx >= limit) fallbackIdx = Math.max(limit - 1, prev + 1);
+        bestIdx = fallbackIdx;
+      }
+      cuts.push(bestIdx);
+    }
+    if (cuts[cuts.length - 1] !== limit) cuts.push(limit);
+    return sanitizeCuts(cuts, limit);
+  }
+
+  function stabilizeCuts(profile, cuts, limit, siblingCuts, siblingLimit) {
+    if (limit === 0) return [0];
+
+    cuts = sanitizeCuts(cuts, limit);
+    var minRequired = Math.min(Math.max(DEFAULTS.minCutsPerAxis, 2), limit + 1);
+    var axisCells = cuts.length - 1;
+    var siblingCells = Math.max(siblingCuts.length - 1, 0);
+    var siblingHasGrid = siblingLimit > 0 && siblingCells >= (minRequired - 1) && siblingCells > 0;
+
+    var stepsSkewed = false;
+    if (siblingHasGrid && axisCells > 0) {
+      var axisStep = limit / axisCells;
+      var siblingStep = siblingLimit / siblingCells;
+      var stepRatio = axisStep / siblingStep;
+      stepsSkewed = stepRatio > DEFAULTS.maxStepRatio || stepRatio < 1.0 / DEFAULTS.maxStepRatio;
+    }
+    var hasEnough = cuts.length >= minRequired;
+    if (hasEnough && !stepsSkewed) return cuts;
+
+    var targetStep;
+    if (siblingHasGrid) {
+      targetStep = siblingLimit / siblingCells;
+    } else if (DEFAULTS.fallbackTargetSegments > 1) {
+      targetStep = limit / DEFAULTS.fallbackTargetSegments;
+    } else if (axisCells > 0) {
+      targetStep = limit / axisCells;
+    } else {
+      targetStep = limit;
+    }
+    if (!isFinite(targetStep) || targetStep <= 0.0) targetStep = 1.0;
+
+    return snapUniformCuts(profile, limit, targetStep, minRequired);
+  }
+
+  function stabilizeBothAxes(profileX, profileY, rawColCuts, rawRowCuts, width, height) {
+    var colPass1 = stabilizeCuts(profileX, rawColCuts.slice(), width, rawRowCuts, height);
+    var rowPass1 = stabilizeCuts(profileY, rawRowCuts.slice(), height, rawColCuts, width);
+
+    var colCells = Math.max(Math.max(colPass1.length - 1, 0), 1);
+    var rowCells = Math.max(Math.max(rowPass1.length - 1, 0), 1);
+    var colStep = width / colCells;
+    var rowStep = height / rowCells;
+
+    var stepRatio = colStep > rowStep ? colStep / rowStep : rowStep / colStep;
+
+    if (stepRatio > DEFAULTS.maxStepRatio) {
+      var targetStep = Math.min(colStep, rowStep);
+      var finalCol = colStep > targetStep * 1.2
+        ? snapUniformCuts(profileX, width, targetStep, DEFAULTS.minCutsPerAxis)
+        : colPass1;
+      var finalRow = rowStep > targetStep * 1.2
+        ? snapUniformCuts(profileY, height, targetStep, DEFAULTS.minCutsPerAxis)
+        : rowPass1;
+      return [finalCol, finalRow];
+    }
+    return [colPass1, rowPass1];
+  }
+
+  // ----- 7. Resample by cell mode color -------------------------------------
+
+  function resample(rgba, w, h, cols, rows) {
+    if (cols.length < 2 || rows.length < 2) {
+      throw new Error('Insufficient grid cuts for resampling');
+    }
+    var outW = Math.max(cols.length, 1) - 1;
+    var outH = Math.max(rows.length, 1) - 1;
+    var out = new Uint8ClampedArray(outW * outH * 4); // zero-init -> transparent black
+
+    for (var yi = 0; yi < rows.length - 1; yi++) {
+      var ys = rows[yi], ye = rows[yi + 1];
+      for (var xi = 0; xi < cols.length - 1; xi++) {
+        var xs = cols[xi], xe = cols[xi + 1];
+        if (xe <= xs || ye <= ys) continue;
+
+        // Count RGBA occurrences. Key = R*2^24 + G*2^16 + B*2^8 + A, which
+        // orders numerically the same as lexicographic [R,G,B,A] (tie-break).
+        var counts = new Map();
+        for (var y = ys; y < ye; y++) {
+          if (y >= h) continue;
+          var rowBase = y * w;
+          for (var x = xs; x < xe; x++) {
+            if (x >= w) continue;
+            var b = (rowBase + x) * 4;
+            var key = rgba[b] * 16777216 + rgba[b + 1] * 65536 + rgba[b + 2] * 256 + rgba[b + 3];
+            counts.set(key, (counts.get(key) || 0) + 1);
+          }
+        }
+
+        var bestKey = 0, bestCount = -1;
+        counts.forEach(function (cnt, key) {
+          if (cnt > bestCount || (cnt === bestCount && key < bestKey)) {
+            bestCount = cnt;
+            bestKey = key;
+          }
+        });
+
+        var ob = (yi * outW + xi) * 4;
+        if (bestCount >= 0) {
+          out[ob] = Math.floor(bestKey / 16777216) & 0xff;
+          out[ob + 1] = Math.floor(bestKey / 65536) & 0xff;
+          out[ob + 2] = Math.floor(bestKey / 256) & 0xff;
+          out[ob + 3] = bestKey & 0xff;
+        }
+      }
+    }
+    return { rgba: out, width: outW, height: outH };
+  }
+
+  // ----- Optional: merge thin "sliver" cells (opt-in, non-reference) --------
+  // Drops interior/boundary cut lines that would leave a cell narrower than
+  // ~0.5 * pixelSize. The 0 and final `limit` endpoints are never dropped, and
+  // the axis is never reduced below 1 cell. When both boundaries of a thin cell
+  // are droppable, we drop whichever leaves the merged cell closest to pixelSize
+  // (the cleaner uniform grid).
+  function mergeThinCells(cuts, pixelSize, limit) {
+    if (!(pixelSize > 0) || cuts.length <= 2) return cuts;
+    var minWidth = 0.5 * pixelSize;
+    var c = cuts.slice();
+    var guard = 0;
+    while (c.length > 2 && guard++ < cuts.length + 4) {
+      // Find the narrowest cell.
+      var narrowIdx = -1, narrowW = Infinity;
+      for (var i = 0; i < c.length - 1; i++) {
+        var wcell = c[i + 1] - c[i];
+        if (wcell < narrowW) { narrowW = wcell; narrowIdx = i; }
+      }
+      if (narrowIdx < 0 || narrowW >= minWidth) break; // nothing thin left
+
+      var left = narrowIdx;          // index of the cell's left boundary
+      var right = narrowIdx + 1;     // index of the cell's right boundary
+      var canDropLeft = left > 0;                  // never drop the 0 endpoint
+      var canDropRight = right < c.length - 1;     // never drop the final limit
+      if (!canDropLeft && !canDropRight) break;    // whole axis is one small cell
+
+      var dropIdx;
+      if (canDropLeft && canDropRight) {
+        var mergedIfDropLeft = c[left + 1] - c[left - 1];   // merge (i-1..i+1)
+        var mergedIfDropRight = c[right + 1] - c[right - 1]; // merge (i..i+2)
+        var errL = Math.abs(mergedIfDropLeft - pixelSize);
+        var errR = Math.abs(mergedIfDropRight - pixelSize);
+        dropIdx = errL <= errR ? left : right;
+      } else {
+        dropIdx = canDropLeft ? left : right;
+      }
+      c.splice(dropIdx, 1);
+    }
+    return c;
+  }
+
+  // ----- Public entry point -------------------------------------------------
+
+  function snapPixelArt(rgba, width, height, options) {
+    options = options || {};
+    var kColors = options.kColors != null ? options.kColors : DEFAULTS.kColors;
+    var seed = options.seed != null ? options.seed : DEFAULTS.kSeed;
+    var pixelSizeOverride = options.pixelSizeOverride != null ? options.pixelSizeOverride : null;
+    var mergeThin = !!options.mergeThinCells;
+
+    // R1: k must be a positive integer. A fractional k (e.g. 2.5) would build a
+    // truncated centroid buffer plus a phantom NaN centroid, so floor first,
+    // then validate (this also rejects fractional values in (0, 1)).
+    kColors = Math.floor(kColors);
+    if (kColors <= 0) throw new Error('Number of colors must be greater than 0');
+    if (width === 0 || height === 0) throw new Error('Image dimensions cannot be zero');
+    if (width > 10000 || height > 10000) throw new Error('Image dimensions too large (max 10000x10000)');
+    if (rgba.length < width * height * 4) throw new Error('rgba buffer too small for width*height*4');
+
+    if (pixelSizeOverride != null) {
+      var maxPx = Math.min(width, height) / 2.0;
+      if (!isFinite(pixelSizeOverride) || pixelSizeOverride < 1.0 || pixelSizeOverride > maxPx) {
+        throw new Error('pixelSizeOverride ' + pixelSizeOverride + ' is out of valid range [1, ' + Math.floor(maxPx) + ']');
+      }
+    }
+
+    var quantized = quantizeImage(rgba, width, height, kColors, seed);
+    var profiles = computeProfiles(quantized, width, height);
+
+    var stepXOpt = estimateStepSize(profiles.colProj);
+    var stepYOpt = estimateStepSize(profiles.rowProj);
+    var resolved = resolveStepSizes(stepXOpt, stepYOpt, width, height, pixelSizeOverride);
+    var stepX = resolved[0], stepY = resolved[1];
+
+    var rawColCuts = walk(profiles.colProj, stepX, width);
+    var rawRowCuts = walk(profiles.rowProj, stepY, height);
+
+    var stabilized = stabilizeBothAxes(
+      profiles.colProj, profiles.rowProj, rawColCuts, rawRowCuts, width, height
+    );
+    var colCuts = stabilized[0], rowCuts = stabilized[1];
+
+    if (mergeThin) {
+      colCuts = mergeThinCells(colCuts, stepX, width);
+      rowCuts = mergeThinCells(rowCuts, stepY, height);
+    }
+
+    var result = resample(quantized, width, height, colCuts, rowCuts);
+
+    return {
+      rgba: result.rgba,
+      width: result.width,
+      height: result.height,
+      pixelSize: stepX,
+      cols: colCuts,
+      rows: rowCuts,
+      quantizedRgba: quantized
+    };
+  }
+
+  // ----- Exports ------------------------------------------------------------
+  // Attach to whichever global object exists: window (page), self (Web Worker),
+  // and/or globalThis (modern Node/ESM). In a browser these alias the same
+  // object, so the repeated assignment is harmless.
+  if (typeof window !== 'undefined') {
+    window.snapPixelArt = snapPixelArt;
+  }
+  if (typeof self !== 'undefined') {
+    self.snapPixelArt = snapPixelArt;
+  }
+  if (typeof globalThis !== 'undefined') {
+    globalThis.snapPixelArt = snapPixelArt;
+  }
+  if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { snapPixelArt: snapPixelArt };
+  }
+})();
+
+    </script>
     <script type="importmap">
 {
   "imports": {
@@ -543,6 +1194,10 @@
             const [copySuccess, setCopySuccess] = useState('');
             const [activeTab, setActiveTab] = useState('json');
             const [gamePreviewActive, setGamePreviewActive] = useState(false);
+            // Pixel snapper (ported from github.com/Hugo-Dz/spritefusion-pixel-snapper): snap
+            // messy/AI pixels to a consistent grid so every frame is pixel-perfect + aligned.
+            const [snapColors, setSnapColors] = useState(16);
+            const [isSnapping, setIsSnapping] = useState(false);
             const gameContainerRef = useRef(null);
             const gameCleanupRef = useRef(null);
 
@@ -867,6 +1522,47 @@
               link.href = tempCanvas.toDataURL('image/png');
               link.click();
             };
+
+            // Snap the sheet to a consistent pixel grid (fixes AI pixel drift so frames line
+            // up): quantize -> detect pixel size from edge profiles -> snap cuts -> mode-color
+            // per cell -> upscale nearest-neighbour so 1 logical px = pixelSize px everywhere.
+            const handleSnapToGrid = useCallback(() => {
+              if (!isDrawable(image) || typeof window.snapPixelArt !== 'function') return;
+              setIsSnapping(true);
+              setTimeout(() => {
+                try {
+                  const src = isDrawable(processedImage) ? processedImage : image;
+                  const w = image.width, h = image.height;
+                  const c = document.createElement('canvas'); c.width = w; c.height = h;
+                  const cx = c.getContext('2d', { willReadFrequently: true });
+                  cx.drawImage(src, 0, 0, w, h);
+                  const id = cx.getImageData(0, 0, w, h);
+                  const k = Math.max(2, Math.min(64, snapColors | 0));
+                  const res = window.snapPixelArt(id.data, w, h, { kColors: k, mergeThinCells: true });
+                  const P = Math.max(1, Math.round(res.pixelSize));
+                  const small = document.createElement('canvas'); small.width = res.width; small.height = res.height;
+                  const sctx = small.getContext('2d');
+                  const sid = sctx.createImageData(res.width, res.height); sid.data.set(res.rgba); sctx.putImageData(sid, 0, 0);
+                  const up = document.createElement('canvas'); up.width = res.width * P; up.height = res.height * P;
+                  const uctx = up.getContext('2d'); uctx.imageSmoothingEnabled = false; uctx.drawImage(small, 0, 0, up.width, up.height);
+                  const img = new Image();
+                  img.onload = () => {
+                    setImage(img);
+                    setImageDimensions({ width: img.width, height: img.height });
+                    setProcessedImage(null);
+                    handleReset();
+                    setIsSnapping(false);
+                    setTimeout(() => handleAutoAdjust(img), 100);
+                    setToast('Snapped: ' + res.width + 'x' + res.height + ' cells at ' + P + 'px each (' + k + ' colors)');
+                  };
+                  img.onerror = () => { setIsSnapping(false); setToast('Pixel snap: reload failed'); };
+                  img.src = up.toDataURL('image/png');
+                } catch (err) {
+                  setIsSnapping(false);
+                  setToast('Pixel snap failed: ' + ((err && err.message) || err));
+                }
+              }, 30);
+            }, [image, processedImage, snapColors]);
 
             const draw = useCallback(() => {
               const canvas = canvasRef.current;
@@ -2552,6 +3248,25 @@ img.onload = () => requestAnimationFrame(loop);
                       className: "flex items-center justify-center gap-2 w-full p-2 rounded-md bg-indigo-600 hover:bg-indigo-500 text-white font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-400 disabled:opacity-50 disabled:cursor-not-allowed",
                       title: "Copy the remix prompt to clipboard for use in an external image-gen tool"
                     }, React.createElement(WandIcon), "Copy Remix Prompt"),
+                    React.createElement('div', { className: "flex items-stretch gap-2" },
+                      React.createElement('button', {
+                        onClick: handleSnapToGrid,
+                        disabled: !image || isSnapping,
+                        className: "flex-1 flex items-center justify-center gap-2 p-2 rounded-md bg-emerald-600 hover:bg-emerald-500 text-white font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-400 disabled:opacity-50 disabled:cursor-not-allowed",
+                        title: "Snap messy / AI-generated pixels to a consistent grid so every frame is pixel-perfect and aligned; also quantizes the palette. Ported from Hugo-Dz/spritefusion-pixel-snapper."
+                      },
+                        isSnapping ? React.createElement('div', { className: "animate-spin h-5 w-5 border-2 border-t-transparent border-white rounded-full" }) : null,
+                        isSnapping ? "Snapping…" : "Snap to Pixel Grid"
+                      ),
+                      React.createElement('div', { className: "flex items-center gap-1 px-2 rounded-md bg-gray-700/50", title: "Palette size (k-means colors)" },
+                        React.createElement('label', { className: "text-xs text-gray-400 select-none" }, "colors"),
+                        React.createElement('input', {
+                          type: "number", min: 2, max: 64, value: snapColors,
+                          onChange: (e) => setSnapColors(Math.max(2, Math.min(64, parseInt(e.target.value, 10) || 16))),
+                          className: "w-14 bg-gray-900 text-white text-sm rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-emerald-400"
+                        })
+                      )
+                    ),
                     React.createElement('div', { className: "flex items-center justify-between p-2 bg-gray-700/50 rounded-md" },
                       React.createElement('div', { className: "flex items-center gap-2" },
                         React.createElement('label', { htmlFor: "strip-bg-toggle", className: "text-sm font-medium text-gray-300 select-none", title: "Strips solid bg via erosion + flood-fill propagation. Auto-fills bg color from image corners; pick manually if corners aren't representative. Small bg-colored pockets inside characters stay opaque." }, "Strip BG"),
