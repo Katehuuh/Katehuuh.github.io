@@ -1,12 +1,20 @@
 {
   "models": {
+    "kimi-k3": {
+      "display_name": "kimi-k3",
+      "python_render": "assets/kimi-k3-python.jpg",
+      "svg": "assets/kimi-k3-svg.jpg",
+      "python_source": "assets/kimi-k3.py",
+      "svg_source": "assets/kimi-k3.svg",
+      "_first_seen": "2026-07-17T01:39:17+00:00"
+    },
     "muse-spark-1.1": {
       "display_name": "Muse-Spark-1.1",
       "python_render": "assets/Muse-Spark-1.1-python.jpg",
       "svg": "assets/Muse-Spark-1.1-svg.jpg",
       "python_source": "assets/Muse-Spark-1.1.py",
       "svg_source": "assets/Muse-Spark-1.1.svg",
-      "_first_seen": "2026-07-17T00:49:20+00:00"
+      "_first_seen": "2026-07-17T00:49:31Z"
     },
     "inkling": {
       "display_name": "Inkling",
