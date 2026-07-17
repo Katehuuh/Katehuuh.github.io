@@ -1,0 +1,127 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="500" height="500" viewBox="0 0 200 200" role="img" aria-label="Cute orange tabby kitten">
+  <defs>
+    <radialGradient id="fur" cx="0.5" cy="0.38" r="0.82">
+      <stop offset="0%" stop-color="#FFEDC9"/>
+      <stop offset="55%" stop-color="#FFC07D"/>
+      <stop offset="100%" stop-color="#FF9F5A"/>
+    </radialGradient>
+    <radialGradient id="belly" cx="0.5" cy="0.4" r="0.75">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="100%" stop-color="#FFE5BA"/>
+    </radialGradient>
+    <linearGradient id="innerEar" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFB1C1"/>
+      <stop offset="100%" stop-color="#FF6E8A"/>
+    </linearGradient>
+    <radialGradient id="eyeShine" cx="0.35" cy="0.35" r="0.7">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="1"/>
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- soft ground shadow -->
+  <ellipse cx="100" cy="179" rx="52" ry="7" fill="#000" opacity="0.07"/>
+
+  <!-- Tail -->
+  <path d="M 128 137 Q 172 143 178 114 Q 176 94 153 95" fill="none" stroke="#FFB26D" stroke-width="17" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M 128 137 Q 172 143 178 114 Q 176 94 153 95" fill="none" stroke="#E89A5E" stroke-width="17" stroke-linecap="round" stroke-dasharray="0 0" opacity="0.15"/>
+  <!-- tail stripes -->
+  <path d="M 155 102 Q 165 104 170 106" stroke="#7A4A33" stroke-width="2.6" stroke-linecap="round" opacity="0.55"/>
+  <path d="M 163 115 Q 172 117 176 119.5" stroke="#7A4A33" stroke-width="2.6" stroke-linecap="round" opacity="0.55"/>
+  <path d="M 162 131 Q 170 132.5 174 134" stroke="#7A4A33" stroke-width="2.6" stroke-linecap="round" opacity="0.55"/>
+
+  <!-- Body -->
+  <ellipse cx="100" cy="142" rx="48" ry="38" fill="url(#fur)" stroke="#E59860" stroke-width="2.2"/>
+  <ellipse cx="100" cy="154.5" rx="29" ry="21" fill="url(#belly)"/>
+  
+  <!-- Back paws little hints -->
+  <ellipse cx="67" cy="158" rx="10" ry="8" fill="#FFC07D" opacity="0.6"/>
+
+  <!-- Front paws - white mittens -->
+  <g>
+    <ellipse cx="77" cy="162.5" rx="16" ry="13.5" fill="#FFFEFB" stroke="#E59860" stroke-width="1.8"/>
+    <ellipse cx="77" cy="166" rx="6" ry="2.5" fill="#FFD6D6" opacity="0.5"/>
+    <ellipse cx="123" cy="162.5" rx="16" ry="13.5" fill="#FFFEFB" stroke="#E59860" stroke-width="1.8"/>
+    <ellipse cx="123" cy="166" rx="6" ry="2.5" fill="#FFD6D6" opacity="0.5"/>
+  </g>
+
+  <!-- Head shadow/neck -->
+  <ellipse cx="100" cy="112" rx="22" ry="9" fill="#C97E4F" opacity="0.18"/>
+
+  <!-- Ears Outer -->
+  <path d="M 60 67 C 42 30, 48 15, 78 37 L 68 63 Z" fill="url(#fur)" stroke="#E59860" stroke-width="2.2" stroke-linejoin="round"/>
+  <path d="M 140 67 C 158 30, 152 15, 122 37 L 132 63 Z" fill="url(#fur)" stroke="#E59860" stroke-width="2.2" stroke-linejoin="round"/>
+  <!-- Ears Inner -->
+  <path d="M 60.5 53 C 52 34, 56 27, 71 38 L 65 53 Z" fill="url(#innerEar)" stroke="#E87A8A" stroke-width="1" stroke-linejoin="round"/>
+  <path d="M 139.5 53 C 148 34, 144 27, 129 38 L 135 53 Z" fill="url(#innerEar)" stroke="#E87A8A" stroke-width="1" stroke-linejoin="round"/>
+  <!-- inner ear fluff -->
+  <path d="M 61 44 Q 62 46 63 44" stroke="#FFF" stroke-width="0.9" opacity="0.7" stroke-linecap="round"/>
+  <path d="M 139 44 Q 138 46 137 44" stroke="#FFF" stroke-width="0.9" opacity="0.7" stroke-linecap="round"/>
+
+  <!-- Head -->
+  <circle cx="100" cy="73" r="44.5" fill="url(#fur)" stroke="#E59860" stroke-width="2.2"/>
+  <!-- Chubby cheeks -->
+  <ellipse cx="66" cy="86" rx="14" ry="13" fill="#FFEDC9"/>
+  <ellipse cx="134" cy="86" rx="14" ry="13" fill="#FFEDC9"/>
+
+  <!-- Forehead tabby stripes -->
+  <g opacity="0.7" stroke="#7A4A33" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M 88 42 Q 89 54 88 60" stroke-width="2.8" fill="none"/>
+    <path d="M 100 37 Q 100 50 100 60" stroke-width="3.2" fill="none"/>
+    <path d="M 112 42 Q 111 54 112 60" stroke-width="2.8" fill="none"/>
+    <!-- cute M shape -->
+    <path d="M 86 64 Q 100 69 114 64" stroke-width="2" fill="none" opacity="0.5"/>
+  </g>
+
+  <!-- Blush -->
+  <ellipse cx="64" cy="91" rx="8" ry="4.5" fill="#FF8E9E" opacity="0.28"/>
+  <ellipse cx="136" cy="91" rx="8" ry="4.5" fill="#FF8E9E" opacity="0.28"/>
+
+  <!-- Eyes -->
+  <g>
+    <!-- Left Eye -->
+    <ellipse cx="79" cy="79" rx="13.5" ry="16" fill="white" stroke="#E59860" stroke-width="1.2"/>
+    <ellipse cx="79" cy="82.5" rx="10" ry="12.5" fill="#3A2A20"/>
+    <ellipse cx="79" cy="83" rx="6.5" ry="8" fill="#5C4033"/>
+    <circle cx="82.5" cy="76" r="4.2" fill="white"/>
+    <circle cx="76.5" cy="88.5" r="1.6" fill="white" opacity="0.7"/>
+    <!-- Right Eye -->
+    <ellipse cx="121" cy="79" rx="13.5" ry="16" fill="white" stroke="#E59860" stroke-width="1.2"/>
+    <ellipse cx="121" cy="82.5" rx="10" ry="12.5" fill="#3A2A20"/>
+    <ellipse cx="121" cy="83" rx="6.5" ry="8" fill="#5C4033"/>
+    <circle cx="124.5" cy="76" r="4.2" fill="white"/>
+    <circle cx="118.5" cy="88.5" r="1.6" fill="white" opacity="0.7"/>
+  </g>
+
+  <!-- Nose -->
+  <path d="M 97.5 91.5 L 102.5 91.5 L 100 95 Z" fill="#FF4D6D" stroke="#C93A52" stroke-width="0.7" stroke-linejoin="round"/>
+  <ellipse cx="100" cy="91.2" rx="2.8" ry="1.2" fill="#FF8FA3" opacity="0.8"/>
+
+  <!-- Mouth -->
+  <g stroke="#5A3526" stroke-width="1.4" stroke-linecap="round" fill="none">
+    <path d="M 92 97.5 Q 97 102 100 97"/>
+    <path d="M 108 97.5 Q 103 102 100 97"/>
+    <path d="M 100 95 L 100 98.5"/>
+  </g>
+  <!-- little chin fluff -->
+  <path d="M 95 103 Q 100 105.5 105 103" stroke="#E59860" stroke-width="0.8" fill="none" opacity="0.6" stroke-linecap="round"/>
+
+  <!-- Whiskers -->
+  <g stroke="#5A3526" stroke-width="0.8" opacity="0.5" stroke-linecap="round">
+    <path d="M 52 84 Q 40 83 33 80"/>
+    <path d="M 52 89 Q 40 90 33 91"/>
+    <path d="M 53 94 Q 42 97 36 101"/>
+    <path d="M 148 84 Q 160 83 167 80"/>
+    <path d="M 148 89 Q 160 90 167 91"/>
+    <path d="M 147 94 Q 158 97 164 101"/>
+  </g>
+
+  <!-- Collar -->
+  <path d="M 68 109 Q 100 127 132 109" fill="none" stroke="#FF5A6A" stroke-width="6.5" stroke-linecap="round"/>
+  <path d="M 68 109 Q 100 127 132 109" fill="none" stroke="#C93A52" stroke-width="6.5" stroke-linecap="round" stroke-dasharray="0 12" opacity="0.12"/>
+  <g>
+    <circle cx="100" cy="122.5" r="7" fill="#FFD93D" stroke="#D6A600" stroke-width="1.2"/>
+    <circle cx="100" cy="122.5" r="2.5" fill="#FFF7B0" stroke="#D6A600" stroke-width="0.6"/>
+    <circle cx="98.5" cy="120.8" r="1.2" fill="white" opacity="0.9"/>
+  </g>
+</svg>
