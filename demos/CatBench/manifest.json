@@ -1,12 +1,20 @@
 {
   "models": {
+    "muse-spark-1.1": {
+      "display_name": "Muse-Spark-1.1",
+      "python_render": "assets/Muse-Spark-1.1-python.jpg",
+      "svg": "assets/Muse-Spark-1.1-svg.jpg",
+      "python_source": "assets/Muse-Spark-1.1.py",
+      "svg_source": "assets/Muse-Spark-1.1.svg",
+      "_first_seen": "2026-07-17T00:49:20+00:00"
+    },
     "inkling": {
       "display_name": "Inkling",
       "python_render": "assets/Inkling-python.jpg",
       "svg": "assets/Inkling-svg.jpg",
       "python_source": "assets/Inkling.py",
       "svg_source": "assets/Inkling.svg",
-      "_first_seen": "2026-07-17T00:40:56+00:00"
+      "_first_seen": "2026-07-17T00:41:07Z"
     },
     "gpt-5.6-sol-pro": {
       "display_name": "GPT-5.6-Sol-Pro",
