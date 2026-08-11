@@ -1,0 +1,192 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 500" width="400" height="500">
+  <defs>
+    <!-- Soft gradient for background -->
+    <radialGradient id="bgGrad" cx="50%" cy="50%" r="60%">
+      <stop offset="0%" style="stop-color:#FFF8F0;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#FFE8D6;stop-opacity:1" />
+    </radialGradient>
+    
+    <!-- Fur gradient -->
+    <radialGradient id="furGrad" cx="50%" cy="40%" r="50%">
+      <stop offset="0%" style="stop-color:#F5E6D3;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#E8D5C0;stop-opacity:1" />
+    </radialGradient>
+    
+    <!-- Darker fur for ears and patches -->
+    <radialGradient id="darkFurGrad" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" style="stop-color:#D4B896;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#C4A882;stop-opacity:1" />
+    </radialGradient>
+    
+    <!-- Eye gradient -->
+    <radialGradient id="eyeGrad" cx="40%" cy="40%" r="50%">
+      <stop offset="0%" style="stop-color:#4A90D9;stop-opacity:1" />
+      <stop offset="60%" style="stop-color:#2E6BA6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#1B4F7A;stop-opacity:1" />
+    </radialGradient>
+    
+    <!-- Nose gradient -->
+    <radialGradient id="noseGrad" cx="50%" cy="40%" r="50%">
+      <stop offset="0%" style="stop-color:#FFB6C1;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#E8919E;stop-opacity:1" />
+    </radialGradient>
+    
+    <!-- Inner ear gradient -->
+    <radialGradient id="innerEarGrad" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" style="stop-color:#FFD1DC;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#F0A0B0;stop-opacity:1" />
+    </radialGradient>
+    
+    <!-- Whisker shadow -->
+    <filter id="whiskerShadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="1" stdDeviation="0.5" flood-color="#000" flood-opacity="0.1"/>
+    </filter>
+    
+    <!-- Soft shadow for body -->
+    <filter id="softShadow" x="-10%" y="-10%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000" flood-opacity="0.15"/>
+    </filter>
+    
+    <!-- Eye shine -->
+    <radialGradient id="eyeShine" cx="35%" cy="35%" r="30%">
+      <stop offset="0%" style="stop-color:#FFFFFF;stop-opacity:0.9" />
+      <stop offset="100%" style="stop-color:#FFFFFF;stop-opacity:0" />
+    </radialGradient>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="400" height="500" fill="url(#bgGrad)" rx="20"/>
+  
+  <!-- Ground shadow -->
+  <ellipse cx="200" cy="470" rx="120" ry="15" fill="#000" opacity="0.08"/>
+  
+  <!-- Tail -->
+  <path d="M 280 380 Q 340 350 350 300 Q 355 270 340 260 Q 330 255 325 270 Q 315 300 280 340" 
+        fill="url(#furGrad)" stroke="#D4B896" stroke-width="1.5" filter="url(#softShadow)"/>
+  <!-- Tail tip -->
+  <path d="M 340 260 Q 355 270 350 300 Q 345 285 340 275 Q 335 265 340 260" 
+        fill="#C4A882" stroke="#B89A78" stroke-width="1"/>
+  
+  <!-- Body -->
+  <ellipse cx="200" cy="370" rx="95" ry="85" fill="url(#furGrad)" stroke="#D4B896" stroke-width="1.5" filter="url(#softShadow)"/>
+  
+  <!-- Belly patch (lighter) -->
+  <ellipse cx="200" cy="395" rx="60" ry="50" fill="#FAF0E6" opacity="0.7"/>
+  
+  <!-- Chest fluff -->
+  <ellipse cx="200" cy="340" rx="45" ry="30" fill="#FAF0E6" opacity="0.5"/>
+  
+  <!-- Left paw -->
+  <ellipse cx="145" cy="440" rx="28" ry="20" fill="url(#furGrad)" stroke="#D4B896" stroke-width="1.5"/>
+  <!-- Left paw toes -->
+  <ellipse cx="135" cy="448" rx="6" ry="5" fill="#F5E6D3" stroke="#D4B896" stroke-width="0.8"/>
+  <ellipse cx="148" cy="450" rx="6" ry="5" fill="#F5E6D3" stroke="#D4B896" stroke-width="0.8"/>
+  <ellipse cx="161" cy="448" rx="6" ry="5" fill="#F5E6D3" stroke="#D4B896" stroke-width="0.8"/>
+  
+  <!-- Right paw -->
+  <ellipse cx="255" cy="440" rx="28" ry="20" fill="url(#furGrad)" stroke="#D4B896" stroke-width="1.5"/>
+  <!-- Right paw toes -->
+  <ellipse cx="245" cy="448" rx="6" ry="5" fill="#F5E6D3" stroke="#D4B896" stroke-width="0.8"/>
+  <ellipse cx="258" cy="450" rx="6" ry="5" fill="#F5E6D3" stroke="#D4B896" stroke-width="0.8"/>
+  <ellipse cx="271" cy="448" rx="6" ry="5" fill="#F5E6D3" stroke="#D4B896" stroke-width="0.8"/>
+  
+  <!-- Left arm -->
+  <path d="M 130 350 Q 110 380 115 410 Q 118 420 130 415 Q 140 410 145 390 Q 150 370 145 350" 
+        fill="url(#furGrad)" stroke="#D4B896" stroke-width="1.5"/>
+  
+  <!-- Right arm -->
+  <path d="M 270 350 Q 290 380 285 410 Q 282 420 270 415 Q 260 410 255 390 Q 250 370 255 350" 
+        fill="url(#furGrad)" stroke="#D4B896" stroke-width="1.5"/>
+  
+  <!-- Head -->
+  <ellipse cx="200" cy="230" rx="85" ry="80" fill="url(#furGrad)" stroke="#D4B896" stroke-width="1.5" filter="url(#softShadow)"/>
+  
+  <!-- Forehead patch (darker) -->
+  <path d="M 170 175 Q 200 160 230 175 Q 225 195 200 200 Q 175 195 170 175" 
+        fill="#D4B896" opacity="0.6"/>
+  
+  <!-- Left ear -->
+  <path d="M 135 180 Q 120 120 145 105 Q 165 95 175 130 Q 180 155 170 175" 
+        fill="url(#darkFurGrad)" stroke="#C4A882" stroke-width="1.5"/>
+  <!-- Left inner ear -->
+  <path d="M 142 175 Q 132 130 150 115 Q 162 108 168 135 Q 172 155 165 170" 
+        fill="url(#innerEarGrad)" stroke="#E8A0B0" stroke-width="0.8"/>
+  
+  <!-- Right ear -->
+  <path d="M 265 180 Q 280 120 255 105 Q 235 95 225 130 Q 220 155 230 175" 
+        fill="url(#darkFurGrad)" stroke="#C4A882" stroke-width="1.5"/>
+  <!-- Right inner ear -->
+  <path d="M 258 175 Q 268 130 250 115 Q 238 108 232 135 Q 228 155 235 170" 
+        fill="url(#innerEarGrad)" stroke="#E8A0B0" stroke-width="0.8"/>
+  
+  <!-- Left eye -->
+  <ellipse cx="168" cy="225" rx="22" ry="24" fill="url(#eyeGrad)" stroke="#1B4F7A" stroke-width="1.5"/>
+  <!-- Left pupil -->
+  <ellipse cx="170" cy="228" rx="10" ry="14" fill="#0D2B45"/>
+  <!-- Left eye shine -->
+  <ellipse cx="162" cy="218" rx="6" ry="7" fill="url(#eyeShine)"/>
+  <ellipse cx="175" cy="235" rx="3" ry="4" fill="#FFFFFF" opacity="0.6"/>
+  
+  <!-- Right eye -->
+  <ellipse cx="232" cy="225" rx="22" ry="24" fill="url(#eyeGrad)" stroke="#1B4F7A" stroke-width="1.5"/>
+  <!-- Right pupil -->
+  <ellipse cx="230" cy="228" rx="10" ry="14" fill="#0D2B45"/>
+  <!-- Right eye shine -->
+  <ellipse cx="224" cy="218" rx="6" ry="7" fill="url(#eyeShine)"/>
+  <ellipse cx="237" cy="235" rx="3" ry="4" fill="#FFFFFF" opacity="0.6"/>
+  
+  <!-- Eyelashes - left eye -->
+  <path d="M 148 215 Q 142 210 140 205" stroke="#1B4F7A" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+  <path d="M 152 210 Q 148 203 146 198" stroke="#1B4F7A" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+  <path d="M 158 207 Q 155 200 154 195" stroke="#1B4F7A" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+  
+  <!-- Eyelashes - right eye -->
+  <path d="M 252 215 Q 258 210 260 205" stroke="#1B4F7A" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+  <path d="M 248 210 Q 252 203 254 198" stroke="#1B4F7A" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+  <path d="M 242 207 Q 245 200 246 195" stroke="#1B4F7A" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+  
+  <!-- Nose -->
+  <path d="M 193 255 Q 200 250 207 255 Q 205 262 200 264 Q 195 262 193 255" 
+        fill="url(#noseGrad)" stroke="#D4808A" stroke-width="1"/>
+  
+  <!-- Mouth -->
+  <path d="M 190 268 Q 200 278 210 268" stroke="#C4909A" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+  <!-- Small smile lines -->
+  <path d="M 188 266 Q 190 270 192 272" stroke="#C4909A" stroke-width="1" fill="none" stroke-linecap="round"/>
+  <path d="M 212 266 Q 210 270 208 272" stroke="#C4909A" stroke-width="1" fill="none" stroke-linecap="round"/>
+  
+  <!-- Whiskers - left side -->
+  <g filter="url(#whiskerShadow)">
+    <line x1="145" y1="250" x2="100" y2="242" stroke="#8B7355" stroke-width="1.2" stroke-linecap="round"/>
+    <line x1="145" y1="258" x2="95" y2="258" stroke="#8B7355" stroke-width="1.2" stroke-linecap="round"/>
+    <line x1="145" y1="266" x2="100" y2="274" stroke="#8B7355" stroke-width="1.2" stroke-linecap="round"/>
+  </g>
+  
+  <!-- Whiskers - right side -->
+  <g filter="url(#whiskerShadow)">
+    <line x1="255" y1="250" x2="300" y2="242" stroke="#8B7355" stroke-width="1.2" stroke-linecap="round"/>
+    <line x1="255" y1="258" x2="305" y2="258" stroke="#8B7355" stroke-width="1.2" stroke-linecap="round"/>
+    <line x1="255" y1="266" x2="300" y2="274" stroke="#8B7355" stroke-width="1.2" stroke-linecap="round"/>
+  </g>
+  
+  <!-- Cheek blush -->
+  <ellipse cx="155" cy="255" rx="15" ry="10" fill="#FFB6C1" opacity="0.35"/>
+  <ellipse cx="245" cy="255" rx="15" ry="10" fill="#FFB6C1" opacity="0.35"/>
+  
+  <!-- Forehead stripes (tabby pattern) -->
+  <path d="M 185 170 Q 190 185 188 195" stroke="#C4A882" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.5"/>
+  <path d="M 200 168 Q 200 185 200 195" stroke="#C4A882" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.5"/>
+  <path d="M 215 170 Q 210 185 212 195" stroke="#C4A882" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.5"/>
+  
+  <!-- Small decorative elements - sparkles -->
+  <g opacity="0.6">
+    <path d="M 80 100 L 83 108 L 91 111 L 83 114 L 80 122 L 77 114 L 69 111 L 77 108 Z" fill="#FFD700"/>
+    <path d="M 320 80 L 322 86 L 328 88 L 322 90 L 320 96 L 318 90 L 312 88 L 318 86 Z" fill="#FFD700"/>
+    <path d="M 340 400 L 342 405 L 347 407 L 342 409 L 340 414 L 338 409 L 333 407 L 338 405 Z" fill="#FFD700"/>
+    <path d="M 60 380 L 62 385 L 67 387 L 62 389 L 60 394 L 58 389 L 53 387 L 58 385 Z" fill="#FFD700"/>
+  </g>
+  
+  <!-- Small heart above head -->
+  <path d="M 200 105 Q 190 95 185 105 Q 180 115 200 130 Q 220 115 215 105 Q 210 95 200 105" 
+        fill="#FF6B8A" opacity="0.7"/>
+</svg>
