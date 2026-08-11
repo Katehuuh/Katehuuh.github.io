@@ -1,12 +1,20 @@
 {
   "models": {
+    "qwopus3.6-27b-fusion-exl3-4.5bpw": {
+      "display_name": "Qwopus3.6-27B-Fusion-exl3-4.5bpw",
+      "python_render": "assets/Qwopus3.6-27B-Fusion-exl3-4.5bpw-python.jpg",
+      "svg": "assets/Qwopus3.6-27B-Fusion-exl3-4.5bpw-svg.jpg",
+      "python_source": "assets/Qwopus3.6-27B-Fusion-exl3-4.5bpw.py",
+      "svg_source": "assets/Qwopus3.6-27B-Fusion-exl3-4.5bpw.svg",
+      "_first_seen": "2026-08-10T21:17:51-05:00"
+    },
     "kimi-k3": {
       "display_name": "kimi-k3",
       "python_render": "assets/kimi-k3-python.jpg",
       "svg": "assets/kimi-k3-svg.jpg",
       "python_source": "assets/kimi-k3.py",
       "svg_source": "assets/kimi-k3.svg",
-      "_first_seen": "2026-07-17T01:39:17+00:00"
+      "_first_seen": "2026-07-17T01:39:28Z"
     },
     "muse-spark-1.1": {
       "display_name": "Muse-Spark-1.1",
