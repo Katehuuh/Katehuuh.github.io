@@ -136,28 +136,32 @@ a:hover { color: #ffb98d; }
    salted IP hash on their side: clicking again undoes your vote, which
    is as strong as it gets without asking readers to sign in.
 ──────────────────────────────────────────────────────────────────── */
-/* Parked in the header's bottom-right corner, out of the text flow entirely.
-   Measured against the alternatives on the same 30 headers: floating it after
-   the name matches the sketch but drops onto its own line when the last line
-   is full (+20.5px per header), floating it before the name steals width from
-   line one and wraps more names (+23.5px). Taking it out of flow and paying
-   for it with bottom padding costs +7.2px, against a text line of ~26px. */
+/* Parked in the header's bottom-left corner, out of the text flow entirely,
+   so it sits in the same spot in every column and the name keeps the whole
+   width of the column. Riding the end of the text instead was measured on
+   the same 30 headers: it costs the pill's width on the last line, which
+   pushes eight more names onto a second line. */
 /* Names run to three lines at most and then end in an ellipsis, so one
    absurdly long model name cannot drive the height of every header in the
-   row. overflow-wrap lets an unbroken token split rather than overflow, and
-   the full name stays available on hover via the title attribute. */
+   row. break-word keeps the normal break points, so a name splits after a
+   hyphen and each line stays full, and only a token too long for a line of
+   its own gets cut mid-word. The full name stays on the title attribute. */
 .mh-name {
   display: -webkit-box; display: box;
   -webkit-line-clamp: 3; line-clamp: 3;
   -webkit-box-orient: vertical; box-orient: vertical;
   overflow: hidden;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
+/* A name with nothing to break on would otherwise stretch its column past
+   180px, so that one is allowed to split mid-word. */
+.mh-name.mh-hard { overflow-wrap: anywhere; }
 
 .vote {
-  position: absolute; right: 5px; bottom: 3px;
-  display: inline-flex; align-items: center; gap: .22rem;
-  margin: 0; padding: .06rem .4rem;
+  position: absolute; left: .3rem; bottom: .25rem;
+  display: inline-flex; align-items: center; gap: .2rem;
+  margin: 0; padding: .06rem .34rem;
+  -webkit-user-select: none; user-select: none;
   background: var(--bg-1); border: 1px solid var(--line);
   border-radius: 999px; cursor: pointer;
   font: 500 .74rem/1.4 var(--mono); color: var(--text-2);
@@ -300,17 +304,16 @@ main > footer .dot { color: var(--text-3); margin: 0 .35rem; }
 .catbench-grid thead .row-label { color: var(--accent); font-size: .78rem; font-weight: 700; }
 .catbench-grid .model-header {
   text-align: center; font-weight: 600; color: var(--text);
-  /* The pill is pinned to the cell's bottom-right, not to the end of the
-     text, so it lands in the same place in every column regardless of
-     whether the name runs to one line or three. The name is centred in the
-     space above it, so the leftover height splits evenly instead of all
-     pooling underneath. */
+  /* The pill sits in the cell's bottom-left corner, out of the text flow,
+     so every column carries it in the same spot and the name keeps the
+     full width of the column on every line. The bottom padding is the band
+     it lives in; the name is centred in what is left. */
   position: relative; vertical-align: middle;
-  /* Swept for the tightest padding that never lets the name touch the
-     pill: .35/1.3 leaves 1px clear in the worst column and brings the
-     row to 74px, against 73px with no pill at all. */
-  padding: .35rem .5rem 1.3rem; background: var(--bg-2);
+  padding: .35rem .3rem 1.5rem; background: var(--bg-2);
   width: 180px; font-size: .92rem; letter-spacing: -0.01em;
+  /* Tight leading: these are two or three word labels, not prose, and the
+     default spacing left a visible gap above the text. */
+  line-height: 1.25;
 }
 .catbench-grid .cell {
   width: 180px; height: 180px; padding: 0;
@@ -479,6 +482,8 @@ main > footer .dot { color: var(--text-3); margin: 0 .35rem; }
     liveAugment(manifest);
   }
   buildGrid(models);
+  fixWideNames();
+  document.fonts?.ready.then(fixWideNames);
   initRunFilter();
   initVoteSort();
   loadVotes(Object.keys(models));
@@ -744,6 +749,28 @@ function initVoteSort() {
   });
 }
 
+// The name gets its own box so it can be clamped. The pill stays a sibling
+// of it, anchored to the cell rather than to where the text ends.
+function makeNameCell(text) {
+  const span = document.createElement('span');
+  span.className = 'mh-name';
+  span.title = text;
+  span.textContent = text;
+  return span;
+}
+
+// A name with no hyphen or space has nowhere to break, so its column grows
+// past the 180px the grid lays out for it. Catch those and let them split
+// mid-word instead. Runs after the grid is built and again once the web
+// font lands, since the metrics change under it.
+function fixWideNames() {
+  for (const span of document.querySelectorAll('.mh-name')) {
+    if (span.closest('th').getBoundingClientRect().width > 181) {
+      span.classList.add('mh-hard');
+    }
+  }
+}
+
 function buildGrid(models) {
   const table = document.getElementById('catbench-grid');
   const thead = table.querySelector('thead tr');
@@ -755,13 +782,7 @@ function buildGrid(models) {
     th.dataset.run = runsWhere(m.display_name || key);
     th.dataset.slug = key;
     th.dataset.pos = String(thead.querySelectorAll('th.model-header').length);
-    // The name needs its own box to be clamped; the pill stays a sibling so
-    // it keeps anchoring to the cell rather than to the text.
-    const name = document.createElement('span');
-    name.className = 'mh-name';
-    name.textContent = m.display_name || key;
-    name.title = m.display_name || key;
-    th.append(name, makeVoteButton(key));
+    th.append(makeNameCell(m.display_name || key), makeVoteButton(key));
     thead.appendChild(th);
   }
   const rows = [
