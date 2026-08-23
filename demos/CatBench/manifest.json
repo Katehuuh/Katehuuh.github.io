@@ -1,7 +1,15 @@
 {
   "base": "https://katehuuh.github.io/demos/CatBench/",
-  "updated": "2026-08-23T08:18:34Z",
+  "updated": "2026-08-23T10:26:06Z",
   "models": {
+    "claude-opus-5": {
+      "display_name": "claude-opus-5",
+      "python_render": "assets/claude-opus-5-python.jpg",
+      "svg": "assets/claude-opus-5-svg.jpg",
+      "python_source": "assets/claude-opus-5.py",
+      "svg_source": "assets/claude-opus-5.svg",
+      "added": "2026-08-23T10:26:06Z"
+    },
     "ox-alpha-glm-5.5": {
       "display_name": "ox-alpha glm-5.5",
       "python_render": "assets/ox-alpha__glm-5.5-python.jpg",
