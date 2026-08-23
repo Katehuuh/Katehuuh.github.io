@@ -8,15 +8,12 @@ body:
   - type: markdown
     attributes:
       value: |
-        Two prompts, one kitten:
+        Two prompts, one kitten with `max` reasoning:
 
         ```
         SVG    : Create a detailed SVG image of a cute kitten.
         Python : Write a Python script that draws a cute kitten using matplotlib.
         ```
-
-        Run both, paste both answers. One on its own won't go through.
-        Pass the checks and it lands on `main` in about a minute.
 
   - type: input
     id: model
