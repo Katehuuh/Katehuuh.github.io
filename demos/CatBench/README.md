@@ -11,42 +11,36 @@ Python : Write a Python script that draws a cute kitten using matplotlib.
 
 Three ways in, easiest first:
 
-1. **Open an issue** with the *CatBench submission* form and paste the code. If
-   it passes the checks it is committed to `main` automatically and shows up in
-   the grid a minute later.
-2. **Open a PR** adding the file(s) to `assets/`. Same checks; merged
-   automatically when they pass.
-3. **Commit directly** if you have write access.
+1. Open an issue with the CatBench submission form and paste both answers.
+2. Open a PR adding the files to `assets/`.
+3. Commit straight to `main` if you have write access.
 
-An entry is **both prompts** — a `.py` *and* an `.svg` for the same model. A
-submission with only one of them is a partial result and waits for a human.
+An entry is both prompts: a `.py` and an `.svg` for the same model. Only one of
+them and it waits for a human.
 
-Automatic handling otherwise only covers the boring case: one model, files only
-inside `assets/`, nothing already in the repo being modified, `.py` / `.svg`
-(plus optional pre-rendered `.png` / `.jpg`). Anything else gets a
-`needs-review` label — that is not a rejection, just the line where a person
-looks.
+Auto-merge covers the boring case only. One model, files sitting directly in
+`demos/CatBench/assets/`, nothing existing being changed, `.py` and `.svg` plus
+an optional pre-rendered `.png` or `.jpg`. Anything else gets a `needs-review`
+label. That isn't a rejection, just the point where a person looks.
 
-There is a daily cap on automatic submissions (5 by default, shared across the
-issue and PR paths). Past it, submissions stay open and go through after
-00:00 UTC. Tune it with the repository variables
-`CATBENCH_AUTOMERGE_DAILY_LIMIT` and `CATBENCH_AUTOMERGE_ENABLED`
-(Settings → Secrets and variables → Actions → *Variables*); both have working
-defaults, so nothing needs configuring.
+Automatic submissions are capped per day (5, shared by the issue and PR paths).
+Past the cap they stay open and go through after 00:00 UTC. Change it with the
+repo variables `CATBENCH_AUTOMERGE_DAILY_LIMIT` and
+`CATBENCH_AUTOMERGE_ENABLED` under Settings > Secrets and variables > Actions >
+Variables. Both have working defaults, so there's nothing to set up.
 
-### Why contributed Python is safe to run
+### Why running submitted Python is safe
 
-Submitted `.py` is executed exactly once, in a job with a read-only token, no
-secrets, and no persisted git credentials. The image it produces is committed
-**alongside** the source — and because `build_catbench_manifest.py` only renders
-a `<model>.py` when no matching `<model>-python.<raster>` exists, the merged
-script is never executed again by `build.yml`, which *does* run on `main` with
-write access. Untrusted code therefore only ever runs where there is nothing to
-take.
+A submitted `.py` runs exactly once, in a job with a read-only token, no secrets
+and no git credentials. The image it produces is committed next to the source,
+and `build_catbench_manifest.py` only renders a `<model>.py` when no matching
+`<model>-python.<raster>` exists. So the merged script never runs again under
+`build.yml`, which does have write access to `main`. Submitted code only ever
+runs where there's nothing worth taking.
 
 The import allowlist in `.github/scripts/catbench_validate.py` (matplotlib,
-numpy, maths/stdlib) is a "this isn't a kitten drawing" filter, not the security
-boundary — the job topology above is.
+numpy, basic maths) filters out things that aren't kitten drawings. It isn't the
+security boundary. The job split above is.
 
 ## Filename convention
 
@@ -55,7 +49,7 @@ Drop everything into one folder, kind is detected by extension:
 ```
 CatBench/assets/
   <model>.svg            # paste SVG content directly
-  <model>.py             # Python source — auto-rendered by GH Action
+  <model>.py             # Python source, auto-rendered by GH Action
   <model>.png|.jpg       # alt: drop a manual screenshot (takes priority over .py rendering)
 ```
 
@@ -63,11 +57,11 @@ The model name is the filename stem, lower-cased and with spaces/underscores nor
 
 ## Auto-render details
 
-Build pipeline runs each `python/<model>.py` with matplotlib's `Agg` backend (no display, no GUI, just direct PNG output via `plt.savefig`). Scripts that call `plt.show()` instead are handled — `show` is patched to a no-op and the figure is captured at exit. Render failures are recorded in `manifest.json` so the grid can show `⚠ render failed` with a link to the source.
+Build pipeline runs each `python/<model>.py` with matplotlib's `Agg` backend (no display, no GUI, just direct PNG output via `plt.savefig`). Scripts that call `plt.show()` instead are handled: `show` is patched to a no-op and the figure is captured at exit. Render failures are recorded in `manifest.json` so the grid can show `⚠ render failed` with a link to the source.
 
 ## Manifest
 
-`manifest.json` is regenerated by `scripts/build_catbench_manifest.py`. Don't hand-edit — it'll be overwritten on the next push. Local preview:
+`manifest.json` is regenerated by `scripts/build_catbench_manifest.py`. Don't hand-edit, it'll be overwritten on the next push. Local preview:
 
 ```
 python ../scripts/build_catbench_manifest.py
@@ -79,9 +73,9 @@ python ../scripts/build_catbench_manifest.py
 
 The intended flow is to paste files into `CatBench/assets/` directly via the GitHub web UI and let the Action do the rest. On every push:
 
-1. The Action runs `build_catbench_manifest.py` — renders any new `.py`, regenerates `manifest.json`, commits the result back.
+1. The Action runs `build_catbench_manifest.py`: renders any new `.py`, regenerates `manifest.json`, commits the result back.
 2. Pages picks up the new commit and republishes within ~30 seconds.
 
 For SVG and pre-rendered PNG uploads, the page also queries the GitHub Contents API at runtime (`/repos/{owner}/{repo}/contents/CatBench/assets`) and merges anything not yet in the manifest. Result: a freshly pasted SVG appears in the grid as soon as it's committed, without waiting for the Action. The API call is sessionStorage-cached for 30s and falls back silently to the static manifest if rate-limited (anonymous limit is 60/hr per IP).
 
-`.py` files still need the Action to render to PNG — no way around running matplotlib.
+`.py` files still need the Action to render to PNG, no way around running matplotlib.

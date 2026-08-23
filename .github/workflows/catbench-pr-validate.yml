@@ -1,4 +1,4 @@
-# CatBench PR gate — UNTRUSTED HALF.
+# CatBench PR gate, UNTRUSTED HALF.
 #
 # This is the only place a contributed .py is ever executed. It runs under the
 # `pull_request` event, which for a fork PR means a read-only GITHUB_TOKEN and
@@ -8,7 +8,7 @@
 #
 # It deliberately has NO write permission and never merges, comments or labels.
 # It only produces a verdict + a rendered image as an artifact. The trusted half
-# (catbench-automerge.yml) re-checks everything from the API before acting —
+# (catbench-automerge.yml) re-checks everything from the API before acting;
 # nothing this job claims is taken on faith, because this job ran attacker code.
 #
 # The rendered image is the security-relevant output, not a convenience:
@@ -67,7 +67,7 @@ jobs:
               per_page: 100,
             });
             // Any status other than "added" (modified/removed/renamed) means the
-            // PR is touching something that already exists — always a human call.
+            // PR is touching something that already exists, always a human call.
             const nonAdded = files.filter(f => f.status !== 'added')
                                   .map(f => `${f.filename} (${f.status})`);
             core.setOutput('paths', files.map(f => f.filename).join('\n'));
@@ -150,15 +150,15 @@ jobs:
           timeout 120 python3 scripts/render_python.py "pr/$py" "$outfile"
           rc=$?
           if [ $rc -ne 0 ] || [ ! -s "$outfile" ]; then
-            echo "render failed (exit $rc) — leaving this one to a human" >&2
+            echo "render failed (exit $rc), leaving this one to a human" >&2
             echo "rendered=" >> "$GITHUB_OUTPUT"
             echo "render_failed=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           echo "rendered=$(basename "$outfile")" >> "$GITHUB_OUTPUT"
 
-      # If the contributed script tried to write into the repo tree — a workflow
-      # file, a poisoned asset, anything — it shows up here and the submission
+      # If the submitted script wrote anything into the repo tree (a workflow
+      # file, a poisoned asset, whatever), it shows up here and the submission
       # stops being auto-mergeable.
       - name: Tamper check
         id: tamper

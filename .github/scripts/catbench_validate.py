@@ -6,24 +6,23 @@ human looking at it. Used by both the PR path (catbench-pr-validate.yml) and the
 issue path (catbench-issue-submit.yml) so there is exactly one definition of
 "eligible".
 
-Threat model — read this before loosening anything
+Threat model (read this before loosening anything)
 --------------------------------------------------
-The real protection is NOT this file. It is the workflow topology: contributed
-Python is executed only in a job with a read-only token and no secrets, and the
-render it produces is committed alongside the source so that
-`build_catbench_manifest.py` on main sees an existing `<model>-python.<raster>`
-and never exec()s the source again. Untrusted code therefore runs exactly once,
-in the context where there is nothing to take.
+This file is not the real protection. The job layout is. Submitted Python only
+runs in a job with a read-only token and no secrets, and the render it produces
+gets committed with the source, so `build_catbench_manifest.py` on main finds an
+existing `<model>-python.<raster>` and never exec()s the source again. Submitted
+code runs once, where there's nothing to take.
 
-That matters because build.yml runs on push to main with `contents: write` and
-actions/checkout leaves push credentials in the workspace — code exec'd there
+That matters because build.yml runs on push to main with `contents: write`, and
+actions/checkout leaves push credentials in the workspace. Code running there
 could push to main and deface the published Pages site.
 
-This script is the second layer: it keeps obvious junk out, and it keeps a
-submission from quietly touching anything except its own two asset files. The
-Python import allowlist is a "this is not a kitten drawing" filter, not a
-sandbox — it is bypassable by anyone who tries, and that is fine, because
-bypassing it only buys you the unprivileged job.
+This script is the second layer. It keeps obvious junk out and stops a
+submission touching anything except its own asset files. The Python import
+allowlist is a "this is not a kitten drawing" filter, not a sandbox. Anyone who
+tries can get around it, which is fine, since that only buys you the
+unprivileged job.
 
 Usage
 -----
@@ -34,7 +33,7 @@ Usage
 
 `extract` turns an issue-form body into candidate files on disk; `check` judges
 a set of candidate files. The issue workflow runs `extract` in both its
-unprivileged and its privileged job — the privileged one re-reads the issue body
+unprivileged and its privileged job. The privileged one re-reads the issue body
 from the API rather than trusting anything the render job produced, so the only
 thing carried across the trust boundary is the rendered JPEG.
 
@@ -54,7 +53,7 @@ from pathlib import Path
 ASSET_DIR = "demos/CatBench/assets"
 
 # User asked for: an image (svg / png / jpg / jpeg) and/or a .py. Deliberately no
-# .gif — the one in the repo predates this and can stay hand-merged.
+# .gif. The one in the repo predates this and can stay hand-merged.
 SOURCE_EXTS = {".py", ".svg"}
 RASTER_EXTS = {".png", ".jpg", ".jpeg"}
 ALLOWED_EXTS = SOURCE_EXTS | RASTER_EXTS
@@ -77,7 +76,7 @@ MAGIC = {
 }
 
 # Everything a matplotlib kitten could legitimately want. Anything else is not
-# rejected as "malicious" — it is rejected as "a human should look at this".
+# rejected as "malicious", it's rejected as "a human should look at this".
 PY_IMPORT_ALLOWLIST = {
     "matplotlib", "mpl_toolkits", "numpy", "np",
     "math", "cmath", "random", "colorsys", "itertools", "functools",
@@ -201,7 +200,7 @@ def check_python(data: bytes, name: str) -> list[str]:
             for a in node.names:
                 imported.add(a.name.split(".")[0])
         elif isinstance(node, ast.ImportFrom):
-            if node.level:  # relative import — nothing to import from
+            if node.level:  # relative import, nothing to import from
                 errs.append(f"{name}: relative import")
             if node.module:
                 imported.add(node.module.split(".")[0])
@@ -212,7 +211,7 @@ def check_python(data: bytes, name: str) -> list[str]:
             errs.append(f"{name}: dunder attribute access '{node.attr}'")
 
     for mod in sorted(imported - PY_IMPORT_ALLOWLIST):
-        errs.append(f"{name}: imports '{mod}' — a matplotlib kitten shouldn't need it")
+        errs.append(f"{name}: imports '{mod}', a matplotlib kitten shouldn't need it")
 
     if not imported & {"matplotlib", "mpl_toolkits"}:
         errs.append(f"{name}: never imports matplotlib")
@@ -359,7 +358,7 @@ def extract(body: str, out_dir: Path) -> tuple[list[str], list[str]]:
         written.append(rel)
 
     if not written:
-        errors.append("no code submitted — both the Python and the SVG field are required")
+        errors.append("no code submitted, both the Python and the SVG field are required")
     return written, errors
 
 

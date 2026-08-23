@@ -1,4 +1,4 @@
-# CatBench PR gate — TRUSTED HALF.
+# CatBench PR gate, TRUSTED HALF.
 #
 # Runs on workflow_run, so it executes from the default branch with a write
 # token. It therefore NEVER checks out or runs PR code. Everything it needs
@@ -106,7 +106,7 @@ jobs:
             }
             if (!verdict.eligible) reasons.push(...(verdict.reasons || ['failed validation']));
 
-            // Authoritative file list — not the artifact's copy of it.
+            // Authoritative file list, not the artifact's copy of it.
             const files = await github.paginate(github.rest.pulls.listFiles, {
               owner: context.repo.owner, repo: context.repo.repo,
               pull_number: prNumber, per_page: 100,
@@ -193,7 +193,7 @@ jobs:
             core.setOutput('note', used < limit ? ''
               : `daily auto-merge limit reached (${used}/${limit} today)`);
 
-      # Raster first — see the header comment. Without this, the merge below
+      # Raster first, see the header comment. Without this, the merge below
       # would hand contributed code to build.yml's exec() on main.
       - name: Land render on main
         id: land
@@ -295,46 +295,39 @@ jobs:
         uses: actions/github-script@v7
         env:
           ELIGIBLE: ${{ steps.recheck.outputs.eligible }}
-          REASONS: ${{ steps.recheck.outputs.reasons }}
           BUDGET_ALLOWED: ${{ steps.budget.outputs.allowed }}
           BUDGET_NOTE: ${{ steps.budget.outputs.note }}
           BUDGET_USED: ${{ steps.budget.outputs.used }}
           BUDGET_LIMIT: ${{ steps.budget.outputs.limit }}
           MERGED: ${{ steps.merge.outputs.merged }}
-          MERGE_WHY: ${{ steps.merge.outputs.why }}
           PR: ${{ steps.recheck.outputs.pr }}
         with:
           script: |
             const { owner, repo } = context.repo;
             const issue_number = Number(process.env.PR);
             const e = process.env;
-            let body;
+            let body, label;
 
+            // Which check tripped stays in the workflow log. Naming it in the
+            // comment just tells the next person what to route around.
             if (e.MERGED === 'true') {
-              body = `🐈 **Merged automatically.**\n\n`
-                   + `The Python render was built in an unprivileged job and landed first, so `
-                   + `the contributed script is never executed on \`main\`.\n\n`
-                   + `_Auto-merge budget: ${Number(e.BUDGET_USED) + 1}/${e.BUDGET_LIMIT} today._`;
-            } else if (e.ELIGIBLE !== 'true') {
-              body = `👀 **Needs a human.**\n\n`
-                   + (e.REASONS ? e.REASONS.split('; ').map(r => `- ${r}`).join('\n') : '- failed validation')
-                   + `\n\nNothing is wrong with the PR as such — it just falls outside what gets `
-                   + `merged unattended. @${owner} can still merge it by hand.`;
-              await github.rest.issues.addLabels({
-                owner, repo, issue_number, labels: ['needs-review'],
-              }).catch(() => {});
-            } else if (e.BUDGET_ALLOWED !== 'true') {
+              body = `🐈 **Merged.**\n\n`
+                   + `The render was built in a locked-down job and landed first, so the `
+                   + `script never runs on \`main\`.\n\n`
+                   + `_Today: ${Number(e.BUDGET_USED) + 1}/${e.BUDGET_LIMIT}._`;
+            } else if (e.ELIGIBLE === 'true' && e.BUDGET_ALLOWED !== 'true') {
               body = `⏳ **Held for today.**\n\n${e.BUDGET_NOTE}\n\n`
-                   + `The submission passed every check — it just hit the daily cap. `
-                   + `It stays open and becomes eligible again after 00:00 UTC.`;
-              await github.rest.issues.addLabels({
-                owner, repo, issue_number, labels: ['rate-limited'],
-              }).catch(() => {});
+                   + `Nothing wrong with it, it just hit the daily cap. Stays open and `
+                   + `goes through after 00:00 UTC.`;
+              label = 'rate-limited';
             } else {
-              body = `⚠️ **Auto-merge did not complete.**\n\n${e.MERGE_WHY || 'see the workflow log'}`;
-              await github.rest.issues.addLabels({
-                owner, repo, issue_number, labels: ['needs-review'],
-              }).catch(() => {});
+              body = `👀 **Needs a human.**\n\nThis one falls outside what gets merged `
+                   + `automatically, so @${owner} will take a look.`;
+              label = 'needs-review';
             }
 
+            if (label) {
+              await github.rest.issues.addLabels({ owner, repo, issue_number, labels: [label] })
+                .catch(() => {});
+            }
             await github.rest.issues.createComment({ owner, repo, issue_number, body });

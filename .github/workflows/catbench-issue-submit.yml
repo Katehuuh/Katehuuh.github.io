@@ -3,18 +3,19 @@
 # Paste a kitten into the issue form and it lands in demos/CatBench/assets/ as a
 # commit on main. Same trust split as the PR path, in two jobs:
 #
-#   prepare  — contents: read. Extracts the code from the issue body and, for a
-#              Python submission, runs it to produce the render. This is the
-#              only job that executes contributed code, and it holds no write
-#              token and no secrets.
-#   publish  — contents: write. Never runs contributed code. Re-reads the issue
-#              body from the API and re-extracts from that, so the source files
-#              it commits come from the issue itself rather than from anything
-#              the render job could have touched. The only artifact it accepts
-#              is the rendered JPEG, by exact name and after a magic-byte check.
+#   prepare (contents: read)
+#     Pulls the code out of the issue body and, for a Python submission, runs
+#     it to make the render. Only job that runs submitted code, and it holds no
+#     write token and no secrets.
+#
+#   publish (contents: write)
+#     Never runs submitted code. Re-reads the issue body from the API and
+#     re-extracts from that, so what it commits comes from the issue itself and
+#     not from anything the render job could have touched. The only artifact it
+#     takes is the rendered JPEG, by exact name and after a magic-byte check.
 #
 # Source and render are committed together, so build.yml's manifest step finds
-# an existing raster and never exec()s the contributed script on main — where it
+# an existing raster and never exec()s the submitted script on main, where it
 # would have contents: write and push credentials in the workspace.
 
 name: catbench / issue submission
@@ -58,7 +59,7 @@ jobs:
       - name: Extract + validate submission
         id: extract
         env:
-          # Via env, never interpolated into a script body — the issue body is
+          # Via env, never interpolated into a script body. The issue body is
           # attacker-controlled text.
           ISSUE_BODY: ${{ github.event.issue.body }}
         run: |
@@ -290,11 +291,7 @@ jobs:
         if: always() && needs.prepare.result != 'skipped'
         uses: actions/github-script@v7
         env:
-          PREPARE_OK: ${{ needs.prepare.outputs.eligible }}
-          PREPARE_REASONS: ${{ needs.prepare.outputs.reasons }}
-          PREPARE_RESULT: ${{ needs.prepare.result }}
           RECHECK_OK: ${{ steps.recheck.outputs.ok }}
-          RECHECK_REASONS: ${{ steps.recheck.outputs.reasons }}
           BUDGET_ALLOWED: ${{ steps.budget.outputs.allowed }}
           BUDGET_NOTE: ${{ steps.budget.outputs.note }}
           BUDGET_USED: ${{ steps.budget.outputs.used }}
@@ -307,41 +304,33 @@ jobs:
             const issue_number = context.payload.issue.number;
             const e = process.env;
             const site = `https://${owner.toLowerCase()}.github.io/demos/CatBench/`;
-            let body, labels = [], close = false;
+            let body, label, close = false;
 
+            // Which check tripped stays in the workflow log. Naming it in the
+            // comment just tells the next person what to route around.
             if (e.COMMITTED === 'true') {
               body = `🐈 **Committed to \`main\`.**\n\n`
-                   + `\`${e.MODEL}\` is on its way to [CatBench](${site}) — the build workflow `
-                   + `regenerates the grid and Pages republishes within a minute or so.\n\n`
-                   + `_Daily budget: ${Number(e.BUDGET_USED) + 1}/${e.BUDGET_LIMIT}._`;
-              labels = ['catbench-auto'];
+                   + `\`${e.MODEL}\` is on its way to [CatBench](${site}). The grid rebuilds `
+                   + `and Pages republishes in about a minute.\n\n`
+                   + `_Today: ${Number(e.BUDGET_USED) + 1}/${e.BUDGET_LIMIT}._`;
+              label = 'catbench-auto';
               close = true;
-            } else if (e.PREPARE_OK !== 'true' || e.RECHECK_OK === 'false') {
-              const reasons = (e.RECHECK_REASONS || e.PREPARE_REASONS || '').split('; ').filter(Boolean);
-              body = `👀 **Not submitted automatically.**\n\n`
-                   + (reasons.length ? reasons.map(r => `- ${r}`).join('\n') : '- failed validation')
-                   + `\n\nEdit the issue to fix it and this will run again. `
-                   + `Auto-submission only accepts a single model's \`.py\` or \`.svg\`; `
-                   + `anything else is a manual merge on purpose.`;
-              labels = ['needs-review'];
-            } else if (e.PREPARE_RESULT === 'failure') {
-              body = `⚠️ **The render didn't produce a figure.**\n\n`
-                   + `The script ran but no matplotlib figure came out of it, so there's nothing `
-                   + `to show in the grid. Check the workflow log, then edit the issue to retry.`;
-              labels = ['needs-review'];
-            } else if (e.BUDGET_ALLOWED !== 'true') {
+            } else if (e.RECHECK_OK === 'true' && e.BUDGET_ALLOWED !== 'true') {
               body = `⏳ **Held for today.**\n\n${e.BUDGET_NOTE}\n\n`
-                   + `The submission passed every check — it just hit the daily cap. `
-                   + `Edit the issue after 00:00 UTC and it'll go through.`;
-              labels = ['rate-limited'];
+                   + `Nothing wrong with it, it just hit the daily cap. Edit the issue after `
+                   + `00:00 UTC and it'll go through.`;
+              label = 'rate-limited';
             } else {
-              body = `⚠️ **Submission did not complete** — see the workflow log.`;
-              labels = ['needs-review'];
+              body = `👀 **Needs a human.**\n\nThis one falls outside what gets submitted `
+                   + `automatically, so @${owner} will take a look. Editing the issue re-runs `
+                   + `the checks.`;
+              label = 'needs-review';
             }
 
             await github.rest.issues.createComment({ owner, repo, issue_number, body });
-            if (labels.length) {
-              await github.rest.issues.addLabels({ owner, repo, issue_number, labels }).catch(() => {});
+            if (label) {
+              await github.rest.issues.addLabels({ owner, repo, issue_number, labels: [label] })
+                .catch(() => {});
             }
             if (close) {
               await github.rest.issues.update({
