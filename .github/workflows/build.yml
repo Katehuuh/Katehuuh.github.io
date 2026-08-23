@@ -15,6 +15,11 @@
 #                                  tiny localhost HTTP server so fetch() works
 #                                  (file:// origin would block it).
 #   Commits regenerated artifacts back to main as github-actions[bot].
+#
+#   Note: a push made with GITHUB_TOKEN does not trigger workflows, so this
+#   build does NOT start on its own after the catbench workflows commit a
+#   submission. They call workflow_dispatch here instead. If a submission's
+#   files are on main but missing from the grid, that dispatch is what failed.
 #   SVG source files are never modified — display fit is handled in index.html.
 #
 name: build
