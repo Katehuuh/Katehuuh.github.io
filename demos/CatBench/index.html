@@ -45,6 +45,30 @@ a:hover { color: #ffb98d; }
 .hero { text-align: center; margin-bottom: 2.4rem; }
 .hero-cb { text-align: left; margin-bottom: 1.6rem; }
 .hero-cb h1 { font-size: clamp(2rem, 5.5vw, 2.8rem); margin: .2rem 0 1rem; }
+/* Cat ears on the C. Two triangles pinned to the top of the letterform,
+   sized in em so they track the clamped font-size. The C stays real text,
+   so selection and screen readers are unaffected. */
+.cat-c { position: relative; display: inline-block; line-height: 1; }
+.cat-c::before,
+.cat-c::after {
+  content: "";
+  position: absolute;
+  top: -.07em;
+  width: .23em; height: .24em;
+  background: currentColor;
+  clip-path: polygon(50% 0%, 100% 100%, 0% 100%);
+}
+.cat-c::before { left: .14em; transform: rotate(-14deg); }
+.cat-c::after  { left: .42em; transform: rotate(14deg); }
+/* Tail off the final h, so the whole wordmark reads as one cat: ears at the
+   head, tail at the back. Absolute, so it never shifts the heading's metrics. */
+.cat-h { position: relative; display: inline-block; line-height: 1; }
+.cat-tail {
+  position: absolute;
+  left: 92%; bottom: -.04em;
+  width: .52em; height: .82em;
+  overflow: visible;
+}
 .back {
   display: inline-block; font-family: var(--mono); font-size: .78rem;
   color: var(--text-3); letter-spacing: .04em;
@@ -236,7 +260,7 @@ main > footer .dot { color: var(--text-3); margin: 0 .35rem; }
 
   <header class="hero hero-cb rise" data-d="1">
     <a class="back" href="../../">back</a>
-    <h1>CatBench</h1>
+    <h1><span class="cat-c">C</span>atBenc<span class="cat-h">h<svg class="cat-tail" viewBox="0 0 20 30" fill="none" aria-hidden="true"><path d="M2 26.5C11.5 29.5 18.2 24.5 16.6 14.2 15.9 8.6 11.6 7.2 10.4 9.8" stroke="currentColor" stroke-width="3.3" stroke-linecap="round"/></svg></span></h1>
     <ul class="prompts">
       <li><span class="tag">svg</span><code>Create a detailed SVG image of a cute kitten.</code></li>
       <li><span class="tag">python</span><code>Write a Python script that draws a cute kitten using matplotlib.</code></li>
