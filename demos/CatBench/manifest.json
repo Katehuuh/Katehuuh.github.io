@@ -1,5 +1,13 @@
 {
   "models": {
+    "gemini-3.7-flash": {
+      "display_name": "gemini-3.7-flash",
+      "python_render": "assets/gemini-3.7-flash-python.jpg",
+      "svg": "assets/gemini-3.7-flash-svg.jpg",
+      "python_source": "assets/gemini-3.7-flash.py",
+      "svg_source": "assets/gemini-3.7-flash.svg",
+      "_first_seen": "2026-08-23T07:05:45Z"
+    },
     "qwen3.8-27b-exl3-5.00bpw": {
       "display_name": "Qwen3.8-27B-exl3-5.00bpw",
       "python_render": "assets/Qwen3.8-27B-exl3-5.00bpw-python.jpg",
