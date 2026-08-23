@@ -22,7 +22,9 @@ name: catbench / issue submission
 
 on:
   issues:
-    types: [opened, edited]
+    # `labeled` lets a submission be re-run by hand: add the label and it goes
+    # again. `edited` covers fixing a rejected submission in place.
+    types: [opened, edited, labeled]
 
 permissions:
   contents: read
@@ -34,8 +36,12 @@ concurrency:
 jobs:
   prepare:
     # Only issues filed through the form, and never one already published.
+    # Matches the form's label OR the title prefix the form sets. The label
+    # alone is not enough: GitHub silently drops labels named in an issue
+    # template when they don't already exist in the repository.
     if: >-
-      contains(join(github.event.issue.labels.*.name, ','), 'catbench-submission')
+      ( contains(join(github.event.issue.labels.*.name, ','), 'catbench-submission')
+        || startsWith(github.event.issue.title, '[CatBench]') )
       && !contains(join(github.event.issue.labels.*.name, ','), 'catbench-auto')
       && github.event.issue.state == 'open'
     runs-on: ubuntu-latest
@@ -43,6 +49,7 @@ jobs:
     outputs:
       eligible: ${{ steps.extract.outputs.eligible }}
       stem: ${{ steps.extract.outputs.stem }}
+      model: ${{ steps.extract.outputs.model }}
       reasons: ${{ steps.extract.outputs.reasons }}
 
     steps:
@@ -79,6 +86,7 @@ jobs:
           r = json.loads(pathlib.Path("out/report.json").read_text())
           py = [f for f in r["files"] if f.endswith(".py")]
           print("stem=" + (pathlib.Path(py[0]).stem if py else ""))
+          print("model=" + (pathlib.Path(r["files"][0]).stem if r["files"] else ""))
           print("reasons=" + "; ".join(r["reasons"]))
           PY
 
@@ -297,12 +305,29 @@ jobs:
           BUDGET_USED: ${{ steps.budget.outputs.used }}
           BUDGET_LIMIT: ${{ steps.budget.outputs.limit }}
           COMMITTED: ${{ steps.commit.outputs.committed }}
-          MODEL: ${{ steps.recheck.outputs.model }}
+          MODEL: ${{ steps.recheck.outputs.model || needs.prepare.outputs.model }}
         with:
           script: |
             const { owner, repo } = context.repo;
             const issue_number = context.payload.issue.number;
             const e = process.env;
+
+            // Name the issue after the model, so the list reads as a list of
+            // submissions rather than a column of "[CatBench]".
+            if (e.MODEL) {
+              const title = `[CatBench] ${e.MODEL}`;
+              if (context.payload.issue.title !== title) {
+                await github.rest.issues.update({ owner, repo, issue_number, title })
+                  .catch(() => {});
+              }
+            }
+
+            // addLabels creates a label that doesn't exist yet. Applying it here
+            // means the issue form can attach it by itself from now on, which is
+            // what failed on the first submission.
+            await github.rest.issues.addLabels({
+              owner, repo, issue_number, labels: ['catbench-submission'],
+            }).catch(() => {});
             const site = `https://${owner.toLowerCase()}.github.io/demos/CatBench/`;
             let body, label, close = false;
 
