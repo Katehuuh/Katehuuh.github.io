@@ -1,0 +1,340 @@
+# CatBench PR gate — TRUSTED HALF.
+#
+# Runs on workflow_run, so it executes from the default branch with a write
+# token. It therefore NEVER checks out or runs PR code. Everything it needs
+# about the PR it re-fetches from the API and re-validates with the base
+# branch's own validator; the artifact from the untrusted job is treated as a
+# claim, not a fact. The only thing taken from that artifact is the rendered
+# JPEG, by exact expected filename and after a magic-byte check.
+#
+# Merge order is load-bearing: the render is pushed to main BEFORE the source is
+# merged. build_catbench_manifest.py only exec()s a <model>.py when no matching
+# raster exists, so landing the raster first means the contributed script is
+# never executed in the privileged main context (build.yml holds contents:write
+# and checkout leaves push credentials in the workspace).
+
+name: catbench / auto-merge
+
+on:
+  workflow_run:
+    workflows: ['catbench / validate PR']
+    types: [completed]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+# Shared with the issue path so the daily budget can't be double-spent by two
+# runs reading the count before either writes it.
+concurrency:
+  group: catbench-auto
+  cancel-in-progress: false
+
+jobs:
+  automerge:
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout main (trusted)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+
+      - name: Download verdict artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: catbench-verdict
+          path: incoming
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # Independent re-check. Confirms the artifact is talking about the PR that
+      # actually triggered this run, then pulls the file contents from the API
+      # and runs the base branch's validator over them.
+      - name: Re-validate from API
+        id: recheck
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            const { execFileSync } = require('child_process');
+
+            let verdict;
+            try {
+              verdict = JSON.parse(fs.readFileSync('incoming/verdict.json', 'utf8'));
+            } catch (e) {
+              core.setFailed(`unreadable verdict: ${e.message}`);
+              return;
+            }
+
+            const prNumber = Number(verdict.pr);
+            if (!Number.isInteger(prNumber) || prNumber <= 0) {
+              core.setFailed('verdict has no usable PR number');
+              return;
+            }
+
+            const { data: pr } = await github.rest.pulls.get({
+              owner: context.repo.owner, repo: context.repo.repo, pull_number: prNumber,
+            });
+
+            // Anti-forgery: the untrusted job could name any PR it likes, so the
+            // PR it names must be the one whose head this run was triggered for.
+            const triggerSha = context.payload.workflow_run.head_sha;
+            if (pr.head.sha !== triggerSha || verdict.head_sha !== triggerSha) {
+              core.setFailed(
+                `verdict/PR head mismatch (pr=${pr.head.sha} verdict=${verdict.head_sha} run=${triggerSha})`);
+              return;
+            }
+
+            core.setOutput('pr', String(prNumber));
+            core.setOutput('base_ref', pr.base.ref);
+
+            const reasons = [];
+            if (pr.state !== 'open') reasons.push(`PR is ${pr.state}`);
+            if (pr.draft) reasons.push('PR is a draft');
+            if (pr.base.ref !== context.payload.repository.default_branch) {
+              reasons.push(`targets ${pr.base.ref}, not the default branch`);
+            }
+            if (!verdict.eligible) reasons.push(...(verdict.reasons || ['failed validation']));
+
+            // Authoritative file list — not the artifact's copy of it.
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              owner: context.repo.owner, repo: context.repo.repo,
+              pull_number: prNumber, per_page: 100,
+            });
+            const nonAdded = files.filter(f => f.status !== 'added');
+            if (nonAdded.length) {
+              reasons.push(`touches existing files: ${nonAdded.map(f => f.filename).join(', ')}`);
+            }
+
+            // Materialise the PR's files from the API into a scratch tree and
+            // re-run the validator that lives on main.
+            const root = 'recheck';
+            fs.rmSync(root, { recursive: true, force: true });
+            for (const f of files) {
+              const dest = path.join(root, f.filename);
+              if (!path.resolve(dest).startsWith(path.resolve(root) + path.sep)) {
+                reasons.push(`suspicious path: ${f.filename}`);
+                continue;
+              }
+              const { data } = await github.rest.repos.getContent({
+                owner: context.repo.owner, repo: context.repo.repo,
+                path: f.filename, ref: pr.head.sha,
+              });
+              fs.mkdirSync(path.dirname(dest), { recursive: true });
+              fs.writeFileSync(dest, Buffer.from(data.content, data.encoding || 'base64'));
+            }
+
+            if (!reasons.length) {
+              const args = ['.github/scripts/catbench_validate.py', 'check', '--root', root];
+              for (const f of files) args.push('--file', f.filename);
+              try {
+                execFileSync('python3', args, { stdio: 'pipe' });
+              } catch (e) {
+                const out = (e.stderr || e.stdout || '').toString().trim();
+                reasons.push(...out.split('\n').filter(l => l.trim().startsWith('-'))
+                                   .map(l => l.replace(/^\s*-\s*/, '')));
+                if (!reasons.length) reasons.push('validator rejected the submission');
+              }
+            }
+
+            const pySrc = files.map(f => f.filename).find(f => f.toLowerCase().endsWith('.py'));
+            core.setOutput('stem', pySrc ? path.basename(pySrc, path.extname(pySrc)) : '');
+            core.setOutput('model', (files[0] ? path.basename(files[0].filename).replace(/\.[^.]+$/, '') : '')
+                                     .replace(/-(python|svg)$/i, ''));
+            core.setOutput('eligible', reasons.length ? 'false' : 'true');
+            core.setOutput('reasons', reasons.join('; '));
+            if (reasons.length) core.notice(`not auto-mergeable: ${reasons.join('; ')}`);
+
+      - name: Check daily budget
+        id: budget
+        if: steps.recheck.outputs.eligible == 'true'
+        uses: actions/github-script@v7
+        env:
+          LIMIT: ${{ vars.CATBENCH_AUTOMERGE_DAILY_LIMIT }}
+          ENABLED: ${{ vars.CATBENCH_AUTOMERGE_ENABLED }}
+        with:
+          script: |
+            // Unset repo variables arrive as '' => defaults apply, so this works
+            // with zero configuration.
+            if ((process.env.ENABLED || 'true').toLowerCase() === 'false') {
+              core.setOutput('allowed', 'false');
+              core.setOutput('note', 'auto-merge is switched off (CATBENCH_AUTOMERGE_ENABLED=false)');
+              return;
+            }
+            const n = parseInt(process.env.LIMIT, 10);
+            const limit = Number.isFinite(n) && n >= 0 ? n : 5;
+            const d = new Date();
+            const since = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+            // listForRepo rather than the search API: search is eventually
+            // consistent, and a stale count would let a burst through. PRs are
+            // issues to this endpoint, so one budget covers both the PR and the
+            // issue path; the shared `catbench-auto` concurrency group keeps
+            // read-then-spend atomic between them.
+            const items = await github.paginate(github.rest.issues.listForRepo, {
+              owner: context.repo.owner, repo: context.repo.repo,
+              state: 'closed', labels: 'catbench-auto',
+              since: since.toISOString(), per_page: 100,
+            });
+            const used = items.filter(i => i.closed_at && new Date(i.closed_at) >= since).length;
+            core.info(`catbench auto budget: ${used}/${limit} since ${since.toISOString()}`);
+            core.setOutput('allowed', used < limit ? 'true' : 'false');
+            core.setOutput('used', String(used));
+            core.setOutput('limit', String(limit));
+            core.setOutput('note', used < limit ? ''
+              : `daily auto-merge limit reached (${used}/${limit} today)`);
+
+      # Raster first — see the header comment. Without this, the merge below
+      # would hand contributed code to build.yml's exec() on main.
+      - name: Land render on main
+        id: land
+        if: steps.recheck.outputs.eligible == 'true' && steps.budget.outputs.allowed == 'true'
+        env:
+          STEM: ${{ steps.recheck.outputs.stem }}
+          PR: ${{ steps.recheck.outputs.pr }}
+        run: |
+          set -euo pipefail
+          if [ -z "$STEM" ]; then
+            echo "no python source in this PR; nothing to pre-render"
+            exit 0
+          fi
+
+          src="incoming/${STEM}-python.jpg"
+          if [ ! -s "$src" ]; then
+            echo "::error::expected render $src missing from artifact"
+            exit 1
+          fi
+          # The artifact came out of the untrusted job: take only this exact
+          # name, and only if the bytes are really a JPEG.
+          if [ "$(head -c 3 "$src" | od -An -tx1 | tr -d ' \n')" != "ffd8ff" ]; then
+            echo "::error::$src is not a JPEG"
+            exit 1
+          fi
+
+          dest="demos/CatBench/assets/${STEM}-python.jpg"
+          if [ -e "$dest" ]; then
+            echo "$dest already exists on main; leaving it alone"
+            exit 0
+          fi
+
+          cp "$src" "$dest"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$dest"
+          git commit \
+            -m "catbench: pre-render ${STEM} from #${PR}" \
+            -m "Landed before the source is merged so build.yml's manifest step finds an existing raster and never exec()s the contributed script on main."
+
+          for i in 1 2 3 4; do
+            if git push origin HEAD:"${{ github.event.repository.default_branch }}"; then
+              echo "pushed"; exit 0
+            fi
+            git pull --rebase origin "${{ github.event.repository.default_branch }}" || true
+            sleep $((2 ** i))
+          done
+          echo "::error::could not push render"; exit 1
+
+      - name: Merge
+        id: merge
+        if: steps.recheck.outputs.eligible == 'true' && steps.budget.outputs.allowed == 'true'
+        uses: actions/github-script@v7
+        env:
+          PR: ${{ steps.recheck.outputs.pr }}
+          MODEL: ${{ steps.recheck.outputs.model }}
+        with:
+          script: |
+            const pull_number = Number(process.env.PR);
+            const model = process.env.MODEL || 'submission';
+            const { owner, repo } = context.repo;
+
+            // mergeable is computed asynchronously; give it a moment.
+            let pr;
+            for (let i = 0; i < 5; i++) {
+              ({ data: pr } = await github.rest.pulls.get({ owner, repo, pull_number }));
+              if (pr.mergeable !== null) break;
+              await new Promise(r => setTimeout(r, 3000));
+            }
+            if (pr.mergeable === false) {
+              core.setOutput('merged', 'false');
+              core.setOutput('why', `GitHub reports the PR as unmergeable (${pr.mergeable_state})`);
+              return;
+            }
+
+            // Label before merging: the daily counter reads labelled+closed
+            // items, and merging closes the PR.
+            await github.rest.issues.addLabels({
+              owner, repo, issue_number: pull_number, labels: ['catbench-auto'],
+            });
+
+            try {
+              await github.rest.pulls.merge({
+                owner, repo, pull_number,
+                merge_method: 'squash',
+                commit_title: `Add ${model} (#${pull_number})`,
+              });
+              core.setOutput('merged', 'true');
+            } catch (e) {
+              await github.rest.issues.removeLabel({
+                owner, repo, issue_number: pull_number, name: 'catbench-auto',
+              }).catch(() => {});
+              core.setOutput('merged', 'false');
+              core.setOutput('why', `merge API refused: ${e.message}`);
+            }
+
+      - name: Report
+        if: always() && steps.recheck.outputs.pr != ''
+        uses: actions/github-script@v7
+        env:
+          ELIGIBLE: ${{ steps.recheck.outputs.eligible }}
+          REASONS: ${{ steps.recheck.outputs.reasons }}
+          BUDGET_ALLOWED: ${{ steps.budget.outputs.allowed }}
+          BUDGET_NOTE: ${{ steps.budget.outputs.note }}
+          BUDGET_USED: ${{ steps.budget.outputs.used }}
+          BUDGET_LIMIT: ${{ steps.budget.outputs.limit }}
+          MERGED: ${{ steps.merge.outputs.merged }}
+          MERGE_WHY: ${{ steps.merge.outputs.why }}
+          PR: ${{ steps.recheck.outputs.pr }}
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const issue_number = Number(process.env.PR);
+            const e = process.env;
+            let body;
+
+            if (e.MERGED === 'true') {
+              body = `🐈 **Merged automatically.**\n\n`
+                   + `The Python render was built in an unprivileged job and landed first, so `
+                   + `the contributed script is never executed on \`main\`.\n\n`
+                   + `_Auto-merge budget: ${Number(e.BUDGET_USED) + 1}/${e.BUDGET_LIMIT} today._`;
+            } else if (e.ELIGIBLE !== 'true') {
+              body = `👀 **Needs a human.**\n\n`
+                   + (e.REASONS ? e.REASONS.split('; ').map(r => `- ${r}`).join('\n') : '- failed validation')
+                   + `\n\nNothing is wrong with the PR as such — it just falls outside what gets `
+                   + `merged unattended. @${owner} can still merge it by hand.`;
+              await github.rest.issues.addLabels({
+                owner, repo, issue_number, labels: ['needs-review'],
+              }).catch(() => {});
+            } else if (e.BUDGET_ALLOWED !== 'true') {
+              body = `⏳ **Held for today.**\n\n${e.BUDGET_NOTE}\n\n`
+                   + `The submission passed every check — it just hit the daily cap. `
+                   + `It stays open and becomes eligible again after 00:00 UTC.`;
+              await github.rest.issues.addLabels({
+                owner, repo, issue_number, labels: ['rate-limited'],
+              }).catch(() => {});
+            } else {
+              body = `⚠️ **Auto-merge did not complete.**\n\n${e.MERGE_WHY || 'see the workflow log'}`;
+              await github.rest.issues.addLabels({
+                owner, repo, issue_number, labels: ['needs-review'],
+              }).catch(() => {});
+            }
+
+            await github.rest.issues.createComment({ owner, repo, issue_number, body });

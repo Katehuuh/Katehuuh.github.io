@@ -7,6 +7,47 @@ SVG    : Create a detailed SVG image of a cute kitten.
 Python : Write a Python script that draws a cute kitten using matplotlib.
 ```
 
+## Submitting a model
+
+Three ways in, easiest first:
+
+1. **Open an issue** with the *CatBench submission* form and paste the code. If
+   it passes the checks it is committed to `main` automatically and shows up in
+   the grid a minute later.
+2. **Open a PR** adding the file(s) to `assets/`. Same checks; merged
+   automatically when they pass.
+3. **Commit directly** if you have write access.
+
+An entry is **both prompts** — a `.py` *and* an `.svg` for the same model. A
+submission with only one of them is a partial result and waits for a human.
+
+Automatic handling otherwise only covers the boring case: one model, files only
+inside `assets/`, nothing already in the repo being modified, `.py` / `.svg`
+(plus optional pre-rendered `.png` / `.jpg`). Anything else gets a
+`needs-review` label — that is not a rejection, just the line where a person
+looks.
+
+There is a daily cap on automatic submissions (5 by default, shared across the
+issue and PR paths). Past it, submissions stay open and go through after
+00:00 UTC. Tune it with the repository variables
+`CATBENCH_AUTOMERGE_DAILY_LIMIT` and `CATBENCH_AUTOMERGE_ENABLED`
+(Settings → Secrets and variables → Actions → *Variables*); both have working
+defaults, so nothing needs configuring.
+
+### Why contributed Python is safe to run
+
+Submitted `.py` is executed exactly once, in a job with a read-only token, no
+secrets, and no persisted git credentials. The image it produces is committed
+**alongside** the source — and because `build_catbench_manifest.py` only renders
+a `<model>.py` when no matching `<model>-python.<raster>` exists, the merged
+script is never executed again by `build.yml`, which *does* run on `main` with
+write access. Untrusted code therefore only ever runs where there is nothing to
+take.
+
+The import allowlist in `.github/scripts/catbench_validate.py` (matplotlib,
+numpy, maths/stdlib) is a "this isn't a kitten drawing" filter, not the security
+boundary — the job topology above is.
+
 ## Filename convention
 
 Drop everything into one folder, kind is detected by extension:

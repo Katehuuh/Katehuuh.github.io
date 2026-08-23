@@ -1,0 +1,66 @@
+# The `label:` values here are parsed by .github/scripts/catbench_validate.py
+# (H_MODEL / H_PYTHON / H_SVG). Renaming a field means renaming it there too.
+name: CatBench submission
+description: Add a model's kitten to the CatBench grid
+title: '[CatBench] '
+labels: ['catbench-submission']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Two prompts, one kitten:
+
+        ```
+        SVG    : Create a detailed SVG image of a cute kitten.
+        Python : Write a Python script that draws a cute kitten using matplotlib.
+        ```
+
+        Run **both** prompts against the model and paste **both** answers below.
+        An entry is the pair — a model that only answered one of them isn't a
+        complete CatBench result and won't be submitted automatically.
+
+        If it passes the checks it is committed to `main` automatically and
+        appears in the grid a minute later.
+
+  - type: input
+    id: model
+    attributes:
+      label: Model name
+      description: >-
+        Used as the filename, so letters, digits, spaces and . _ + - only.
+        Write it the way it should appear in the grid.
+      placeholder: Claude-Opus-5
+    validations:
+      required: true
+
+  - type: textarea
+    id: python
+    attributes:
+      label: Python code
+      description: >-
+        Must import matplotlib and draw the kitten. It is executed once, in a
+        job with no write access and no secrets, to produce the image — so it
+        can only import matplotlib, numpy and the usual maths/stdlib bits.
+        Reading or writing files, networking and subprocesses are rejected.
+      render: python
+    validations:
+      required: true
+
+  - type: textarea
+    id: svg
+    attributes:
+      label: SVG markup
+      description: >-
+        The complete `<svg>…</svg>` document. Scripts, event handlers and
+        references to other sites are rejected.
+      render: xml
+    validations:
+      required: true
+
+  - type: markdown
+    attributes:
+      value: |
+        <sub>Anything outside these rules isn't rejected as such — it just gets
+        a `needs-review` label and waits for a human. There's a daily cap on
+        automatic submissions; past it, your issue stays open and goes through
+        after 00:00 UTC.</sub>

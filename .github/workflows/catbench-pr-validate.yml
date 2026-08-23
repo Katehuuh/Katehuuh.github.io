@@ -1,0 +1,220 @@
+# CatBench PR gate — UNTRUSTED HALF.
+#
+# This is the only place a contributed .py is ever executed. It runs under the
+# `pull_request` event, which for a fork PR means a read-only GITHUB_TOKEN and
+# no access to secrets. Both checkouts set persist-credentials: false and the
+# render step maps no token into the environment, so the contributed script has
+# no credential to find even if it goes looking.
+#
+# It deliberately has NO write permission and never merges, comments or labels.
+# It only produces a verdict + a rendered image as an artifact. The trusted half
+# (catbench-automerge.yml) re-checks everything from the API before acting —
+# nothing this job claims is taken on faith, because this job ran attacker code.
+#
+# The rendered image is the security-relevant output, not a convenience:
+# build_catbench_manifest.py on main only exec()s a <model>.py when no matching
+# <model>-python.<raster> exists. Landing the render together with the source
+# means the merged code is never executed again in the privileged main context,
+# where build.yml holds contents: write.
+
+name: catbench / validate PR
+
+on:
+  pull_request:
+    paths:
+      - 'demos/CatBench/assets/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: catbench-validate-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      # Trusted tree: validator, render_python.py, requirements. Comes from the
+      # PR's base, never from the PR itself, so a submission cannot edit the
+      # code that judges it.
+      - name: Checkout base (trusted tooling)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
+
+      # Untrusted tree, kept in a subdirectory and never executed from except
+      # through the trusted renderer.
+      - name: Checkout PR head (untrusted)
+        uses: actions/checkout@v4
+        with:
+          ref: refs/pull/${{ github.event.pull_request.number }}/head
+          path: pr
+          persist-credentials: false
+
+      - name: List changed files
+        id: files
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.payload.pull_request.number,
+              per_page: 100,
+            });
+            // Any status other than "added" (modified/removed/renamed) means the
+            // PR is touching something that already exists — always a human call.
+            const nonAdded = files.filter(f => f.status !== 'added')
+                                  .map(f => `${f.filename} (${f.status})`);
+            core.setOutput('paths', files.map(f => f.filename).join('\n'));
+            core.setOutput('non_added', nonAdded.join(', '));
+            core.setOutput('count', String(files.length));
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Static validation
+        id: validate
+        env:
+          PATHS: ${{ steps.files.outputs.paths }}
+          NON_ADDED: ${{ steps.files.outputs.non_added }}
+        run: |
+          set -euo pipefail
+          mkdir -p out
+
+          if [ -n "$NON_ADDED" ]; then
+            echo "not eligible: PR modifies or removes existing files: $NON_ADDED" >&2
+            printf '{"eligible":false,"reasons":["modifies or removes existing files: %s"]}\n' \
+              "$NON_ADDED" > out/verdict-static.json
+            echo "eligible=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          args=()
+          while IFS= read -r p; do
+            [ -n "$p" ] && args+=(--file "$p")
+          done <<< "$PATHS"
+
+          if python3 .github/scripts/catbench_validate.py check \
+               --root pr --json out/verdict-static.json "${args[@]}"; then
+            echo "eligible=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "eligible=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install render deps
+        if: steps.validate.outputs.eligible == 'true'
+        run: pip install -r scripts/requirements.txt
+
+      # The one moment untrusted code runs. Output is written OUTSIDE the PR
+      # tree so that the tamper check below can require `pr/` to be pristine.
+      - name: Render contributed Python (sandboxed)
+        id: render
+        if: steps.validate.outputs.eligible == 'true'
+        env:
+          PATHS: ${{ steps.files.outputs.paths }}
+        run: |
+          set -uo pipefail
+          py=""
+          has_raster=0
+          while IFS= read -r p; do
+            case "${p,,}" in
+              *.py) py="$p" ;;
+              *.png|*.jpg|*.jpeg) has_raster=1 ;;
+            esac
+          done <<< "$PATHS"
+
+          if [ -z "$py" ]; then
+            echo "no python source in this submission; nothing to render"
+            echo "rendered=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ "$has_raster" = "1" ]; then
+            # Contributor supplied their own raster; the manifest prefers it and
+            # main will not exec the source either way.
+            echo "submission already ships a raster; skipping render"
+            echo "rendered=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          stem="$(basename "$py" .py)"
+          outfile="out/${stem}-python.jpg"
+
+          # Bounded so an infinite loop fails the job instead of burning 6h.
+          timeout 120 python3 scripts/render_python.py "pr/$py" "$outfile"
+          rc=$?
+          if [ $rc -ne 0 ] || [ ! -s "$outfile" ]; then
+            echo "render failed (exit $rc) — leaving this one to a human" >&2
+            echo "rendered=" >> "$GITHUB_OUTPUT"
+            echo "render_failed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "rendered=$(basename "$outfile")" >> "$GITHUB_OUTPUT"
+
+      # If the contributed script tried to write into the repo tree — a workflow
+      # file, a poisoned asset, anything — it shows up here and the submission
+      # stops being auto-mergeable.
+      - name: Tamper check
+        id: tamper
+        if: steps.validate.outputs.eligible == 'true'
+        run: |
+          set -euo pipefail
+          dirty="$(git -C pr status --porcelain)"
+          if [ -n "$dirty" ]; then
+            echo "::error::contributed code modified the working tree:"
+            echo "$dirty"
+            echo "clean=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "clean=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Write verdict
+        env:
+          ELIGIBLE: ${{ steps.validate.outputs.eligible }}
+          CLEAN: ${{ steps.tamper.outputs.clean }}
+          RENDERED: ${{ steps.render.outputs.rendered }}
+          RENDER_FAILED: ${{ steps.render.outputs.render_failed }}
+          PATHS: ${{ steps.files.outputs.paths }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          python3 - <<'PY'
+          import json, os, pathlib
+          paths = [p for p in os.environ.get("PATHS", "").splitlines() if p.strip()]
+          static = {}
+          sp = pathlib.Path("out/verdict-static.json")
+          if sp.exists():
+              static = json.loads(sp.read_text())
+          eligible = (os.environ.get("ELIGIBLE") == "true"
+                      and os.environ.get("CLEAN") != "false"
+                      and os.environ.get("RENDER_FAILED") != "true")
+          reasons = list(static.get("reasons", []))
+          if os.environ.get("CLEAN") == "false":
+              reasons.append("contributed code modified the working tree during render")
+          if os.environ.get("RENDER_FAILED") == "true":
+              reasons.append("python render failed")
+          json.dump({
+              "pr": int(os.environ["PR_NUMBER"]),
+              "head_sha": os.environ["HEAD_SHA"],
+              "files": paths,
+              "rendered": os.environ.get("RENDERED") or None,
+              "eligible": eligible,
+              "reasons": reasons,
+          }, open("out/verdict.json", "w"), indent=2)
+          PY
+          cat out/verdict.json
+
+      - name: Upload verdict + render
+        uses: actions/upload-artifact@v4
+        with:
+          name: catbench-verdict
+          path: out/
+          retention-days: 3

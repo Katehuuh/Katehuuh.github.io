@@ -1,0 +1,350 @@
+# CatBench submission by issue.
+#
+# Paste a kitten into the issue form and it lands in demos/CatBench/assets/ as a
+# commit on main. Same trust split as the PR path, in two jobs:
+#
+#   prepare  — contents: read. Extracts the code from the issue body and, for a
+#              Python submission, runs it to produce the render. This is the
+#              only job that executes contributed code, and it holds no write
+#              token and no secrets.
+#   publish  — contents: write. Never runs contributed code. Re-reads the issue
+#              body from the API and re-extracts from that, so the source files
+#              it commits come from the issue itself rather than from anything
+#              the render job could have touched. The only artifact it accepts
+#              is the rendered JPEG, by exact name and after a magic-byte check.
+#
+# Source and render are committed together, so build.yml's manifest step finds
+# an existing raster and never exec()s the contributed script on main — where it
+# would have contents: write and push credentials in the workspace.
+
+name: catbench / issue submission
+
+on:
+  issues:
+    types: [opened, edited]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: catbench-issue-${{ github.event.issue.number }}
+  cancel-in-progress: true
+
+jobs:
+  prepare:
+    # Only issues filed through the form, and never one already published.
+    if: >-
+      contains(join(github.event.issue.labels.*.name, ','), 'catbench-submission')
+      && !contains(join(github.event.issue.labels.*.name, ','), 'catbench-auto')
+      && github.event.issue.state == 'open'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      eligible: ${{ steps.extract.outputs.eligible }}
+      stem: ${{ steps.extract.outputs.stem }}
+      reasons: ${{ steps.extract.outputs.reasons }}
+
+    steps:
+      - name: Checkout main (trusted tooling)
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Extract + validate submission
+        id: extract
+        env:
+          # Via env, never interpolated into a script body — the issue body is
+          # attacker-controlled text.
+          ISSUE_BODY: ${{ github.event.issue.body }}
+        run: |
+          set -uo pipefail
+          mkdir -p out
+          printf '%s' "$ISSUE_BODY" > out/body.md
+
+          if python3 .github/scripts/catbench_validate.py extract \
+               --body-file out/body.md --out-dir candidate --json out/report.json; then
+            echo "eligible=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "eligible=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json, pathlib
+          r = json.loads(pathlib.Path("out/report.json").read_text())
+          py = [f for f in r["files"] if f.endswith(".py")]
+          print("stem=" + (pathlib.Path(py[0]).stem if py else ""))
+          print("reasons=" + "; ".join(r["reasons"]))
+          PY
+
+      - name: Install render deps
+        if: steps.extract.outputs.eligible == 'true' && steps.extract.outputs.stem != ''
+        run: pip install -r scripts/requirements.txt
+
+      # The one moment contributed code runs.
+      - name: Render contributed Python (sandboxed)
+        id: render
+        if: steps.extract.outputs.eligible == 'true' && steps.extract.outputs.stem != ''
+        env:
+          STEM: ${{ steps.extract.outputs.stem }}
+        run: |
+          set -uo pipefail
+          timeout 120 python3 scripts/render_python.py \
+            "candidate/demos/CatBench/assets/${STEM}.py" "out/${STEM}-python.jpg"
+          rc=$?
+          if [ $rc -ne 0 ] || [ ! -s "out/${STEM}-python.jpg" ]; then
+            echo "::error::render failed (exit $rc)"
+            echo "render_failed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Tamper check
+        if: steps.extract.outputs.eligible == 'true'
+        run: |
+          set -euo pipefail
+          dirty="$(git status --porcelain -- ':!candidate' ':!out')"
+          if [ -n "$dirty" ]; then
+            echo "::error::contributed code modified the repository tree:"
+            echo "$dirty"
+            exit 1
+          fi
+
+      - name: Fail if render failed
+        if: steps.render.outputs.render_failed == 'true'
+        run: exit 1
+
+      - name: Upload render
+        if: steps.extract.outputs.eligible == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: catbench-issue-render
+          # Only the render crosses the boundary; the source is re-derived from
+          # the issue body in `publish`.
+          path: out/*-python.jpg
+          if-no-files-found: ignore
+          retention-days: 3
+
+  publish:
+    needs: prepare
+    if: always() && needs.prepare.result != 'skipped'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      issues: write
+    # Shared with the PR path so the daily budget can't be double-spent.
+    concurrency:
+      group: catbench-auto
+      cancel-in-progress: false
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Download render
+        if: needs.prepare.outputs.eligible == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: catbench-issue-render
+          path: incoming
+        continue-on-error: true
+
+      # Authoritative pass: the body is re-fetched from the API, so what gets
+      # committed is what the human actually wrote in the issue.
+      - name: Re-extract from the API
+        id: recheck
+        if: needs.prepare.outputs.eligible == 'true' && needs.prepare.result == 'success'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const { execFileSync } = require('child_process');
+            const { data: issue } = await github.rest.issues.get({
+              owner: context.repo.owner, repo: context.repo.repo,
+              issue_number: context.payload.issue.number,
+            });
+            fs.mkdirSync('trusted', { recursive: true });
+            fs.writeFileSync('trusted/body.md', issue.body || '');
+            try {
+              execFileSync('python3', [
+                '.github/scripts/catbench_validate.py', 'extract',
+                '--body-file', 'trusted/body.md',
+                '--out-dir', 'trusted/candidate',
+                '--json', 'trusted/report.json',
+              ], { stdio: 'pipe' });
+            } catch (e) {
+              core.setOutput('ok', 'false');
+              const out = (e.stderr || e.stdout || '').toString().trim();
+              core.setOutput('reasons', out.split('\n').filter(l => l.trim().startsWith('-'))
+                                            .map(l => l.replace(/^\s*-\s*/, '')).join('; '));
+              return;
+            }
+            const report = JSON.parse(fs.readFileSync('trusted/report.json', 'utf8'));
+            const py = report.files.find(f => f.endsWith('.py'));
+            core.setOutput('ok', 'true');
+            core.setOutput('files', report.files.join('\n'));
+            core.setOutput('stem', py ? py.split('/').pop().replace(/\.py$/, '') : '');
+            core.setOutput('model', report.files[0].split('/').pop().replace(/\.[^.]+$/, ''));
+
+      - name: Check daily budget
+        id: budget
+        if: steps.recheck.outputs.ok == 'true'
+        uses: actions/github-script@v7
+        env:
+          LIMIT: ${{ vars.CATBENCH_AUTOMERGE_DAILY_LIMIT }}
+          ENABLED: ${{ vars.CATBENCH_AUTOMERGE_ENABLED }}
+        with:
+          script: |
+            // Unset repo variables arrive as '' => defaults apply, so this works
+            // with zero configuration.
+            if ((process.env.ENABLED || 'true').toLowerCase() === 'false') {
+              core.setOutput('allowed', 'false');
+              core.setOutput('note', 'auto-submit is switched off (CATBENCH_AUTOMERGE_ENABLED=false)');
+              return;
+            }
+            const n = parseInt(process.env.LIMIT, 10);
+            const limit = Number.isFinite(n) && n >= 0 ? n : 5;
+            const d = new Date();
+            const since = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+            // listForRepo rather than the search API: search is eventually
+            // consistent and a stale count would let a burst through. PRs count
+            // as issues here, so one budget covers both paths.
+            const items = await github.paginate(github.rest.issues.listForRepo, {
+              owner: context.repo.owner, repo: context.repo.repo,
+              state: 'closed', labels: 'catbench-auto',
+              since: since.toISOString(), per_page: 100,
+            });
+            const used = items.filter(i => i.closed_at && new Date(i.closed_at) >= since).length;
+            core.info(`catbench auto budget: ${used}/${limit} since ${since.toISOString()}`);
+            core.setOutput('allowed', used < limit ? 'true' : 'false');
+            core.setOutput('used', String(used));
+            core.setOutput('limit', String(limit));
+            core.setOutput('note', used < limit ? ''
+              : `daily submission limit reached (${used}/${limit} today)`);
+
+      - name: Commit submission
+        id: commit
+        if: steps.recheck.outputs.ok == 'true' && steps.budget.outputs.allowed == 'true'
+        env:
+          FILES: ${{ steps.recheck.outputs.files }}
+          STEM: ${{ steps.recheck.outputs.stem }}
+          MODEL: ${{ steps.recheck.outputs.model }}
+          ISSUE: ${{ github.event.issue.number }}
+        run: |
+          set -euo pipefail
+          added=()
+
+          while IFS= read -r rel; do
+            [ -n "$rel" ] || continue
+            if [ -e "$rel" ]; then
+              echo "::error::$rel already exists on main"
+              exit 1
+            fi
+            mkdir -p "$(dirname "$rel")"
+            cp "trusted/$rel" "$rel"
+            added+=("$rel")
+          done <<< "$FILES"
+
+          # Source + render land in ONE commit so main never sees a .py without
+          # its raster (which is what stops build.yml exec()ing it).
+          if [ -n "$STEM" ]; then
+            src="incoming/${STEM}-python.jpg"
+            if [ ! -s "$src" ]; then
+              echo "::error::expected render $src missing"
+              exit 1
+            fi
+            if [ "$(head -c 3 "$src" | od -An -tx1 | tr -d ' \n')" != "ffd8ff" ]; then
+              echo "::error::$src is not a JPEG"
+              exit 1
+            fi
+            dest="demos/CatBench/assets/${STEM}-python.jpg"
+            cp "$src" "$dest"
+            added+=("$dest")
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- "${added[@]}"
+          git commit \
+            -m "Add ${MODEL} (#${ISSUE})" \
+            -m "Submitted via the CatBench issue form. Python was rendered in an unprivileged job and committed alongside its source."
+
+          for i in 1 2 3 4; do
+            if git push origin HEAD:"${{ github.event.repository.default_branch }}"; then
+              echo "committed=true" >> "$GITHUB_OUTPUT"; exit 0
+            fi
+            git pull --rebase origin "${{ github.event.repository.default_branch }}" || true
+            sleep $((2 ** i))
+          done
+          echo "::error::could not push"; exit 1
+
+      - name: Report
+        if: always() && needs.prepare.result != 'skipped'
+        uses: actions/github-script@v7
+        env:
+          PREPARE_OK: ${{ needs.prepare.outputs.eligible }}
+          PREPARE_REASONS: ${{ needs.prepare.outputs.reasons }}
+          PREPARE_RESULT: ${{ needs.prepare.result }}
+          RECHECK_OK: ${{ steps.recheck.outputs.ok }}
+          RECHECK_REASONS: ${{ steps.recheck.outputs.reasons }}
+          BUDGET_ALLOWED: ${{ steps.budget.outputs.allowed }}
+          BUDGET_NOTE: ${{ steps.budget.outputs.note }}
+          BUDGET_USED: ${{ steps.budget.outputs.used }}
+          BUDGET_LIMIT: ${{ steps.budget.outputs.limit }}
+          COMMITTED: ${{ steps.commit.outputs.committed }}
+          MODEL: ${{ steps.recheck.outputs.model }}
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const issue_number = context.payload.issue.number;
+            const e = process.env;
+            const site = `https://${owner.toLowerCase()}.github.io/demos/CatBench/`;
+            let body, labels = [], close = false;
+
+            if (e.COMMITTED === 'true') {
+              body = `🐈 **Committed to \`main\`.**\n\n`
+                   + `\`${e.MODEL}\` is on its way to [CatBench](${site}) — the build workflow `
+                   + `regenerates the grid and Pages republishes within a minute or so.\n\n`
+                   + `_Daily budget: ${Number(e.BUDGET_USED) + 1}/${e.BUDGET_LIMIT}._`;
+              labels = ['catbench-auto'];
+              close = true;
+            } else if (e.PREPARE_OK !== 'true' || e.RECHECK_OK === 'false') {
+              const reasons = (e.RECHECK_REASONS || e.PREPARE_REASONS || '').split('; ').filter(Boolean);
+              body = `👀 **Not submitted automatically.**\n\n`
+                   + (reasons.length ? reasons.map(r => `- ${r}`).join('\n') : '- failed validation')
+                   + `\n\nEdit the issue to fix it and this will run again. `
+                   + `Auto-submission only accepts a single model's \`.py\` or \`.svg\`; `
+                   + `anything else is a manual merge on purpose.`;
+              labels = ['needs-review'];
+            } else if (e.PREPARE_RESULT === 'failure') {
+              body = `⚠️ **The render didn't produce a figure.**\n\n`
+                   + `The script ran but no matplotlib figure came out of it, so there's nothing `
+                   + `to show in the grid. Check the workflow log, then edit the issue to retry.`;
+              labels = ['needs-review'];
+            } else if (e.BUDGET_ALLOWED !== 'true') {
+              body = `⏳ **Held for today.**\n\n${e.BUDGET_NOTE}\n\n`
+                   + `The submission passed every check — it just hit the daily cap. `
+                   + `Edit the issue after 00:00 UTC and it'll go through.`;
+              labels = ['rate-limited'];
+            } else {
+              body = `⚠️ **Submission did not complete** — see the workflow log.`;
+              labels = ['needs-review'];
+            }
+
+            await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            if (labels.length) {
+              await github.rest.issues.addLabels({ owner, repo, issue_number, labels }).catch(() => {});
+            }
+            if (close) {
+              await github.rest.issues.update({
+                owner, repo, issue_number, state: 'closed', state_reason: 'completed',
+              });
+            }
