@@ -10,6 +10,9 @@ __pycache__/
 .venv/
 venv/
 
+# Logs
+*.log
+
 # OS
 .DS_Store
 Thumbs.db
@@ -19,7 +22,7 @@ desktop.ini
 .vscode/
 .idea/
 
-# Local secrets — never commit
+# Local secrets, never commit
 .env
 .env.local
 *.token
