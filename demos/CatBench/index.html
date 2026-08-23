@@ -47,7 +47,6 @@ a:hover { color: #ffb98d; }
 .hero-cb h1 {
   font-family: 'Fredoka', var(--sans); font-weight: 600;
   font-size: clamp(2rem, 5.5vw, 2.8rem); margin: .2rem 0 1rem;
-  display: flex; align-items: center; gap: .9rem; flex-wrap: wrap;
 }
 /* Cat ears on the C. Two triangles pinned to the top of the letterform,
    sized in em so they track the clamped font-size. The C stays real text,
@@ -128,6 +127,12 @@ a:hover { color: #ffb98d; }
     inset 0 0 0 1px rgba(255, 138, 76, 0.38),
     inset 0 -1px 0 rgba(0, 0, 0, 0.20),
     0 0 14px -3px rgba(255, 138, 76, 0.32);
+}
+/* Perched on the top-right corner of the bench, straddling its edge. */
+main > section:first-of-type { position: relative; }
+#run-filter { position: absolute; top: -.85rem; right: .9rem; z-index: 3; }
+@media (max-width: 600px) {
+  #run-filter { position: static; display: inline-flex; margin: 0 0 .5rem; }
 }
 .is-hidden-by-filter { display: none !important; }
 .grid-empty-note { color: var(--text-3); font-size: .9rem; margin: .8rem 0 0; }
@@ -332,7 +337,7 @@ main > footer .dot { color: var(--text-3); margin: 0 .35rem; }
 
   <header class="hero hero-cb rise" data-d="1">
     <a class="back" href="../../">back</a>
-    <h1><span class="cb-word"><span class="cat-c">C</span>atBenc<span class="cat-h">h<svg class="cat-tail" viewBox="0 0 20 30" fill="none" aria-hidden="true"><path d="M2 26.5C11.5 29.5 18.2 24.5 16.6 14.2 15.9 8.6 11.6 7.2 10.4 9.8" stroke="currentColor" stroke-width="3.3" stroke-linecap="round"/></svg></span></span><span class="tag-filter" id="run-filter" role="group" aria-label="filter by where the model runs"><button data-run="local" class="active" aria-pressed="true" title="quantised weights you run yourself: gguf, exl2/exl3, Q4_K_M, bpw">local</button><button data-run="cloud" class="active" aria-pressed="true" title="hosted models behind an API">cloud</button></span></h1>
+    <h1><span class="cb-word"><span class="cat-c">C</span>atBenc<span class="cat-h">h<svg class="cat-tail" viewBox="0 0 20 30" fill="none" aria-hidden="true"><path d="M2 26.5C11.5 29.5 18.2 24.5 16.6 14.2 15.9 8.6 11.6 7.2 10.4 9.8" stroke="currentColor" stroke-width="3.3" stroke-linecap="round"/></svg></span></span></h1>
     <ul class="prompts">
       <li><span class="tag">svg</span><code>Create a detailed SVG image of a cute kitten.</code></li>
       <li><span class="tag">python</span><code>Write a Python script that draws a cute kitten using matplotlib.</code></li>
@@ -340,6 +345,7 @@ main > footer .dot { color: var(--text-3); margin: 0 .35rem; }
   </header>
 
   <section class="rise" data-d="2">
+    <span class="tag-filter" id="run-filter" role="group" aria-label="filter by where the model runs"><button data-run="local" class="active" aria-pressed="true" title="quantised weights you run yourself: gguf, exl2/exl3, Q4_K_M, bpw">local</button><button data-run="cloud" class="active" aria-pressed="true" title="hosted models behind an API">cloud</button></span>
     <div class="grid-wrap">
       <table id="catbench-grid" class="catbench-grid">
         <thead><tr><th class="row-label">model</th></tr></thead>
