@@ -212,7 +212,7 @@ a:hover { color: #ffb98d; }
 
 /* Perched on the top-right corner of the bench, straddling its edge. */
 main > section:first-of-type { position: relative; }
-#run-filter { position: absolute; top: -1.25rem; right: .9rem; z-index: 3; }
+#run-filter { position: absolute; top: -1.65rem; right: .9rem; z-index: 3; }
 @media (max-width: 600px) {
   #run-filter { position: static; display: inline-flex; margin: 0 0 .5rem; }
 }
@@ -301,7 +301,12 @@ main > footer .dot { color: var(--text-3); margin: 0 .35rem; }
   font-size: .92rem; text-align: center; vertical-align: middle;
   border-right: 1px solid var(--line);
 }
-.catbench-grid thead .row-label { color: var(--accent); font-size: .78rem; font-weight: 700; }
+/* Same padding as the model headers, including the band the pill sits in,
+   so "model" and a one-line model name land on the same line. */
+.catbench-grid thead .row-label {
+  color: var(--accent); font-size: .78rem; font-weight: 700;
+  padding: .35rem .3rem 1.5rem;
+}
 .catbench-grid .model-header {
   text-align: center; font-weight: 600; color: var(--text);
   /* The pill sits in the cell's bottom-right corner, out of the text flow,
@@ -340,14 +345,18 @@ main > footer .dot { color: var(--text-3); margin: 0 .35rem; }
 .catbench-grid .cell.cell-svg object {
   width: 100%; height: 100%; object-fit: contain;
 }
+/* Kept quiet: the kitten is the point, the link to the source is a footnote.
+   It brightens on hover. */
 .catbench-grid .cell .source-link {
-  position: absolute; bottom: 6px; right: 6px;
-  font-size: .68rem; background: rgba(0, 0, 0, 0.72);
-  color: var(--accent); padding: .12rem .42rem;
-  border-radius: 6px; pointer-events: auto; z-index: 1;
+  position: absolute; bottom: 5px; right: 5px;
+  font-size: .64rem; background: rgba(0, 0, 0, 0.42);
+  color: rgba(255, 255, 255, 0.5); padding: 0 .18rem;
+  border-radius: 4px; pointer-events: auto; z-index: 1;
   font-family: var(--mono);
 }
-.catbench-grid .cell .source-link:hover { background: var(--accent); color: var(--bg); }
+.catbench-grid .cell .source-link:hover {
+  background: rgba(0, 0, 0, 0.85); color: var(--accent);
+}
 .catbench-grid .cell.empty {
   cursor: default; color: var(--text-3);
   display: flex; align-items: center; justify-content: center; font-size: .8rem;
