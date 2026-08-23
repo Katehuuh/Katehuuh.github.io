@@ -432,7 +432,7 @@ main > footer .dot { color: var(--text-3); margin: 0 .35rem; }
   </header>
 
   <section class="rise" data-d="2">
-    <span class="tag-filter" id="run-filter" role="group" aria-label="filter by where the model runs"><button data-run="local" class="active" aria-pressed="true" title="quantised weights you run yourself: gguf, exl2/exl3, Q4_K_M, bpw">local</button><button data-run="cloud" class="active" aria-pressed="true" title="hosted models behind an API">cloud</button><span class="sort-sep" aria-hidden="true"></span><button id="sort-votes" type="button" aria-pressed="false" title="sort by votes (off = manifest order)" aria-label="sort by votes">👍</button></span>
+    <span class="tag-filter" id="run-filter" role="group" aria-label="filter by where the model runs"><button data-run="local" class="active" aria-pressed="true" title="quantised weights you run yourself: gguf, exl2/exl3, Q4_K_M, bpw">local</button><button data-run="cloud" class="active" aria-pressed="true" title="hosted models behind an API">cloud</button><span class="sort-sep" aria-hidden="true"></span><button id="sort-votes" type="button" aria-pressed="false" title="sort by votes (off = most recent)" aria-label="sort by votes">👍</button></span>
     <div class="grid-wrap">
       <table id="catbench-grid" class="catbench-grid">
         <thead><tr><th class="row-label">model</th></tr></thead>
@@ -589,7 +589,10 @@ function initRunFilter() {
   const bar = document.getElementById('run-filter');
   if (!bar) return;
   bar.addEventListener('click', (e) => {
-    const btn = e.target.closest('button');
+    // Only the run toggles. The sort button lives in the same bar and has
+    // its own handler; catching it here flipped its state twice per click,
+    // so it could never be turned back off.
+    const btn = e.target.closest('button[data-run]');
     if (!btn) return;
     const active = !btn.classList.contains('active');
     btn.classList.toggle('active', active);
