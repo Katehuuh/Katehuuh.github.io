@@ -1,5 +1,13 @@
 {
   "models": {
+    "ox-alpha-glm-5.5": {
+      "display_name": "ox-alpha glm-5.5",
+      "python_render": "assets/ox-alpha__glm-5.5-python.jpg",
+      "svg": "assets/ox-alpha__glm-5.5-svg.jpg",
+      "python_source": "assets/ox-alpha__glm-5.5.py",
+      "svg_source": "assets/ox-alpha__glm-5.5.svg",
+      "_first_seen": "2026-08-23T08:18:34Z"
+    },
     "gemini-3.7-flash": {
       "display_name": "gemini-3.7-flash",
       "python_render": "assets/gemini-3.7-flash-python.jpg",
