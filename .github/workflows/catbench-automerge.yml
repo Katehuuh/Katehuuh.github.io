@@ -279,7 +279,7 @@ jobs:
               await github.rest.pulls.merge({
                 owner, repo, pull_number,
                 merge_method: 'squash',
-                commit_title: `Add ${model} (#${pull_number})`,
+                commit_title: `Add ${model} to CatBench (#${pull_number})`,
               });
               core.setOutput('merged', 'true');
             } catch (e) {
@@ -291,7 +291,7 @@ jobs:
             }
 
       - name: Report
-        if: always() && steps.recheck.outputs.pr != ''
+        if: ${{ !cancelled() && steps.recheck.outputs.pr != '' }}
         uses: actions/github-script@v7
         env:
           ELIGIBLE: ${{ steps.recheck.outputs.eligible }}
