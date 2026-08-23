@@ -25,13 +25,15 @@ import json
 import re
 import subprocess
 import sys
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 CATBENCH = ROOT / "demos" / "CatBench"
 ASSETS_DIR = CATBENCH / "assets"
-RENDER_SCRIPT = ROOT / "scripts" / "render_python.py"
+# Sits next to this file, so moving the scripts folder cannot break it again.
+RENDER_SCRIPT = Path(__file__).resolve().parent / "render_python.py"
 
 RASTER_EXTS = {".png", ".jpg", ".jpeg", ".gif"}
 SITE = "https://katehuuh.github.io/demos/CatBench/"
@@ -162,7 +164,11 @@ def render_missing(models: dict) -> None:
         # Auto-render output: <stem>-python.jpg in the same folder
         out = src.with_name(f"{src.stem}-python.jpg")
         cmd = [sys.executable, str(RENDER_SCRIPT), str(src), str(out)]
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        # Kitten scripts routinely end with plt.savefig('kitten.png'). Run from
+        # a scratch directory so that relative write lands there and not in the
+        # repo root, same as the submission pipeline does.
+        with tempfile.TemporaryDirectory() as scratch:
+            result = subprocess.run(cmd, capture_output=True, text=True, cwd=scratch)
         if result.returncode == 0 and out.exists():
             m["python_render"] = f"assets/{out.name}"
         else:
