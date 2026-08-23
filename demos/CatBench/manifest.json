@@ -1,5 +1,13 @@
 {
   "models": {
+    "qwen3.8-27b-exl3-5.00bpw": {
+      "display_name": "Qwen3.8-27B-exl3-5.00bpw",
+      "python_render": "assets/Qwen3.8-27B-exl3-5.00bpw-python.jpg",
+      "svg": "assets/Qwen3.8-27B-exl3-5.00bpw-svg.jpg",
+      "python_source": "assets/Qwen3.8-27B-exl3-5.00bpw.py",
+      "svg_source": "assets/Qwen3.8-27B-exl3-5.00bpw.svg",
+      "_first_seen": "2026-08-22T23:45:30-05:00"
+    },
     "qwopus3.6-27b-fusion-exl3-4.5bpw": {
       "display_name": "Qwopus3.6-27B-Fusion-exl3-4.5bpw",
       "python_render": "assets/Qwopus3.6-27B-Fusion-exl3-4.5bpw-python.jpg",
