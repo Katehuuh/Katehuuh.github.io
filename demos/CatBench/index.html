@@ -786,8 +786,8 @@ function fixWideNames() {
 
 // ?model=<id> (or #model=<id>) puts one kitten in view and marks it, so a
 // link to a single model lands on it instead of the far left of the grid.
-// api.json hands out these links; the id is the name lowercased with spaces
-// and underscores turned into dashes.
+// manifest.json keys are these ids: the name lowercased with spaces and
+// underscores turned into dashes.
 function focusModel() {
   const q = new URLSearchParams(location.search).get('model')
     || (location.hash.match(/(?:^#|[#&])model=([^&]*)/) || [])[1];

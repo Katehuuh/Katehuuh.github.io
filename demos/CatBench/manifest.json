@@ -1,4 +1,6 @@
 {
+  "base": "https://katehuuh.github.io/demos/CatBench/",
+  "updated": "2026-08-23T08:18:34Z",
   "models": {
     "ox-alpha-glm-5.5": {
       "display_name": "ox-alpha glm-5.5",
@@ -6,7 +8,7 @@
       "svg": "assets/ox-alpha__glm-5.5-svg.jpg",
       "python_source": "assets/ox-alpha__glm-5.5.py",
       "svg_source": "assets/ox-alpha__glm-5.5.svg",
-      "_first_seen": "2026-08-23T08:18:34Z"
+      "added": "2026-08-23T08:18:34Z"
     },
     "gemini-3.7-flash": {
       "display_name": "gemini-3.7-flash",
@@ -14,7 +16,7 @@
       "svg": "assets/gemini-3.7-flash-svg.jpg",
       "python_source": "assets/gemini-3.7-flash.py",
       "svg_source": "assets/gemini-3.7-flash.svg",
-      "_first_seen": "2026-08-23T07:05:45Z"
+      "added": "2026-08-23T07:05:45Z"
     },
     "qwen3.8-27b-exl3-5.00bpw": {
       "display_name": "Qwen3.8-27B-exl3-5.00bpw",
@@ -22,7 +24,7 @@
       "svg": "assets/Qwen3.8-27B-exl3-5.00bpw-svg.jpg",
       "python_source": "assets/Qwen3.8-27B-exl3-5.00bpw.py",
       "svg_source": "assets/Qwen3.8-27B-exl3-5.00bpw.svg",
-      "_first_seen": "2026-08-23T04:45:30Z"
+      "added": "2026-08-23T04:45:30Z"
     },
     "qwopus3.6-27b-fusion-exl3-4.5bpw": {
       "display_name": "Qwopus3.6-27B-Fusion-exl3-4.5bpw",
@@ -30,7 +32,7 @@
       "svg": "assets/Qwopus3.6-27B-Fusion-exl3-4.5bpw-svg.jpg",
       "python_source": "assets/Qwopus3.6-27B-Fusion-exl3-4.5bpw.py",
       "svg_source": "assets/Qwopus3.6-27B-Fusion-exl3-4.5bpw.svg",
-      "_first_seen": "2026-08-11T02:17:51Z"
+      "added": "2026-08-11T02:17:51Z"
     },
     "kimi-k3": {
       "display_name": "kimi-k3",
@@ -38,7 +40,7 @@
       "svg": "assets/kimi-k3-svg.jpg",
       "python_source": "assets/kimi-k3.py",
       "svg_source": "assets/kimi-k3.svg",
-      "_first_seen": "2026-07-17T01:38:09Z"
+      "added": "2026-07-17T01:38:09Z"
     },
     "muse-spark-1.1": {
       "display_name": "Muse-Spark-1.1",
@@ -46,7 +48,7 @@
       "svg": "assets/Muse-Spark-1.1-svg.jpg",
       "python_source": "assets/Muse-Spark-1.1.py",
       "svg_source": "assets/Muse-Spark-1.1.svg",
-      "_first_seen": "2026-07-17T00:48:21Z"
+      "added": "2026-07-17T00:48:21Z"
     },
     "inkling": {
       "display_name": "Inkling",
@@ -54,7 +56,7 @@
       "svg": "assets/Inkling-svg.jpg",
       "python_source": "assets/Inkling.py",
       "svg_source": "assets/Inkling.svg",
-      "_first_seen": "2026-07-17T00:39:41Z"
+      "added": "2026-07-17T00:39:41Z"
     },
     "gpt-5.6-sol-pro": {
       "display_name": "GPT-5.6-Sol-Pro",
@@ -62,7 +64,7 @@
       "svg": "assets/GPT-5.6-Sol-Pro-svg.jpg",
       "python_source": "assets/GPT-5.6-Sol-Pro.py",
       "svg_source": "assets/GPT-5.6-Sol-Pro.svg",
-      "_first_seen": "2026-07-09T23:55:36Z"
+      "added": "2026-07-09T23:55:36Z"
     },
     "gpt-5.6-sol": {
       "display_name": "GPT-5.6-Sol",
@@ -70,7 +72,7 @@
       "svg": "assets/GPT-5.6-Sol-svg.jpg",
       "python_source": "assets/GPT-5.6-Sol.py",
       "svg_source": "assets/GPT-5.6-Sol.svg",
-      "_first_seen": "2026-07-09T23:44:36Z"
+      "added": "2026-07-09T23:44:36Z"
     },
     "grok-4.5": {
       "display_name": "grok-4.5",
@@ -78,7 +80,7 @@
       "svg": "assets/grok-4.5-svg.jpg",
       "python_source": "assets/grok-4.5.py",
       "svg_source": "assets/grok-4.5.svg",
-      "_first_seen": "2026-07-09T23:36:45Z"
+      "added": "2026-07-09T23:36:45Z"
     },
     "claude-sonnet-5": {
       "display_name": "claude-sonnet-5",
@@ -86,7 +88,7 @@
       "svg": "assets/claude-sonnet-5-svg.jpg",
       "python_source": "assets/claude-sonnet-5.py",
       "svg_source": "assets/claude-sonnet-5.svg",
-      "_first_seen": "2026-07-01T02:46:17Z"
+      "added": "2026-07-01T02:46:17Z"
     },
     "laguna-m.1-225b-a32b": {
       "display_name": "Laguna-M.1 225B-A32B",
@@ -94,7 +96,7 @@
       "svg": "assets/Laguna-M.1_225B-A32B-svg.jpg",
       "python_source": "assets/Laguna-M.1_225B-A32B.py",
       "svg_source": "assets/Laguna-M.1_225B-A32B.svg",
-      "_first_seen": "2026-06-27T23:56:13Z"
+      "added": "2026-06-27T23:56:13Z"
     },
     "laguna-xs.2-33b-a3b": {
       "display_name": "Laguna-XS.2 33B-A3B",
@@ -102,7 +104,7 @@
       "svg": "assets/Laguna-XS.2_33B-A3B-svg.jpg",
       "python_source": "assets/Laguna-XS.2_33B-A3B.py",
       "svg_source": "assets/Laguna-XS.2_33B-A3B.svg",
-      "_first_seen": "2026-06-27T23:56:13Z"
+      "added": "2026-06-27T23:56:13Z"
     },
     "north-mini-code-1.0-30b": {
       "display_name": "North-Mini-Code-1.0 30B",
@@ -110,7 +112,7 @@
       "svg": "assets/North-Mini-Code-1.0_30B-svg.jpg",
       "python_source": "assets/North-Mini-Code-1.0_30B.py",
       "svg_source": "assets/North-Mini-Code-1.0_30B.svg",
-      "_first_seen": "2026-06-27T23:56:13Z"
+      "added": "2026-06-27T23:56:13Z"
     },
     "glm-5.2": {
       "display_name": "glm-5.2",
@@ -118,7 +120,7 @@
       "svg": "assets/glm-5.2-svg.jpg",
       "python_source": "assets/glm-5.2.py",
       "svg_source": "assets/glm-5.2.svg",
-      "_first_seen": "2026-06-16T21:44:35Z"
+      "added": "2026-06-16T21:44:35Z"
     },
     "claude-fable-5": {
       "display_name": "claude-fable-5",
@@ -126,7 +128,7 @@
       "svg": "assets/claude-fable-5-svg.jpg",
       "python_source": "assets/claude-fable-5.py",
       "svg_source": "assets/claude-fable-5.svg",
-      "_first_seen": "2026-06-09T19:40:31Z"
+      "added": "2026-06-09T19:40:31Z"
     },
     "grok-build-0.1": {
       "display_name": "Grok-Build-0.1",
@@ -134,7 +136,7 @@
       "svg": "assets/Grok-Build-0.1-svg.jpg",
       "python_source": "assets/Grok-Build-0.1.py",
       "svg_source": "assets/Grok-Build-0.1.svg",
-      "_first_seen": "2026-06-06T13:54:05Z"
+      "added": "2026-06-06T13:54:05Z"
     },
     "composer-2.5": {
       "display_name": "Composer-2.5",
@@ -142,7 +144,7 @@
       "svg": "assets/Composer-2.5-svg.jpg",
       "python_source": "assets/Composer-2.5.py",
       "svg_source": "assets/Composer-2.5.svg",
-      "_first_seen": "2026-06-06T13:44:00Z"
+      "added": "2026-06-06T13:44:00Z"
     },
     "qwen3.7-max": {
       "display_name": "qwen3.7-max",
@@ -150,7 +152,7 @@
       "svg": "assets/qwen3.7-max-svg.jpg",
       "python_source": "assets/qwen3.7-max.py",
       "svg_source": "assets/qwen3.7-max.svg",
-      "_first_seen": "2026-06-05T02:31:54Z"
+      "added": "2026-06-05T02:31:54Z"
     },
     "nemotron-3-ultra": {
       "display_name": "Nemotron-3-Ultra",
@@ -158,7 +160,7 @@
       "svg": "assets/Nemotron-3-Ultra-svg.jpg",
       "python_source": "assets/Nemotron-3-Ultra.py",
       "svg_source": "assets/Nemotron-3-Ultra.svg",
-      "_first_seen": "2026-06-05T02:16:11Z"
+      "added": "2026-06-05T02:16:11Z"
     },
     "minimax-m3": {
       "display_name": "minimax-m3",
@@ -166,7 +168,7 @@
       "svg": "assets/minimax-m3-svg.jpg",
       "python_source": "assets/minimax-m3.py",
       "svg_source": "assets/minimax-m3.svg",
-      "_first_seen": "2026-06-05T02:14:50Z"
+      "added": "2026-06-05T02:14:50Z"
     },
     "claude-opus-4.8": {
       "display_name": "claude-opus-4.8",
@@ -174,7 +176,7 @@
       "svg": "assets/claude-opus-4.8-svg.jpg",
       "python_source": "assets/claude-opus-4.8.py",
       "svg_source": "assets/claude-opus-4.8.svg",
-      "_first_seen": "2026-05-28T19:35:40Z"
+      "added": "2026-05-28T19:35:40Z"
     },
     "gemini-3.5-flash": {
       "display_name": "gemini-3.5-flash",
@@ -182,21 +184,21 @@
       "svg": "assets/gemini-3.5-flash-svg.jpg",
       "python_source": "assets/gemini-3.5-flash.py",
       "svg_source": "assets/gemini-3.5-flash.svg",
-      "_first_seen": "2026-05-20T13:53:35Z"
+      "added": "2026-05-20T13:53:35Z"
     },
     "gpt-5.5-pro": {
       "display_name": "GPT-5.5-Pro",
       "python_render": "assets/GPT-5.5-Pro-python.jpg",
       "python_source": "assets/GPT-5.5-Pro.py",
       "svg": "assets/gpt-5.5-pro-svg.jpg",
-      "_first_seen": "2026-04-27T13:12:56Z"
+      "added": "2026-04-27T13:12:56Z"
     },
     "gpt-5.5": {
       "display_name": "GPT-5.5",
       "python_render": "assets/GPT-5.5-python.jpg",
       "python_source": "assets/GPT-5.5.py",
       "svg": "assets/gpt-5.5-svg.jpg",
-      "_first_seen": "2026-04-27T13:12:56Z"
+      "added": "2026-04-27T13:12:56Z"
     },
     "claude-opus-4.7": {
       "display_name": "claude-opus-4.7",
@@ -204,31 +206,31 @@
       "svg": "assets/claude-opus-4.7-svg.jpg",
       "python_source": "assets/claude-opus-4.7.py",
       "svg_source": "assets/claude-opus-4.7.svg",
-      "_first_seen": "2026-04-27T13:12:56Z"
+      "added": "2026-04-27T13:12:56Z"
     },
     "deepseek-v4-flash-thinking": {
       "display_name": "deepseek-v4-flash-thinking",
       "python_render": "assets/deepseek-v4-flash-thinking-python.jpg",
       "svg": "assets/deepseek-v4-flash-thinking-svg.jpg",
-      "_first_seen": "2026-04-27T13:12:56Z"
+      "added": "2026-04-27T13:12:56Z"
     },
     "deepseek-v4-pro-thinking": {
       "display_name": "deepseek-v4-pro-thinking",
       "python_render": "assets/deepseek-v4-pro-thinking-python.jpg",
       "svg": "assets/deepseek-v4-pro-thinking-svg.jpg",
-      "_first_seen": "2026-04-27T13:12:56Z"
+      "added": "2026-04-27T13:12:56Z"
     },
     "kimi-k2.6": {
       "display_name": "kimi-k2.6",
       "python_render": "assets/kimi-k2.6-python.jpg",
       "svg": "assets/kimi-k2.6-svg.gif",
-      "_first_seen": "2026-04-27T13:12:56Z"
+      "added": "2026-04-27T13:12:56Z"
     },
     "mimo-v2.5-pro": {
       "display_name": "mimo-v2.5-pro",
       "python_render": "assets/mimo-v2.5-pro-python.jpg",
       "svg": "assets/mimo-v2.5-pro-svg.jpg",
-      "_first_seen": "2026-04-27T13:12:56Z"
+      "added": "2026-04-27T13:12:56Z"
     }
   },
   "prompts": {

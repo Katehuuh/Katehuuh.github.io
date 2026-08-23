@@ -180,42 +180,8 @@ def annotate_first_seen(models: dict) -> None:
                 p = CATBENCH / m[field]
                 if p.exists():
                     candidates.append(file_first_commit(p))
-        m["_first_seen"] = min(candidates) if candidates else utc(
+        m["added"] = min(candidates) if candidates else utc(
             datetime.now(timezone.utc).isoformat(timespec="seconds"))
-
-
-def api_file(ordered: list, prompts: dict) -> dict:
-    """One flat file other services can read: absolute URLs, no path joining,
-    newest model first. manifest.json stays the page's own format."""
-    def url(rel):
-        return SITE + rel if rel else None
-
-    models = []
-    for key, m in ordered:
-        shown = m.get("svg", "")
-        entry = {
-            "id": key,
-            "name": m.get("display_name", key),
-            "page": f"{SITE}?model={key}",
-            "svg": url(m.get("svg_source")),
-            # The grid shows a raster of the SVG when CI managed to make one,
-            # since Discord and README embeds cannot render svg files.
-            "svg_image": url(shown) if Path(shown).suffix.lower() in RASTER_EXTS else None,
-            "python": url(m.get("python_source")),
-            "python_image": url(m.get("python_render")),
-            "added": m.get("_first_seen"),
-        }
-        models.append({k: v for k, v in entry.items() if v})
-
-    return {
-        "catbench": SITE,
-        # Newest entry's date, not build time, so a rebuild that changed
-        # nothing leaves the file byte for byte the same.
-        "updated": models[0]["added"] if models else None,
-        "count": len(models),
-        "prompts": prompts,
-        "models": models,
-    }
 
 
 def main() -> int:
@@ -224,20 +190,23 @@ def main() -> int:
     annotate_first_seen(models)
 
     # Sort: newest first commit on the left, oldest on the right.
-    ordered = sorted(models.items(), key=lambda kv: kv[1].get("_first_seen", ""), reverse=True)
-    prompts = {
-        "svg": "Create a detailed SVG image of a cute kitten.",
-        "python": "Write a Python script that draws a cute kitten using matplotlib.",
+    ordered = sorted(models.items(), key=lambda kv: kv[1].get("added", ""), reverse=True)
+    # base and updated make this file usable from outside the page: paths in
+    # it are relative, and `updated` is the newest entry's date, so a poller
+    # can tell "something landed" without diffing the whole thing.
+    manifest = {
+        "base": SITE,
+        "updated": max((m.get("added", "") for m in models.values()), default=None),
+        "models": dict(ordered),
+        "prompts": {
+            "svg": "Create a detailed SVG image of a cute kitten.",
+            "python": "Write a Python script that draws a cute kitten using matplotlib.",
+        },
     }
-    manifest = {"models": dict(ordered), "prompts": prompts}
 
     out_path = CATBENCH / "manifest.json"
     out_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     print(f"manifest: {len(models)} models -> {out_path.relative_to(ROOT)}")
-
-    api_path = CATBENCH / "api.json"
-    api_path.write_text(json.dumps(api_file(ordered, prompts), indent=2) + "\n", encoding="utf-8")
-    print(f"api: {len(models)} models -> {api_path.relative_to(ROOT)}")
     return 0
 
 
