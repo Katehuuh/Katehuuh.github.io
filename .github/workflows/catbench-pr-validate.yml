@@ -146,8 +146,16 @@ jobs:
           stem="$(basename "$py" .py)"
           outfile="out/${stem}-python.jpg"
 
+          # Kitten scripts routinely end with plt.savefig('kitten.png'): 8 of the
+          # 25 entries already in the repo do. Run the render from a scratch
+          # directory so a relative write lands there instead of in the tree,
+          # which keeps the tamper check below meaningful for writes that
+          # genuinely target the repo.
+          repo="$PWD"
+          scratch="$(mktemp -d)"
           # Bounded so an infinite loop fails the job instead of burning 6h.
-          timeout 120 python3 .github/scripts/render_python.py "pr/$py" "$outfile"
+          ( cd "$scratch" && timeout 120 python3 "$repo/.github/scripts/render_python.py" \
+              "$repo/pr/$py" "$repo/$outfile" )
           rc=$?
           if [ $rc -ne 0 ] || [ ! -s "$outfile" ]; then
             echo "render failed (exit $rc), leaving this one to a human" >&2
