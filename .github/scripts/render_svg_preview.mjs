@@ -107,6 +107,12 @@ const COMPUTE_CROP = `(() => {
   };
   walk(svg);
   if (!isFinite(minX)) return null;
+  // Anything outside the viewBox never paints, so it must not drag the crop
+  // out with it. One floor ellipse hanging off the canvas would otherwise
+  // shrink the whole drawing and frame it in blank space.
+  minX = Math.max(minX, 0); minY = Math.max(minY, 0);
+  maxX = Math.min(maxX, fullW); maxY = Math.min(maxY, fullH);
+  if (maxX <= minX || maxY <= minY) return null;
   let x = minX, y = minY, w = maxX - minX, h = maxY - minY;
   const pad = Math.max(w, h) * 0.02;
   x -= pad; y -= pad; w += 2 * pad; h += 2 * pad;
