@@ -288,8 +288,12 @@ main > footer .dot { color: var(--text-3); margin: 0 .35rem; }
 .catbench-grid thead .row-label { color: var(--accent); font-size: .78rem; font-weight: 700; }
 .catbench-grid .model-header {
   text-align: center; font-weight: 600; color: var(--text);
-  /* Bottom padding holds the vote pill clear of the name's last line. */
-  position: relative;
+  /* The pill is pinned to the cell's bottom-right, not to the end of the
+     text, so it lands in the same place in every column regardless of
+     whether the name runs to one line or three. The name is centred in the
+     space above it, so the leftover height splits evenly instead of all
+     pooling underneath. */
+  position: relative; vertical-align: middle;
   padding: .8rem .5rem 1.35rem; background: var(--bg-2);
   width: 180px; font-size: .92rem; letter-spacing: -0.01em;
 }
