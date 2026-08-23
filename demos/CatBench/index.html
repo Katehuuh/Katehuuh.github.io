@@ -136,7 +136,7 @@ a:hover { color: #ffb98d; }
    salted IP hash on their side: clicking again undoes your vote, which
    is as strong as it gets without asking readers to sign in.
 ──────────────────────────────────────────────────────────────────── */
-/* Parked in the header's bottom-left corner, out of the text flow entirely,
+/* Parked in the header's bottom-right corner, out of the text flow entirely,
    so it sits in the same spot in every column and the name keeps the whole
    width of the column. Riding the end of the text instead was measured on
    the same 30 headers: it costs the pill's width on the last line, which
@@ -158,7 +158,7 @@ a:hover { color: #ffb98d; }
 .mh-name.mh-hard { overflow-wrap: anywhere; }
 
 .vote {
-  position: absolute; left: .3rem; bottom: .25rem;
+  position: absolute; right: .3rem; bottom: .25rem;
   display: inline-flex; align-items: center; gap: .2rem;
   margin: 0; padding: .06rem .34rem;
   -webkit-user-select: none; user-select: none;
@@ -304,7 +304,7 @@ main > footer .dot { color: var(--text-3); margin: 0 .35rem; }
 .catbench-grid thead .row-label { color: var(--accent); font-size: .78rem; font-weight: 700; }
 .catbench-grid .model-header {
   text-align: center; font-weight: 600; color: var(--text);
-  /* The pill sits in the cell's bottom-left corner, out of the text flow,
+  /* The pill sits in the cell's bottom-right corner, out of the text flow,
      so every column carries it in the same spot and the name keeps the
      full width of the column on every line. The bottom padding is the band
      it lives in; the name is centred in what is left. */
