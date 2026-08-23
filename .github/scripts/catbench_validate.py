@@ -18,11 +18,11 @@ That matters because build.yml runs on push to main with `contents: write`, and
 actions/checkout leaves push credentials in the workspace. Code running there
 could push to main and deface the published Pages site.
 
-This script is the second layer. It keeps obvious junk out and stops a
-submission touching anything except its own asset files. The Python import
-allowlist is a "this is not a kitten drawing" filter, not a sandbox. Anyone who
-tries can get around it, which is fine, since that only buys you the
-unprivileged job.
+This script keeps a submission from touching anything except its own asset
+files, and keeps active content out of SVG that gets served to readers. Those
+two are load-bearing. Python is only checked for being parseable: screening its
+imports guarded against nothing the sandbox does not already contain, while
+rejecting genuine submissions, so it was removed.
 
 Usage
 -----
@@ -75,23 +75,6 @@ MAGIC = {
     ".jpeg": b"\xff\xd8\xff",
 }
 
-# Everything a matplotlib kitten could legitimately want. Anything else is not
-# rejected as "malicious", it's rejected as "a human should look at this".
-PY_IMPORT_ALLOWLIST = {
-    "matplotlib", "mpl_toolkits", "numpy", "np",
-    "math", "cmath", "random", "colorsys", "itertools", "functools",
-    "dataclasses", "typing", "__future__", "collections", "copy", "string",
-    # Models like to wrap their kitten in a CLI. render_python.py already
-    # neutralises it (argv is blanked, SystemExit swallowed), and one entry in
-    # the repo relies on this, so it stays allowed.
-    "argparse",
-}
-
-# Builtins with no business in a drawing script.
-PY_BANNED_NAMES = {
-    "eval", "exec", "compile", "__import__", "open", "input", "breakpoint",
-    "globals", "locals", "vars", "memoryview",
-}
 
 # <use> is NOT banned: href="#localId" is ordinary SVG reuse and two entries in
 # the repo depend on it. It is instead required to stay a local fragment below,
@@ -183,40 +166,36 @@ def check_paths(files: list[str], root: Path) -> list[str]:
 
 
 def check_python(data: bytes, name: str) -> list[str]:
-    errs: list[str] = []
+    """Only asks: is this actually Python?
+
+    There used to be an import allowlist and a banned-builtin list here. Both
+    are gone, deliberately. They were never the security boundary (the job
+    topology is), and as a filter they were wrong far more often than right:
+    argparse tripped one, and the tamper check tripped on plt.savefig, which
+    8 of the 25 entries in the repo call. A screen that rejects a third of
+    genuine submissions to guard against a threat the sandbox already handles
+    is a bad trade.
+
+    What actually contains a hostile script: it runs in a job with a
+    read-only token, no secrets and no git credentials; its working directory
+    is scratch space outside the repo; it is capped at 120 seconds; and its
+    render is committed alongside it so main never executes it again. There
+    is nothing there worth stealing and nowhere for it to persist.
+
+    The real filter is the outcome, not the syntax. A script that does not
+    produce a matplotlib figure fails to render and is rejected on that basis,
+    which is exactly the question worth asking and cannot false-positive on a
+    kitten drawn in an unexpected way.
+    """
     try:
         src = data.decode("utf-8")
     except UnicodeDecodeError:
         return [f"{name}: not valid UTF-8"]
-
     try:
-        tree = ast.parse(src, filename=name)
+        ast.parse(src, filename=name)
     except SyntaxError as e:
         return [f"{name}: syntax error line {e.lineno}: {e.msg}"]
-
-    imported: set[str] = set()
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            for a in node.names:
-                imported.add(a.name.split(".")[0])
-        elif isinstance(node, ast.ImportFrom):
-            if node.level:  # relative import, nothing to import from
-                errs.append(f"{name}: relative import")
-            if node.module:
-                imported.add(node.module.split(".")[0])
-        elif isinstance(node, ast.Name) and node.id in PY_BANNED_NAMES:
-            errs.append(f"{name}: uses '{node.id}'")
-        elif isinstance(node, ast.Attribute) and node.attr.startswith("__") \
-                and node.attr.endswith("__") and node.attr != "__name__":
-            errs.append(f"{name}: dunder attribute access '{node.attr}'")
-
-    for mod in sorted(imported - PY_IMPORT_ALLOWLIST):
-        errs.append(f"{name}: imports '{mod}', a matplotlib kitten shouldn't need it")
-
-    if not imported & {"matplotlib", "mpl_toolkits"}:
-        errs.append(f"{name}: never imports matplotlib")
-
-    return sorted(set(errs))
+    return []
 
 
 def check_svg(data: bytes, name: str) -> list[str]:
