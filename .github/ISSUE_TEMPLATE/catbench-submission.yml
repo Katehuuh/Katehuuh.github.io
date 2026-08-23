@@ -25,6 +25,17 @@ body:
       required: true
 
   - type: textarea
+    id: svg
+    attributes:
+      label: SVG markup
+      description: >-
+        The full svg document. Scripts, event handlers and links to other sites
+        get rejected.
+      render: xml
+    validations:
+      required: true
+
+  - type: textarea
     id: python
     attributes:
       label: Python code
@@ -33,16 +44,5 @@ body:
         only matplotlib, numpy and basic maths imports are allowed. File access,
         network and subprocesses get rejected.
       render: python
-    validations:
-      required: true
-
-  - type: textarea
-    id: svg
-    attributes:
-      label: SVG markup
-      description: >-
-        The full svg document. Scripts, event handlers and links to other sites
-        get rejected.
-      render: xml
     validations:
       required: true
