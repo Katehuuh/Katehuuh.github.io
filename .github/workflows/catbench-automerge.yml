@@ -24,6 +24,7 @@ permissions:
   contents: write
   pull-requests: write
   issues: write
+  actions: write
 
 # Shared with the issue path so the daily budget can't be double-spent by two
 # runs reading the count before either writes it.
@@ -289,6 +290,21 @@ jobs:
               core.setOutput('merged', 'false');
               core.setOutput('why', `merge API refused: ${e.message}`);
             }
+
+      # A push made with GITHUB_TOKEN does not trigger workflows, so build.yml
+      # never sees the commit we just made and the manifest stays stale.
+      # workflow_dispatch is the documented exception to that rule.
+      - name: Rebuild the grid
+        if: steps.merge.outputs.merged == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'build.yml',
+              ref: context.payload.repository.default_branch,
+            });
 
       - name: Report
         if: ${{ !cancelled() && steps.recheck.outputs.pr != '' }}
