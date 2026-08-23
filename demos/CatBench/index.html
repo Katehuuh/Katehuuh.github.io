@@ -315,6 +315,9 @@ main > footer .dot { color: var(--text-3); margin: 0 .35rem; }
      default spacing left a visible gap above the text. */
   line-height: 1.25;
 }
+/* ?model=<id> landed on this column. */
+.catbench-grid .picked { box-shadow: inset 0 0 0 2px var(--accent-line); }
+.catbench-grid th.picked { color: var(--accent); }
 .catbench-grid .cell {
   width: 180px; height: 180px; padding: 0;
   position: relative; cursor: zoom-in; background: #08080a;
@@ -484,6 +487,7 @@ main > footer .dot { color: var(--text-3); margin: 0 .35rem; }
   buildGrid(models);
   fixWideNames();
   document.fonts?.ready.then(fixWideNames);
+  focusModel();
   initRunFilter();
   initVoteSort();
   loadVotes(Object.keys(models));
@@ -769,6 +773,25 @@ function fixWideNames() {
       span.classList.add('mh-hard');
     }
   }
+}
+
+// ?model=<id> (or #model=<id>) puts one kitten in view and marks it, so a
+// link to a single model lands on it instead of the far left of the grid.
+// api.json hands out these links; the id is the name lowercased with spaces
+// and underscores turned into dashes.
+function focusModel() {
+  const q = new URLSearchParams(location.search).get('model')
+    || (location.hash.match(/(?:^#|[#&])model=([^&]*)/) || [])[1];
+  if (!q) return;
+  const id = normKey(decodeURIComponent(q));
+  const th = document.querySelector(`th.model-header[data-slug="${CSS.escape(id)}"]`);
+  if (!th) return;
+  const sel = CSS.escape(id);
+  for (const el of document.querySelectorAll(`th[data-slug="${sel}"], td[data-slug="${sel}"]`)) {
+    el.classList.add('picked');
+  }
+  th.scrollIntoView({ inline: 'center', block: 'nearest' });
+  document.title = `${th.querySelector('.mh-name').title} - CatBench`;
 }
 
 function buildGrid(models) {

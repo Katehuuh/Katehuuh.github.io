@@ -34,6 +34,7 @@ ASSETS_DIR = CATBENCH / "assets"
 RENDER_SCRIPT = ROOT / "scripts" / "render_python.py"
 
 RASTER_EXTS = {".png", ".jpg", ".jpeg", ".gif"}
+SITE = "https://katehuuh.github.io/demos/CatBench/"
 SVG_RASTER_SUFFIX = "-svg"
 PY_RASTER_SUFFIX = "-python"
 
@@ -44,6 +45,19 @@ def normalize(stem: str) -> str:
 
 def display_name(stem: str) -> str:
     return re.sub(r"[_\s]+", " ", stem.strip())
+
+
+def utc(iso: str) -> str:
+    """Same instant, always spelled in UTC. Git prints whatever offset the
+    author had, and the grid sorts these as plain strings, so a +02:00 stamp
+    would land in the wrong column."""
+    try:
+        dt = datetime.fromisoformat(iso)
+    except ValueError:
+        return iso
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
 
 
 def file_first_commit(path: Path) -> str:
@@ -57,10 +71,10 @@ def file_first_commit(path: Path) -> str:
         )
         first = (result.stdout or "").strip().split("\n", 1)[0].strip()
         if first:
-            return first
+            return utc(first)
     except Exception:
         pass
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+    return utc(datetime.now(timezone.utc).isoformat(timespec="seconds"))
 
 
 def looks_like_svg(path: Path) -> bool:
@@ -166,7 +180,42 @@ def annotate_first_seen(models: dict) -> None:
                 p = CATBENCH / m[field]
                 if p.exists():
                     candidates.append(file_first_commit(p))
-        m["_first_seen"] = min(candidates) if candidates else datetime.now(timezone.utc).isoformat(timespec="seconds")
+        m["_first_seen"] = min(candidates) if candidates else utc(
+            datetime.now(timezone.utc).isoformat(timespec="seconds"))
+
+
+def api_file(ordered: list, prompts: dict) -> dict:
+    """One flat file other services can read: absolute URLs, no path joining,
+    newest model first. manifest.json stays the page's own format."""
+    def url(rel):
+        return SITE + rel if rel else None
+
+    models = []
+    for key, m in ordered:
+        shown = m.get("svg", "")
+        entry = {
+            "id": key,
+            "name": m.get("display_name", key),
+            "page": f"{SITE}?model={key}",
+            "svg": url(m.get("svg_source")),
+            # The grid shows a raster of the SVG when CI managed to make one,
+            # since Discord and README embeds cannot render svg files.
+            "svg_image": url(shown) if Path(shown).suffix.lower() in RASTER_EXTS else None,
+            "python": url(m.get("python_source")),
+            "python_image": url(m.get("python_render")),
+            "added": m.get("_first_seen"),
+        }
+        models.append({k: v for k, v in entry.items() if v})
+
+    return {
+        "catbench": SITE,
+        # Newest entry's date, not build time, so a rebuild that changed
+        # nothing leaves the file byte for byte the same.
+        "updated": models[0]["added"] if models else None,
+        "count": len(models),
+        "prompts": prompts,
+        "models": models,
+    }
 
 
 def main() -> int:
@@ -176,17 +225,19 @@ def main() -> int:
 
     # Sort: newest first commit on the left, oldest on the right.
     ordered = sorted(models.items(), key=lambda kv: kv[1].get("_first_seen", ""), reverse=True)
-    manifest = {
-        "models": dict(ordered),
-        "prompts": {
-            "svg": "Create a detailed SVG image of a cute kitten.",
-            "python": "Write a Python script that draws a cute kitten using matplotlib.",
-        },
+    prompts = {
+        "svg": "Create a detailed SVG image of a cute kitten.",
+        "python": "Write a Python script that draws a cute kitten using matplotlib.",
     }
+    manifest = {"models": dict(ordered), "prompts": prompts}
 
     out_path = CATBENCH / "manifest.json"
     out_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     print(f"manifest: {len(models)} models -> {out_path.relative_to(ROOT)}")
+
+    api_path = CATBENCH / "api.json"
+    api_path.write_text(json.dumps(api_file(ordered, prompts), indent=2) + "\n", encoding="utf-8")
+    print(f"api: {len(models)} models -> {api_path.relative_to(ROOT)}")
     return 0
 
 
