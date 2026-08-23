@@ -136,17 +136,18 @@ a:hover { color: #ffb98d; }
    salted IP hash on their side: clicking again undoes your vote, which
    is as strong as it gets without asking readers to sign in.
 ──────────────────────────────────────────────────────────────────── */
-/* Tucked into the header's bottom-right corner. The cell already carried
-   bottom padding doing nothing; the pill sits in it, and that padding is
-   widened just enough that the name's last line stops above the pill
-   instead of running under it. Costs a few pixels, not a line. */
+/* On the name's own line, pinned hard right. The name is a flex item that
+   shrinks and wraps into whatever width is left, so a long model name can
+   never reach the button: the space is reserved, not shared. */
+.model-head { display: flex; align-items: center; gap: .4rem; }
+.model-head .mh-name { flex: 1 1 auto; min-width: 0; text-align: center; }
 .vote {
-  position: absolute; right: 5px; bottom: 3px; z-index: 2;
+  flex: 0 0 auto;
   display: inline-flex; align-items: center; gap: .22rem;
   margin: 0; padding: .06rem .4rem;
   background: var(--bg-1); border: 1px solid var(--line);
   border-radius: 999px; cursor: pointer;
-  font: 500 .64rem/1.4 var(--mono); color: var(--text-2);
+  font: 500 .74rem/1.4 var(--mono); color: var(--text-2);
   transition: border-color .2s ease, color .2s ease, background-color .2s ease;
 }
 .vote:hover { color: var(--text); border-color: var(--line-2); }
@@ -154,11 +155,40 @@ a:hover { color: #ffb98d; }
   color: var(--accent); border-color: var(--accent-line);
   background: var(--accent-soft);
 }
+.vote .thumb { font-size: 1rem; line-height: 1; }
 .vote .n { font-variant-numeric: tabular-nums; min-width: 1ch; }
 .vote[data-busy="1"] { opacity: .5; pointer-events: none; }
 .tag-filter .sort-sep {
   display: inline-block; width: 1px; align-self: stretch;
   margin: 4px 4px; background: rgba(255, 255, 255, 0.14);
+}
+
+/* ─── Tap targets ────────────────────────────────────────────────────
+   Every control here renders 20-24px tall, under the 24x24 WCAG 2.5.8
+   minimum and well under the 44x44 Apple asks for. The page is meant to
+   fit one screen without scrolling, so growing the buttons is the wrong
+   trade. Instead each one carries an invisible pseudo-element that
+   extends the touch area to 44px: it is absolutely positioned, so it
+   costs no layout space and the visual design is untouched.
+──────────────────────────────────────────────────────────────────── */
+.vote, .tag-filter button, .source-link, .back { position: relative; }
+.vote::after,
+.tag-filter button::after,
+.source-link::after,
+.back::after {
+  content: '';
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 100%; min-width: 44px;
+  height: 44px;
+}
+@media (hover: hover) and (pointer: fine) {
+  /* A mouse is precise, so the padded area only gets in the way there. */
+  .vote::after,
+  .tag-filter button::after,
+  .source-link::after,
+  .back::after { height: 100%; min-width: 0; }
 }
 
 /* Perched on the top-right corner of the bench, straddling its edge. */
@@ -255,10 +285,7 @@ main > footer .dot { color: var(--text-3); margin: 0 .35rem; }
 .catbench-grid thead .row-label { color: var(--accent); font-size: .78rem; font-weight: 700; }
 .catbench-grid .model-header {
   text-align: center; font-weight: 600; color: var(--text);
-  /* Bottom padding is deep enough to hold the vote pill clear of the last
-     line of the name. */
-  position: relative;
-  padding: .8rem .5rem 1.35rem; background: var(--bg-2);
+  padding: .85rem .5rem; background: var(--bg-2);
   width: 180px; font-size: .92rem; letter-spacing: -0.01em;
 }
 .catbench-grid .cell {
@@ -599,7 +626,7 @@ function makeVoteButton(slug) {
   b.dataset.slug = slug;
   b.setAttribute('aria-pressed', String(votedLocally(slug)));
   b.title = 'vote for this kitten (click again to undo)';
-  b.innerHTML = '\u{1F44D}<span class="n">·</span>';
+  b.innerHTML = '<span class="thumb">\u{1F44D}</span><span class="n">·</span>';
   b.addEventListener('click', (e) => { e.stopPropagation(); castVote(slug, b); });
   return b;
 }
@@ -701,8 +728,13 @@ function buildGrid(models) {
     th.dataset.run = runsWhere(m.display_name || key);
     th.dataset.slug = key;
     th.dataset.pos = String(thead.querySelectorAll('th.model-header').length);
-    th.textContent = m.display_name || key;
-    th.appendChild(makeVoteButton(key));
+    const head = document.createElement('div');
+    head.className = 'model-head';
+    const name = document.createElement('span');
+    name.className = 'mh-name';
+    name.textContent = m.display_name || key;
+    head.append(name, makeVoteButton(key));
+    th.appendChild(head);
     thead.appendChild(th);
   }
   const rows = [
