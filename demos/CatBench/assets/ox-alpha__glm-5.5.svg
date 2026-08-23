@@ -1,0 +1,124 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" width="500" height="500" role="img" aria-label="A cute orange tabby kitten">
+  <title>Cute Kitten</title>
+
+  <defs>
+    <radialGradient id="bgGrad" cx="50%" cy="42%" r="75%">
+      <stop offset="0%" stop-color="#fff7ea"/>
+      <stop offset="100%" stop-color="#fbe3c0"/>
+    </radialGradient>
+    <radialGradient id="glowGrad">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.9"/>
+      <stop offset="65%" stop-color="#ffffff" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="furGrad" cx="38%" cy="28%" r="85%">
+      <stop offset="0%" stop-color="#ffdcaa"/>
+      <stop offset="55%" stop-color="#f9b877"/>
+      <stop offset="100%" stop-color="#ee9a54"/>
+    </radialGradient>
+    <radialGradient id="eyeGrad" cx="50%" cy="38%" r="75%">
+      <stop offset="0%" stop-color="#daf7a2"/>
+      <stop offset="55%" stop-color="#8cc63f"/>
+      <stop offset="100%" stop-color="#4e9425"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="500" height="500" rx="28" fill="url(#bgGrad)"/>
+  <circle cx="250" cy="265" r="215" fill="url(#glowGrad)"/>
+
+  <!-- Floating hearts & sparkles -->
+  <path d="M0 3 C0 0 -4 -2 -6 0 C-8 2 -6 5 0 10 C6 5 8 2 6 0 C4 -2 0 0 0 3 Z"
+        transform="translate(82 100) rotate(-14) scale(1.8)" fill="#f7a8c4"/>
+  <path d="M0 3 C0 0 -4 -2 -6 0 C-8 2 -6 5 0 10 C6 5 8 2 6 0 C4 -2 0 0 0 3 Z"
+        transform="translate(428 112) rotate(12) scale(1.4)" fill="#f9bfd6"/>
+  <path d="M0 3 C0 0 -4 -2 -6 0 C-8 2 -6 5 0 10 C6 5 8 2 6 0 C4 -2 0 0 0 3 Z"
+        transform="translate(452 305) rotate(18) scale(0.9)" fill="#fbc9da"/>
+  <path d="M0 -9 L2.2 -2.2 L9 0 L2.2 2.2 L0 9 L-2.2 2.2 L-9 0 L-2.2 -2.2 Z"
+        transform="translate(96 338) scale(1.1)" fill="#ffd98e"/>
+  <path d="M0 -9 L2.2 -2.2 L9 0 L2.2 2.2 L0 9 L-2.2 2.2 L-9 0 L-2.2 -2.2 Z"
+        transform="translate(416 58) scale(0.8)" fill="#ffd98e"/>
+  <path d="M0 -9 L2.2 -2.2 L9 0 L2.2 2.2 L0 9 L-2.2 2.2 L-9 0 L-2.2 -2.2 Z"
+        transform="translate(58 205) scale(0.6)" fill="#f9bfd6"/>
+
+  <!-- Ground shadow -->
+  <ellipse cx="250" cy="468" rx="150" ry="20" fill="#e6c79b" opacity="0.55"/>
+
+  <!-- Tail (behind body) -->
+  <path d="M318 408 C388 428 420 372 400 316" fill="none" stroke="#e8964f" stroke-width="40" stroke-linecap="round"/>
+  <path d="M318 408 C388 428 420 372 400 316" fill="none" stroke="#f9b877" stroke-width="34" stroke-linecap="round"/>
+  <path d="M386 374 Q402 366 419 374" fill="none" stroke="#dd8a45" stroke-width="9" stroke-linecap="round"/>
+  <path d="M389 350 Q406 342 423 350" fill="none" stroke="#dd8a45" stroke-width="9" stroke-linecap="round"/>
+  <circle cx="400" cy="316" r="17" fill="#ffe9d1" stroke="#e8964f" stroke-width="3"/>
+
+  <!-- Body -->
+  <ellipse cx="250" cy="385" rx="112" ry="92" fill="url(#furGrad)" stroke="#e8964f" stroke-width="3"/>
+  <ellipse cx="250" cy="398" rx="66" ry="58" fill="#ffe9d1"/>
+
+  <!-- Hind feet peeking out -->
+  <ellipse cx="163" cy="452" rx="30" ry="17" fill="url(#furGrad)" stroke="#e8964f" stroke-width="3"/>
+  <path d="M156 442 L156 454 M170 442 L170 454" fill="none" stroke="#d97f3d" stroke-width="3" stroke-linecap="round"/>
+  <ellipse cx="337" cy="452" rx="30" ry="17" fill="url(#furGrad)" stroke="#e8964f" stroke-width="3"/>
+  <path d="M330 442 L330 454 M344 442 L344 454" fill="none" stroke="#d97f3d" stroke-width="3" stroke-linecap="round"/>
+
+  <!-- Front paws -->
+  <ellipse cx="212" cy="452" rx="33" ry="20" fill="#ffe9d1" stroke="#e8964f" stroke-width="3"/>
+  <path d="M202 438 Q203 446 202 453 M222 438 Q221 446 222 453" fill="none" stroke="#eeb98a" stroke-width="3" stroke-linecap="round"/>
+  <ellipse cx="288" cy="452" rx="33" ry="20" fill="#ffe9d1" stroke="#e8964f" stroke-width="3"/>
+  <path d="M278 438 Q279 446 278 453 M298 438 Q297 446 298 453" fill="none" stroke="#eeb98a" stroke-width="3" stroke-linecap="round"/>
+
+  <!-- Ears (behind head) -->
+  <path d="M158 172 L136 66 L244 118 Z" fill="url(#furGrad)" stroke="#e8964f" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M168 152 L152 88 L226 120 Z" fill="#f9b3c7"/>
+  <path d="M342 172 L364 66 L256 118 Z" fill="url(#furGrad)" stroke="#e8964f" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M332 152 L348 88 L274 120 Z" fill="#f9b3c7"/>
+
+  <!-- Head -->
+  <ellipse cx="250" cy="228" rx="118" ry="102" fill="url(#furGrad)" stroke="#e8964f" stroke-width="3"/>
+
+  <!-- Cheek fluff tufts -->
+  <path d="M133 236 l-11 6 l12 6 Z" fill="url(#furGrad)" stroke="#e8964f" stroke-width="2.5" stroke-linejoin="round"/>
+  <path d="M367 236 l11 6 l-12 6 Z" fill="url(#furGrad)" stroke="#e8964f" stroke-width="2.5" stroke-linejoin="round"/>
+
+  <!-- Tabby forehead stripes -->
+  <path d="M250 132 Q253 150 250 168" fill="none" stroke="#e8964f" stroke-width="9" stroke-linecap="round"/>
+  <path d="M226 138 Q229 154 226 170" fill="none" stroke="#e8964f" stroke-width="9" stroke-linecap="round"/>
+  <path d="M274 138 Q271 154 274 170" fill="none" stroke="#e8964f" stroke-width="9" stroke-linecap="round"/>
+
+  <!-- Eyes -->
+  <ellipse cx="206" cy="222" rx="27" ry="31" fill="url(#eyeGrad)" stroke="#3f7d23" stroke-width="2.5"/>
+  <ellipse cx="206" cy="226" rx="11" ry="17" fill="#33302b"/>
+  <circle cx="198" cy="214" r="7" fill="#ffffff"/>
+  <circle cx="214" cy="237" r="3.5" fill="#ffffff" opacity="0.9"/>
+  <ellipse cx="294" cy="222" rx="27" ry="31" fill="url(#eyeGrad)" stroke="#3f7d23" stroke-width="2.5"/>
+  <ellipse cx="294" cy="226" rx="11" ry="17" fill="#33302b"/>
+  <circle cx="286" cy="214" r="7" fill="#ffffff"/>
+  <circle cx="302" cy="237" r="3.5" fill="#ffffff" opacity="0.9"/>
+
+  <!-- Nose & mouth -->
+  <path d="M237 266 Q250 259 263 266 Q265 278 250 283 Q235 278 237 266 Z" fill="#f48fb1" stroke="#e5799f" stroke-width="2" stroke-linejoin="round"/>
+  <circle cx="244" cy="268" r="2.5" fill="#ffd1e0"/>
+  <path d="M250 283 Q249 296 237 295 M250 283 Q251 296 263 295" fill="none" stroke="#8a5a33" stroke-width="3.5" stroke-linecap="round"/>
+
+  <!-- Blush -->
+  <ellipse cx="172" cy="290" rx="17" ry="9" fill="#ffb3ba" opacity="0.55"/>
+  <ellipse cx="328" cy="290" rx="17" ry="9" fill="#ffb3ba" opacity="0.55"/>
+
+  <!-- Whisker dots -->
+  <circle cx="179" cy="251" r="1.8" fill="#a5713d"/>
+  <circle cx="180" cy="263" r="1.8" fill="#a5713d"/>
+  <circle cx="179" cy="275" r="1.8" fill="#a5713d"/>
+  <circle cx="321" cy="251" r="1.8" fill="#a5713d"/>
+  <circle cx="320" cy="263" r="1.8" fill="#a5713d"/>
+  <circle cx="321" cy="275" r="1.8" fill="#a5713d"/>
+
+  <!-- Whiskers -->
+  <g fill="none" stroke="#a5713d" stroke-width="2.5" stroke-linecap="round" opacity="0.85">
+    <path d="M172 252 Q130 244 100 234"/>
+    <path d="M172 264 Q128 262 96 260"/>
+    <path d="M172 276 Q130 280 102 290"/>
+    <path d="M328 252 Q370 244 400 234"/>
+    <path d="M328 264 Q372 262 404 260"/>
+    <path d="M328 276 Q370 280 398 290"/>
+  </g>
+</svg>
