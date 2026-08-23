@@ -8,7 +8,7 @@
 <meta name="color-scheme" content="dark">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500&family=Manrope:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500&family=Manrope:wght@400;500;600&family=Fredoka:wght@600&display=swap" rel="stylesheet">
 <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%20100%20100%22%3E%3Ctext%20y%3D%2280%22%20font-size%3D%2280%22%3E%F0%9F%90%B1%3C/text%3E%3C/svg%3E">
 <style>
 :root {
@@ -44,31 +44,94 @@ a:hover { color: #ffb98d; }
 
 .hero { text-align: center; margin-bottom: 2.4rem; }
 .hero-cb { text-align: left; margin-bottom: 1.6rem; }
-.hero-cb h1 { font-size: clamp(2rem, 5.5vw, 2.8rem); margin: .2rem 0 1rem; }
+.hero-cb h1 {
+  font-family: 'Fredoka', var(--sans); font-weight: 600;
+  font-size: clamp(2rem, 5.5vw, 2.8rem); margin: .2rem 0 1rem;
+  display: flex; align-items: center; gap: .9rem; flex-wrap: wrap;
+}
 /* Cat ears on the C. Two triangles pinned to the top of the letterform,
    sized in em so they track the clamped font-size. The C stays real text,
    so selection and screen readers are unaffected. */
+.cb-word { display: inline-block; white-space: nowrap; }
 .cat-c { position: relative; display: inline-block; line-height: 1; }
 .cat-c::before,
 .cat-c::after {
   content: "";
   position: absolute;
-  top: -.07em;
+  top: -.04em;
   width: .23em; height: .24em;
   background: currentColor;
   clip-path: polygon(50% 0%, 100% 100%, 0% 100%);
 }
-.cat-c::before { left: .14em; transform: rotate(-14deg); }
-.cat-c::after  { left: .42em; transform: rotate(14deg); }
+.cat-c::before { left: .16em; transform: rotate(-16deg); }
+.cat-c::after  { left: .40em; transform: rotate(16deg); }
 /* Tail off the final h, so the whole wordmark reads as one cat: ears at the
    head, tail at the back. Absolute, so it never shifts the heading's metrics. */
 .cat-h { position: relative; display: inline-block; line-height: 1; }
 .cat-tail {
   position: absolute;
-  left: 92%; bottom: -.04em;
+  left: 68%; bottom: .02em;
   width: .52em; height: .82em;
   overflow: visible;
 }
+/* ─── Liquid-glass runtime filter ────────────────────────────────────
+   Same lip-profile treatment as the tag filter on the landing page:
+   inset shadows for the convex rim, a conic specular sweep tracking the
+   cursor via --gloss-angle, and blur+saturate for the surface. Chromium
+   also pulls url(#lg-refract) so the backdrop distorts at the rim;
+   Safari ignores it and falls back to plain blur.
+──────────────────────────────────────────────────────────────────── */
+.tag-filter {
+  display: inline-flex; align-items: center; gap: 2px; padding: 3px;
+  position: relative; isolation: isolate; border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  -webkit-backdrop-filter: blur(14px) saturate(170%);
+  backdrop-filter: blur(14px) saturate(170%) url(#lg-refract);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 6px 24px -6px rgba(0, 0, 0, 0.55),
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.45),
+    inset 1.5px 0 1px rgba(255, 255, 255, 0.10),
+    inset -1.5px 0 1px rgba(255, 255, 255, 0.10),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.28);
+  font-family: var(--mono); font-size: .78rem;
+  letter-spacing: .1em; text-transform: uppercase;
+}
+.tag-filter::before {
+  content: ''; position: absolute; inset: 0; border-radius: inherit;
+  pointer-events: none; z-index: -1;
+  background: conic-gradient(from var(--gloss-angle, 90deg),
+    transparent 0deg, transparent 70deg,
+    rgba(255, 255, 255, 0.38) 100deg, rgba(255, 255, 255, 0.16) 140deg,
+    transparent 210deg, transparent 360deg);
+  filter: blur(7px); mix-blend-mode: screen; opacity: .85;
+}
+.tag-filter::after {
+  content: ''; position: absolute; inset: 1px; border-radius: inherit;
+  pointer-events: none; z-index: -1;
+  background: linear-gradient(180deg,
+    rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0) 38%,
+    rgba(0, 0, 0, 0) 72%, rgba(0, 0, 0, 0.07) 100%);
+}
+.tag-filter button {
+  position: relative; z-index: 1; appearance: none;
+  background: transparent; border: 0; color: var(--text-3);
+  padding: 2px 10px; border-radius: 999px; font: inherit; cursor: pointer;
+  transition: color .2s ease, background-color .25s ease, box-shadow .25s ease;
+}
+.tag-filter button:hover { color: var(--text); background: rgba(255, 255, 255, 0.05); }
+.tag-filter button.active {
+  color: var(--accent);
+  background: linear-gradient(180deg, rgba(255, 138, 76, 0.24), rgba(255, 138, 76, 0.11));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    inset 0 0 0 1px rgba(255, 138, 76, 0.38),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.20),
+    0 0 14px -3px rgba(255, 138, 76, 0.32);
+}
+.is-hidden-by-filter { display: none !important; }
+.grid-empty-note { color: var(--text-3); font-size: .9rem; margin: .8rem 0 0; }
+
 .back {
   display: inline-block; font-family: var(--mono); font-size: .78rem;
   color: var(--text-3); letter-spacing: .04em;
@@ -256,11 +319,20 @@ main > footer .dot { color: var(--text-3); margin: 0 .35rem; }
 </head>
 <body>
 
+<svg style="position:absolute;width:0;height:0;overflow:hidden" aria-hidden="true">
+  <defs>
+    <filter id="lg-refract" x="0%" y="0%" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.012 0.02" numOctaves="2" seed="4" result="t"/>
+      <feDisplacementMap in="SourceGraphic" in2="t" scale="3.5" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+  </defs>
+</svg>
+
 <main>
 
   <header class="hero hero-cb rise" data-d="1">
     <a class="back" href="../../">back</a>
-    <h1><span class="cat-c">C</span>atBenc<span class="cat-h">h<svg class="cat-tail" viewBox="0 0 20 30" fill="none" aria-hidden="true"><path d="M2 26.5C11.5 29.5 18.2 24.5 16.6 14.2 15.9 8.6 11.6 7.2 10.4 9.8" stroke="currentColor" stroke-width="3.3" stroke-linecap="round"/></svg></span></h1>
+    <h1><span class="cb-word"><span class="cat-c">C</span>atBenc<span class="cat-h">h<svg class="cat-tail" viewBox="0 0 20 30" fill="none" aria-hidden="true"><path d="M2 26.5C11.5 29.5 18.2 24.5 16.6 14.2 15.9 8.6 11.6 7.2 10.4 9.8" stroke="currentColor" stroke-width="3.3" stroke-linecap="round"/></svg></span></span><span class="tag-filter" id="run-filter" role="group" aria-label="filter by where the model runs"><button data-run="local" class="active" aria-pressed="true" title="quantised weights you run yourself: gguf, exl2/exl3, Q4_K_M, bpw">local</button><button data-run="cloud" class="active" aria-pressed="true" title="hosted models behind an API">cloud</button></span></h1>
     <ul class="prompts">
       <li><span class="tag">svg</span><code>Create a detailed SVG image of a cute kitten.</code></li>
       <li><span class="tag">python</span><code>Write a Python script that draws a cute kitten using matplotlib.</code></li>
@@ -314,6 +386,7 @@ main > footer .dot { color: var(--text-3); margin: 0 .35rem; }
     liveAugment(manifest);
   }
   buildGrid(models);
+  initRunFilter();
   setupLightbox();
 })();
 
@@ -377,6 +450,68 @@ async function liveAugment(manifest) {
   }
 }
 
+// ─── local vs cloud ───────────────────────────────────────────────────
+// A model is "local" when its name carries a quantisation marker, i.e.
+// weights you download and run yourself. Tokens are split on spaces and
+// dashes only, so parameter counts survive: a32b, 30b and minimax-m3 are
+// not quant markers and must not match.
+function runsWhere(name) {
+  const local = String(name).toLowerCase().split(/[\s-]+/).some(tok =>
+    /^exl\d*$/.test(tok) ||            // exl, exl2, exl3
+    /(^|\.)gguf$/.test(tok) ||         // gguf, model.gguf
+    /^i?q[1-8](_[a-z0-9]+)*$/.test(tok) || // Q4_K_M, Q8_0, IQ4_XS
+    /^\d+(\.\d+)?bpw$/.test(tok)        // 5.00bpw, 4.5bpw
+  );
+  return local ? 'local' : 'cloud';
+}
+
+function applyRunFilter() {
+  const bar = document.getElementById('run-filter');
+  if (!bar) return;
+  const on = new Set([...bar.querySelectorAll('button.active')].map(b => b.dataset.run));
+  const table = document.getElementById('catbench-grid');
+  let shown = 0;
+  for (const el of table.querySelectorAll('[data-run]')) {
+    const hide = !on.has(el.dataset.run);
+    el.classList.toggle('is-hidden-by-filter', hide);
+    if (!hide && el.tagName === 'TH') shown++;
+  }
+  let note = document.getElementById('grid-empty-note');
+  if (!shown) {
+    if (!note) {
+      note = document.createElement('p');
+      note.id = 'grid-empty-note';
+      note.className = 'grid-empty-note';
+      note.textContent = 'Both toggles are off, so there is nothing to show.';
+      table.closest('.grid-wrap').after(note);
+    }
+  } else if (note) {
+    note.remove();
+  }
+}
+
+function initRunFilter() {
+  const bar = document.getElementById('run-filter');
+  if (!bar) return;
+  bar.addEventListener('click', (e) => {
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    const active = !btn.classList.contains('active');
+    btn.classList.toggle('active', active);
+    btn.setAttribute('aria-pressed', String(active));
+    applyRunFilter();
+  });
+  // Specular sweep follows the cursor, same as the landing page.
+  bar.addEventListener('mousemove', (e) => {
+    const r = bar.getBoundingClientRect();
+    const ang = Math.atan2(e.clientY - (r.top + r.height / 2),
+                           e.clientX - (r.left + r.width / 2)) * 180 / Math.PI;
+    bar.style.setProperty('--gloss-angle', `${ang + 90}deg`);
+  });
+  bar.addEventListener('mouseleave', () => bar.style.setProperty('--gloss-angle', '90deg'));
+  applyRunFilter();
+}
+
 function buildGrid(models) {
   const table = document.getElementById('catbench-grid');
   const thead = table.querySelector('thead tr');
@@ -385,6 +520,7 @@ function buildGrid(models) {
     const m = models[key];
     const th = document.createElement('th');
     th.className = 'model-header';
+    th.dataset.run = runsWhere(m.display_name || key);
     th.textContent = m.display_name || key;
     thead.appendChild(th);
   }
@@ -402,6 +538,7 @@ function buildGrid(models) {
       const m = models[key];
       const td = document.createElement('td');
       td.className = 'cell';
+      td.dataset.run = runsWhere(m.display_name || key);
       const path = m[row.field];
       const sourcePath = row.sourceField ? m[row.sourceField] : null;
       const errMsg = row.errorField ? m[row.errorField] : null;
