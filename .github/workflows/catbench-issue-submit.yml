@@ -258,7 +258,7 @@ jobs:
               exit 1
             fi
             mkdir -p "$(dirname "$rel")"
-            cp "trusted/$rel" "$rel"
+            cp "trusted/candidate/$rel" "$rel"
             added+=("$rel")
           done <<< "$FILES"
 
@@ -340,6 +340,13 @@ jobs:
                    + `_Today: ${Number(e.BUDGET_USED) + 1}/${e.BUDGET_LIMIT}._`;
               label = 'catbench-auto';
               close = true;
+            } else if (e.RECHECK_OK === 'true' && e.BUDGET_ALLOWED === 'true') {
+              // Passed every check and still didn't land: that is on us.
+              body = `🔧 **This one is our fault.**\n\n`
+                   + `The submission passed every check and then the automation fell over `
+                   + `on the way to committing it. Nothing is wrong with what you sent. `
+                   + `@${owner} has the workflow log.`;
+              label = 'needs-review';
             } else if (e.RECHECK_OK === 'true' && e.BUDGET_ALLOWED !== 'true') {
               body = `⏳ **Held for today.**\n\n${e.BUDGET_NOTE}\n\n`
                    + `Nothing wrong with it, it just hit the daily cap. Edit the issue after `
