@@ -16,7 +16,7 @@ from pathlib import Path
 
 from git_helpers import first_commit_iso
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parent.parent.parent
 THUMBS = ROOT / "assets" / "thumbs"
 DEMOS = ROOT / "demos"
 

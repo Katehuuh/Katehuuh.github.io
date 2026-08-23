@@ -10,7 +10,7 @@ import { join, resolve, dirname, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import http from 'node:http';
 
-const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const ASSETS = join(ROOT, 'demos', 'CatBench', 'assets');
 const PORT = 8643;
 const BASE = `http://localhost:${PORT}`;

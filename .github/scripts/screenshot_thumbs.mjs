@@ -15,7 +15,7 @@ import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import http from 'node:http';
 
-const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const THUMBS_DIR = join(ROOT, 'assets', 'thumbs');
 const DEMOS_DIR = join(ROOT, 'demos');
 const DATA_JSON = join(ROOT, 'data.json');

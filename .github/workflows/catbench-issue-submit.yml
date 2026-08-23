@@ -84,7 +84,7 @@ jobs:
 
       - name: Install render deps
         if: steps.extract.outputs.eligible == 'true' && steps.extract.outputs.stem != ''
-        run: pip install -r scripts/requirements.txt
+        run: pip install -r .github/scripts/requirements.txt
 
       # The one moment contributed code runs.
       - name: Render contributed Python (sandboxed)
@@ -94,7 +94,7 @@ jobs:
           STEM: ${{ steps.extract.outputs.stem }}
         run: |
           set -uo pipefail
-          timeout 120 python3 scripts/render_python.py \
+          timeout 120 python3 .github/scripts/render_python.py \
             "candidate/demos/CatBench/assets/${STEM}.py" "out/${STEM}-python.jpg"
           rc=$?
           if [ $rc -ne 0 ] || [ ! -s "out/${STEM}-python.jpg" ]; then

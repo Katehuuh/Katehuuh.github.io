@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const CATBENCH = join(ROOT, 'demos', 'CatBench');
 const PORT = 8777;
 

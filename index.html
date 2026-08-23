@@ -1111,7 +1111,7 @@ async function fetchCached(key, ttl, fetcher) {
 }
 
 /* First-commit date is embedded into each thumbnail JPEG's COM marker by
-   the build pipeline (scripts/embed_thumb_dates.py). We read the binary
+   the build pipeline (.github/scripts/embed_thumb_dates.py). We read the binary
    the browser is already fetching for <img>, so this costs ~0 network -
    shared HTTP cache between fetch() and <img>. No GitHub API hit. */
 async function readJpegEmbeddedDate(thumbUrl) {

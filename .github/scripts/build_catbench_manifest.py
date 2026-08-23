@@ -28,7 +28,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parent.parent.parent
 CATBENCH = ROOT / "demos" / "CatBench"
 ASSETS_DIR = CATBENCH / "assets"
 RENDER_SCRIPT = ROOT / "scripts" / "render_python.py"

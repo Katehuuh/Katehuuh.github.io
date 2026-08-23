@@ -110,7 +110,7 @@ jobs:
 
       - name: Install render deps
         if: steps.validate.outputs.eligible == 'true'
-        run: pip install -r scripts/requirements.txt
+        run: pip install -r .github/scripts/requirements.txt
 
       # The one moment untrusted code runs. Output is written OUTSIDE the PR
       # tree so that the tamper check below can require `pr/` to be pristine.
@@ -147,7 +147,7 @@ jobs:
           outfile="out/${stem}-python.jpg"
 
           # Bounded so an infinite loop fails the job instead of burning 6h.
-          timeout 120 python3 scripts/render_python.py "pr/$py" "$outfile"
+          timeout 120 python3 .github/scripts/render_python.py "pr/$py" "$outfile"
           rc=$?
           if [ $rc -ne 0 ] || [ ! -s "$outfile" ]; then
             echo "render failed (exit $rc), leaving this one to a human" >&2

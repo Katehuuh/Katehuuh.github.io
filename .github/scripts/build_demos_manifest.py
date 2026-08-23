@@ -23,7 +23,7 @@ from pathlib import Path
 
 from git_helpers import first_commit_iso
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parent.parent.parent
 DEMOS_DIR = ROOT / "demos"
 OUT = DEMOS_DIR / "manifest.json"
 
