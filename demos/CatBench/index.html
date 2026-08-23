@@ -136,12 +136,18 @@ a:hover { color: #ffb98d; }
    salted IP hash on their side: clicking again undoes your vote, which
    is as strong as it gets without asking readers to sign in.
 ──────────────────────────────────────────────────────────────────── */
+/* Sits in the header's top padding, with the name pushed down under it.
+   The header's vertical padding is rebalanced rather than added to, so
+   the row barely grows: the space was already there, just unused. It
+   covers neither the name nor the kitten. */
 .vote {
-  display: inline-flex; align-items: center; gap: .3rem;
-  margin: .35rem auto 0; padding: .1rem .5rem;
+  position: absolute; top: 5px; left: 50%; transform: translateX(-50%);
+  z-index: 2;
+  display: inline-flex; align-items: center; gap: .22rem;
+  margin: 0; padding: .06rem .4rem;
   background: var(--bg-1); border: 1px solid var(--line);
   border-radius: 999px; cursor: pointer;
-  font: 500 .78rem/1.6 var(--mono); color: var(--text-2);
+  font: 500 .7rem/1.5 var(--mono); color: var(--text-2);
   transition: border-color .2s ease, color .2s ease, background-color .2s ease;
 }
 .vote:hover { color: var(--text); border-color: var(--line-2); }
@@ -250,7 +256,10 @@ main > footer .dot { color: var(--text-3); margin: 0 .35rem; }
 .catbench-grid thead .row-label { color: var(--accent); font-size: .78rem; font-weight: 700; }
 .catbench-grid .model-header {
   text-align: center; font-weight: 600; color: var(--text);
-  padding: .85rem .5rem; background: var(--bg-2);
+  /* Top padding carries the vote pill, bottom is trimmed to pay for it, so
+     the header gains a few pixels rather than a whole line. */
+  position: relative;
+  padding: 1.75rem .5rem .35rem; background: var(--bg-2);
   width: 180px; font-size: .92rem; letter-spacing: -0.01em;
 }
 .catbench-grid .cell {
@@ -592,7 +601,7 @@ function makeVoteButton(slug) {
   b.setAttribute('aria-pressed', String(votedLocally(slug)));
   b.title = 'vote for this kitten (click again to undo)';
   b.innerHTML = '\u{1F44D}<span class="n">·</span>';
-  b.addEventListener('click', () => castVote(slug, b));
+  b.addEventListener('click', (e) => { e.stopPropagation(); castVote(slug, b); });
   return b;
 }
 
@@ -693,9 +702,7 @@ function buildGrid(models) {
     th.dataset.run = runsWhere(m.display_name || key);
     th.dataset.slug = key;
     th.dataset.pos = String(thead.querySelectorAll('th.model-header').length);
-    const name = document.createElement('div');
-    name.textContent = m.display_name || key;
-    th.appendChild(name);
+    th.textContent = m.display_name || key;
     th.appendChild(makeVoteButton(key));
     thead.appendChild(th);
   }
