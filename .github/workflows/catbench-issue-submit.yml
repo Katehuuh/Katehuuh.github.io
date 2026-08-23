@@ -50,7 +50,6 @@ jobs:
       eligible: ${{ steps.extract.outputs.eligible }}
       stem: ${{ steps.extract.outputs.stem }}
       model: ${{ steps.extract.outputs.model }}
-      reasons: ${{ steps.extract.outputs.reasons }}
 
     steps:
       - name: Checkout main (trusted tooling)
@@ -81,13 +80,26 @@ jobs:
             echo "eligible=false" >> "$GITHUB_OUTPUT"
           fi
 
-          python3 - <<'PY' >> "$GITHUB_OUTPUT"
-          import json, pathlib
+          # Values reach $GITHUB_OUTPUT one per line, so a newline inside one of
+          # them starts a forged line. The rejection reasons quote the submitted
+          # model name back, and a name containing "\neligible=true\n" would
+          # override the verdict written just above. Strip newlines from every
+          # value, and keep the reasons out of outputs entirely: they are for
+          # the log, and nothing consumes them.
+          python3 - <<'PY'
+          import json, os, pathlib, sys
+
+          def emit(key, value):
+              flat = str(value).replace("\r", " ").replace("\n", " ")
+              with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
+                  fh.write(f"{key}={flat}\n")
+
           r = json.loads(pathlib.Path("out/report.json").read_text())
           py = [f for f in r["files"] if f.endswith(".py")]
-          print("stem=" + (pathlib.Path(py[0]).stem if py else ""))
-          print("model=" + (pathlib.Path(r["files"][0]).stem if r["files"] else ""))
-          print("reasons=" + "; ".join(r["reasons"]))
+          emit("stem", pathlib.Path(py[0]).stem if py else "")
+          emit("model", pathlib.Path(r["files"][0]).stem if r["files"] else "")
+          for reason in r["reasons"]:
+              print("not eligible: " + reason.replace("\n", "\\n"), file=sys.stderr)
           PY
 
       - name: Install render deps
