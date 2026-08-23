@@ -1,14 +1,14 @@
 {
   "base": "https://katehuuh.github.io/demos/CatBench/",
-  "updated": "2026-08-23T10:26:06Z",
+  "updated": "2026-08-23T10:26:10Z",
   "models": {
     "claude-opus-5": {
       "display_name": "claude-opus-5",
-      "python_render": "assets/claude-opus-5-python.jpg",
       "svg": "assets/claude-opus-5-svg.jpg",
       "python_source": "assets/claude-opus-5.py",
       "svg_source": "assets/claude-opus-5.svg",
-      "added": "2026-08-23T10:26:06Z"
+      "python_error": "/opt/hostedtoolcache/Python/3.11.16/x64/bin/python: can't open file '/home/runner/work/Katehuuh.github.io/Katehuuh.github.io/scripts/render_python.py': [Errno 2] No such file or directory",
+      "added": "2026-08-23T10:26:10Z"
     },
     "ox-alpha-glm-5.5": {
       "display_name": "ox-alpha glm-5.5",
