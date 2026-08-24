@@ -7,11 +7,10 @@ schedule is enough to keep it from being archived.
 WISPBYTE_MODE picks how to authenticate:
 
   cookie  (default) replay a session captured from a real browser. Works.
-  login             submit the login form with a stored password. Kept as a
-                    fallback only - the form sits behind Cloudflare Turnstile,
-                    which issues no token to an automated browser, so the
-                    submit is rejected. Nothing here tries to defeat that
-                    check; the path just reports honestly when it is blocked.
+  login             submit the login form with a stored password. Uses
+                    camoufox (anti-detect Firefox) to pass Cloudflare
+                    Turnstile automatically - no API key or extension
+                    needed.
 
 LOGIN_ACCOUNTS holds every account, one per line. A line may carry the
 password, the cookie, or both, so the mode can be flipped without editing it:
@@ -55,6 +54,12 @@ import sys
 from datetime import datetime, timezone
 
 from playwright.async_api import async_playwright
+
+try:
+    from camoufox.async_api import AsyncCamoufox
+    HAS_CAMOUFOX = True
+except ImportError:
+    HAS_CAMOUFOX = False
 
 SERVERS_URL = "https://wispbyte.com/client/servers"
 AUTH_MARKER = 'a[href*="/client/dashboard"]'   # absent on the logged-out page
@@ -207,7 +212,11 @@ async def touch_with_cookies(account):
 
 
 async def touch_with_login(account):
-    """Submit the real login form. Blocked by Turnstile - see module docstring.
+    """Submit the real login form using camoufox to pass Turnstile.
+
+    Camoufox is an anti-detect Firefox that passes Cloudflare Turnstile
+    automatically. Falls back to plain Playwright if camoufox is not
+    installed (will likely fail on Turnstile).
 
     Success is confirmed by the dashboard nav appearing. It deliberately does
     not test the URL: Wispbyte renders the login form in place at
@@ -216,12 +225,18 @@ async def touch_with_login(account):
     """
     label = account["label"]
     result = {"label": label, "success": False, "detail": ""}
-    async with async_playwright() as p:
-        browser, context = await open_browser(p)
-        page = await context.new_page()
+
+    if HAS_CAMOUFOX:
+        return await _login_camoufox(account, label, result)
+    return await _login_playwright(account, label, result)
+
+
+async def _login_camoufox(account, label, result):
+    async with AsyncCamoufox(headless=True) as browser:
+        page = await browser.new_page()
         page.set_default_timeout(60000)
         try:
-            print("[%s] opening login form" % label, flush=True)
+            print("[%s] opening login form (camoufox)" % label, flush=True)
             await page.goto(SERVERS_URL, wait_until="load", timeout=60000)
             await page.wait_for_load_state("domcontentloaded", timeout=30000)
             await asyncio.sleep(5)
@@ -233,7 +248,51 @@ async def touch_with_login(account):
                 await page.fill(EMAIL_FIELD, account["email"])
                 await page.fill(PASSWORD_FIELD, account["password"])
 
-                # Wait for Turnstile to issue a token of its own accord.
+                token = ""
+                for _ in range(90):
+                    el = await page.query_selector(TURNSTILE_FIELD)
+                    if el:
+                        token = (await el.get_attribute("value")) or ""
+                    if token:
+                        break
+                    await asyncio.sleep(1)
+                print("[%s] turnstile token: %s"
+                      % (label, "solved" if token else "NOT SOLVED"), flush=True)
+                if not token:
+                    result["detail"] = "Turnstile not solved after 90s"
+
+                await page.click(SUBMIT_BUTTON)
+                try:
+                    await page.wait_for_selector(AUTH_MARKER, timeout=45000)
+                except Exception:
+                    pass
+
+            await report_page(label, page, result)
+        except Exception as exc:
+            result["detail"] = str(exc).splitlines()[0][:160]
+            print("[%s] error: %s" % (label, result["detail"]), flush=True)
+    return result
+
+
+async def _login_playwright(account, label, result):
+    """Fallback when camoufox is not installed."""
+    async with async_playwright() as p:
+        browser, context = await open_browser(p)
+        page = await context.new_page()
+        page.set_default_timeout(60000)
+        try:
+            print("[%s] opening login form (playwright, no camoufox)" % label, flush=True)
+            await page.goto(SERVERS_URL, wait_until="load", timeout=60000)
+            await page.wait_for_load_state("domcontentloaded", timeout=30000)
+            await asyncio.sleep(5)
+
+            if await page.query_selector(AUTH_MARKER) is not None:
+                result.update(success=True, detail="already authenticated")
+            else:
+                await page.wait_for_selector(EMAIL_FIELD, timeout=20000)
+                await page.fill(EMAIL_FIELD, account["email"])
+                await page.fill(PASSWORD_FIELD, account["password"])
+
                 token = ""
                 for _ in range(20):
                     token = await page.evaluate(
@@ -244,8 +303,8 @@ async def touch_with_login(account):
                 print("[%s] turnstile token: %s"
                       % (label, "issued" if token else "NOT ISSUED"), flush=True)
                 if not token:
-                    result["detail"] = ("Turnstile issued no token - the login path cannot "
-                                        "work unattended; use WISPBYTE_MODE=cookie")
+                    result["detail"] = ("Turnstile issued no token - install camoufox "
+                                        "or use WISPBYTE_MODE=cookie")
 
                 await page.click(SUBMIT_BUTTON)
                 try:
@@ -285,9 +344,10 @@ async def main():
               flush=True)
         return 1
 
-    if MODE == "login":
-        print("::warning::WISPBYTE_MODE=login - Turnstile blocks this path; expect "
-              "failure unless that has changed.", flush=True)
+    if MODE == "login" and not HAS_CAMOUFOX:
+        print("::warning::WISPBYTE_MODE=login without camoufox - Turnstile will "
+              "likely block the login; install camoufox[geoip] or use cookie mode.",
+              flush=True)
 
     start = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
     print("start %s UTC, mode=%s, %d account(s): %s" % (
