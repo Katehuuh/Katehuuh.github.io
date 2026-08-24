@@ -1,0 +1,98 @@
+# Wispbyte keep-alive. Wispbyte archives a server after 30 days of account
+# inactivity; any authenticated page view counts as activity, so this loads
+# /client/servers twice a week and stamps the result into time.txt.
+#
+#   This file must live on the DEFAULT branch: GitHub registers `schedule:`
+#   and `workflow_dispatch:` only from there, so a workflow sitting only on
+#   the wispbyte-login branch would never fire and could not be dispatched.
+#   Everything else (keepalive.py, README, time.txt) lives on that branch.
+#
+#   The job does not log in - the login form is behind Cloudflare Turnstile,
+#   which issues no token to an automated browser. LOGIN_ACCOUNTS instead
+#   holds a session captured from a real browser, and the job replays it.
+#   See the branch README for the format and the login-mode fallback.
+#
+name: wispbyte-login
+
+on:
+  schedule:
+    - cron: '16 18 * * 1,4' # Mon+Thu 18:16 UTC. The session is a 15-day
+                            # rolling express-session, so <=3 missed runs
+                            # are survivable; weekly would tolerate only 1.
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: wispbyte-login
+  cancel-in-progress: false
+
+jobs:
+  keepalive:
+    # Secrets never transfer to a fork, so without this guard every fork
+    # would run the job and fail twice a week. Skipped before a runner is
+    # allocated. Change it if you fork this deliberately.
+    if: github.repository == 'Katehuuh/Katehuuh.github.io'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout wispbyte-login branch
+        uses: actions/checkout@v5
+        with:
+          ref: wispbyte-login
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Install Playwright
+        timeout-minutes: 8
+        run: |
+          pip install --quiet playwright
+          playwright install --with-deps chromium
+
+      # continue-on-error so the stamp below always runs; the last step is
+      # what turns the run red. keepalive.py masks every value in the secret
+      # before use and never prints an account identifier.
+      - name: Touch each session
+        id: keepalive
+        continue-on-error: true
+        timeout-minutes: 6
+        env:
+          WISPBYTE_MODE: ${{ vars.WISPBYTE_MODE || 'cookie' }}
+          LOGIN_ACCOUNTS: ${{ secrets.LOGIN_ACCOUNTS }}
+        run: python keepalive.py
+
+      - name: Stamp time.txt on wispbyte-login
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          stamp="$(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+          if [ "${{ steps.keepalive.outcome }}" = "success" ]; then
+            result=success
+          else
+            result=failure
+          fi
+
+          {
+            echo "$stamp"
+            echo "login: $result"
+          } > time.txt
+          git add time.txt
+
+          if git diff --cached --quiet; then
+            echo "No changes"
+          else
+            git commit -m "Update: $stamp (login: $result)"
+            git push origin HEAD:wispbyte-login
+          fi
+
+      - name: Fail the run if a session is dead
+        if: steps.keepalive.outcome != 'success'
+        run: |
+          echo "::error::Wispbyte session invalid - recapture the cookie in LOGIN_ACCOUNTS."
+          exit 1
