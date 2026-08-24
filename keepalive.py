@@ -48,9 +48,12 @@ address.
 
 import asyncio
 import hashlib
+import json
 import os
 import re
 import sys
+import urllib.request
+import urllib.error
 from datetime import datetime, timezone
 
 from playwright.async_api import async_playwright
@@ -270,10 +273,55 @@ async def _login_camoufox(account, label, result):
                     pass
 
             await report_page(label, page, result)
+
+            if result["success"]:
+                await _start_and_ping(label, page, result)
         except Exception as exc:
             result["detail"] = str(exc).splitlines()[0][:160]
             print("[%s] error: %s" % (label, result["detail"]), flush=True)
     return result
+
+
+async def _start_and_ping(label, page, result):
+    """Unlock captcha, start the server, and curl its health endpoint."""
+    try:
+        rewarded = await page.evaluate("""async () => {
+            const r = await fetch('/client/api/server/start-captcha/rewarded',
+                {method: 'POST', credentials: 'include',
+                 headers: {'Content-Type': 'application/json'}, body: '{}'});
+            return await r.json();
+        }""")
+        print("[%s] captcha unlock: %s"
+              % (label, "ok" if rewarded.get("success") else rewarded), flush=True)
+
+        status = await page.evaluate("""async () => {
+            const r = await fetch('/client/api/servers/status', {credentials: 'include'});
+            return await r.json();
+        }""")
+        servers = status.get("servers", [])
+        if not servers:
+            print("[%s] no servers found" % label, flush=True)
+            return
+
+        srv = servers[0]
+        server_id = srv["identifier"]
+
+        if srv["current_state"] not in ("running", "starting"):
+            started = await page.evaluate("""async (sid) => {
+                const r = await fetch('/client/api/server/start',
+                    {method: 'POST', credentials: 'include',
+                     headers: {'Content-Type': 'application/json'},
+                     body: JSON.stringify({serverId: sid})});
+                return await r.json();
+            }""", server_id)
+            print("[%s] server start: %s" % (label, started.get("message", started)),
+                  flush=True)
+        else:
+            print("[%s] server already %s" % (label, srv["current_state"]), flush=True)
+
+        result["server_id"] = server_id
+    except Exception as exc:
+        print("[%s] start/ping error: %s" % (label, str(exc)[:120]), flush=True)
 
 
 async def _login_playwright(account, label, result):
@@ -366,7 +414,47 @@ async def main():
         print("  %s %s  %s" % ("OK  " if r["success"] else "FAIL", r["label"], r["detail"]),
               flush=True)
 
+    if MODE == "login":
+        await _ping_servers(results)
+
     return 1 if failed else 0
+
+
+SERVER_ADDRESSES = {
+    "6942dd38": "78.154.103.21:11812",
+    "df7cac21": "78.154.103.29:11445",
+}
+
+
+async def _ping_servers(results):
+    """Wait for servers to boot, then curl their health endpoints."""
+    pings = []
+    for r in results:
+        sid = r.get("server_id", "")
+        addr = SERVER_ADDRESSES.get(sid, "")
+        if addr:
+            pings.append((r["label"], sid, addr))
+
+    if not pings:
+        return
+
+    print("\nWaiting 30s for servers to boot...", flush=True)
+    await asyncio.sleep(30)
+
+    print("\nServer health check:", flush=True)
+    for label, sid, addr in pings:
+        url = "http://%s/health" % addr
+        try:
+            req = urllib.request.Request(url, method="GET")
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                body = json.loads(resp.read())
+                status = body.get("status", "unknown")
+                print("  %s %s (%s) -> %s"
+                      % ("ALIVE" if status == "ok" else "WARN ", label, addr, status),
+                      flush=True)
+        except Exception as exc:
+            print("  DOWN  %s (%s) -> %s"
+                  % (label, addr, str(exc).splitlines()[0][:100]), flush=True)
 
 
 if __name__ == "__main__":
