@@ -7,10 +7,9 @@
 #   the wispbyte-login branch would never fire and could not be dispatched.
 #   Everything else (keepalive.py, README, time.txt) lives on that branch.
 #
-#   Login mode uses camoufox (anti-detect Firefox) + NopeCHA (CAPTCHA
-#   solver addon) to pass Cloudflare Turnstile automatically. Cookie
-#   mode replays a session captured from a real browser. See the branch
-#   README for the format.
+#   Login mode uses camoufox (anti-detect Firefox) to pass Cloudflare
+#   Turnstile automatically. Cookie mode replays a session captured from
+#   a real browser. See the branch README for the format.
 #
 name: wispbyte-login
 
@@ -54,15 +53,6 @@ jobs:
           pip install --quiet playwright "camoufox[geoip]"
           playwright install --with-deps chromium
           python -m camoufox fetch
-
-      - name: Install NopeCHA addon
-        run: |
-          RELEASE_URL=$(curl -sL https://api.github.com/repos/NopeCHALLC/nopecha-extension/releases/latest \
-            | python3 -c "import sys,json; assets=json.load(sys.stdin)['assets']; print(next(a['browser_download_url'] for a in assets if 'firefox_automation' in a['name']))")
-          curl -sL -o nopecha.zip "$RELEASE_URL"
-          mkdir -p nopecha-ext
-          unzip -qo nopecha.zip -d nopecha-ext
-          echo "NOPECHA_EXT_PATH=$(pwd)/nopecha-ext" >> "$GITHUB_ENV"
 
       # continue-on-error so the stamp below always runs; the last step is
       # what turns the run red. keepalive.py masks every value in the secret
