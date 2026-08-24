@@ -61,8 +61,6 @@ try:
 except ImportError:
     HAS_CAMOUFOX = False
 
-NOPECHA_EXT_PATH = os.getenv("NOPECHA_EXT_PATH", "").strip()
-
 SERVERS_URL = "https://wispbyte.com/client/servers"
 AUTH_MARKER = 'a[href*="/client/dashboard"]'   # absent on the logged-out page
 EMAIL_FIELD = "#email"
@@ -234,13 +232,11 @@ async def touch_with_login(account):
 
 
 async def _login_camoufox(account, label, result):
-    addons = [NOPECHA_EXT_PATH] if NOPECHA_EXT_PATH else []
-    async with AsyncCamoufox(headless=True, addons=addons) as browser:
+    async with AsyncCamoufox(headless=True) as browser:
         page = await browser.new_page()
         page.set_default_timeout(60000)
         try:
-            engine = "camoufox+nopecha" if NOPECHA_EXT_PATH else "camoufox"
-            print("[%s] opening login form (%s)" % (label, engine), flush=True)
+            print("[%s] opening login form (camoufox)" % label, flush=True)
             await page.goto(SERVERS_URL, wait_until="load", timeout=60000)
             await page.wait_for_load_state("domcontentloaded", timeout=30000)
             await asyncio.sleep(5)
@@ -265,7 +261,9 @@ async def _login_camoufox(account, label, result):
                 if not token:
                     result["detail"] = "Turnstile not solved after 90s"
 
-                await page.click(SUBMIT_BUTTON)
+                await asyncio.sleep(2)
+                await page.evaluate(
+                    "s => document.querySelector(s).click()", SUBMIT_BUTTON)
                 try:
                     await page.wait_for_selector(AUTH_MARKER, timeout=45000)
                 except Exception:
