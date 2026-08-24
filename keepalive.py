@@ -227,7 +227,8 @@ async def touch_with_login(account):
     page too and would report success while signed out.
     """
     label = account["label"]
-    result = {"label": label, "success": False, "detail": ""}
+    result = {"label": label, "success": False, "detail": "",
+              "email": account["email"]}
 
     if HAS_CAMOUFOX:
         return await _login_camoufox(account, label, result)
@@ -415,7 +416,7 @@ async def main():
               flush=True)
 
     if MODE == "login":
-        await _ping_servers(results)
+        await _ping_servers(results, usable)
 
     return 1 if failed else 0
 
@@ -426,31 +427,41 @@ SERVER_ADDRESSES = {
 }
 
 
-async def _ping_servers(results):
-    """Wait for servers to boot, then curl their health endpoints."""
+async def _ping_servers(results, accounts):
+    """Wait for servers to boot, then ping via /exec."""
     pings = []
     for r in results:
         sid = r.get("server_id", "")
         addr = SERVER_ADDRESSES.get(sid, "")
-        if addr:
-            pings.append((r["label"], sid, addr))
+        if not addr:
+            continue
+        acct = next((a for a in accounts if a["email"] == r.get("email", "")), None)
+        if not acct:
+            continue
+        token = hashlib.sha256(
+            ("%s:%s" % (acct["email"], acct["password"])).encode()).hexdigest()
+        pings.append((r["label"], addr, token))
 
     if not pings:
         return
 
-    print("\nWaiting 30s for servers to boot...", flush=True)
-    await asyncio.sleep(30)
+    print("\nWaiting 45s for servers to boot...", flush=True)
+    await asyncio.sleep(45)
 
-    print("\nServer health check:", flush=True)
-    for label, sid, addr in pings:
-        url = "http://%s/health" % addr
+    print("\nServer ping (/exec):", flush=True)
+    for label, addr, token in pings:
+        url = "http://%s/exec" % addr
         try:
-            req = urllib.request.Request(url, method="GET")
+            data = json.dumps({"cmd": "echo ok"}).encode()
+            req = urllib.request.Request(url, data=data, method="POST",
+                                         headers={"Content-Type": "application/json",
+                                                  "Authorization": "Bearer " + token})
             with urllib.request.urlopen(req, timeout=15) as resp:
                 body = json.loads(resp.read())
-                status = body.get("status", "unknown")
+                ok = body.get("exit") == 0 and "ok" in body.get("stdout", "")
                 print("  %s %s (%s) -> %s"
-                      % ("ALIVE" if status == "ok" else "WARN ", label, addr, status),
+                      % ("ALIVE" if ok else "WARN ", label, addr,
+                         body.get("stdout", "").strip()[:60]),
                       flush=True)
         except Exception as exc:
             print("  DOWN  %s (%s) -> %s"
