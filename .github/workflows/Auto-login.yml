@@ -7,10 +7,9 @@
 #   the wispbyte-login branch would never fire and could not be dispatched.
 #   Everything else (keepalive.py, README, time.txt) lives on that branch.
 #
-#   The job does not log in - the login form is behind Cloudflare Turnstile,
-#   which issues no token to an automated browser. LOGIN_ACCOUNTS instead
-#   holds a session captured from a real browser, and the job replays it.
-#   See the branch README for the format and the login-mode fallback.
+#   Login mode uses camoufox (anti-detect Firefox) to pass Cloudflare
+#   Turnstile automatically. Cookie mode replays a session captured from
+#   a real browser. See the branch README for the format.
 #
 name: wispbyte-login
 
@@ -48,11 +47,12 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install Playwright
+      - name: Install browser automation
         timeout-minutes: 8
         run: |
-          pip install --quiet playwright
+          pip install --quiet playwright "camoufox[geoip]"
           playwright install --with-deps chromium
+          python -m camoufox fetch
 
       # continue-on-error so the stamp below always runs; the last step is
       # what turns the run red. keepalive.py masks every value in the secret
@@ -60,11 +60,11 @@ jobs:
       - name: Touch each session
         id: keepalive
         continue-on-error: true
-        timeout-minutes: 6
+        timeout-minutes: 8
         env:
           WISPBYTE_MODE: ${{ vars.WISPBYTE_MODE || 'cookie' }}
           LOGIN_ACCOUNTS: ${{ secrets.LOGIN_ACCOUNTS }}
-        run: python keepalive.py
+        run: xvfb-run python keepalive.py
 
       - name: Stamp time.txt on wispbyte-login
         run: |
@@ -94,5 +94,5 @@ jobs:
       - name: Fail the run if a session is dead
         if: steps.keepalive.outcome != 'success'
         run: |
-          echo "::error::Wispbyte session invalid - recapture the cookie in LOGIN_ACCOUNTS."
+          echo "::error::Wispbyte session invalid - check LOGIN_ACCOUNTS (login mode) or recapture the cookie."
           exit 1
