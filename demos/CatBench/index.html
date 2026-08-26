@@ -255,13 +255,13 @@ main > section:first-of-type { position: relative; }
 main > section { margin-block: 2.4rem; }
 main > section:first-of-type { margin-top: 0; }
 @media (max-width: 600px) {
-  main > section { margin-block: 1.4rem; }
+  main > section { margin-block: .45rem; }
   .prompts code, .back { font-size: .76rem; }
   /* back and the title share one line instead of stacking, and the title
      scales with the viewport so it stays on that line when zoomed. */
   .hero-cb {
     display: flex; flex-wrap: wrap; align-items: baseline;
-    column-gap: .55rem; margin-bottom: .9rem;
+    column-gap: .55rem; margin-bottom: .35rem;
   }
   .hero-cb .back { flex: 0 0 auto; }
   .hero-cb h1 {
@@ -313,6 +313,14 @@ main > footer .dot { color: var(--text-3); margin: 0 .35rem; }
 }
 .catbench-grid th:last-child, .catbench-grid td:last-child { border-right: none; }
 .catbench-grid tbody tr:last-child td { border-bottom: none; }
+/* The border between the frozen column and the artwork belongs to the
+   table once borders are collapsed, so it scrolls out from under the
+   sticky cell and leaves a gap that shows the white artwork through it.
+   This line is drawn on the cell, so it stays put. */
+.catbench-grid .row-label::after {
+  content: ''; position: absolute; top: 0; bottom: 0; right: 0;
+  width: 1px; background: var(--line);
+}
 .catbench-grid .row-label {
   position: sticky; left: 0; z-index: 2; width: 76px;
   background: var(--bg-2); color: var(--text-2);
@@ -440,26 +448,32 @@ main > footer .dot { color: var(--text-3); margin: 0 .35rem; }
 
 @media (max-width: 600px) {
   /* The only place the phone page padding is set. 3.5rem at the bottom was
-     dead scroll under the footer. */
-  main { padding: 1.4rem 1.1rem 1rem; }
+     dead scroll under the footer, and the side padding is narrow so the
+     grid gets the width instead. */
+  main { padding: .6rem .8rem 1rem; }
 }
 /* ─── Phone layout ───────────────────────────────────────────────────
    At 180px a column plus a 77px row label, a 390px phone shows 1.5 models
    and a zoomed one shows half of one, so nothing can be compared side by
-   side. Two changes buy the second column: the row label turns on its side,
-   26px instead of 77px, and the columns size themselves so exactly two fit
-   whatever the width. 50vw minus 2.2rem is half the content box less half
-   the label, which is the widest a column can be and still leave room for
-   its neighbour.
+   side. The second column comes from taking width back on the left: the
+   page padding, the row label and its padding all shrink, and the columns
+   then size themselves so exactly two fit whatever the width. 50vw minus
+   2.3rem is half the content box less half the label.
+
+   The width is rounded down to whole pixels. A fractional column makes
+   fractional rows, and the wrapper then reports a few pixels it cannot
+   show, which is what let the grid drift up and down under a finger.
 ──────────────────────────────────────────────────────────────────── */
 @media (max-width: 600px) {
-  .catbench-grid { --cb-col: min(180px, calc(50vw - 2.2rem)); }
-  .catbench-grid .row-label {
-    width: 1.6rem; padding: .3rem .1rem;
-    writing-mode: vertical-rl; transform: rotate(180deg);
-    font-size: .68rem; letter-spacing: .08em;
+  .catbench-grid { --cb-col: min(180px, calc(50vw - 2.3rem)); }
+  @supports (width: round(down, 3.3px, 1px)) {
+    .catbench-grid { --cb-col: min(180px, round(down, calc(50vw - 2.3rem), 1px)); }
   }
-  .catbench-grid thead .row-label { font-size: .62rem; }
+  .catbench-grid .row-label {
+    width: 2.7rem; padding: .25rem .2rem;
+    font-size: .56rem; letter-spacing: .04em;
+  }
+  .catbench-grid thead .row-label { font-size: .54rem; padding: .25rem .2rem 1.35rem; }
   .catbench-grid .model-header {
     width: var(--cb-col); font-size: .72rem; padding: .3rem .2rem 1.35rem;
   }
@@ -467,10 +481,12 @@ main > footer .dot { color: var(--text-3); margin: 0 .35rem; }
   .vote { font-size: .64rem; padding: .04rem .26rem; right: .2rem; }
   .vote .thumb { font-size: .8rem; }
   /* Cells are a third of their desktop size, so the source badge and its
-     touch area shrink with them. 26px still clears the 24px minimum, and
-     leaves the rest of the cell for the tap that opens the picture. */
-  .catbench-grid .cell .source-link { font-size: .56rem; bottom: 3px; right: 3px; }
-  .catbench-grid .cell .source-link::after { min-width: 26px; height: 26px; }
+     touch area shrink with them. 24px is the minimum a finger needs, and
+     the badge sits far enough in that the touch area stays inside the
+     cell: hanging past the bottom row was what made the grid scroll a few
+     pixels up and down. */
+  .catbench-grid .cell .source-link { font-size: .56rem; bottom: 6px; right: 6px; }
+  .catbench-grid .cell .source-link::after { min-width: 24px; height: 24px; }
   .add-note { margin-top: 1.2rem; font-size: .9rem; }
   .tag-filter button { padding: 2px 6px; }
   .tag-filter { font-size: .7rem; letter-spacing: .04em; }
