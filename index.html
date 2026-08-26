@@ -540,11 +540,14 @@ section h2 .alias-mark {
 @media (prefers-reduced-motion: reduce) { .rise { animation: none; } }
 
 @media (max-width: 600px) {
-  /* 3.5rem at the bottom was dead scroll under the last line. */
-  main { padding: 1.6rem 1.1rem 1rem; }
-  .hero { margin-bottom: 2rem; }
-  .avatar { width: 92px; height: 92px; margin-bottom: .8rem; }
-  section { margin-block: 2.2rem; }
+  /* Same rhythm as CatBench: 3.5rem at the bottom was dead scroll under
+     the last line, and the top and the gaps between blocks were carrying
+     desktop spacing on a screen a fifth as tall. */
+  main { padding: .6rem .8rem 1rem; }
+  .hero { margin-bottom: 1rem; }
+  .avatar { width: 92px; height: 92px; margin-bottom: .6rem; }
+  section { margin-block: 1rem; }
+  h2 { margin-block: .4rem .6rem; }
   .tag-filter button { padding: 5px 12px; }
   /* The pill and the search field are 264px and 170px wide. Side by side
      they overflow a zoomed phone, so let both give way instead. */
