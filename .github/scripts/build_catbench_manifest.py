@@ -68,7 +68,9 @@ def file_first_commit(path: Path) -> str:
     rel = path.relative_to(ROOT).as_posix()
     try:
         result = subprocess.run(
-            ["git", "log", "--reverse", "--format=%aI", "--", rel],
+            # --follow crosses renames, so retitling a model keeps the date it
+            # was actually benched instead of jumping to the front of the grid.
+            ["git", "log", "--follow", "--reverse", "--format=%aI", "--", rel],
             capture_output=True, text=True, cwd=ROOT, check=False,
         )
         first = (result.stdout or "").strip().split("\n", 1)[0].strip()
