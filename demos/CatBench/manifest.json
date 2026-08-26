@@ -10,12 +10,12 @@
       "svg_source": "assets/claude-opus-5.svg",
       "added": "2026-08-23T10:26:06Z"
     },
-    "ox-alpha-glm-5.5": {
-      "display_name": "ox-alpha glm-5.5",
-      "python_render": "assets/ox-alpha__glm-5.5-python.jpg",
-      "svg": "assets/ox-alpha__glm-5.5-svg.jpg",
-      "python_source": "assets/ox-alpha__glm-5.5.py",
-      "svg_source": "assets/ox-alpha__glm-5.5.svg",
+    "glm-5.3-flash": {
+      "display_name": "glm-5.3-flash",
+      "python_render": "assets/glm-5.3-flash-python.jpg",
+      "svg": "assets/glm-5.3-flash-svg.jpg",
+      "python_source": "assets/glm-5.3-flash.py",
+      "svg_source": "assets/glm-5.3-flash.svg",
       "added": "2026-08-23T08:18:34Z"
     },
     "gemini-3.7-flash": {

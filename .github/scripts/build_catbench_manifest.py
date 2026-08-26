@@ -70,12 +70,14 @@ def file_first_commit(path: Path) -> str:
         result = subprocess.run(
             # --follow crosses renames, so retitling a model keeps the date it
             # was actually benched instead of jumping to the front of the grid.
-            ["git", "log", "--follow", "--reverse", "--format=%aI", "--", rel],
+            # It does not compose with --reverse (together they return only the
+            # rename commit), so read the list oldest-last instead.
+            ["git", "log", "--follow", "--format=%aI", "--", rel],
             capture_output=True, text=True, cwd=ROOT, check=False,
         )
-        first = (result.stdout or "").strip().split("\n", 1)[0].strip()
-        if first:
-            return utc(first)
+        lines = [l.strip() for l in (result.stdout or "").splitlines() if l.strip()]
+        if lines:
+            return utc(lines[-1])
     except Exception:
         pass
     return utc(datetime.now(timezone.utc).isoformat(timespec="seconds"))
