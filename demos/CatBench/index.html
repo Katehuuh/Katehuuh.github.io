@@ -37,7 +37,7 @@ body {
   -webkit-font-smoothing: antialiased; -webkit-text-size-adjust: 100%;
   text-rendering: optimizeLegibility;
 }
-main { max-width: var(--max); margin: 0 auto; padding: 3.5rem 1.4rem 5rem; }
+main { max-width: var(--max); margin: 0 auto; padding: 3.5rem 1.4rem 2rem; }
 a { color: var(--accent); text-decoration: none; }
 a:hover { color: #ffb98d; }
 ::selection { background: var(--accent-soft); color: var(--accent); }
@@ -219,9 +219,12 @@ main > section:first-of-type { position: relative; }
 .is-hidden-by-filter { display: none !important; }
 .grid-empty-note { color: var(--text-3); font-size: .9rem; margin: .8rem 0 0; }
 
+/* Matches .prompts code, the text right below it. --text-3 was too dim to
+   read on a phone in daylight: 3.4:1 against the background, under the 4.5:1
+   minimum. --text-2 is the same palette and clears it at 7:1. */
 .back {
-  display: inline-block; font-family: var(--mono); font-size: .78rem;
-  color: var(--text-3); letter-spacing: .04em;
+  display: inline-block; font-family: var(--mono); font-size: .9rem;
+  color: var(--text-2); letter-spacing: .04em;
 }
 .back:hover { color: var(--accent); }
 .back::before { content: "← "; }
@@ -231,8 +234,8 @@ main > section:first-of-type { position: relative; }
   display: grid; gap: .35rem;
 }
 .prompts li {
-  display: flex; align-items: baseline; gap: .55rem;
-  margin: 0; padding: .45rem .7rem;
+  display: flex; align-items: baseline; gap: .5rem;
+  margin: 0; padding: .4rem .55rem;
   background: var(--bg-1); border: 1px solid var(--line);
   border-radius: 10px; flex-wrap: wrap;
 }
@@ -245,14 +248,27 @@ main > section:first-of-type { position: relative; }
 .prompts code {
   font-family: var(--mono); font-size: .9rem;
   color: var(--text-2); background: transparent; padding: 0; border: 0;
+  /* Stops a line break that leaves one word alone on the last line. */
+  text-wrap: pretty;
 }
 
 main > section { margin-block: 2.4rem; }
 main > section:first-of-type { margin-top: 0; }
 @media (max-width: 600px) {
-  main > section { margin-block: 1.8rem; }
-  .hero-cb { margin-bottom: 1.2rem; }
-  .prompts code { font-size: .76rem; }
+  main > section { margin-block: 1.4rem; }
+  .prompts code, .back { font-size: .76rem; }
+  /* back and the title share one line instead of stacking, and the title
+     scales with the viewport so it stays on that line when zoomed. */
+  .hero-cb {
+    display: flex; flex-wrap: wrap; align-items: baseline;
+    column-gap: .55rem; margin-bottom: .9rem;
+  }
+  .hero-cb .back { flex: 0 0 auto; }
+  .hero-cb h1 {
+    flex: 1 1 auto; margin: 0;
+    font-size: clamp(1.25rem, 7.5vw, 2.8rem);
+  }
+  .hero-cb .prompts { flex: 1 0 100%; margin-top: .6rem; }
 }
 
 code:not(.prompts code):not(.add-note code) {
@@ -266,6 +282,9 @@ code:not(.prompts code):not(.add-note code) {
   font-family: var(--mono); font-size: .88em;
   background: var(--bg-2); border: 1px solid var(--line);
   padding: .08em .42em; border-radius: 6px; color: var(--text);
+  /* A path is one long token. Without this it pushes the whole page
+     sideways once the viewport gets narrow or the reader zooms in. */
+  overflow-wrap: anywhere;
 }
 
 footer {
@@ -276,7 +295,7 @@ footer {
 footer p { margin: 0; }
 footer a { color: var(--text-2); border-bottom: 1px dotted var(--line-2); }
 footer a:hover { color: var(--accent); border-bottom-color: var(--accent-line); }
-main > footer { margin-top: 1.4rem; padding-top: 1.2rem; }
+main > footer { margin-top: 1.2rem; padding-top: 1rem; }
 main > footer .dot { color: var(--text-3); margin: 0 .35rem; }
 
 .grid-wrap {
@@ -420,8 +439,43 @@ main > footer .dot { color: var(--text-3); margin: 0 .35rem; }
 @media (prefers-reduced-motion: reduce) { .rise { animation: none; } }
 
 @media (max-width: 600px) {
-  main { padding: 2rem 1.1rem 3.5rem; }
+  /* The only place the phone page padding is set. 3.5rem at the bottom was
+     dead scroll under the footer. */
+  main { padding: 1.4rem 1.1rem 1rem; }
 }
+/* ─── Phone layout ───────────────────────────────────────────────────
+   At 180px a column plus a 77px row label, a 390px phone shows 1.5 models
+   and a zoomed one shows half of one, so nothing can be compared side by
+   side. Two changes buy the second column: the row label turns on its side,
+   26px instead of 77px, and the columns size themselves so exactly two fit
+   whatever the width. 50vw minus 2.2rem is half the content box less half
+   the label, which is the widest a column can be and still leave room for
+   its neighbour.
+──────────────────────────────────────────────────────────────────── */
+@media (max-width: 600px) {
+  .catbench-grid { --cb-col: min(180px, calc(50vw - 2.2rem)); }
+  .catbench-grid .row-label {
+    width: 1.6rem; padding: .3rem .1rem;
+    writing-mode: vertical-rl; transform: rotate(180deg);
+    font-size: .68rem; letter-spacing: .08em;
+  }
+  .catbench-grid thead .row-label { font-size: .62rem; }
+  .catbench-grid .model-header {
+    width: var(--cb-col); font-size: .72rem; padding: .3rem .2rem 1.35rem;
+  }
+  .catbench-grid .cell { width: var(--cb-col); height: var(--cb-col); }
+  .vote { font-size: .64rem; padding: .04rem .26rem; right: .2rem; }
+  .vote .thumb { font-size: .8rem; }
+  /* Cells are a third of their desktop size, so the source badge and its
+     touch area shrink with them. 26px still clears the 24px minimum, and
+     leaves the rest of the cell for the tap that opens the picture. */
+  .catbench-grid .cell .source-link { font-size: .56rem; bottom: 3px; right: 3px; }
+  .catbench-grid .cell .source-link::after { min-width: 26px; height: 26px; }
+  .add-note { margin-top: 1.2rem; font-size: .9rem; }
+  .tag-filter button { padding: 2px 6px; }
+  .tag-filter { font-size: .7rem; letter-spacing: .04em; }
+}
+
 </style>
 </head>
 <body>
