@@ -74,7 +74,7 @@ body {
   -webkit-font-smoothing: antialiased; -webkit-text-size-adjust: 100%;
   text-rendering: optimizeLegibility;
 }
-main { max-width: var(--max); margin: 0 auto; padding: 3.5rem 1.4rem 5rem; }
+main { max-width: var(--max); margin: 0 auto; padding: 3.5rem 1.4rem 2rem; }
 a { color: var(--accent); text-decoration: none; }
 a:hover { color: #ffb98d; }
 ::selection { background: var(--accent-soft); color: var(--accent); }
@@ -108,7 +108,9 @@ a:hover { color: #ffb98d; }
 }
 .visits-badge .emoji { font-size: .95rem; line-height: 1; }
 .visits-badge.hidden { display: none; }
-.icon-nav { display: inline-flex; gap: .25rem; justify-content: center; }
+/* Wraps rather than overflowing: five 48px circles need 256px, which a
+   phone at 200% zoom does not have. */
+.icon-nav { display: inline-flex; flex-wrap: wrap; gap: .25rem; justify-content: center; }
 /* Direct-child selectors only - descendant `.icon-nav a` would also match
    popover pills and force them to 48x48 circles. */
 .icon-nav > a, .icon-nav > .icon-pop-wrap > a {
@@ -538,11 +540,16 @@ section h2 .alias-mark {
 @media (prefers-reduced-motion: reduce) { .rise { animation: none; } }
 
 @media (max-width: 600px) {
-  main { padding: 2rem 1.1rem 3.5rem; }
+  /* 3.5rem at the bottom was dead scroll under the last line. */
+  main { padding: 1.6rem 1.1rem 1rem; }
   .hero { margin-bottom: 2rem; }
   .avatar { width: 92px; height: 92px; margin-bottom: .8rem; }
   section { margin-block: 2.2rem; }
   .tag-filter button { padding: 5px 12px; }
+  /* The pill and the search field are 264px and 170px wide. Side by side
+     they overflow a zoomed phone, so let both give way instead. */
+  .tag-filter { flex-wrap: wrap; max-width: 100%; }
+  .inline-search { width: 100%; }
 }
 
 /* Command palette - Ctrl/Cmd+K opens a centered modal scoped to navigation
