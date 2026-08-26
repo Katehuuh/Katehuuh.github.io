@@ -74,7 +74,7 @@ body {
   -webkit-font-smoothing: antialiased; -webkit-text-size-adjust: 100%;
   text-rendering: optimizeLegibility;
 }
-main { max-width: var(--max); margin: 0 auto; padding: 3.5rem 1.4rem 2rem; }
+main { max-width: var(--max); margin: 0 auto; padding: 2.4rem 1.4rem 2rem; }
 a { color: var(--accent); text-decoration: none; }
 a:hover { color: #ffb98d; }
 ::selection { background: var(--accent-soft); color: var(--accent); }
@@ -240,7 +240,7 @@ a:hover { color: #ffb98d; }
 }
 .is-hidden-by-search { display: none !important; }
 
-section { margin-block: 2.8rem; }
+section { margin-block: 2rem; }
 section h2 {
   font-family: var(--serif); font-weight: 500;
   font-size: clamp(1.55rem, 3vw, 1.95rem);
@@ -300,7 +300,7 @@ section h2 .alias-mark {
       ignores the url() and falls back to plain blur.
 ────────────────────────────────────────────────────────────────────── */
 .tag-filter {
-  display: inline-flex;
+  display: inline-flex; flex-wrap: wrap; max-width: 100%;
   align-items: center;
   gap: 2px;
   padding: 3px;
@@ -549,9 +549,8 @@ section h2 .alias-mark {
   section { margin-block: 1rem; }
   h2 { margin-block: .4rem .6rem; }
   .tag-filter button { padding: 5px 12px; }
-  /* The pill and the search field are 264px and 170px wide. Side by side
-     they overflow a zoomed phone, so let both give way instead. */
-  .tag-filter { flex-wrap: wrap; max-width: 100%; }
+  /* The search field takes the row to itself rather than squeezing in
+     beside the pill. The pill's own wrapping is general, see .tag-filter. */
   .inline-search { width: 100%; }
 }
 

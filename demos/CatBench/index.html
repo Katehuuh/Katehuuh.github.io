@@ -37,16 +37,24 @@ body {
   -webkit-font-smoothing: antialiased; -webkit-text-size-adjust: 100%;
   text-rendering: optimizeLegibility;
 }
-main { max-width: var(--max); margin: 0 auto; padding: 3.5rem 1.4rem 2rem; }
+main { max-width: var(--max); margin: 0 auto; padding: 2.4rem 1.4rem 2rem; }
 a { color: var(--accent); text-decoration: none; }
 a:hover { color: #ffb98d; }
 ::selection { background: var(--accent-soft); color: var(--accent); }
 
 .hero { text-align: center; margin-bottom: 2.4rem; }
-.hero-cb { text-align: left; margin-bottom: 1.6rem; }
+/* back and the title share a line at every width. Stacked they cost a whole
+   row of height and left the link floating on its own. */
+.hero-cb {
+  text-align: left; margin-bottom: 1.2rem;
+  display: flex; flex-wrap: wrap; align-items: baseline; column-gap: .7rem;
+}
+.hero-cb .back { flex: 0 0 auto; }
+.hero-cb .prompts { flex: 1 0 100%; margin-top: .8rem; }
 .hero-cb h1 {
   font-family: 'Fredoka', var(--sans); font-weight: 600;
-  font-size: clamp(2rem, 5.5vw, 2.8rem); margin: .2rem 0 1rem;
+  font-size: clamp(2rem, 5.5vw, 2.8rem); margin: 0;
+  flex: 1 1 auto;
 }
 /* Cat ears on the C. Two triangles pinned to the top of the letterform,
    sized in em so they track the clamped font-size. The C stays real text,
@@ -252,23 +260,15 @@ main > section:first-of-type { position: relative; }
   text-wrap: pretty;
 }
 
-main > section { margin-block: 2.4rem; }
+main > section { margin-block: 1.8rem; }
 main > section:first-of-type { margin-top: 0; }
 @media (max-width: 600px) {
   main > section { margin-block: .45rem; }
   .prompts code, .back { font-size: .76rem; }
-  /* back and the title share one line instead of stacking, and the title
-     scales with the viewport so it stays on that line when zoomed. */
-  .hero-cb {
-    display: flex; flex-wrap: wrap; align-items: baseline;
-    column-gap: .55rem; margin-bottom: .35rem;
-  }
-  .hero-cb .back { flex: 0 0 auto; }
-  .hero-cb h1 {
-    flex: 1 1 auto; margin: 0;
-    font-size: clamp(1.25rem, 7.5vw, 2.8rem);
-  }
-  .hero-cb .prompts { flex: 1 0 100%; margin-top: .6rem; }
+  /* Only the sizes change here. The one-line header itself is general. */
+  .hero-cb { column-gap: .55rem; margin-bottom: .35rem; }
+  .hero-cb h1 { font-size: clamp(1.25rem, 7.5vw, 2.8rem); }
+  .hero-cb .prompts { margin-top: .6rem; }
 }
 
 code:not(.prompts code):not(.add-note code) {
