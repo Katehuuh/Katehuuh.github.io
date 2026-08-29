@@ -181,6 +181,12 @@
       "name": "[TOOL]-min-nvd-chat",
       "type": "file",
       "filename": "[TOOL]-min-nvd-chat.html"
+    },
+    {
+      "name": "[SHOW]-Handbuilt-Transformer",
+      "type": "file",
+      "filename": "[SHOW]-Handbuilt-Transformer.html",
+      "description": "A transformer with every weight placed by hand, no training. Watch the induction circuit find a repeat and copy what came next, then break it with the ablation switches."
     }
   ]
 }

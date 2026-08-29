@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hand-built transformer</title>
+<meta name="description" content="A transformer with every weight placed by hand, no training. Watch the induction circuit find a repeat and copy what came next, then break it with the ablation switches.">
+<meta name="color-scheme" content="dark">
+<style>
+:root{
+  --bg:#050507; --bg-1:#0c0c10; --bg-2:#14141a;
+  --line:rgba(255,255,255,.07); --line-2:rgba(255,255,255,.14);
+  --text:#f4f4f6; --text-2:rgba(244,244,246,.62); --text-3:rgba(244,244,246,.36);
+  --accent:#ff6b35; --accent-soft:rgba(255,107,53,.12); --accent-line:rgba(255,107,53,.42);
+  --cool:#4fc3f7; --warm:#ffd166;
+  --mono:ui-monospace,"JetBrains Mono","SF Mono",Consolas,monospace;
+  --sans:"Manrope",-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:16px;line-height:1.55;
+  -webkit-font-smoothing:antialiased;-webkit-text-size-adjust:100%}
+main{max-width:1080px;margin:0 auto;padding:2.4rem 1.4rem 2rem}
+a{color:var(--accent);text-decoration:none}
+a:hover{color:#ffb98d}
+h1{font-size:clamp(1.5rem,4vw,2.2rem);margin:0;letter-spacing:-.02em}
+h2{font-size:1rem;margin:0 0 .5rem;font-family:var(--mono);color:var(--accent);
+   text-transform:lowercase;letter-spacing:.06em;font-weight:600}
+p{margin:.5rem 0}
+.head{display:flex;flex-wrap:wrap;align-items:baseline;column-gap:.7rem;margin-bottom:.8rem}
+.back{font-family:var(--mono);font-size:.9rem;color:var(--text-2);flex:0 0 auto}
+.back::before{content:"\2190 "}
+.back:hover{color:var(--accent)}
+.lede{color:var(--text-2);font-size:.95rem;max-width:62ch;margin:.2rem 0 1.2rem;flex:1 0 100%}
+.lede b{color:var(--text);font-weight:600}
+
+.panel{background:var(--bg-1);border:1px solid var(--line);border-radius:14px;padding:.9rem 1rem;margin:.8rem 0}
+.note{color:var(--text-3);font-size:.82rem;font-family:var(--mono);line-height:1.5;margin:.5rem 0 0}
+.note b{color:var(--text-2);font-weight:400}
+.k{color:var(--warm)}
+
+/* controls */
+.row{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center}
+input[type=text]{background:var(--bg-2);border:1px solid var(--line-2);border-radius:999px;
+  color:var(--text);font-family:var(--mono);font-size:1rem;padding:.4rem .9rem;letter-spacing:.22em;
+  min-width:0;flex:1 1 12rem;outline:none;text-transform:uppercase}
+input[type=text]:focus{border-color:var(--accent-line)}
+button{background:transparent;border:1px solid var(--line-2);border-radius:999px;color:var(--text-2);
+  font-family:var(--mono);font-size:.8rem;padding:.25rem .7rem;cursor:pointer;
+  transition:color .15s,border-color .15s,background-color .15s}
+button:hover{color:var(--text);border-color:var(--line-2);background:rgba(255,255,255,.05)}
+button.on{color:var(--accent);border-color:var(--accent-line);background:var(--accent-soft)}
+button.off{color:var(--text-3);text-decoration:line-through}
+
+/* token strip */
+.strip{display:flex;flex-wrap:wrap;gap:.3rem;margin:.2rem 0 .1rem}
+.tok{width:2.1rem;height:2.1rem;display:grid;place-items:center;border-radius:8px;
+  background:var(--bg-2);border:1px solid var(--line);font-family:var(--mono);font-size:1rem;cursor:pointer}
+.tok:hover{border-color:var(--line-2)}
+.tok.sel{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
+.tok.pred{border-style:dashed;border-color:var(--accent-line);color:var(--accent)}
+.pos{font-family:var(--mono);font-size:.6rem;color:var(--text-3);text-align:center;width:2.1rem}
+
+/* matrices */
+.grid{display:grid;gap:1px;background:var(--line);border:1px solid var(--line);border-radius:6px;
+  overflow:hidden;width:max-content;max-width:100%}
+.cell{width:var(--cs,1.35rem);height:var(--cs,1.35rem);background:var(--bg-2);position:relative}
+.cell[title]{cursor:help}
+.axis{font-family:var(--mono);font-size:.62rem;color:var(--text-3);display:grid;place-items:center;
+  width:var(--cs,1.35rem);height:var(--cs,1.35rem)}
+.axis.rowlab{width:auto;padding-right:.35rem;justify-content:end}
+/* One scroll box per matrix. The inner wrapper keeps its natural width;
+   without min-width:0 a flex item refuses to shrink and pushes the page. */
+.mat{display:flex;align-items:flex-start;gap:.2rem;overflow-x:auto;max-width:100%;padding-bottom:.2rem}
+.mat>*{min-width:0}
+.matinner{display:flex;align-items:flex-start;gap:.2rem;width:max-content}
+.matcol{display:flex;flex-direction:column;gap:.2rem}
+/* minmax(0,...) not 1fr: a bare 1fr track refuses to go below its content's
+   min-content width, so a wide table inside pushes the whole page sideways. */
+.two{display:grid;gap:.8rem;grid-template-columns:minmax(0,1fr)}
+@media(min-width:820px){.two{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}}
+
+/* bars */
+.bars{display:grid;gap:2px;margin-top:.3rem}
+.bar{display:grid;grid-template-columns:1.3rem 1fr 3.2rem;align-items:center;gap:.4rem;
+  font-family:var(--mono);font-size:.78rem}
+.bar .t{color:var(--text-2)}
+.bar .track{height:.7rem;background:var(--bg-2);border-radius:999px;overflow:hidden}
+.bar .fill{height:100%;background:linear-gradient(90deg,var(--accent-line),var(--accent));border-radius:999px}
+.bar .v{text-align:right;color:var(--text-3);font-variant-numeric:tabular-nums}
+.bar.win .t,.bar.win .v{color:var(--accent)}
+
+.neuron{display:grid;grid-template-columns:auto 1fr auto;gap:.5rem;align-items:center;
+  font-family:var(--mono);font-size:.8rem;padding:.25rem 0;border-top:1px solid var(--line)}
+.neuron:first-of-type{border-top:0}
+.neuron .rule{color:var(--text-2)}
+.neuron .act{color:var(--text-3);font-variant-numeric:tabular-nums}
+.neuron.fire .rule,.neuron.fire .act{color:var(--warm)}
+
+table.nums{border-collapse:collapse;font-family:var(--mono);font-size:.78rem;margin-top:.4rem;
+  display:block;overflow-x:auto;max-width:100%;white-space:nowrap}
+table.nums td,table.nums th{border:1px solid var(--line);padding:.15rem .5rem;text-align:right}
+table.nums th{color:var(--text-3);font-weight:400}
+table.nums td.hit{color:var(--accent);background:var(--accent-soft)}
+footer{margin-top:1.6rem;padding-top:1rem;border-top:1px solid var(--line);
+  color:var(--text-3);font-size:.85rem;font-family:var(--mono)}
+</style>
+</head>
+<body>
+<main>
+  <div class="head">
+    <a class="back" href="../">back</a>
+    <h1>A transformer nobody trained</h1>
+    <p class="lede">Every weight below was placed by hand, for a stated reason. No gradient descent, no
+      dataset, no random init. It runs live in this page: <b>type a sequence and it predicts the next
+      token</b>, because the weights spell out an <b>induction circuit</b>. Find where this token
+      appeared before, and copy whatever followed it. Switch a part off and watch the ability die.</p>
+  </div>
+
+  <div class="panel">
+    <div class="row">
+      <input id="seq" type="text" value="ABCDABC" spellcheck="false" aria-label="sequence" maxlength="24">
+      <button data-preset="ABCDABC">ABCDABC</button>
+      <button data-preset="DEFDE">DEFDE</button>
+      <button data-preset="HGFHG">HGFHG</button>
+      <button data-preset="AG">AG</button>
+      <button data-preset="ABABABA">ABABABA</button>
+    </div>
+    <div id="strip" class="strip"></div>
+    <div id="posrow" class="strip"></div>
+    <p class="note" id="verdict"></p>
+    <div class="row" style="margin-top:.5rem">
+      <span class="note" style="margin:0">ablate:</span>
+      <button id="ab0" class="on">head 0 · prev-token</button>
+      <button id="ab1" class="on">head 1 · induction</button>
+      <button id="ab2" class="on">mlp · memories</button>
+    </div>
+  </div>
+
+  <div class="two">
+    <div class="panel">
+      <h2>head 0 · previous token</h2>
+      <div id="att0" class="mat"></div>
+      <p class="note">Query and key carry one fixed unit vector each; <b>RoPE</b> turns them by their
+        position, so the score depends only on the gap <span class="k">i-j</span>. Turning the query
+        back by <span class="k">-&theta;</span> first puts the peak on a gap of exactly 1.
+        Two frequencies, <span class="k">&theta;&#8321;=1.0</span> and
+        <span class="k">&theta;&#8322;=2.3</span>, because one alone ties gap 0 with gap 2.</p>
+      <table class="nums" id="offtab"></table>
+    </div>
+
+    <div class="panel">
+      <h2>head 1 · induction</h2>
+      <div id="att1" class="mat"></div>
+      <p class="note">Query reads the <b>current token</b>, key reads the <b>previous token</b> that
+        head 0 wrote at each earlier place. Both are one-hot, so the dot product is
+        <span class="k">1</span> on a match and <span class="k">0</span> otherwise, times a scale of
+        <span class="k">12</span> to make the softmax commit. It lands on the token that followed the
+        earlier copy, and the value path carries that token out.</p>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>residual stream</h2>
+    <div id="res" class="mat"></div>
+    <p class="note">One row per position, one column per dimension, <span class="k">31</span> of them.
+      Four blocks, each with a job: <b>T</b> the token itself, <b>P</b> the previous token that head 0
+      delivers, <b>C</b> the guess that head 1 and the MLP write into, <b>R</b> the two unit vectors
+      RoPE turns. Nothing is entangled, because nothing had to be squeezed by an optimiser.</p>
+  </div>
+
+  <div class="two">
+    <div class="panel">
+      <h2>mlp · key-value memories</h2>
+      <div id="neurons"></div>
+      <p class="note">One neuron per fact. Weights in read a single token direction, the bias sits at
+        <span class="k">-0.5</span> so nothing else can wake it, weights out add
+        <span class="k">1.2</span> to one guess. Deliberately quieter than the head, so evidence in
+        the sequence beats a memorised habit.</p>
+    </div>
+
+    <div class="panel">
+      <h2>logits</h2>
+      <div id="logits" class="bars"></div>
+      <p class="note">Read straight off the <b>C</b> block. The start marker carries a
+        <span class="k">-10</span> bias so it is never the answer. Flat bars mean the circuit found
+        nothing, which is the honest output, not a failure.</p>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>the weights themselves</h2>
+    <div id="weights" class="two"></div>
+    <p class="note" id="wnote"></p>
+  </div>
+
+  <footer>
+    <span id="selftest"></span> &middot; built by hand, checked in the browser on every load
+  </footer>
+</main>
+
+<script>
+/* ─── the model ────────────────────────────────────────────────────────
+   Vocab is a start marker plus eight letters. The residual stream is cut
+   into four blocks that never overlap, so every weight below is a plain
+   selection: read this block, write that one.
+
+     T  0..8    the token at this position, one-hot
+     P  9..17   the token at the position before, head 0 puts it here
+     C  18..26  the guess, head 1 and the MLP add into it
+     R  27..30  two unit vectors for RoPE to turn
+──────────────────────────────────────────────────────────────────────── */
+const V = [..."^ABCDEFGH"], NV = V.length;
+const T0 = 0, P0 = NV, C0 = 2*NV, R0 = 3*NV, D = 3*NV + 4;
+const TH = [1.0, 2.3];          // two RoPE frequencies, picked to break a tie
+const SCALE0 = 12, SCALE1 = 12; // sharpen both softmaxes
+const RULES = [["G","H"], ["E","F"]];
+const MLP_BIAS = -0.5, MLP_OUT = 1.2, BOS_BIAS = -10;
+
+const zeros = n => new Array(n).fill(0);
+const dot = (a,b) => a.reduce((s,x,i) => s + x*b[i], 0);
+function softmax(z){ const m = Math.max(...z), e = z.map(x => Math.exp(x-m)), s = e.reduce((a,b)=>a+b,0);
+  return e.map(x => x/s); }
+
+// RoPE: turn each pair of dimensions by its frequency times the position.
+function rope(v, pos){
+  const o = v.slice();
+  for (let p = 0; p < TH.length; p++){
+    const a = v[2*p], b = v[2*p+1], c = Math.cos(TH[p]*pos), s = Math.sin(TH[p]*pos);
+    o[2*p] = a*c - b*s; o[2*p+1] = a*s + b*c;
+  }
+  return o;
+}
+// Query for head 0, turned back by -theta so the peak lands on a gap of 1.
+const Q0 = [Math.cos(TH[0]), -Math.sin(TH[0]), Math.cos(TH[1]), -Math.sin(TH[1])];
+
+function embed(t){ const x = zeros(D); x[T0+t] = 1; x[R0] = 1; x[R0+2] = 1; return x; }
+
+function head0(xs){
+  const n = xs.length, pat = [], out = [];
+  for (let i = 0; i < n; i++){
+    const q = rope(Q0, i), sc = [];
+    for (let j = 0; j < n; j++){
+      const k = rope(xs[j].slice(R0, R0+4), j);
+      sc.push(j <= i ? SCALE0*dot(q,k) : -1e9);   // causal
+    }
+    const a = softmax(sc); pat.push(a);
+    const o = zeros(D);
+    for (let j = 0; j < n; j++) for (let t = 0; t < NV; t++) o[P0+t] += a[j]*xs[j][T0+t];
+    out.push(o);
+  }
+  return {pat, out};
+}
+
+function head1(xs){
+  const n = xs.length, pat = [], out = [];
+  for (let i = 0; i < n; i++){
+    const sc = [];
+    for (let j = 0; j < n; j++){
+      let d = 0; for (let t = 0; t < NV; t++) d += xs[i][T0+t]*xs[j][P0+t];
+      sc.push(j <= i ? SCALE1*d : -1e9);
+    }
+    const a = softmax(sc); pat.push(a);
+    const o = zeros(D);
+    for (let j = 0; j < n; j++) for (let t = 0; t < NV; t++) o[C0+t] += a[j]*xs[j][T0+t];
+    out.push(o);
+  }
+  return {pat, out};
+}
+
+function mlp(x){
+  const o = zeros(D), acts = [];
+  for (const [src,dst] of RULES){
+    const act = Math.max(0, x[T0+V.indexOf(src)] + MLP_BIAS);
+    acts.push(act);
+    o[C0+V.indexOf(dst)] += MLP_OUT*act;
+  }
+  return {o, acts};
+}
+
+function run(letters, on = {h0:true, h1:true, mlp:true}){
+  const toks = ["^", ...letters].map(c => V.indexOf(c));
+  let xs = toks.map(embed);
+  const r0 = head0(xs);
+  if (on.h0) xs = xs.map((x,i) => x.map((v,d) => v + r0.out[i][d]));
+  const r1 = head1(xs);
+  if (on.h1) xs = xs.map((x,i) => x.map((v,d) => v + r1.out[i][d]));
+  const acts = [];
+  xs = xs.map(x => { const m = mlp(x); acts.push(m.acts);
+    return on.mlp ? x.map((v,d) => v + m.o[d]) : x; });
+  const logits = xs.map(x => { const L = x.slice(C0, C0+NV); L[0] += BOS_BIAS; return L; });
+  return {toks, xs, r0, r1, acts, logits};
+}
+
+/* ─── a check that runs on every load, so the page cannot lie ────────── */
+function selfTest(){
+  const cases = [["ABCDABC","D"], ["DEFDE","F"], ["ABCABCAB","C"], ["HGFHG","F"], ["AG","H"]];
+  let pass = 0;
+  for (const [s, want] of cases){
+    const r = run([...s]);
+    const L = r.logits[r.logits.length-1];
+    if (V[L.indexOf(Math.max(...L))] === want) pass++;
+  }
+  // head 0 has to sit on the position before, at every position
+  const r = run([..."ABCDABC"]);
+  const prevOk = r.r0.pat.every((row,i) => i === 0 || row.indexOf(Math.max(...row)) === i-1);
+  // and the circuit must die when its first stage is cut
+  const cut = run([..."ABCDABC"], {h0:false, h1:true, mlp:true});
+  const cutL = cut.logits[cut.logits.length-1];
+  const died = V[cutL.indexOf(Math.max(...cutL))] !== "D";
+  return {pass, total: cases.length, prevOk, died};
+}
+
+/* ─── drawing ──────────────────────────────────────────────────────────── */
+const $ = s => document.querySelector(s);
+const state = {seq: "ABCDABC", sel: null, on: {h0:true, h1:true, mlp:true}};
+
+function colour(v, max){
+  if (Math.abs(v) < 1e-6) return "var(--bg-2)";
+  const t = Math.min(1, Math.abs(v)/(max || 1));
+  return v > 0 ? `rgba(255,107,53,${(.12 + .88*t).toFixed(3)})`
+               : `rgba(79,195,247,${(.12 + .88*t).toFixed(3)})`;
+}
+
+function matrix(rows, {rowLab, colLab, max = 1, fmt = v => v.toFixed(3), cs, noAxis}){
+  const wrap = document.createElement("div");
+  wrap.className = "matcol";
+  const grid = document.createElement("div");
+  grid.className = "grid";
+  grid.style.gridTemplateColumns = `repeat(${rows[0].length}, var(--cs,1.35rem))`;
+  if (cs) grid.style.setProperty("--cs", cs);
+  rows.forEach((r, i) => r.forEach((v, j) => {
+    const c = document.createElement("div");
+    c.className = "cell";
+    c.style.background = colour(v, max);
+    c.title = `${rowLab ? rowLab[i] + " " : ""}${colLab ? colLab[j] : j} = ${fmt(v)}`;
+    grid.appendChild(c);
+  }));
+  if (noAxis){ wrap.appendChild(grid); const bare = document.createElement("div");
+    bare.className = "matinner"; bare.appendChild(wrap); return bare; }
+  const head = document.createElement("div");
+  head.className = "grid";
+  head.style.cssText = "background:transparent;border:0";
+  head.style.gridTemplateColumns = `repeat(${rows[0].length}, var(--cs,1.35rem))`;
+  if (cs) head.style.setProperty("--cs", cs);
+  (colLab || rows[0].map((_,j)=>j)).forEach(l => {
+    const a = document.createElement("div"); a.className = "axis"; a.textContent = l; head.appendChild(a);
+  });
+  wrap.append(head, grid);
+  const out = document.createElement("div");
+  out.className = "matinner";
+  if (rowLab){
+    const col = document.createElement("div");
+    col.className = "matcol";
+    const sp = document.createElement("div"); sp.className = "axis"; sp.style.height = cs || "1.35rem";
+    col.appendChild(sp);
+    const inner = document.createElement("div");
+    inner.style.cssText = "display:grid;gap:1px;padding-top:1px";
+    inner.style.gridTemplateRows = `repeat(${rows.length}, var(--cs,1.35rem))`;
+    if (cs) inner.style.setProperty("--cs", cs);
+    rowLab.forEach(l => { const a = document.createElement("div");
+      a.className = "axis rowlab"; a.textContent = l; inner.appendChild(a); });
+    col.appendChild(inner); out.appendChild(col);
+  }
+  out.appendChild(wrap);
+  return out;
+}
+
+function draw(){
+  const letters = [...state.seq];
+  const r = run(letters, state.on);
+  const n = r.toks.length;
+  const labels = r.toks.map(t => V[t]);
+  const sel = state.sel == null ? n-1 : Math.min(state.sel, n-1);
+
+  // token strip plus the prediction
+  const L = r.logits[n-1];
+  const best = L.indexOf(Math.max(...L));
+  const strip = $("#strip"), posrow = $("#posrow");
+  strip.innerHTML = ""; posrow.innerHTML = "";
+  labels.forEach((c,i) => {
+    const d = document.createElement("div");
+    d.className = "tok" + (i === sel ? " sel" : "");
+    d.textContent = c; d.title = `position ${i}`;
+    d.onclick = () => { state.sel = i; draw(); };
+    strip.appendChild(d);
+    const p = document.createElement("div"); p.className = "pos"; p.textContent = i; posrow.appendChild(p);
+  });
+  const pd = document.createElement("div");
+  pd.className = "tok pred"; pd.textContent = V[best]; pd.title = "prediction";
+  strip.appendChild(pd);
+  const pp = document.createElement("div"); pp.className = "pos"; pp.textContent = "next"; posrow.appendChild(pp);
+
+  const spread = Math.max(...L) - [...L].sort((a,b)=>b-a)[1];
+  $("#verdict").innerHTML = spread < 1e-6
+    ? `no earlier copy of <span class="k">${labels[n-1]}</span> to learn from, so the guess is a shrug`
+    : `last token <span class="k">${labels[n-1]}</span> appeared before, and
+       <span class="k">${V[best]}</span> followed it &rarr; predicts <span class="k">${V[best]}</span>
+       by <span class="k">${spread.toFixed(2)}</span>`;
+
+  // attention patterns
+  $("#att0").replaceChildren(matrix(r.r0.pat, {rowLab: labels, colLab: labels, max: 1}));
+  $("#att1").replaceChildren(matrix(r.r1.pat, {rowLab: labels, colLab: labels, max: 1}));
+
+  // the offset table, straight from the same numbers the head uses
+  const rowsOff = [0,1,2,3,4].map(g => {
+    const s = TH.reduce((acc,th) => acc + Math.cos(th*(g-1)), 0);
+    return `<td class="${g===1?"hit":""}">${s.toFixed(3)}</td>`;
+  }).join("");
+  $("#offtab").innerHTML = `<tr><th>gap i-j</th>${[0,1,2,3,4].map(g=>`<th>${g}</th>`).join("")}</tr>`
+    + `<tr><th>score</th>${rowsOff}</tr>`;
+
+  // residual stream
+  const blockLab = d => d < NV ? "T" + V[d] : d < 2*NV ? "P" + V[d-NV]
+    : d < 3*NV ? "C" + V[d-2*NV] : "R" + (d-3*NV);
+  $("#res").replaceChildren(matrix(r.xs, {
+    rowLab: labels, colLab: Array.from({length: D}, (_,d) => blockLab(d)[0]), max: 1, cs: "1.05rem"
+  }));
+
+  // mlp neurons at the selected position
+  const nrs = $("#neurons"); nrs.innerHTML = "";
+  RULES.forEach(([src,dst], k) => {
+    const act = r.acts[sel][k];
+    const el = document.createElement("div");
+    el.className = "neuron" + (act > 0 ? " fire" : "");
+    el.innerHTML = `<span class="rule">n${k}</span>
+      <span class="rule">if <b>${src}</b> then nudge <b>${dst}</b></span>
+      <span class="act">${act > 0 ? "+" + (act*MLP_OUT).toFixed(2) : "0"}</span>`;
+    nrs.appendChild(el);
+  });
+
+  // logits at the selected position
+  const Ls = r.logits[sel], top = Math.max(...Ls.map(Math.abs), 1);
+  const bars = $("#logits"); bars.innerHTML = "";
+  V.forEach((c,t) => {
+    if (t === 0) return;
+    const w = Math.max(0, Ls[t]) / top * 100;
+    const el = document.createElement("div");
+    el.className = "bar" + (t === Ls.indexOf(Math.max(...Ls)) ? " win" : "");
+    el.innerHTML = `<span class="t">${c}</span>
+      <span class="track"><span class="fill" style="width:${w.toFixed(1)}%"></span></span>
+      <span class="v">${Ls[t].toFixed(2)}</span>`;
+    bars.appendChild(el);
+  });
+
+  drawWeights();
+  $("#ab0").className = state.on.h0 ? "on" : "off";
+  $("#ab1").className = state.on.h1 ? "on" : "off";
+  $("#ab2").className = state.on.mlp ? "on" : "off";
+}
+
+function drawWeights(){
+  const box = $("#weights");
+  if (box.dataset.done) return;          // these never change, draw once
+  box.dataset.done = "1";
+  const sel = (from, to) => {            // a block-to-block selection matrix
+    const m = Array.from({length: D}, () => zeros(D));
+    for (let t = 0; t < NV; t++) m[to+t][from+t] = 1;
+    return m;
+  };
+  const wrap = (title, m, note) => {
+    const d = document.createElement("div");
+    const h = document.createElement("h2"); h.innerHTML = title; h.style.fontSize = ".82rem";
+    d.appendChild(h);
+    const box = document.createElement("div"); box.className = "mat";
+    box.appendChild(matrix(m, {max: 1, cs: ".42rem", noAxis: true}));
+    d.appendChild(box);
+    const p = document.createElement("p"); p.className = "note"; p.innerHTML = note;
+    d.appendChild(p);
+    return d;
+  };
+  box.append(
+    wrap("W_O head 0 &middot; 31&times;31", sel(T0, P0),
+      "Reads the token block, writes the previous-token block. A diagonal offset by nine, and nothing else."),
+    wrap("W_O head 1 &middot; 31&times;31", sel(T0, C0),
+      "Same shape, offset by eighteen, writing into the guess block. Two identical ideas, two different addresses.")
+  );
+  const t = selfTest();
+  $("#selftest").innerHTML = `self-test <span class="k">${t.pass}/${t.total}</span> sequences,
+    prev-token head on target: <span class="k">${t.prevOk}</span>,
+    circuit dies when cut: <span class="k">${t.died}</span>`;
+  $("#wnote").innerHTML = `Every value is <span class="k">0</span> or <span class="k">1</span>. That is
+    what hand-built looks like: a trained model of this size would be a dense wash of small numbers
+    with no single dimension meaning anything on its own.`;
+}
+
+/* ─── wiring ───────────────────────────────────────────────────────────── */
+$("#seq").addEventListener("input", e => {
+  const clean = e.target.value.toUpperCase().replace(/[^A-H]/g, "").slice(0, 24);
+  if (clean !== e.target.value) e.target.value = clean;
+  state.seq = clean || "A"; state.sel = null; draw();
+});
+document.querySelectorAll("[data-preset]").forEach(b => b.onclick = () => {
+  state.seq = b.dataset.preset; $("#seq").value = state.seq; state.sel = null; draw();
+});
+$("#ab0").onclick = () => { state.on.h0 = !state.on.h0; draw(); };
+$("#ab1").onclick = () => { state.on.h1 = !state.on.h1; draw(); };
+$("#ab2").onclick = () => { state.on.mlp = !state.on.mlp; draw(); };
+draw();
+</script>
+</body>
+</html>
