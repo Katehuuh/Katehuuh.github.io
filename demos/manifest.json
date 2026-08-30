@@ -4,7 +4,7 @@
       "name": "[SHOW]-Handbuilt-Transformer",
       "type": "file",
       "filename": "[SHOW]-Handbuilt-Transformer.html",
-      "description": "Type a word and watch a transformer nobody trained guess the next letter. Every weight placed by hand. The arcs are its real attention, click a letter to follow them."
+      "description": "A transformer nobody trained, wired by hand. Press play and watch the signal cross the web letter by letter as it writes."
     },
     {
       "name": "[SHOW]-Black-Hole-fable-5",
