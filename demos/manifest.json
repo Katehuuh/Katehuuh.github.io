@@ -1,6 +1,12 @@
 {
   "demos": [
     {
+      "name": "[SHOW]-Dioramas",
+      "type": "file",
+      "filename": "[SHOW]-Dioramas.html",
+      "description": "Seven floating miniature biome dioramas built from procedural Three.js geometry, with orbit, zoom and click to fly to a tile."
+    },
+    {
       "name": "[SHOW]-Black-Hole-fable-5",
       "type": "file",
       "filename": "[SHOW]-Black-Hole-fable-5.html"
@@ -181,12 +187,6 @@
       "name": "[TOOL]-min-nvd-chat",
       "type": "file",
       "filename": "[TOOL]-min-nvd-chat.html"
-    },
-    {
-      "name": "[SHOW]-Dioramas",
-      "type": "file",
-      "filename": "[SHOW]-Dioramas.html",
-      "description": "Seven floating miniature biome dioramas built from procedural Three.js geometry, with orbit, zoom and click to fly to a tile."
     }
   ]
 }
