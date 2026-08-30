@@ -86,6 +86,28 @@
   }
   #tag.show{opacity:1}
 
+  /* The brief this scene was built from, on demand. */
+  #promptWrap{
+    position:fixed;inset:0;z-index:8;display:none;place-items:center;padding:18px;
+    background:rgba(3,6,18,.72);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);
+    pointer-events:auto;
+  }
+  #promptWrap.show{display:grid}
+  #promptBox{
+    width:min(94vw,620px);max-height:min(82vh,720px);display:flex;flex-direction:column;
+    padding:15px 17px 14px;
+  }
+  #promptBox h2{margin:0;font-size:15px;font-weight:640;letter-spacing:.01em}
+  #promptBox .sub{margin:4px 0 10px;font-size:11px;color:#8ea2d2;line-height:1.5}
+  #promptBox pre{
+    margin:0;overflow:auto;flex:1;min-height:0;
+    font-family:ui-monospace,"SF Mono",Consolas,monospace;font-size:11.5px;line-height:1.6;
+    color:#c6d3f4;white-space:pre-wrap;word-break:break-word;
+    background:rgba(4,8,22,.5);border:1px solid rgba(150,180,255,.12);border-radius:10px;padding:11px 13px;
+  }
+  #promptBox .foot{display:flex;gap:8px;justify-content:flex-end;margin-top:11px}
+  @media (max-width:640px){ #promptBox pre{font-size:11px} }
+
   #boot{
     position:fixed;inset:0;z-index:9;display:grid;place-items:center;
     background:#05081a;color:#93a6d4;font-size:12.5px;letter-spacing:.06em;
@@ -120,7 +142,10 @@
       <h1>Seven Dioramas</h1>
       <p>Handmade miniature worlds, every rock and roof shingle grown from plain <b>Three.js</b> geometry.</p>
     </div>
-    <button id="spin" class="btn" type="button" aria-pressed="true">Auto orbit on</button>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">
+      <button id="promptBtn" class="btn" type="button">Prompt</button>
+      <button id="spin" class="btn" type="button" aria-pressed="true">Auto orbit on</button>
+    </div>
   </header>
 
   <footer>
@@ -131,6 +156,19 @@
 </div>
 
 <div id="tag"></div>
+
+<div id="promptWrap" role="dialog" aria-modal="true" aria-labelledby="promptTitle">
+  <div id="promptBox" class="panel">
+    <h2 id="promptTitle">The prompt behind this scene</h2>
+    <p class="sub">Written by hand, then handed to the model that built every line of this page.</p>
+    <pre id="promptText"></pre>
+    <div class="foot">
+      <button id="promptCopy" class="btn" type="button">Copy</button>
+      <button id="promptClose" class="btn" type="button">Close</button>
+    </div>
+  </div>
+</div>
+
 <div id="boot">shaping the islands</div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -2105,8 +2143,73 @@ renderer.domElement.addEventListener('pointermove', function (e) {
 });
 renderer.domElement.addEventListener('pointerleave', function () { tagEl.classList.remove('show'); });
 window.addEventListener('keydown', function (e) {
-  if (e.key === 'Escape') select(-1, true);
+  if (e.key === 'Escape') {
+    if (promptWrap.classList.contains('show')) { closePrompt(); return; }
+    select(-1, true);
+  }
   else if (e.key >= '1' && e.key <= '7') select(parseInt(e.key, 10) - 1, true);
+});
+
+/* The brief this scene came from, word for word, so anyone can see what was
+   asked for and what the model decided on its own. */
+var PROMPT_TEXT = [
+  'Dioramas with Three.js',
+  '',
+  'Build a beautiful, interactive 3D scene featuring seven miniature biome',
+  'dioramas floating against a deep navy background. Use the attached image as',
+  'the visual reference.',
+  '',
+  'Each diorama sits on a thick square terrain slab with visible sides, like a',
+  'handcrafted miniature world. Arrange the islands at different heights around',
+  'a central forest, with enough space to clearly distinguish their silhouettes.',
+  '',
+  'Include these seven environments:',
+  '',
+  '1. Forest: a cabin, angular pine trees, rocky mountains, a river flowing over',
+  "   the tile's edge as a waterfall, and a floating rain cloud.",
+  '',
+  '2. Farm: a red barn with white trim, tractor, windmill, fences, sunflowers,',
+  '   and neat vegetable rows.',
+  '',
+  '3. Desert oasis: golden sand, a turquoise pond, palm trees, cacti, rocks, and',
+  '   a camel.',
+  '',
+  '4. Beach: shallow turquoise water, sand, striped umbrellas, loungers,',
+  '   lifeguard tower, and tiny swimmers.',
+  '',
+  '...3 more vary biome strictly diff and detailed',
+  '',
+  '',
+  '--- build constraints added on top of the brief ---',
+  '',
+  'One self contained html file, no build step. three.js r128 and OrbitControls',
+  'from a cdn, nothing else. Every object is procedural geometry, no textures',
+  'and no downloaded models. Merge repeated geometry, cap the pixel ratio at 2,',
+  'no page scrollbars, works on a phone in portrait, no console errors.',
+  '',
+  'No reference image was attached in the end, so the look came from the text.',
+  'The last three biomes were the model’s own choice.'
+].join('\n');
+
+var promptWrap = document.getElementById('promptWrap');
+document.getElementById('promptText').textContent = PROMPT_TEXT;
+function openPrompt() { promptWrap.classList.add('show'); document.getElementById('promptClose').focus(); }
+function closePrompt() { promptWrap.classList.remove('show'); }
+document.getElementById('promptBtn').addEventListener('click', openPrompt);
+document.getElementById('promptClose').addEventListener('click', closePrompt);
+promptWrap.addEventListener('click', function (e) { if (e.target === promptWrap) closePrompt(); });
+document.getElementById('promptCopy').addEventListener('click', function () {
+  var btn = this;
+  var done = function () { btn.textContent = 'Copied'; setTimeout(function () { btn.textContent = 'Copy'; }, 1500); };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(PROMPT_TEXT).then(done, function () { btn.textContent = 'Copy failed'; });
+  } else {
+    var ta = document.createElement('textarea');
+    ta.value = PROMPT_TEXT; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); done(); } catch (err) { btn.textContent = 'Copy failed'; }
+    document.body.removeChild(ta);
+  }
 });
 
 function resize() {
