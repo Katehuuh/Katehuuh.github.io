@@ -1,12 +1,6 @@
 {
   "demos": [
     {
-      "name": "[SHOW]-Handbuilt-Transformer",
-      "type": "file",
-      "filename": "[SHOW]-Handbuilt-Transformer.html",
-      "description": "A transformer nobody trained, wired by hand. Press play and watch the signal cross the web letter by letter as it writes."
-    },
-    {
       "name": "[SHOW]-Black-Hole-fable-5",
       "type": "file",
       "filename": "[SHOW]-Black-Hole-fable-5.html"
