@@ -4,7 +4,7 @@
       "name": "[SHOW]-Handbuilt-Transformer",
       "type": "file",
       "filename": "[SHOW]-Handbuilt-Transformer.html",
-      "description": "A transformer with every weight placed by hand, no training. Watch the induction circuit find a repeat and copy what came next, then break it with the ablation switches."
+      "description": "Type a word and watch a transformer nobody trained guess the next letter. Every weight placed by hand. The arcs are its real attention, click a letter to follow them."
     },
     {
       "name": "[SHOW]-Black-Hole-fable-5",
