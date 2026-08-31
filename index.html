@@ -1130,8 +1130,29 @@ function setupCat(root) {
     pupils.style.transform = `translate(${(dx * 3.4).toFixed(2)}px, ${(dy * 2.6).toFixed(2)}px)`;
   };
   const queue = (pt) => { pending = pt; if (!frame) frame = requestAnimationFrame(write); };
-  btn.addEventListener('pointermove', e => { if (!still.matches) queue({ x: e.clientX, y: e.clientY }); });
-  btn.addEventListener('pointerleave', () => queue(null));
+
+  // A mouse hovers, so follow it while it is over the cat.
+  btn.addEventListener('pointermove', e => {
+    if (e.pointerType === 'mouse' && !still.matches) queue({ x: e.clientX, y: e.clientY });
+  });
+  btn.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse') queue(null); });
+
+  // A finger has no hover and covers the cat while it is on it, so touch
+  // follows the finger anywhere on the page for as long as it is down.
+  // Lifting it recentres, and so does the browser taking the gesture over to
+  // scroll, which fires pointercancel.
+  let touching = false;
+  const release = () => { if (touching) { touching = false; queue(null); } };
+  document.addEventListener('pointerdown', e => {
+    if (e.pointerType === 'mouse' || root.hidden || still.matches) return;
+    touching = true;
+    queue({ x: e.clientX, y: e.clientY });
+  }, { passive: true });
+  document.addEventListener('pointermove', e => {
+    if (touching && !root.hidden) queue({ x: e.clientX, y: e.clientY });
+  }, { passive: true });
+  document.addEventListener('pointerup', release, { passive: true });
+  document.addEventListener('pointercancel', release, { passive: true });
 }
 
 function setupSearch() {
