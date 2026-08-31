@@ -155,6 +155,18 @@ details[open] > summary::before { content: '▾ '; }
       <p class="copy-hint">These color pairs are not yet used by the scanned orgs.</p>
       <div class="card-grid" id="avail-grid"></div>
     </section>
+    <details id="agent-api">
+      <summary>For an agent, without a browser</summary>
+      <p>This page cannot answer <code>curl</code>. GitHub Pages serves the file as
+      written and <code>curl</code> never runs the JavaScript, so the same empty
+      page comes back whatever you put in the query string. The data is one
+      public API call away, though, and needs no key:</p>
+      <pre><code>curl -s https://katehuuh.github.io/demos/hf-colors.sh | sh -s -- Luminia,WeReCooking -emoji</code></pre>
+      <p>Prints <code>AVAILABLE n/64</code> and every free
+      <code>colorFrom-&gt;colorTo</code> pair, then <code>USED</code> with a count
+      in brackets for repeats, then <code>EMOJI</code> if you pass
+      <code>-emoji</code>. Needs <code>curl</code> and <code>jq</code>.</p>
+    </details>
   </main>
 </div>
 
