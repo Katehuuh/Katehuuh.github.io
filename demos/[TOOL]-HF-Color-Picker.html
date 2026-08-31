@@ -171,16 +171,56 @@ html.api-mode, html.api-mode body {
       and prints plain text instead of the cards. Add <code>&amp;emoji</code> to
       list the emoji already taken. The bare form <code>?Luminia,WeReCooking</code>
       works too.</p>
-      <p><strong>This still needs a browser.</strong> GitHub Pages hands
-      <code>curl</code> the file exactly as written and never runs any of this, so
-      the same empty page comes back whatever you put in the query string. For a
-      script, call the Hugging Face API directly, it needs no key:</p>
-      <pre><code>curl -s 'https://huggingface.co/api/spaces?author=Luminia&amp;expand[]=cardData&amp;limit=1000' \
-  | jq -r '.[].cardData | select(.colorFrom) | "\(.colorFrom)->\(.colorTo)"' | sort -u</code></pre>
+      <p><strong>That still needs a browser.</strong> GitHub Pages hands
+      <code>curl</code> this file exactly as written and never runs any of it, so
+      the same page comes back whatever you put in the query string.</p>
+      <p>So the shell version lives <em>inside</em> this file, in a
+      <code>text/plain</code> block the browser ignores. Pull it out and run it,
+      one file, no server, no key:</p>
+      <pre><code>curl -s https://katehuuh.github.io/demos/%5BTOOL%5D-HF-Color-Picker.html \
+  | awk '/^#!\/bin\/sh/,/^#END/' | sh -s -- Luminia,WeReCooking -emoji</code></pre>
+      <p>Prints <code>AVAILABLE n/64</code> then every free pair, then
+      <code>USED</code> with a count in brackets for repeats, then
+      <code>EMOJI</code> if you asked. Needs <code>curl</code> and <code>jq</code>.</p>
     </details>
   </main>
 </div>
 
+<script type="text/plain" id="hf-sh">
+#!/bin/sh
+# Everything between this line and #END is a shell script living inside this
+# page. type="text/plain" means the browser neither runs nor shows it, and
+# script content is raw text, so nothing here is HTML escaped.
+#
+#   curl -s https://katehuuh.github.io/demos/%5BTOOL%5D-HF-Color-Picker.html \
+#     | awk '/^#!\/bin\/sh/,/^#END/' | sh -s -- Luminia,WeReCooking -emoji
+#
+# Needs curl and jq. Reads the public Hugging Face API, no key, no account.
+set -eu
+[ $# -ge 1 ] || { echo "usage: <owner[,owner2,...]> [-emoji]" >&2; exit 2; }
+owners=$(echo "$1" | tr ',' ' '); shift
+want_emoji=false
+[ "${1:-}" = "-emoji" ] && want_emoji=true
+for o in $owners; do
+  curl -sS "https://huggingface.co/api/spaces?author=$o&expand[]=cardData&limit=1000"
+done | jq -s --argjson emoji "$want_emoji" -r '
+  def C: ["red","yellow","green","blue","indigo","purple","pink","gray"];
+  def tally: group_by(.) | map({k:.[0], n:length}) | sort_by(-.n, .k);
+  def show: map(if .n > 1 then "\(.k) (\(.n))" else .k end);
+  ([.[][] | .cardData // {}]) as $cards
+  | ([$cards[] | select(.colorFrom and .colorTo) | "\(.colorFrom)->\(.colorTo)"]) as $used
+  | ([C[] as $a | C[] as $b | "\($a)->\($b)"]) as $all
+  | ($used | tally) as $cnt
+  | ($all - ($used | unique)) as $free
+  | ([$cards[] | .emoji // empty] | tally) as $emo
+  | ( ["AVAILABLE \($free|length)/\($all|length)"] + $free
+    + ["", "USED \($cnt|length)"] + ($cnt | show)
+    + (if $emoji then ["", "EMOJI \($emo|length)"] + ($emo | show) else [] end)
+    ) | .[]
+'
+exit 0
+#END
+</script>
 <script>
 "use strict";
 
