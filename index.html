@@ -439,7 +439,13 @@ section h2 .alias-mark {
 .void-cat { width: 176px; height: 176px; overflow: visible; }
 /* Drawn as strokes, not a filled patch: a solid ellipse of accent on a near
    black background reads as a smudge of dirt. */
-.cat-blush { stroke: var(--accent); stroke-width: 1.8; opacity: .55; fill: none; }
+/* The cat blushes when you are on it and the colour drains away when you
+   leave. Slower going than coming, the way a real blush fades. */
+.cat-blush {
+  stroke: var(--accent); stroke-width: 1.8; fill: none;
+  opacity: 0; transition: opacity .5s ease;
+}
+.void-cat-btn.is-petted .cat-blush { opacity: .55; transition: opacity .25s ease; }
 .cat-breathe { animation: cat-breathe 4.2s ease-in-out infinite; transform-origin: 100px 168px; }
 .cat-tail { animation: cat-tail 5.5s ease-in-out infinite; transform-origin: 140px 168px; }
 /* Blink is driven from JS so the gap between blinks can be random. A CSS
@@ -1131,22 +1137,32 @@ function setupCat(root) {
   };
   const queue = (pt) => { pending = pt; if (!frame) frame = requestAnimationFrame(write); };
 
+  // The blush is not gated on reduced motion the way the tracking is: a slow
+  // colour fade is not the kind of movement that setting is protecting from.
+  const pet = (on) => btn.classList.toggle('is-petted', on);
+
   // A mouse hovers, so follow it while it is over the cat.
+  btn.addEventListener('pointerenter', e => { if (e.pointerType === 'mouse') pet(true); });
   btn.addEventListener('pointermove', e => {
     if (e.pointerType === 'mouse' && !still.matches) queue({ x: e.clientX, y: e.clientY });
   });
-  btn.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse') queue(null); });
+  btn.addEventListener('pointerleave', e => {
+    if (e.pointerType !== 'mouse') return;
+    pet(false);
+    queue(null);
+  });
 
   // A finger has no hover and covers the cat while it is on it, so touch
   // follows the finger anywhere on the page for as long as it is down.
   // Lifting it recentres, and so does the browser taking the gesture over to
   // scroll, which fires pointercancel.
   let touching = false;
-  const release = () => { if (touching) { touching = false; queue(null); } };
+  const release = () => { if (touching) { touching = false; pet(false); queue(null); } };
   document.addEventListener('pointerdown', e => {
-    if (e.pointerType === 'mouse' || root.hidden || still.matches) return;
+    if (e.pointerType === 'mouse' || root.hidden) return;
     touching = true;
-    queue({ x: e.clientX, y: e.clientY });
+    pet(true);
+    if (!still.matches) queue({ x: e.clientX, y: e.clientY });
   }, { passive: true });
   document.addEventListener('pointermove', e => {
     if (touching && !root.hidden) queue({ x: e.clientX, y: e.clientY });
