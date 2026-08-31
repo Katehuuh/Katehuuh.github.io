@@ -427,6 +427,51 @@ section h2 .alias-mark {
 }
 .is-hidden-by-filter { display: none !important; }
 
+/* Filter everything out and the projects fall past the horizon. Click the
+   singularity to get them back. */
+.void { display: grid; place-items: center; gap: .9rem; padding: 2.2rem 0 .5rem; }
+.void[hidden] { display: none; }
+.void-hole {
+  position: relative; width: 150px; height: 150px;
+  display: grid; place-items: center;
+  background: none; border: 0; padding: 0; cursor: pointer;
+}
+.void-disk {
+  position: absolute; inset: 0; border-radius: 50%;
+  background: conic-gradient(from 0deg,
+    transparent 0deg,
+    rgba(255, 107, 53, .10) 30deg,
+    rgba(255, 176, 106, .85) 95deg,
+    rgba(255, 240, 214, .95) 125deg,
+    rgba(255, 107, 53, .55) 175deg,
+    transparent 250deg,
+    rgba(255, 107, 53, .30) 330deg,
+    transparent 360deg);
+  filter: blur(7px);
+  animation: void-spin 9s linear infinite;
+}
+.void-core {
+  position: relative; width: 78px; height: 78px; border-radius: 50%;
+  background: #000;
+  box-shadow:
+    0 0 0 1.5px rgba(255, 214, 170, .55),
+    0 0 22px 3px rgba(255, 107, 53, .35),
+    inset 0 0 18px 2px rgba(0, 0, 0, .9);
+}
+.void-hole:hover .void-disk { animation-duration: 3.5s; }
+.void-hole:hover .void-core { box-shadow:
+    0 0 0 1.5px rgba(255, 236, 214, .8),
+    0 0 34px 6px rgba(255, 107, 53, .5),
+    inset 0 0 18px 2px rgba(0, 0, 0, .9); }
+@keyframes void-spin { to { transform: rotate(360deg); } }
+.void-note, .void-hint {
+  margin: 0; font-family: var(--mono); text-align: center; color: var(--text-3);
+}
+.void-note { font-size: .86rem; color: var(--text-2); }
+.void-note b { color: var(--accent); font-weight: 500; }
+.void-hint { font-size: .72rem; letter-spacing: .06em; }
+@media (prefers-reduced-motion: reduce) { .void-disk { animation: none; } }
+
 .vibe-grid { display: grid; grid-template-columns: 1fr; gap: 1rem; }
 @media (min-width: 720px) { .vibe-grid { grid-template-columns: 1fr 1fr; gap: 1.25rem; } }
 .vibe-card {
@@ -671,6 +716,14 @@ section h2 .alias-mark {
     <div id="projects-grid" class="vibe-grid">
       <noscript><p>Browse <a href="https://github.com/Katehuuh">github.com/Katehuuh</a> directly.</p></noscript>
     </div>
+    <div id="void" class="void" hidden>
+      <button class="void-hole" type="button" aria-label="bring the projects back">
+        <span class="void-disk" aria-hidden="true"></span>
+        <span class="void-core" aria-hidden="true"></span>
+      </button>
+      <p class="void-note"></p>
+      <p class="void-hint">click it to pull them back out</p>
+    </div>
   </section>
 
 </main>
@@ -697,6 +750,7 @@ section h2 .alias-mark {
   renderProjects(projects);
   setupSearch();
   setupTagFilter();
+  setupVoid();
   setupSortByLikes();
   populateHeroPopovers(data);
   setupCommandPalette();
@@ -733,6 +787,7 @@ function setupTagFilter() {
       const visible = cardCats.length === 0 || cardCats.some(t => enabled.has(t));
       card.classList.toggle('is-hidden-by-filter', !visible);
     }
+    updateEmptyState();
     writeHash();
   }
 
@@ -1002,6 +1057,41 @@ function setupCommandPalette() {
   });
 }
 
+// Hide every project and they fall into the black hole. Clicking it undoes
+// whatever emptied the grid, so nobody is stuck staring at nothing.
+function updateEmptyState() {
+  const el = document.getElementById('void');
+  if (!el) return;
+  const cards = [...document.querySelectorAll('.vibe-card')];
+  const hidden = c => c.classList.contains('is-hidden-by-filter')
+                   || c.classList.contains('is-hidden-by-search');
+  el.hidden = !cards.length || !cards.every(hidden);
+  if (el.hidden) return;
+  const byFilter = cards.every(c => c.classList.contains('is-hidden-by-filter'));
+  el.querySelector('.void-note').innerHTML = byFilter
+    ? `every tag is off. <b>${cards.length}</b> projects crossed the horizon.`
+    : `no match. <b>${cards.length}</b> projects crossed the horizon.`;
+}
+
+function setupVoid() {
+  const el = document.getElementById('void');
+  if (!el) return;
+  el.querySelector('.void-hole').addEventListener('click', () => {
+    withVT(() => {
+      for (const b of document.querySelectorAll('#tag-filter button[data-tag]')) {
+        b.classList.add('active');
+        b.setAttribute('aria-pressed', 'true');
+      }
+      const search = document.getElementById('site-search');
+      if (search) search.value = '';
+      for (const c of document.querySelectorAll('.vibe-card')) {
+        c.classList.remove('is-hidden-by-filter', 'is-hidden-by-search');
+      }
+      updateEmptyState();
+    });
+  });
+}
+
 function setupSearch() {
   const input = document.getElementById('site-search');
   if (!input) return;
@@ -1010,6 +1100,7 @@ function setupSearch() {
     for (const el of document.querySelectorAll('.vibe-card')) {
       el.classList.toggle('is-hidden-by-search', !!q && !el.textContent.toLowerCase().includes(q));
     }
+    updateEmptyState();
   };
   input.addEventListener('input', () => withVT(apply));
 }
