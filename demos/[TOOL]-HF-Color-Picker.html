@@ -201,9 +201,23 @@ set -eu
 owners=$(echo "$1" | tr ',' ' '); shift
 want_emoji=false
 [ "${1:-}" = "-emoji" ] && want_emoji=true
-for o in $owners; do
-  curl -sS "https://huggingface.co/api/spaces?author=$o&expand[]=cardData&limit=1000"
-done | jq -s --argjson emoji "$want_emoji" -r '
+PAGE=${HF_PAGE:-1000}
+
+# limit=1000 is honoured, but an owner with more than that gets a cursor in
+# the link header. Following it costs four lines and stops the count being
+# quietly short. Set HF_TOKEN for a higher rate limit and your own private
+# spaces; it is optional.
+fetch_owner() {
+  url="https://huggingface.co/api/spaces?author=$1&expand[]=cardData&limit=$PAGE"
+  while [ -n "$url" ]; do
+    h=$(mktemp)
+    curl -sS -D "$h" ${HF_TOKEN:+-H "Authorization: Bearer $HF_TOKEN"} "$url"
+    url=$(grep -i '^link:' "$h" | sed -n 's/.*<\([^>]*\)>; *rel="next".*/\1/p' | tr -d '\r')
+    rm -f "$h"
+  done
+}
+
+for o in $owners; do fetch_owner "$o"; done | jq -s --argjson emoji "$want_emoji" -r '
   def C: ["red","yellow","green","blue","indigo","purple","pink","gray"];
   def tally: group_by(.) | map({k:.[0], n:length}) | sort_by(-.n, .k);
   def show: map(if .n > 1 then "\(.k) (\(.n))" else .k end);
