@@ -129,6 +129,16 @@ details[open] > summary::before { content: '▾ '; }
   .card-grid { grid-template-columns: 1fr; }
   .input-row { flex-direction: column; }
 }
+/* Plain text endpoint: nothing but the result, so a reader that renders
+   this page returns clean text instead of the whole interface. */
+html.api-mode body > *:not(#api-out) { display: none !important; }
+html.api-mode, html.api-mode body {
+  background: #fff; color: #000; margin: 0; padding: 0;
+}
+#api-out {
+  font: 13px/1.45 ui-monospace, monospace;
+  white-space: pre; margin: 0; padding: 8px;
+}
 </style>
 </head>
 <body>
@@ -156,16 +166,17 @@ details[open] > summary::before { content: '▾ '; }
       <div class="card-grid" id="avail-grid"></div>
     </section>
     <details id="agent-api">
-      <summary>For an agent, without a browser</summary>
-      <p>This page cannot answer <code>curl</code>. GitHub Pages serves the file as
-      written and <code>curl</code> never runs the JavaScript, so the same empty
-      page comes back whatever you put in the query string. The data is one
-      public API call away, though, and needs no key:</p>
-      <pre><code>curl -s https://katehuuh.github.io/demos/hf-colors.sh | sh -s -- Luminia,WeReCooking -emoji</code></pre>
-      <p>Prints <code>AVAILABLE n/64</code> and every free
-      <code>colorFrom-&gt;colorTo</code> pair, then <code>USED</code> with a count
-      in brackets for repeats, then <code>EMOJI</code> if you pass
-      <code>-emoji</code>. Needs <code>curl</code> and <code>jq</code>.</p>
+      <summary>Linking straight to a result</summary>
+      <p><code>?org=Luminia,WeReCooking</code> on this page runs the scan on load
+      and prints plain text instead of the cards. Add <code>&amp;emoji</code> to
+      list the emoji already taken. The bare form <code>?Luminia,WeReCooking</code>
+      works too.</p>
+      <p><strong>This still needs a browser.</strong> GitHub Pages hands
+      <code>curl</code> the file exactly as written and never runs any of this, so
+      the same empty page comes back whatever you put in the query string. For a
+      script, call the Hugging Face API directly, it needs no key:</p>
+      <pre><code>curl -s 'https://huggingface.co/api/spaces?author=Luminia&amp;expand[]=cardData&amp;limit=1000' \
+  | jq -r '.[].cardData | select(.colorFrom) | "\(.colorFrom)->\(.colorTo)"' | sort -u</code></pre>
     </details>
   </main>
 </div>
@@ -222,16 +233,25 @@ function createCard(cf, ct, title, status, spacesText) {
   return card;
 }
 
+// expand[]=cardData returns colorFrom, colorTo and emoji in the listing
+// itself. Without it every space needed its own README fetch, so an org with
+// 100 spaces cost 101 requests and no rendering proxy would wait that long.
 async function fetchSpacesList(org) {
   const all = [];
-  let url = `https://huggingface.co/api/spaces?author=${encodeURIComponent(org)}&limit=100`;
+  let url = `https://huggingface.co/api/spaces?author=${encodeURIComponent(org)}&expand[]=cardData&limit=100`;
   while (url) {
     const r = await fetch(url);
     if (!r.ok) break;
     const data = await r.json();
     for (const s of data) {
       const name = s.id.split('/').pop();
-      all.push({ name, org, private: s.private });
+      const cd = s.cardData || {};
+      all.push({
+        name, org, private: s.private,
+        colorFrom: VALID_COLORS.includes(cd.colorFrom) ? cd.colorFrom : null,
+        colorTo: VALID_COLORS.includes(cd.colorTo) ? cd.colorTo : null,
+        emoji: cd.emoji || null,
+      });
     }
     const link = r.headers.get('link');
     const next = link && link.match(/<([^>]+)>;\s*rel="next"/);
@@ -272,6 +292,51 @@ async function runWithConcurrency(tasks, concurrency) {
   return results;
 }
 
+// Shared by the page and the plain text endpoint.
+async function collectUsage(orgs, onStatus) {
+  const allSpaces = [];
+  for (const org of orgs) {
+    try {
+      const spaces = await fetchSpacesList(org);
+      allSpaces.push(...spaces.filter(s => !s.private));
+      onStatus(`${org}: ${spaces.length} spaces found. Total: ${allSpaces.length}`);
+    } catch (e) {
+      onStatus(`Error fetching ${org}: ${e.message}`, true);
+    }
+  }
+
+  const colorToSpaces = {};
+  const emojiCount = {};
+  const usedSet = new Set();
+
+  // Only spaces whose card carries no colours need their README read.
+  const needReadme = allSpaces.filter(s => !(s.colorFrom && s.colorTo));
+  let done = 0;
+  await runWithConcurrency(needReadme.map(s => async () => {
+    const c = await fetchReadmeColors(s.org, s.name);
+    done++;
+    if (done % 5 === 0 || done === needReadme.length) {
+      onStatus(`Read ${done} / ${needReadme.length} readme files...`);
+    }
+    if (c) { s.colorFrom = c.colorFrom; s.colorTo = c.colorTo; }
+  }), 6);
+
+  for (const s of allSpaces) {
+    if (s.emoji) emojiCount[s.emoji] = (emojiCount[s.emoji] || 0) + 1;
+    if (!(s.colorFrom && s.colorTo)) continue;
+    const key = `${s.colorFrom},${s.colorTo}`;
+    usedSet.add(key);
+    (colorToSpaces[key] ||= []).push(`${s.org}/${s.name}`);
+  }
+  return { allSpaces, colorToSpaces, usedSet, emojiCount };
+}
+
+function allCombos() {
+  const out = [];
+  for (const cf of VALID_COLORS) for (const ct of VALID_COLORS) out.push([cf, ct]);
+  return out;
+}
+
 async function scanColors() {
   const orgsStr = orgsEl.value.trim();
   if (!orgsStr) { setStatus('Enter at least one org/username.', true); return; }
@@ -281,50 +346,16 @@ async function scanColors() {
   results.style.display = 'none';
   setStatus(`Fetching space lists for ${orgs.length} org(s)...`);
 
-  const allSpaces = [];
-  for (const org of orgs) {
-    try {
-      const spaces = await fetchSpacesList(org);
-      allSpaces.push(...spaces.filter(s => !s.private));
-      setStatus(`${org}: ${spaces.length} spaces found. Total: ${allSpaces.length}`);
-    } catch (e) {
-      setStatus(`Error fetching ${org}: ${e.message}`, true);
-    }
-  }
-
+  const { allSpaces, colorToSpaces, usedSet } = await collectUsage(orgs, setStatus);
   if (allSpaces.length === 0) {
     setStatus('No public spaces found for the given orgs.', true);
     scanBtn.disabled = false;
     return;
   }
 
-  setStatus(`Scanning ${allSpaces.length} spaces for color metadata...`);
-  const colorToSpaces = {};
-  const usedColors = [];
-  let done = 0;
-
-  const tasks = allSpaces.map(s => async () => {
-    const c = await fetchReadmeColors(s.org, s.name);
-    done++;
-    if (done % 5 === 0 || done === allSpaces.length) {
-      setStatus(`Scanned ${done} / ${allSpaces.length} spaces...`);
-    }
-    if (c) {
-      const key = `${c.colorFrom},${c.colorTo}`;
-      const label = `${s.org}/${s.name}`;
-      if (!colorToSpaces[key]) colorToSpaces[key] = [];
-      colorToSpaces[key].push(label);
-      usedColors.push(c);
-    }
-  });
-
-  await runWithConcurrency(tasks, 6);
-
-  const usedSet = new Set(usedColors.map(c => `${c.colorFrom},${c.colorTo}`));
+  const combos = allCombos();
   const usedUnique = [...usedSet].map(k => k.split(','));
-  const allCombos = [];
-  for (const cf of VALID_COLORS) for (const ct of VALID_COLORS) allCombos.push([cf, ct]);
-  const available = allCombos.filter(([cf, ct]) => !usedSet.has(`${cf},${ct}`));
+  const available = combos.filter(([cf, ct]) => !usedSet.has(`${cf},${ct}`));
 
   const usedGrid  = document.getElementById('used-grid');
   const availGrid = document.getElementById('avail-grid');
@@ -336,20 +367,89 @@ async function scanColors() {
 
   for (const [cf, ct] of usedUnique) {
     const spaces = colorToSpaces[`${cf},${ct}`] || [];
-    usedGrid.appendChild(createCard(cf, ct, `${cf} → ${ct}`, 'Used', spaces.join(', ')));
+    usedGrid.appendChild(createCard(cf, ct, `${cf} \u2192 ${ct}`, 'Used', spaces.join(', ')));
   }
-
   for (const [cf, ct] of available) {
-    availGrid.appendChild(createCard(cf, ct, `${cf} → ${ct}`, 'Available', ''));
+    availGrid.appendChild(createCard(cf, ct, `${cf} \u2192 ${ct}`, 'Available', ''));
   }
 
   results.style.display = 'block';
-  setStatus(`Done. ${usedUnique.length} used, ${available.length} available out of ${allCombos.length} total.`);
+  setStatus(`Done. ${usedUnique.length} used, ${available.length} available out of ${combos.length} total.`);
   scanBtn.disabled = false;
+}
+
+/* ─── Plain text endpoint ─────────────────────────────────────────────
+   GitHub Pages cannot answer a query string: curl gets the file as
+   written and never runs any of this. What it can do is answer a reader
+   that renders the page first, so
+     curl https://r.jina.ai/<this url>?org=Luminia,WeReCooking&emoji
+   comes back as text. Accepts ?org=a,b or the bare ?a,b, and prints
+   nothing but the result so the rendered output stays clean.
+──────────────────────────────────────────────────────────────────── */
+function apiRequest() {
+  const q = new URLSearchParams(location.search);
+  let raw = q.get('org') || q.get('orgs') || '';
+  const emoji = q.has('emoji') || q.has('-emoji');
+  if (!raw) {
+    for (const [k, v] of q) {
+      if (v === '' && k !== 'emoji' && k !== '-emoji') { raw = k; break; }
+    }
+  }
+  const orgs = raw.split(',').map(s => s.trim()).filter(Boolean);
+  return orgs.length ? { orgs, emoji } : null;
+}
+
+function tallyLines(counts) {
+  return Object.entries(counts)
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([k, n]) => (n > 1 ? `${k} (${n})` : k));
+}
+
+async function runApiMode({ orgs, emoji }) {
+  document.documentElement.classList.add('api-mode');
+  const pre = document.createElement('pre');
+  pre.id = 'api-out';
+  pre.textContent = 'WORKING';
+  document.body.appendChild(pre);
+
+  let out;
+  try {
+    const { allSpaces, colorToSpaces, usedSet, emojiCount } =
+      await collectUsage(orgs, () => {});
+    const combos = allCombos();
+    const free = combos.filter(([cf, ct]) => !usedSet.has(`${cf},${ct}`))
+                       .map(([cf, ct]) => `${cf}->${ct}`);
+    const usedCount = {};
+    for (const [k, v] of Object.entries(colorToSpaces)) {
+      usedCount[k.replace(',', '->')] = v.length;
+    }
+    out = [
+      `OWNERS ${orgs.join(' ')}`,
+      `SPACES ${allSpaces.length}`,
+      '',
+      `AVAILABLE ${free.length}/${combos.length}`,
+      ...free,
+      '',
+      `USED ${Object.keys(usedCount).length}`,
+      ...tallyLines(usedCount),
+    ];
+    if (emoji) {
+      const e = tallyLines(emojiCount);
+      out.push('', `EMOJI ${e.length}`, ...e);
+    }
+    out.push('', 'END');
+  } catch (err) {
+    out = ['ERROR ' + (err && err.message ? err.message : String(err)), 'END'];
+  }
+  pre.textContent = out.join('\n');
+  document.title = 'hf colors ' + orgs.join(',');
 }
 
 scanBtn.addEventListener('click', scanColors);
 orgsEl.addEventListener('keydown', e => { if (e.key === 'Enter') scanColors(); });
+
+const apiReq = apiRequest();
+if (apiReq) runApiMode(apiReq);
 </script>
 </body>
 </html>
