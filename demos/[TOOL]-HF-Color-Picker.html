@@ -1,3 +1,54 @@
+<!--
+#!/bin/sh
+# This page is also a shell script. It opens with an html comment, which a
+# browser skips and which sh reads as a failed redirect on line 1, one line
+# on stderr and then it carries on into this. A comment before the doctype
+# keeps the document in standards mode, so the page is unaffected.
+#
+#   curl -sg https://katehuuh.github.io/demos/[TOOL]-HF-Color-Picker.html \
+#     | sh -s -- Luminia,WeReCooking -emoji 2>/dev/null
+#
+# Needs curl and jq. Reads the public Hugging Face API, no key, no account.
+set -eu
+exec 2>&1
+[ $# -ge 1 ] || { echo "usage: <owner[,owner2,...]> [-emoji]" >&2; exit 2; }
+owners=$(echo "$1" | tr ',' ' '); shift
+want_emoji=false
+[ "${1:-}" = "-emoji" ] && want_emoji=true
+PAGE=${HF_PAGE:-1000}
+
+# limit=1000 is honoured, but an owner with more than that gets a cursor in
+# the link header. Following it costs four lines and stops the count being
+# quietly short. Set HF_TOKEN for a higher rate limit and your own private
+# spaces; it is optional.
+fetch_owner() {
+  url="https://huggingface.co/api/spaces?author=$1&expand[]=cardData&limit=$PAGE"
+  while [ -n "$url" ]; do
+    h=$(mktemp)
+    curl -sS -D "$h" ${HF_TOKEN:+-H "Authorization: Bearer $HF_TOKEN"} "$url"
+    url=$(grep -i '^link:' "$h" | sed -n 's/.*<\([^>]*\)>; *rel="next".*/\1/p' | tr -d '\r')
+    rm -f "$h"
+  done
+}
+
+for o in $owners; do fetch_owner "$o"; done | jq -s --argjson emoji "$want_emoji" -r '
+  def C: ["red","yellow","green","blue","indigo","purple","pink","gray"];
+  def tally: group_by(.) | map({k:.[0], n:length}) | sort_by(-.n, .k);
+  def show: map(if .n > 1 then "\(.k) (\(.n))" else .k end);
+  ([.[][] | .cardData // {}]) as $cards
+  | ([$cards[] | select(.colorFrom and .colorTo) | "\(.colorFrom)->\(.colorTo)"]) as $used
+  | ([C[] as $a | C[] as $b | "\($a)->\($b)"]) as $all
+  | ($used | tally) as $cnt
+  | ($all - ($used | unique)) as $free
+  | ([$cards[] | .emoji // empty] | tally) as $emo
+  | ( ["AVAILABLE \($free|length)/\($all|length)"] + $free
+    + ["", "USED \($cnt|length)"] + ($cnt | show)
+    + (if $emoji then ["", "EMOJI \($emo|length)"] + ($emo | show) else [] end)
+    ) | .[]
+'
+exit 0
+#END
+-->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -174,11 +225,14 @@ html.api-mode, html.api-mode body {
       <p><strong>That still needs a browser.</strong> GitHub Pages hands
       <code>curl</code> this file exactly as written and never runs any of it, so
       the same page comes back whatever you put in the query string.</p>
-      <p>So the shell version lives <em>inside</em> this file, in a
-      <code>text/plain</code> block the browser ignores. Pull it out and run it,
-      one file, no server, no key:</p>
-      <pre><code>curl -s https://katehuuh.github.io/demos/%5BTOOL%5D-HF-Color-Picker.html \
-  | awk '/^#!\/bin\/sh/,/^#END/' | sh -s -- Luminia,WeReCooking -emoji</code></pre>
+      <p>So this file is also a shell script. It opens with an html comment,
+      which the browser skips, so you can pipe the page straight into
+      <code>sh</code>. One file, no server, no key:</p>
+      <pre><code>curl -sg https://katehuuh.github.io/demos/[TOOL]-HF-Color-Picker.html | sh -s -- Luminia,WeReCooking -emoji 2>/dev/null</code></pre>
+      <p><code>-g</code> stops curl treating the brackets as a glob.
+      <code>2>/dev/null</code> hides the one line sh prints about the comment
+      opener; the script's own messages go to stdout so you still see them.
+      Set <code>HF_TOKEN</code> for a higher rate limit.</p>
       <p>Prints <code>AVAILABLE n/64</code> then every free pair, then
       <code>USED</code> with a count in brackets for repeats, then
       <code>EMOJI</code> if you asked. Needs <code>curl</code> and <code>jq</code>.</p>
@@ -186,55 +240,6 @@ html.api-mode, html.api-mode body {
   </main>
 </div>
 
-<script type="text/plain" id="hf-sh">
-#!/bin/sh
-# Everything between this line and #END is a shell script living inside this
-# page. type="text/plain" means the browser neither runs nor shows it, and
-# script content is raw text, so nothing here is HTML escaped.
-#
-#   curl -s https://katehuuh.github.io/demos/%5BTOOL%5D-HF-Color-Picker.html \
-#     | awk '/^#!\/bin\/sh/,/^#END/' | sh -s -- Luminia,WeReCooking -emoji
-#
-# Needs curl and jq. Reads the public Hugging Face API, no key, no account.
-set -eu
-[ $# -ge 1 ] || { echo "usage: <owner[,owner2,...]> [-emoji]" >&2; exit 2; }
-owners=$(echo "$1" | tr ',' ' '); shift
-want_emoji=false
-[ "${1:-}" = "-emoji" ] && want_emoji=true
-PAGE=${HF_PAGE:-1000}
-
-# limit=1000 is honoured, but an owner with more than that gets a cursor in
-# the link header. Following it costs four lines and stops the count being
-# quietly short. Set HF_TOKEN for a higher rate limit and your own private
-# spaces; it is optional.
-fetch_owner() {
-  url="https://huggingface.co/api/spaces?author=$1&expand[]=cardData&limit=$PAGE"
-  while [ -n "$url" ]; do
-    h=$(mktemp)
-    curl -sS -D "$h" ${HF_TOKEN:+-H "Authorization: Bearer $HF_TOKEN"} "$url"
-    url=$(grep -i '^link:' "$h" | sed -n 's/.*<\([^>]*\)>; *rel="next".*/\1/p' | tr -d '\r')
-    rm -f "$h"
-  done
-}
-
-for o in $owners; do fetch_owner "$o"; done | jq -s --argjson emoji "$want_emoji" -r '
-  def C: ["red","yellow","green","blue","indigo","purple","pink","gray"];
-  def tally: group_by(.) | map({k:.[0], n:length}) | sort_by(-.n, .k);
-  def show: map(if .n > 1 then "\(.k) (\(.n))" else .k end);
-  ([.[][] | .cardData // {}]) as $cards
-  | ([$cards[] | select(.colorFrom and .colorTo) | "\(.colorFrom)->\(.colorTo)"]) as $used
-  | ([C[] as $a | C[] as $b | "\($a)->\($b)"]) as $all
-  | ($used | tally) as $cnt
-  | ($all - ($used | unique)) as $free
-  | ([$cards[] | .emoji // empty] | tally) as $emo
-  | ( ["AVAILABLE \($free|length)/\($all|length)"] + $free
-    + ["", "USED \($cnt|length)"] + ($cnt | show)
-    + (if $emoji then ["", "EMOJI \($emo|length)"] + ($emo | show) else [] end)
-    ) | .[]
-'
-exit 0
-#END
-</script>
 <script>
 "use strict";
 
