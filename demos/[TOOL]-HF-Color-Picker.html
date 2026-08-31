@@ -6,15 +6,25 @@
 # keeps the document in standards mode, so the page is unaffected.
 #
 #   curl -sg https://katehuuh.github.io/demos/[TOOL]-HF-Color-Picker.html \
-#     | sh -s -- Luminia,WeReCooking -emoji 2>/dev/null
+#     | sh -s -- Luminia,WeReCooking,WeReCooking2 -emoji 2>/dev/null
 #
-# Needs curl and jq. Reads the public Hugging Face API, no key, no account.
+# Needs curl and awk, both of which POSIX guarantees. It used to need jq,
+# which turns out to be missing on plenty of machines including Git Bash.
+# Reads the public Hugging Face API. No key, no account, no server.
 set -eu
 exec 2>&1
 [ $# -ge 1 ] || { echo "usage: <owner[,owner2,...]> [-emoji]" >&2; exit 2; }
+
+# Checked before the pipeline starts, on purpose. A missing command inside a
+# pipeline writes its complaint into the pipe rather than to the terminal, so
+# awk eats it and you get a confident empty answer instead of an error.
+for need in curl awk sed grep tr; do
+  command -v "$need" >/dev/null 2>&1 || {
+    echo "ERROR this needs $need and it is not installed"; exit 127; }
+done
 owners=$(echo "$1" | tr ',' ' '); shift
-want_emoji=false
-[ "${1:-}" = "-emoji" ] && want_emoji=true
+want_emoji=0
+[ "${1:-}" = "-emoji" ] && want_emoji=1
 PAGE=${HF_PAGE:-1000}
 
 # limit=1000 is honoured, but an owner with more than that gets a cursor in
@@ -24,27 +34,73 @@ PAGE=${HF_PAGE:-1000}
 fetch_owner() {
   url="https://huggingface.co/api/spaces?author=$1&expand[]=cardData&limit=$PAGE"
   while [ -n "$url" ]; do
-    h=$(mktemp)
+    h=$(mktemp 2>/dev/null || echo "${TMPDIR:-/tmp}/hfcolors.$$")
     curl -sS -D "$h" ${HF_TOKEN:+-H "Authorization: Bearer $HF_TOKEN"} "$url"
     url=$(grep -i '^link:' "$h" | sed -n 's/.*<\([^>]*\)>; *rel="next".*/\1/p' | tr -d '\r')
     rm -f "$h"
   done
 }
 
-for o in $owners; do fetch_owner "$o"; done | jq -s --argjson emoji "$want_emoji" -r '
-  def C: ["red","yellow","green","blue","indigo","purple","pink","gray"];
-  def tally: group_by(.) | map({k:.[0], n:length}) | sort_by(-.n, .k);
-  def show: map(if .n > 1 then "\(.k) (\(.n))" else .k end);
-  ([.[][] | .cardData // {}]) as $cards
-  | ([$cards[] | select(.colorFrom and .colorTo) | "\(.colorFrom)->\(.colorTo)"]) as $used
-  | ([C[] as $a | C[] as $b | "\($a)->\($b)"]) as $all
-  | ($used | tally) as $cnt
-  | ($all - ($used | unique)) as $free
-  | ([$cards[] | .emoji // empty] | tally) as $emo
-  | ( ["AVAILABLE \($free|length)/\($all|length)"] + $free
-    + ["", "USED \($cnt|length)"] + ($cnt | show)
-    + (if $emoji then ["", "EMOJI \($emo|length)"] + ($emo | show) else [] end)
-    ) | .[]
+for o in $owners; do fetch_owner "$o"; done \
+| sed 's/{"_id":/\
+{"_id":/g' \
+| awk -v emoji="$want_emoji" '
+  # One record per line. The marker is {"_id": rather than },{ because the
+  # owners are separate json arrays glued together, so their boundary is ][
+  # and a },{ split silently merged the last space of one owner with the
+  # first of the next. That cost two colour pairs across three owners.
+  # Pull "key":"value" out of one space record.
+  function field(line, key,   v) {
+    if (match(line, "\"" key "\":\"[^\"]*\"")) {
+      v = substr(line, RSTART, RLENGTH)
+      sub("\"" key "\":\"", "", v)
+      sub("\"$", "", v)
+      return v
+    }
+    return ""
+  }
+  # Most used first, then alphabetical. awk has no sort worth relying on.
+  function order(cnt, keys,   n, i, j, t) {
+    n = 0
+    for (k in cnt) keys[++n] = k
+    for (i = 2; i <= n; i++) {
+      t = keys[i]
+      for (j = i - 1; j >= 1 && (cnt[keys[j]] < cnt[t] || \
+           (cnt[keys[j]] == cnt[t] && keys[j] > t)); j--) keys[j+1] = keys[j]
+      keys[j+1] = t
+    }
+    return n
+  }
+  function label(k, c) { return c > 1 ? k " (" c ")" : k }
+  {
+    cf = field($0, "colorFrom"); ct = field($0, "colorTo"); em = field($0, "emoji")
+    if ($0 ~ /"_id"/) seen++
+    if (cf != "" && ct != "") used[cf "->" ct]++
+    if (em != "") emo[em]++
+  }
+  END {
+    if (seen == 0) {
+      print "ERROR no spaces came back. Check the owner name and your network."
+      exit 1
+    }
+    split("red yellow green blue indigo purple pink gray", C, " ")
+    for (i = 1; i <= 8; i++) for (j = 1; j <= 8; j++) {
+      k = C[i] "->" C[j]; total++
+      if (!(k in used)) free[++nf] = k
+    }
+    print "AVAILABLE " nf "/" total
+    for (i = 1; i <= nf; i++) print free[i]
+    print ""
+    n = order(used, uk)
+    print "USED " n
+    for (i = 1; i <= n; i++) print label(uk[i], used[uk[i]])
+    if (emoji == 1) {
+      print ""
+      n = order(emo, ek)
+      print "EMOJI " n
+      for (i = 1; i <= n; i++) print label(ek[i], emo[ek[i]])
+    }
+  }
 '
 exit 0
 #END
@@ -228,11 +284,14 @@ html.api-mode, html.api-mode body {
       <p>So this file is also a shell script. It opens with an html comment,
       which the browser skips, so you can pipe the page straight into
       <code>sh</code>. One file, no server, no key:</p>
-      <pre><code>curl -sg https://katehuuh.github.io/demos/[TOOL]-HF-Color-Picker.html | sh -s -- Luminia,WeReCooking -emoji 2>/dev/null</code></pre>
-      <p><code>-g</code> stops curl treating the brackets as a glob.
+      <pre><code>curl -sg https://katehuuh.github.io/demos/[TOOL]-HF-Color-Picker.html | sh -s -- Luminia,WeReCooking,WeReCooking2 -emoji 2>/dev/null</code></pre>
+      <p>Needs only <code>curl</code> and <code>awk</code>. Tested on dash, bash
+      and sh, and under mawk, so Git Bash on Windows is covered as well as Linux
+      and macOS. <code>-g</code> stops curl treating the brackets as a glob.
       <code>2>/dev/null</code> hides the one line sh prints about the comment
-      opener; the script's own messages go to stdout so you still see them.
-      Set <code>HF_TOKEN</code> for a higher rate limit.</p>
+      opener, and nothing else: a missing tool, an unknown owner or a dead
+      network all print <code>ERROR</code> on stdout and exit non-zero. Set
+      <code>HF_TOKEN</code> for a higher rate limit.</p>
       <p>Prints <code>AVAILABLE n/64</code> then every free pair, then
       <code>USED</code> with a count in brackets for repeats, then
       <code>EMOJI</code> if you asked. Needs <code>curl</code> and <code>jq</code>.</p>
