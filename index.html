@@ -440,13 +440,11 @@ section h2 .alias-mark {
 /* Drawn as strokes, not a filled patch: a solid ellipse of accent on a near
    black background reads as a smudge of dirt. */
 .cat-blush { stroke: var(--accent); stroke-width: 1.8; opacity: .55; fill: none; }
-/* Brighter than the outline so the eyes read as the focal point. */
-.cat-eye { fill: var(--text-2); stroke: none; }
 .cat-breathe { animation: cat-breathe 4.2s ease-in-out infinite; transform-origin: 100px 168px; }
 .cat-tail { animation: cat-tail 5.5s ease-in-out infinite; transform-origin: 140px 168px; }
 /* Blink is driven from JS so the gap between blinks can be random. A CSS
    animation only repeats on a fixed beat, which reads as a metronome. */
-.cat-eyes { transform-origin: 100px 73px; transition: transform .09s ease-in-out; }
+.cat-eyes { transform-origin: 100px 74px; transition: transform .09s ease-in-out; }
 .cat-eyes.is-blinking { transform: scaleY(.08); }
 /* Short enough to follow the pointer, long enough not to twitch. */
 .cat-pupils { transition: transform .18s ease-out; }
@@ -722,12 +720,8 @@ section h2 .alias-mark {
             <path class="cat-blush" d="M122 85l-3 5M117 84l-3 5M112 85l-3 5"/>
             <g class="cat-eyes">
               <g class="cat-pupils">
-                <ellipse class="cat-eye" cx="85" cy="73" rx="7.6" ry="8.8"/>
-                <ellipse class="cat-eye" cx="115" cy="73" rx="7.6" ry="8.8"/>
-                <circle cx="87.8" cy="69.6" r="2.7" fill="var(--text)" stroke="none"/>
-                <circle cx="117.8" cy="69.6" r="2.7" fill="var(--text)" stroke="none"/>
-                <circle cx="82.2" cy="76.6" r="1.4" fill="var(--text)" stroke="none" opacity=".65"/>
-                <circle cx="112.2" cy="76.6" r="1.4" fill="var(--text)" stroke="none" opacity=".65"/>
+                <ellipse cx="88" cy="74" rx="3.2" ry="3.8" fill="currentColor" stroke="none"/>
+                <ellipse cx="112" cy="74" rx="3.2" ry="3.8" fill="currentColor" stroke="none"/>
               </g>
             </g>
             <path d="M96.6 88h6.8l-3.4 3.5z" fill="currentColor" stroke="none"/>
