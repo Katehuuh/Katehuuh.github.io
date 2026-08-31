@@ -427,50 +427,35 @@ section h2 .alias-mark {
 }
 .is-hidden-by-filter { display: none !important; }
 
-/* Filter everything out and the projects fall past the horizon. Click the
-   singularity to get them back. */
-.void { display: grid; place-items: center; gap: .9rem; padding: 2.2rem 0 .5rem; }
+/* Filter everything out and the cat has the place to itself. No text, it
+   just sits there breathing, with the odd blink and a slow tail. Nothing
+   changes on hover: the point is that it is calm. */
+.void { display: grid; place-items: center; padding: 1.6rem 0 .5rem; }
 .void[hidden] { display: none; }
-.void-hole {
-  position: relative; width: 150px; height: 150px;
-  display: grid; place-items: center;
+.void-cat-btn {
   background: none; border: 0; padding: 0; cursor: pointer;
+  color: var(--text-3); line-height: 0;
 }
-.void-disk {
-  position: absolute; inset: 0; border-radius: 50%;
-  background: conic-gradient(from 0deg,
-    transparent 0deg,
-    rgba(255, 107, 53, .10) 30deg,
-    rgba(255, 176, 106, .85) 95deg,
-    rgba(255, 240, 214, .95) 125deg,
-    rgba(255, 107, 53, .55) 175deg,
-    transparent 250deg,
-    rgba(255, 107, 53, .30) 330deg,
-    transparent 360deg);
-  filter: blur(7px);
-  animation: void-spin 9s linear infinite;
+.void-cat { width: 168px; height: 168px; overflow: visible; }
+.cat-breathe { animation: cat-breathe 4.2s ease-in-out infinite; transform-origin: 100px 168px; }
+.cat-tail { animation: cat-tail 5.5s ease-in-out infinite; transform-origin: 142px 166px; }
+.cat-eyes { animation: cat-blink 7s ease-in-out infinite; transform-origin: 100px 76px; }
+@keyframes cat-breathe {
+  0%, 100% { transform: scale(1, 1); }
+  50%      { transform: scale(1.012, .988); }
 }
-.void-core {
-  position: relative; width: 78px; height: 78px; border-radius: 50%;
-  background: #000;
-  box-shadow:
-    0 0 0 1.5px rgba(255, 214, 170, .55),
-    0 0 22px 3px rgba(255, 107, 53, .35),
-    inset 0 0 18px 2px rgba(0, 0, 0, .9);
+@keyframes cat-tail {
+  0%, 100% { transform: rotate(-7deg); }
+  50%      { transform: rotate(7deg); }
 }
-.void-hole:hover .void-disk { animation-duration: 3.5s; }
-.void-hole:hover .void-core { box-shadow:
-    0 0 0 1.5px rgba(255, 236, 214, .8),
-    0 0 34px 6px rgba(255, 107, 53, .5),
-    inset 0 0 18px 2px rgba(0, 0, 0, .9); }
-@keyframes void-spin { to { transform: rotate(360deg); } }
-.void-note, .void-hint {
-  margin: 0; font-family: var(--mono); text-align: center; color: var(--text-3);
+@keyframes cat-blink {
+  0%, 92%, 100% { transform: scaleY(1); }
+  94%           { transform: scaleY(.1); }
+  96%           { transform: scaleY(1); }
 }
-.void-note { font-size: .86rem; color: var(--text-2); }
-.void-note b { color: var(--accent); font-weight: 500; }
-.void-hint { font-size: .72rem; letter-spacing: .06em; }
-@media (prefers-reduced-motion: reduce) { .void-disk { animation: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .cat-breathe, .cat-tail, .cat-eyes { animation: none; }
+}
 
 .vibe-grid { display: grid; grid-template-columns: 1fr; gap: 1rem; }
 @media (min-width: 720px) { .vibe-grid { grid-template-columns: 1fr 1fr; gap: 1.25rem; } }
@@ -717,12 +702,25 @@ section h2 .alias-mark {
       <noscript><p>Browse <a href="https://github.com/Katehuuh">github.com/Katehuuh</a> directly.</p></noscript>
     </div>
     <div id="void" class="void" hidden>
-      <button class="void-hole" type="button" aria-label="bring the projects back">
-        <span class="void-disk" aria-hidden="true"></span>
-        <span class="void-core" aria-hidden="true"></span>
+      <button class="void-cat-btn" type="button" aria-label="bring the projects back">
+        <svg class="void-cat" viewBox="0 0 200 200" fill="none" stroke="currentColor"
+             stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <g class="cat-breathe">
+            <g class="cat-tail"><path d="M142 166c28 3 41-12 39-29-2-14-15-20-23-12-6 7-2 16 7 14"/></g>
+            <path d="M77 106c-14 18-23 43-20 61h86c3-18-6-43-20-61"/>
+            <path d="M79 167v-5a8 8 0 0 1 16 0v5M105 167v-5a8 8 0 0 1 16 0v5"/>
+            <circle cx="100" cy="76" r="32"/>
+            <path d="M75 57 72 29l24 12M125 57l3-28-24 12"/>
+            <g class="cat-eyes">
+              <ellipse cx="88" cy="76" rx="3.2" ry="3.8" fill="currentColor" stroke="none"/>
+              <ellipse cx="112" cy="76" rx="3.2" ry="3.8" fill="currentColor" stroke="none"/>
+            </g>
+            <path d="M96.5 88h7l-3.5 3.6z" fill="currentColor" stroke="none"/>
+            <path d="M100 91.6v3.4M100 95c-1.6 2.6-4.8 2.6-6.4 0M100 95c1.6 2.6 4.8 2.6 6.4 0"/>
+            <path d="M76 87 58 83M76 94 58 96M124 87l18-4M124 94l18 2"/>
+          </g>
+        </svg>
       </button>
-      <p class="void-note"></p>
-      <p class="void-hint">click it to pull them back out</p>
     </div>
   </section>
 
@@ -1066,17 +1064,12 @@ function updateEmptyState() {
   const hidden = c => c.classList.contains('is-hidden-by-filter')
                    || c.classList.contains('is-hidden-by-search');
   el.hidden = !cards.length || !cards.every(hidden);
-  if (el.hidden) return;
-  const byFilter = cards.every(c => c.classList.contains('is-hidden-by-filter'));
-  el.querySelector('.void-note').innerHTML = byFilter
-    ? `every tag is off. <b>${cards.length}</b> projects crossed the horizon.`
-    : `no match. <b>${cards.length}</b> projects crossed the horizon.`;
 }
 
 function setupVoid() {
   const el = document.getElementById('void');
   if (!el) return;
-  el.querySelector('.void-hole').addEventListener('click', () => {
+  el.querySelector('.void-cat-btn').addEventListener('click', () => {
     withVT(() => {
       for (const b of document.querySelectorAll('#tag-filter button[data-tag]')) {
         b.classList.add('active');
