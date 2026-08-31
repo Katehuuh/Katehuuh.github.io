@@ -1382,16 +1382,20 @@ const LIKE_COUNTS = new Map();
 let sortByLikesActive = false;
 let originalCardOrder = [];
 
-let _sortQueued = false;
+let _sortTimer = 0;
 
-// Counts arrive one relay event at a time. Re-sorting on each one made a
-// burst of 60 events cost 153ms of layout and churn 39,000 layout objects;
-// coalescing to one pass per frame makes it 1 sort instead of 60.
+// Counts arrive one relay event at a time, and re-sorting on each one rebuilds
+// all 40 cards. Coalescing per animation frame does not help: when the events
+// land in one tick Blink already batches them into a single layout, and when
+// they trickle they arrive about one per frame anyway, so a frame is no wider
+// than the gap. Measured, that version was 710ms of layout against 751ms with
+// it. Waiting for the stream to go quiet is what actually collapses the work,
+// and it also stops the grid reshuffling under the reader while counts land.
 function notifyLikeCountLoaded(slug, n) {
   LIKE_COUNTS.set(slug, n);
-  if (!sortByLikesActive || _sortQueued) return;
-  _sortQueued = true;
-  requestAnimationFrame(() => { _sortQueued = false; applyLikesSort(); });
+  if (!sortByLikesActive) return;
+  clearTimeout(_sortTimer);
+  _sortTimer = setTimeout(applyLikesSort, 150);
 }
 
 function setupSortByLikes() {
