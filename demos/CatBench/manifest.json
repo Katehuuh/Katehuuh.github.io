@@ -12,10 +12,10 @@
     },
     "solar-pro4": {
       "display_name": "solar-pro4",
+      "python_render": "assets/solar-pro4-python.jpg",
       "svg": "assets/solar-pro4-svg.jpg",
       "python_source": "assets/solar-pro4.py",
       "svg_source": "assets/solar-pro4.svg",
-      "python_error": "ERROR rendering /home/runner/work/Katehuuh.github.io/Katehuuh.github.io/demos/CatBench/assets/solar-pro4.py: AttributeError: module 'matplotlib.patches' has no attribute 'Line2D'",
       "added": "2026-09-03T05:29:18Z"
     },
     "claude-opus-5": {
