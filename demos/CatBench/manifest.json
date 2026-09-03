@@ -1,7 +1,15 @@
 {
   "base": "https://katehuuh.github.io/demos/CatBench/",
-  "updated": "2026-09-03T06:06:53Z",
+  "updated": "2026-09-03T21:13:33Z",
   "models": {
+    "muse-spark-1.3": {
+      "display_name": "muse-spark-1.3",
+      "python_render": "assets/muse-spark-1.3-python.jpg",
+      "svg": "assets/muse-spark-1.3-svg.jpg",
+      "python_source": "assets/muse-spark-1.3.py",
+      "svg_source": "assets/muse-spark-1.3.svg",
+      "added": "2026-09-03T21:13:33Z"
+    },
     "claude-fable-5.1": {
       "display_name": "claude-fable-5.1",
       "python_render": "assets/claude-fable-5.1-python.jpg",
