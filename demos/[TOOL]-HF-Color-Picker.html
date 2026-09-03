@@ -200,11 +200,6 @@ details[open] > summary::before { content: '▾ '; }
   filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.color-card .color-label {
-  color: rgb(229 231 235); font-size: 0.8rem; opacity: 0.85;
-  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.3));
-  margin-top: 2px;
-}
 .color-card .card-footer {
   position: absolute; bottom: 0; left: 0; right: 0;
   padding: 0.5rem 0.75rem; font-size: 0.7rem;
@@ -212,10 +207,25 @@ details[open] > summary::before { content: '▾ '; }
   border-radius: 0.75rem;
   color: rgb(209 213 219); font-family: ui-monospace, monospace;
 }
+/* The space names are the point of this card, so the list wraps and scrolls
+   inside a fixed height instead of being cut off at one line with an
+   ellipsis. The card is still exactly 120px either way. The room came from
+   deleting the line under the title, which repeated the title word for word.
+   Hovering gives the whole list as a tooltip, one name per line. */
 .color-card .spaces-list {
-  font-size: 0.65rem; color: #fde68a; margin-top: 2px;
+  font-size: 0.65rem; color: #fde68a; margin-top: 3px;
   text-shadow: 0 1px 2px rgba(0,0,0,0.6);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  line-height: 1.35;
+  max-height: 4.05em;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.4) transparent;
+}
+.color-card .spaces-list::-webkit-scrollbar { width: 4px; }
+.color-card .spaces-list::-webkit-scrollbar-track { background: transparent; }
+.color-card .spaces-list::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.4); border-radius: 2px;
 }
 .color-card.copied .card-footer::after {
   content: 'Copied!'; position: absolute; right: 0.75rem; top: 0.5rem;
@@ -324,6 +334,10 @@ function setStatus(msg, isError) {
   statusEl.className = isError ? 'error' : '';
 }
 
+// Names come from an API, so they are escaped rather than trusted.
+const esc = (t) => String(t).replace(/[&<>"]/g,
+  c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
 function createCard(cf, ct, title, status, spacesText) {
   const fromRgb = COLOR_MAP[cf] || COLOR_MAP.gray;
   const toRgb   = COLOR_MAP[ct] || COLOR_MAP.gray;
@@ -335,9 +349,8 @@ function createCard(cf, ct, title, status, spacesText) {
     <div class="overlay"></div>
     <div class="card-header"><span class="badge">${status}</span></div>
     <div class="card-body">
-      <h4>${title}</h4>
-      <div class="color-label">${cf} → ${ct}</div>
-      ${spacesText ? `<div class="spaces-list">${spacesText}</div>` : ''}
+      <h4>${esc(title)}</h4>
+      ${spacesText ? `<div class="spaces-list" title="${esc(spacesText.split(', ').join('\n'))}">${esc(spacesText)}</div>` : ''}
     </div>
     <div class="card-footer">Click to copy</div>
   `;
