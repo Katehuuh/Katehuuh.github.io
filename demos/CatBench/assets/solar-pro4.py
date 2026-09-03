@@ -69,9 +69,9 @@ nose = patches.Polygon([[0, 2.1], [-0.15, 1.9], [0.15, 1.9]],
 ax.add_patch(nose)
 
 # === MOUTH ===
-mouth_left = patches.Line2D([-0.15, -0.35], [1.9, 1.7], 
+mouth_left = plt.Line2D([-0.15, -0.35], [1.9, 1.7], 
                             color='pink', linewidth=2, zorder=6)
-mouth_right = patches.Line2D([0.15, 0.35], [1.9, 1.7], 
+mouth_right = plt.Line2D([0.15, 0.35], [1.9, 1.7], 
                              color='pink', linewidth=2, zorder=6)
 ax.add_line(mouth_left)
 ax.add_line(mouth_right)
