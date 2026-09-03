@@ -9,7 +9,9 @@ the canvas at exit. AI-generated kitten code rarely calls savefig itself.
 """
 from __future__ import annotations
 
+import os
 import sys
+import tempfile
 from pathlib import Path
 
 import matplotlib
@@ -29,7 +31,17 @@ def render(src: Path, out: Path) -> int:
     namespace = {"__name__": "__main__", "__file__": str(src)}
     try:
         code = compile(src.read_text(encoding="utf-8"), str(src), "exec")
-        exec(code, namespace)
+        # Entries routinely end with plt.savefig('kitten.png'), and one of them
+        # writing into whatever directory the caller happened to be in is how a
+        # stray cute_kitten.png turned up in the repo root. Run from a scratch
+        # directory so a relative write lands there and is thrown away.
+        with tempfile.TemporaryDirectory() as scratch:
+            here = os.getcwd()
+            os.chdir(scratch)
+            try:
+                exec(code, namespace)
+            finally:
+                os.chdir(here)
     except SystemExit as e:
         # argparse can call sys.exit() on bad args; just continue and check figures.
         if e.code not in (None, 0):
