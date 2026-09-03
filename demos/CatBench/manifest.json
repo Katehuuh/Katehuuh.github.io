@@ -1,7 +1,15 @@
 {
   "base": "https://katehuuh.github.io/demos/CatBench/",
-  "updated": "2026-09-03T05:29:18Z",
+  "updated": "2026-09-03T06:01:29Z",
   "models": {
+    "gemini-3.8-flash": {
+      "display_name": "gemini-3.8-flash",
+      "python_render": "assets/gemini-3.8-flash-python.jpg",
+      "svg": "assets/gemini-3.8-flash-svg.jpg",
+      "python_source": "assets/gemini-3.8-flash.py",
+      "svg_source": "assets/gemini-3.8-flash.svg",
+      "added": "2026-09-03T06:01:29Z"
+    },
     "grok-4.6-high": {
       "display_name": "grok-4.6-high",
       "python_render": "assets/grok-4.6-high-python.jpg",
