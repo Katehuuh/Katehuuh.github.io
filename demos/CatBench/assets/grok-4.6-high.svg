@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="500" viewBox="0 0 400 500">
+  <rect width="100%" height="100%" fill="#f0f8ff"/>
+  
+  <!-- Body -->
+  <ellipse cx="200" cy="345" rx="115" ry="95" fill="#c8c8c8" stroke="#777" stroke-width="3"/>
+  
+  <!-- Tail -->
+  <path d="M295 310 Q390 270 340 140" fill="none" stroke="#c8c8c8" stroke-width="28" stroke-linecap="round"/>
+  <path d="M295 310 Q390 270 340 140" fill="none" stroke="#777" stroke-width="3" stroke-linecap="round"/>
+  
+  <!-- Head -->
+  <circle cx="200" cy="175" r="92" fill="#c8c8c8" stroke="#777" stroke-width="3"/>
+  
+  <!-- Left ear -->
+  <polygon points="128 115 85 25 175 85" fill="#c8c8c8" stroke="#777" stroke-width="3"/>
+  <polygon points="133 110 100 45 165 85" fill="#ffb6c1"/>
+  
+  <!-- Right ear -->
+  <polygon points="272 115 315 25 225 85" fill="#c8c8c8" stroke="#777" stroke-width="3"/>
+  <polygon points="267 110 300 45 235 85" fill="#ffb6c1"/>
+  
+  <!-- Left eye -->
+  <ellipse cx="162" cy="160" rx="26" ry="30" fill="white" stroke="#222" stroke-width="2.5"/>
+  <circle cx="168" cy="166" r="15" fill="#1a1a1a"/>
+  <circle cx="174" cy="158" r="6.5" fill="white"/>
+  <circle cx="164" cy="172" r="3.5" fill="white" opacity="0.8"/>
+  
+  <!-- Right eye -->
+  <ellipse cx="238" cy="160" rx="26" ry="30" fill="white" stroke="#222" stroke-width="2.5"/>
+  <circle cx="232" cy="166" r="15" fill="#1a1a1a"/>
+  <circle cx="226" cy="158" r="6.5" fill="white"/>
+  <circle cx="236" cy="172" r="3.5" fill="white" opacity="0.8"/>
+  
+  <!-- Nose -->
+  <ellipse cx="200" cy="198" rx="16" ry="11" fill="#ff69b4" stroke="#e91e63" stroke-width="1.5"/>
+  
+  <!-- Mouth -->
+  <line x1="200" y1="209" x2="200" y2="222" stroke="#333" stroke-width="2"/>
+  <path d="M182 218 Q200 242 218 218" fill="none" stroke="#333" stroke-width="2.5" stroke-linecap="round"/>
+  
+  <!-- Whiskers -->
+  <g stroke="#555" stroke-width="1.8" stroke-linecap="round">
+    <line x1="152" y1="195" x2="45" y2="165"/>
+    <line x1="150" y1="208" x2="35" y2="208"/>
+    <line x1="152" y1="221" x2="45" y2="255"/>
+    <line x1="248" y1="195" x2="355" y2="165"/>
+    <line x1="250" y1="208" x2="365" y2="208"/>
+    <line x1="248" y1="221" x2="355" y2="255"/>
+  </g>
+  
+  <!-- Blush -->
+  <ellipse cx="135" cy="205" rx="22" ry="13" fill="#ffb6c1" opacity="0.55"/>
+  <ellipse cx="265" cy="205" rx="22" ry="13" fill="#ffb6c1" opacity="0.55"/>
+  
+  <!-- Paws -->
+  <ellipse cx="135" cy="420" rx="42" ry="28" fill="#c8c8c8" stroke="#777" stroke-width="3"/>
+  <ellipse cx="265" cy="420" rx="42" ry="28" fill="#c8c8c8" stroke="#777" stroke-width="3"/>
+</svg>
