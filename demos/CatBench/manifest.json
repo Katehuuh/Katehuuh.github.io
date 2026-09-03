@@ -1,7 +1,23 @@
 {
   "base": "https://katehuuh.github.io/demos/CatBench/",
-  "updated": "2026-08-23T10:26:06Z",
+  "updated": "2026-09-03T05:29:18Z",
   "models": {
+    "grok-4.6-high": {
+      "display_name": "grok-4.6-high",
+      "python_render": "assets/grok-4.6-high-python.jpg",
+      "svg": "assets/grok-4.6-high-svg.jpg",
+      "python_source": "assets/grok-4.6-high.py",
+      "svg_source": "assets/grok-4.6-high.svg",
+      "added": "2026-09-03T05:29:18Z"
+    },
+    "solar-pro4": {
+      "display_name": "solar-pro4",
+      "svg": "assets/solar-pro4-svg.jpg",
+      "python_source": "assets/solar-pro4.py",
+      "svg_source": "assets/solar-pro4.svg",
+      "python_error": "ERROR rendering /home/runner/work/Katehuuh.github.io/Katehuuh.github.io/demos/CatBench/assets/solar-pro4.py: AttributeError: module 'matplotlib.patches' has no attribute 'Line2D'",
+      "added": "2026-09-03T05:29:18Z"
+    },
     "claude-opus-5": {
       "display_name": "claude-opus-5",
       "python_render": "assets/claude-opus-5-python.jpg",
