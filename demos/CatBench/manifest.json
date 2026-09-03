@@ -1,7 +1,15 @@
 {
   "base": "https://katehuuh.github.io/demos/CatBench/",
-  "updated": "2026-09-03T06:01:29Z",
+  "updated": "2026-09-03T06:06:53Z",
   "models": {
+    "claude-fable-5.1": {
+      "display_name": "claude-fable-5.1",
+      "python_render": "assets/claude-fable-5.1-python.jpg",
+      "svg": "assets/claude-fable-5.1-svg.jpg",
+      "python_source": "assets/claude-fable-5.1.py",
+      "svg_source": "assets/claude-fable-5.1.svg",
+      "added": "2026-09-03T06:06:53Z"
+    },
     "gemini-3.8-flash": {
       "display_name": "gemini-3.8-flash",
       "python_render": "assets/gemini-3.8-flash-python.jpg",
