@@ -1,0 +1,82 @@
+<svg width="680" height="540" viewBox="0 0 680 540" role="img" xmlns="http://www.w3.org/2000/svg">
+  <title>Cute tabby kitten</title>
+  <desc>A cartoon orange tabby kitten sitting and facing forward with large green eyes, a pink nose, white whiskers, a striped curled tail, and a red collar with a gold bell, on a soft blue circular background.</desc>
+
+  <!-- Background -->
+  <circle cx="340" cy="290" r="230" fill="#DDEBF5"/>
+  <path d="M150 140 l4 10 l10 4 l-10 4 l-4 10 l-4 -10 l-10 -4 l10 -4 z" fill="#FFFFFF" opacity="0.9"/>
+  <path d="M525 120 l3 8 l8 3 l-8 3 l-3 8 l-3 -8 l-8 -3 l8 -3 z" fill="#FFFFFF" opacity="0.9"/>
+  <path d="M545 420 l3 8 l8 3 l-8 3 l-3 8 l-3 -8 l-8 -3 l8 -3 z" fill="#FFFFFF" opacity="0.9"/>
+  <path d="M130 380 l3 8 l8 3 l-8 3 l-3 8 l-3 -8 l-8 -3 l8 -3 z" fill="#FFFFFF" opacity="0.9"/>
+  <ellipse cx="340" cy="497" rx="160" ry="13" fill="#C3D6E6"/>
+
+  <!-- Tail -->
+  <path d="M445 445 Q540 470 545 380 Q548 330 510 322" fill="none" stroke="#F5B27A" stroke-width="32" stroke-linecap="round"/>
+  <path d="M445 445 Q540 470 545 380 Q548 330 510 322" fill="none" stroke="#D98A4F" stroke-width="32" stroke-dasharray="12 30" stroke-dashoffset="18"/>
+
+  <!-- Body -->
+  <ellipse cx="340" cy="400" rx="118" ry="92" fill="#F5B27A"/>
+  <path d="M238 372 Q256 392 246 420" fill="none" stroke="#D98A4F" stroke-width="9" stroke-linecap="round"/>
+  <path d="M442 372 Q424 392 434 420" fill="none" stroke="#D98A4F" stroke-width="9" stroke-linecap="round"/>
+  <ellipse cx="340" cy="425" rx="62" ry="66" fill="#FBE3C8"/>
+
+  <!-- Collar -->
+  <path d="M255 330 Q340 378 425 330" fill="none" stroke="#E8607A" stroke-width="11" stroke-linecap="round"/>
+
+  <!-- Paws -->
+  <ellipse cx="297" cy="478" rx="35" ry="21" fill="#F8C99A"/>
+  <ellipse cx="383" cy="478" rx="35" ry="21" fill="#F8C99A"/>
+  <path d="M285 470 L285 488 M297 468 L297 488 M309 470 L309 488" stroke="#D98A4F" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M371 470 L371 488 M383 468 L383 488 M395 470 L395 488" stroke="#D98A4F" stroke-width="2.5" stroke-linecap="round"/>
+
+  <!-- Ears -->
+  <polygon points="250,192 232,78 322,152" fill="#F5B27A"/>
+  <polygon points="430,192 448,78 358,152" fill="#F5B27A"/>
+  <polygon points="260,180 246,102 306,152" fill="#F7A8B8"/>
+  <polygon points="420,180 434,102 374,152" fill="#F7A8B8"/>
+
+  <!-- Head -->
+  <circle cx="340" cy="240" r="100" fill="#F5B27A"/>
+  <path d="M322 148 Q332 126 342 146 Q350 124 360 148" fill="#F5B27A" stroke="#F5B27A" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M340 150 L340 196" stroke="#D98A4F" stroke-width="8" stroke-linecap="round"/>
+  <path d="M308 160 Q304 178 312 196" fill="none" stroke="#D98A4F" stroke-width="8" stroke-linecap="round"/>
+  <path d="M372 160 Q376 178 368 196" fill="none" stroke="#D98A4F" stroke-width="8" stroke-linecap="round"/>
+  <path d="M244 236 Q262 236 274 246" fill="none" stroke="#D98A4F" stroke-width="7" stroke-linecap="round"/>
+  <path d="M436 236 Q418 236 406 246" fill="none" stroke="#D98A4F" stroke-width="7" stroke-linecap="round"/>
+
+  <!-- Muzzle and cheeks -->
+  <ellipse cx="292" cy="292" rx="50" ry="36" fill="#FBE3C8"/>
+  <ellipse cx="388" cy="292" rx="50" ry="36" fill="#FBE3C8"/>
+  <ellipse cx="268" cy="290" rx="18" ry="11" fill="#F7B4C0" opacity="0.7"/>
+  <ellipse cx="412" cy="290" rx="18" ry="11" fill="#F7B4C0" opacity="0.7"/>
+
+  <!-- Eyes -->
+  <circle cx="302" cy="245" r="26" fill="#FFFFFF"/>
+  <circle cx="378" cy="245" r="26" fill="#FFFFFF"/>
+  <circle cx="302" cy="245" r="20" fill="#6CC5B0"/>
+  <circle cx="378" cy="245" r="20" fill="#6CC5B0"/>
+  <circle cx="302" cy="245" r="20" fill="none" stroke="#4FA893" stroke-width="2"/>
+  <circle cx="378" cy="245" r="20" fill="none" stroke="#4FA893" stroke-width="2"/>
+  <ellipse cx="302" cy="247" rx="7" ry="15" fill="#1F1B1E"/>
+  <ellipse cx="378" cy="247" rx="7" ry="15" fill="#1F1B1E"/>
+  <circle cx="295" cy="236" r="6" fill="#FFFFFF"/>
+  <circle cx="371" cy="236" r="6" fill="#FFFFFF"/>
+  <circle cx="308" cy="252" r="3" fill="#FFFFFF"/>
+  <circle cx="384" cy="252" r="3" fill="#FFFFFF"/>
+  <path d="M276 224 Q302 212 328 224" fill="none" stroke="#D98A4F" stroke-width="3" stroke-linecap="round"/>
+  <path d="M352 224 Q378 212 404 224" fill="none" stroke="#D98A4F" stroke-width="3" stroke-linecap="round"/>
+
+  <!-- Nose and mouth -->
+  <polygon points="329,274 351,274 340,287" fill="#F08AA0"/>
+  <path d="M340 287 Q332 302 318 294" fill="none" stroke="#B86B45" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M340 287 Q348 302 362 294" fill="none" stroke="#B86B45" stroke-width="2.5" stroke-linecap="round"/>
+
+  <!-- Whiskers -->
+  <path d="M268 270 L196 258 M268 280 L192 282 M268 290 L200 306" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M412 270 L484 258 M412 280 L488 282 M412 290 L480 306" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round"/>
+
+  <!-- Bell -->
+  <circle cx="340" cy="362" r="12" fill="#F6C453"/>
+  <circle cx="340" cy="362" r="12" fill="none" stroke="#D9A431" stroke-width="2"/>
+  <path d="M332 366 L348 366 M340 366 L340 372" stroke="#B8861F" stroke-width="2" stroke-linecap="round"/>
+</svg>
