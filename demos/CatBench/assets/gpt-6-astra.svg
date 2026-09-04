@@ -1,0 +1,587 @@
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="900" height="900" viewBox="0 0 900 900"
+     role="img" aria-labelledby="title description"
+     stroke-linecap="round" stroke-linejoin="round">
+  <title id="title">A fluffy kitten and a ball of yarn</title>
+  <desc id="description">
+    A cute golden tabby kitten with enormous sparkling green eyes, fluffy
+    pink ears, a creamy muzzle, white paws, and a teal collar with a golden
+    bell. Its striped tail curls beside it, and a mint-green ball of yarn
+    rests nearby on a warm pastel background.
+  </desc>
+
+  <defs>
+    <!-- Soft, coordinated colors -->
+    <linearGradient id="background" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0" stop-color="#fffaf0"/>
+      <stop offset="0.55" stop-color="#fff1df"/>
+      <stop offset="1" stop-color="#f9ddd3"/>
+    </linearGradient>
+
+    <radialGradient id="halo">
+      <stop offset="0" stop-color="#fffdf0"/>
+      <stop offset="0.8" stop-color="#fff5d9" stop-opacity=".9"/>
+      <stop offset="1" stop-color="#fff5d9" stop-opacity="0"/>
+    </radialGradient>
+
+    <radialGradient id="fur" cx="37%" cy="24%" r="80%">
+      <stop offset="0" stop-color="#ffdda0"/>
+      <stop offset=".6" stop-color="#f7bc73"/>
+      <stop offset="1" stop-color="#eaa05c"/>
+    </radialGradient>
+
+    <linearGradient id="body-fur" x1="20%" y1="0%" x2="80%" y2="100%">
+      <stop offset="0" stop-color="#ffd591"/>
+      <stop offset=".55" stop-color="#f3b46d"/>
+      <stop offset="1" stop-color="#df9654"/>
+    </linearGradient>
+
+    <radialGradient id="cream" cx="42%" cy="25%" r="85%">
+      <stop offset="0" stop-color="#fffef7"/>
+      <stop offset=".65" stop-color="#fff1d7"/>
+      <stop offset="1" stop-color="#f4d9ad"/>
+    </radialGradient>
+
+    <linearGradient id="ear-pink" x1="0%" y1="0%" x2="60%" y2="100%">
+      <stop offset="0" stop-color="#dd8b8b"/>
+      <stop offset=".55" stop-color="#f1aaa2"/>
+      <stop offset="1" stop-color="#ffd0b8"/>
+    </linearGradient>
+
+    <radialGradient id="iris" cx="35%" cy="25%" r="85%">
+      <stop offset="0" stop-color="#c1f0d9"/>
+      <stop offset=".45" stop-color="#7acbbb"/>
+      <stop offset=".8" stop-color="#429c98"/>
+      <stop offset="1" stop-color="#28666f"/>
+    </radialGradient>
+
+    <linearGradient id="pupil" x1="0%" y1="0%" x2="80%" y2="100%">
+      <stop offset="0" stop-color="#234954"/>
+      <stop offset="1" stop-color="#091b29"/>
+    </linearGradient>
+
+    <linearGradient id="nose-pink" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0" stop-color="#ffb4b4"/>
+      <stop offset="1" stop-color="#df7e88"/>
+    </linearGradient>
+
+    <linearGradient id="collar" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0" stop-color="#88d3c3"/>
+      <stop offset="1" stop-color="#398c8c"/>
+    </linearGradient>
+
+    <radialGradient id="gold" cx="32%" cy="25%" r="80%">
+      <stop offset="0" stop-color="#fff5b6"/>
+      <stop offset=".5" stop-color="#f7d16b"/>
+      <stop offset="1" stop-color="#d79537"/>
+    </radialGradient>
+
+    <radialGradient id="yarn" cx="30%" cy="23%" r="85%">
+      <stop offset="0" stop-color="#b9edd9"/>
+      <stop offset=".55" stop-color="#80cdbb"/>
+      <stop offset="1" stop-color="#54a299"/>
+    </radialGradient>
+
+    <radialGradient id="ground-shadow">
+      <stop offset="0" stop-color="#ad795b" stop-opacity=".27"/>
+      <stop offset=".65" stop-color="#ad795b" stop-opacity=".12"/>
+      <stop offset="1" stop-color="#ad795b" stop-opacity="0"/>
+    </radialGradient>
+
+    <filter id="soft-shadow" x="-25%" y="-20%" width="150%" height="150%"
+            color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="9" stdDeviation="8"
+                    flood-color="#986348" flood-opacity=".17"/>
+    </filter>
+
+    <filter id="small-shadow" x="-35%" y="-35%" width="170%" height="180%"
+            color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="4" stdDeviation="3"
+                    flood-color="#775743" flood-opacity=".22"/>
+    </filter>
+
+    <!-- Reusable silhouettes -->
+    <path id="head-shape" d="
+      M283 276
+      C263 247 259 198 274 151
+      Q279 133 293 143
+      C334 162 364 190 384 222
+      L402 211 L404 222 L427 205 L430 219
+      C456 213 488 215 514 225
+      C538 190 569 164 608 144
+      Q624 136 629 154
+      C645 199 640 247 621 281
+      C655 312 671 350 667 391
+      L681 405 L664 410 L679 423 L658 429
+      C650 480 601 516 544 528
+      C486 541 413 541 355 528
+      C297 516 248 480 240 430
+      L219 424 L235 411 L219 402 L237 391
+      C232 349 246 311 283 276 Z"/>
+
+    <path id="body-shape" d="
+      M342 491
+      C313 519 300 563 299 618
+      C282 649 279 688 296 719
+      C318 749 374 754 449 748
+      C524 754 580 749 601 719
+      C618 688 616 649 600 618
+      C600 565 586 520 556 491
+      C508 468 390 468 342 491 Z"/>
+
+    <path id="tail-shape" d="
+      M334 683
+      C284 715 229 701 215 668
+      C205 646 217 630 212 611
+      C206 586 178 583 165 603
+      C146 631 150 675 172 706
+      C199 746 266 769 337 735
+      C359 723 356 695 334 683 Z"/>
+
+    <path id="leg-shape" d="
+      M353 569
+      C338 598 341 644 335 681
+      C322 693 318 711 325 729
+      C334 752 352 761 377 761
+      C405 761 425 746 427 724
+      C430 695 421 644 419 609
+      C418 589 407 576 392 572
+      Q372 564 353 569 Z"/>
+
+    <clipPath id="head-clip">
+      <use href="#head-shape"/>
+    </clipPath>
+    <clipPath id="body-clip">
+      <use href="#body-shape"/>
+    </clipPath>
+    <clipPath id="tail-clip">
+      <use href="#tail-shape"/>
+    </clipPath>
+    <clipPath id="leg-clip">
+      <use href="#leg-shape"/>
+    </clipPath>
+    <clipPath id="yarn-clip">
+      <circle r="64"/>
+    </clipPath>
+
+    <!-- Pink ear with little cream tufts -->
+    <g id="ear-detail">
+      <path d="M291 175 C319 191 343 218 358 244
+               C332 246 310 256 294 273
+               C284 243 282 208 291 175 Z"
+            fill="url(#ear-pink)" stroke="#c98270" stroke-width="3"/>
+      <path d="M299 191 Q319 209 332 231"
+            fill="none" stroke="#ffdacf" stroke-width="6" opacity=".7"/>
+      <path d="M285 256 L291 237 L300 253 L305 232
+               L315 250 L330 241 L337 259
+               Q312 263 296 279 Z"
+            fill="url(#cream)"/>
+      <path d="M297 262 L301 249 M308 259 L313 247 M319 256 L324 249"
+            fill="none" stroke="#fffdf2" stroke-width="2.5"/>
+    </g>
+
+    <g id="body-stripes" fill="#b97c45">
+      <path d="M296 555 C323 550 345 565 356 589
+               C334 577 315 579 296 587 Z"/>
+      <path d="M286 615 C313 605 338 620 348 641
+               C323 630 304 634 286 646 Z"/>
+      <path d="M285 674 C306 658 328 663 345 683
+               C323 677 307 689 294 705 Z"/>
+    </g>
+
+    <g id="cheek-stripes" fill="#b87540">
+      <path d="M246 300 C274 298 295 312 307 329
+               C280 319 259 325 238 337 Z"/>
+      <path d="M232 349 C256 342 279 355 290 371
+               C265 364 248 372 232 385 Z"/>
+      <path d="M230 398 C252 386 278 390 293 407
+               C268 402 249 412 232 424 Z"/>
+    </g>
+
+    <!-- Front leg, white sock, and individual toes -->
+    <g id="front-leg">
+      <use href="#leg-shape" fill="url(#body-fur)"/>
+      <g clip-path="url(#leg-clip)">
+        <path d="M327 622 Q361 613 386 634 Q359 627 331 643 Z"
+              fill="#bd8048" opacity=".55"/>
+        <path d="M326 665 Q350 651 375 668 Q350 665 330 683 Z"
+              fill="#bd8048" opacity=".5"/>
+        <path d="M313 708 C339 691 363 706 383 701
+                 C409 693 422 701 440 714
+                 L445 780 L306 780 Z"
+              fill="url(#cream)"/>
+        <path d="M337 718 Q350 709 366 712"
+              fill="none" stroke="#fffef8" stroke-width="7" opacity=".75"/>
+      </g>
+      <use href="#leg-shape" fill="none" stroke="#94613f" stroke-width="4"/>
+      <path d="M351 735 Q347 744 352 751
+               M375 738 Q372 749 376 757
+               M398 734 Q401 744 397 751"
+            fill="none" stroke="#c29b76" stroke-width="2.8"/>
+      <path d="M354 590 Q349 610 351 622"
+            fill="none" stroke="#ffe1a5" stroke-width="5" opacity=".65"/>
+    </g>
+
+    <!-- Eye shell; reflections are placed separately for consistent lighting -->
+    <g id="eye-base">
+      <ellipse rx="68" ry="74" fill="#fffaf0"
+               stroke="#79503c" stroke-width="5"/>
+      <ellipse cx="4" cy="3" rx="58" ry="65"
+               fill="url(#iris)" stroke="#376d6c" stroke-width="2"/>
+      <g fill="none" stroke="#d3efd0" stroke-width="2.4" opacity=".65">
+        <path d="M-46 28 L-38 24 M-38 44 L-31 36
+                 M-24 57 L-20 46 M-7 65 L-6 53
+                 M11 65 L9 53 M28 58 L23 48
+                 M43 46 L35 38 M55 29 L44 25"/>
+        <path d="M-36 39 C-17 62 25 63 44 36" stroke-width="3.5"/>
+      </g>
+      <ellipse cx="6" cy="6" rx="36" ry="50" fill="url(#pupil)"/>
+      <path d="M-58 -31 C-36 -72 34 -76 59 -33"
+            fill="none" stroke="#654331" stroke-width="5"/>
+    </g>
+
+    <g id="eye-shine" fill="#ffffff">
+      <ellipse cx="-20" cy="-28" rx="15" ry="19"
+               transform="rotate(25 -20 -28)" opacity=".97"/>
+      <circle cx="25" cy="26" r="7" opacity=".9"/>
+      <circle cx="-38" cy="-5" r="3.5" opacity=".82"/>
+      <ellipse cx="14" cy="-45" rx="5.5" ry="3" opacity=".58"/>
+    </g>
+
+    <g id="whiskers" fill="none" stroke="#967059" stroke-width="2.7">
+      <path d="M396 456 C342 442 276 431 212 438"/>
+      <path d="M393 468 C335 466 271 476 205 490"/>
+      <path d="M400 479 C346 487 289 504 230 516"/>
+    </g>
+
+    <path id="sparkle" d="M0 -14 Q3 -3 14 0 Q3 3 0 14
+                           Q-3 3 -14 0 Q-3 -3 0 -14 Z"/>
+    <path id="heart" d="M0 8 C-24 -7 -15 -27 -3 -18
+                         Q0 -16 3 -18 C15 -27 24 -7 0 8 Z"/>
+
+    <g id="daisy">
+      <g fill="#fffdf3" stroke="#e9d9bb" stroke-width="1">
+        <ellipse cy="-10" rx="4.5" ry="8"/>
+        <ellipse cy="-10" rx="4.5" ry="8" transform="rotate(45)"/>
+        <ellipse cy="-10" rx="4.5" ry="8" transform="rotate(90)"/>
+        <ellipse cy="-10" rx="4.5" ry="8" transform="rotate(135)"/>
+        <ellipse cy="-10" rx="4.5" ry="8" transform="rotate(180)"/>
+        <ellipse cy="-10" rx="4.5" ry="8" transform="rotate(225)"/>
+        <ellipse cy="-10" rx="4.5" ry="8" transform="rotate(270)"/>
+        <ellipse cy="-10" rx="4.5" ry="8" transform="rotate(315)"/>
+      </g>
+      <circle r="6" fill="#edbc57"/>
+      <circle cx="-1.5" cy="-2" r="2" fill="#ffe79b"/>
+    </g>
+
+    <path id="yarn-back" d="
+      M-68 -16 C-34 -52 20 -54 61 -5
+      M-60 -36 C-19 -69 34 -48 65 -20
+      M-45 -53 C-7 -76 43 -45 68 -30
+      M-69 4 C-40 -34 9 -34 48 13
+      M-65 26 C-44 -14 -5 -18 31 31"/>
+
+    <path id="yarn-front" d="
+      M-66 -18 C-25 1 19 -3 59 -32
+      M-69 -1 C-27 19 26 12 66 -16
+      M-68 17 C-24 37 31 28 70 1
+      M-61 35 C-20 55 35 43 69 19
+      M-48 53 C-13 71 38 59 63 38"/>
+  </defs>
+
+  <!-- Warm storybook background -->
+  <rect width="900" height="900" fill="url(#background)"/>
+  <ellipse cx="450" cy="423" rx="365" ry="366" fill="url(#halo)"/>
+  <circle cx="450" cy="424" r="332"
+          fill="none" stroke="#fffdf3" stroke-width="2" opacity=".8"/>
+
+  <g fill="#deb777" opacity=".7">
+    <use href="#sparkle" transform="translate(174 250) scale(.9)"/>
+    <use href="#sparkle" transform="translate(734 382) scale(.85)"/>
+    <use href="#sparkle" transform="translate(673 143) scale(.65)"/>
+    <use href="#sparkle" transform="translate(153 491) scale(.55)"/>
+    <use href="#sparkle" transform="translate(771 575) scale(.55)"/>
+  </g>
+
+  <g fill="#e9a394" opacity=".65">
+    <use href="#heart" transform="translate(728 242) rotate(13) scale(1.1)"/>
+    <use href="#heart" transform="translate(191 365) rotate(-18) scale(.55)"/>
+  </g>
+
+  <g fill="#fffef8" stroke="#ead4af" stroke-width="1.5" opacity=".85">
+    <circle cx="210" cy="185" r="5"/>
+    <circle cx="752" cy="322" r="6"/>
+    <circle cx="135" cy="421" r="4"/>
+    <circle cx="646" cy="99" r="4"/>
+  </g>
+
+  <g fill="#eac69b" opacity=".55">
+    <circle cx="188" cy="561" r="3"/>
+    <circle cx="695" cy="187" r="3"/>
+    <circle cx="783" cy="455" r="3"/>
+    <circle cx="255" cy="124" r="3"/>
+  </g>
+
+  <!-- Grounding shadows and an unspooled strand -->
+  <ellipse cx="445" cy="768" rx="264" ry="37" fill="url(#ground-shadow)"/>
+  <ellipse cx="720" cy="793" rx="83" ry="20" fill="url(#ground-shadow)"/>
+  <path d="M221 798 Q330 810 431 802"
+        fill="none" stroke="#dbb394" stroke-width="2" opacity=".4"/>
+
+  <path d="M684 777
+           C650 794 624 815 582 806
+           C551 799 548 779 568 775
+           C589 772 605 792 581 811
+           C553 834 510 821 480 821"
+        fill="none" stroke="#65ae9f" stroke-width="5"/>
+  <path d="M684 776
+           C650 793 624 814 582 805
+           C551 798 548 778 568 774"
+        fill="none" stroke="#c9ecda" stroke-width="1.5"/>
+
+  <!-- The kitten -->
+  <g filter="url(#soft-shadow)">
+    <!-- Curled, striped tail behind the body -->
+    <use href="#tail-shape" fill="url(#fur)"/>
+    <g clip-path="url(#tail-clip)">
+      <path d="M155 623 C153 607 163 589 180 589
+               C198 586 211 597 213 614
+               L211 625 Q185 640 155 623 Z"
+            fill="url(#cream)"/>
+      <g fill="#b87943" opacity=".65">
+        <path d="M154 646 Q185 662 214 643 L215 662
+                 Q190 678 159 665 Z"/>
+        <path d="M170 697 Q186 686 207 684 L220 700
+                 Q194 708 186 722 Z"/>
+        <path d="M217 743 Q220 722 236 704 L255 710
+                 Q242 735 244 754 Z"/>
+        <path d="M280 754 Q278 733 286 713 L305 705
+                 Q301 731 304 747 Z"/>
+      </g>
+      <path d="M178 658 C177 696 211 725 249 731"
+            fill="none" stroke="#ffdfa3" stroke-width="7" opacity=".55"/>
+      <path d="M165 613 Q179 605 194 613"
+            fill="none" stroke="#fffef3" stroke-width="4" opacity=".8"/>
+    </g>
+    <use href="#tail-shape" fill="none" stroke="#93603e" stroke-width="4.5"/>
+
+    <!-- Round body and creamy chest -->
+    <use href="#body-shape" fill="url(#body-fur)"
+         stroke="#94613f" stroke-width="4.5"/>
+    <g clip-path="url(#body-clip)" opacity=".65">
+      <use href="#body-stripes"/>
+      <use href="#body-stripes" transform="translate(900 0) scale(-1 1)"/>
+    </g>
+
+    <path d="M380 517
+             C403 529 431 530 450 530
+             C469 530 497 529 520 517
+             L514 540 L530 532
+             C547 560 544 600 530 630
+             L536 639 L520 642
+             C504 677 474 702 450 714
+             C426 702 396 677 380 642
+             L364 639 L370 630
+             C356 600 353 560 370 532
+             L386 540 Z"
+          fill="url(#cream)"/>
+
+    <g fill="none" stroke="#dfbe92" stroke-width="2.4" opacity=".65">
+      <path d="M401 553 L406 564 L412 557"/>
+      <path d="M476 560 L470 574 L465 568"/>
+      <path d="M432 610 L440 622 L447 614"/>
+      <path d="M480 629 L472 641 L468 635"/>
+      <path d="M420 659 L431 670 L438 663"/>
+      <path d="M453 681 L458 688 L466 677"/>
+    </g>
+
+    <path d="M314 661 Q295 691 316 714
+             M586 661 Q605 691 584 714"
+          fill="none" stroke="#ffd99b" stroke-width="7" opacity=".55"/>
+
+    <use href="#front-leg"/>
+    <use href="#front-leg" transform="translate(900 0) scale(-1 1)"/>
+
+    <!-- Teal collar and tiny golden bell -->
+    <path d="M339 508 C385 534 515 534 561 508
+             L566 534 C502 567 398 567 334 534 Z"
+          fill="url(#collar)" stroke="#477f78" stroke-width="3.5"/>
+    <path d="M352 531 C408 555 493 555 548 531"
+          fill="none" stroke="#d9f4df" stroke-width="1.5"
+          stroke-dasharray="3 6" opacity=".7"/>
+
+    <g filter="url(#small-shadow)">
+      <circle cx="450" cy="550" r="7.5"
+              fill="none" stroke="#ab843e" stroke-width="4"/>
+      <circle cx="450" cy="575" r="23"
+              fill="url(#gold)" stroke="#a87934" stroke-width="3"/>
+      <ellipse cx="442" cy="566" rx="6" ry="8"
+               fill="#fffbe0" opacity=".75" transform="rotate(25 442 566)"/>
+      <path d="M430 582 Q450 591 470 582"
+            fill="none" stroke="#a6732c" stroke-width="2.5"/>
+      <circle cx="450" cy="583" r="3.8" fill="#86602e"/>
+      <path d="M450 585 L450 593"
+            fill="none" stroke="#86602e" stroke-width="2.5"/>
+    </g>
+
+    <!-- Oversized fluffy head -->
+    <use href="#head-shape" fill="url(#fur)"/>
+
+    <g clip-path="url(#head-clip)">
+      <use href="#ear-detail"/>
+      <use href="#ear-detail" transform="translate(900 0) scale(-1 1)"/>
+
+      <!-- Forehead tabby markings -->
+      <g fill="#b97b43" opacity=".63">
+        <path d="M429 213 C434 242 440 262 445 292
+                 Q450 306 455 292
+                 C461 262 466 242 471 213 Z"/>
+        <path d="M375 222 C383 244 394 264 411 282
+                 C402 256 401 237 400 219 Z"/>
+        <path d="M525 222 C517 244 506 264 489 282
+                 C498 256 499 237 500 219 Z"/>
+      </g>
+
+      <g opacity=".62">
+        <use href="#cheek-stripes"/>
+        <use href="#cheek-stripes" transform="translate(900 0) scale(-1 1)"/>
+      </g>
+
+      <path d="M295 293 C319 263 347 247 371 239"
+            fill="none" stroke="#fff1cb" stroke-width="11" opacity=".32"/>
+
+      <!-- Cream cheeks and chin -->
+      <path d="M318 430
+               C322 408 351 404 378 419
+               C400 438 426 438 450 433
+               C474 438 500 438 522 419
+               C549 404 578 408 582 430
+               C602 460 577 496 540 512
+               C513 526 480 531 450 530
+               C420 531 387 526 360 512
+               C323 496 298 460 318 430 Z"
+            fill="url(#cream)"/>
+
+      <ellipse cx="294" cy="449" rx="27" ry="14"
+               fill="#ed9b91" opacity=".38"/>
+      <ellipse cx="606" cy="449" rx="27" ry="14"
+               fill="#ed9b91" opacity=".38"/>
+
+      <!-- Small fur strokes -->
+      <g fill="none" stroke="#fff0c7" stroke-width="3" opacity=".75">
+        <path d="M320 268 L327 261 M334 257 L342 251
+                 M568 255 L576 261 M581 267 L588 274"/>
+        <path d="M265 375 L270 385 M261 391 L269 397
+                 M635 375 L630 385 M639 391 L631 397"/>
+        <path d="M285 478 L296 483 M300 491 L311 496
+                 M615 478 L604 483 M600 491 L589 496"/>
+      </g>
+
+      <g fill="none" stroke="#d9ad75" stroke-width="2.3" opacity=".55">
+        <path d="M350 504 L360 511 M365 514 L375 519"/>
+        <path d="M550 504 L540 511 M535 514 L525 519"/>
+      </g>
+    </g>
+
+    <use href="#head-shape" fill="none"
+         stroke="#925e40" stroke-width="4.5"/>
+
+    <!-- Gentle brows -->
+    <path d="M307 281 Q329 270 349 277
+             M551 277 Q572 270 594 282"
+          fill="none" stroke="#b77a45" stroke-width="5"/>
+
+    <!-- Big, glossy eyes -->
+    <use href="#eye-base" transform="translate(353 367)"/>
+    <use href="#eye-base" transform="translate(547 367) scale(-1 1)"/>
+    <use href="#eye-shine" transform="translate(353 367)"/>
+    <use href="#eye-shine" transform="translate(547 367)"/>
+
+    <!-- Plump whisker pads -->
+    <ellipse cx="413" cy="463" rx="45" ry="30" fill="url(#cream)"/>
+    <ellipse cx="487" cy="463" rx="45" ry="30" fill="url(#cream)"/>
+    <ellipse cx="407" cy="451" rx="18" ry="7"
+             fill="#ffffff" opacity=".42"/>
+    <ellipse cx="481" cy="451" rx="18" ry="7"
+             fill="#ffffff" opacity=".32"/>
+
+    <!-- Pink button nose -->
+    <path d="M435 432 Q450 424 465 432
+             Q470 436 465 441
+             L456 450 Q450 456 444 450
+             L435 441 Q430 436 435 432 Z"
+          fill="url(#nose-pink)" stroke="#b96d70" stroke-width="2.8"/>
+    <path d="M441 434 Q449 430 457 434"
+          fill="none" stroke="#ffe5df" stroke-width="3" opacity=".9"/>
+
+    <!-- Small, contented smile -->
+    <path d="M450 453 L450 464
+             M426 464 C432 477 443 478 450 464
+             C457 478 468 477 474 464"
+          fill="none" stroke="#905846" stroke-width="3.4"/>
+    <path d="M435 497 Q450 502 465 497"
+          fill="none" stroke="#d8b78f" stroke-width="2" opacity=".65"/>
+
+    <g fill="#b58b66" opacity=".8">
+      <circle cx="404" cy="454" r="2.5"/>
+      <circle cx="416" cy="461" r="2.2"/>
+      <circle cx="403" cy="470" r="2.4"/>
+      <circle cx="496" cy="454" r="2.5"/>
+      <circle cx="484" cy="461" r="2.2"/>
+      <circle cx="497" cy="470" r="2.4"/>
+    </g>
+
+    <use href="#whiskers"/>
+    <use href="#whiskers" transform="translate(900 0) scale(-1 1)"/>
+  </g>
+
+  <!-- A tiny daisy sprig -->
+  <g>
+    <path d="M120 780 Q125 751 117 724
+             M126 780 Q141 766 151 749"
+          fill="none" stroke="#86a58a" stroke-width="3"/>
+    <path d="M123 760 Q102 761 106 745 Q119 747 123 760 Z"
+          fill="#a8c7a3"/>
+    <path d="M135 771 Q153 775 160 758 Q144 758 135 771 Z"
+          fill="#92b79a"/>
+    <use href="#daisy" transform="translate(117 722) rotate(-12)"/>
+    <use href="#daisy" transform="translate(152 747) rotate(17) scale(.8)"/>
+  </g>
+
+  <!-- Detailed mint ball of yarn -->
+  <g transform="translate(720 733)" filter="url(#small-shadow)">
+    <circle r="65" fill="url(#yarn)"/>
+
+    <g clip-path="url(#yarn-clip)">
+      <use href="#yarn-back" fill="none"
+           stroke="#529f94" stroke-width="7"/>
+      <use href="#yarn-back" fill="none"
+           stroke="#cef1dd" stroke-width="2.5" opacity=".8"/>
+
+      <!-- The front bundle overlaps the back windings -->
+      <path d="M-71 -27 C-22 0 20 -6 64 -45
+               L79 74 L-77 75 Z"
+            fill="url(#yarn)"/>
+
+      <use href="#yarn-front" fill="none"
+           stroke="#529f94" stroke-width="8"/>
+      <use href="#yarn-front" fill="none"
+           stroke="#c1ecd7" stroke-width="2.7" opacity=".9"/>
+
+      <path d="M-28 -64 C3 -44 35 -6 48 48
+               M-12 -67 C19 -42 47 -7 59 30"
+            fill="none" stroke="#4e9b92" stroke-width="7"/>
+      <path d="M-29 -64 C2 -44 34 -6 47 48
+               M-13 -67 C18 -42 46 -7 58 30"
+            fill="none" stroke="#bae8d4" stroke-width="2.5"/>
+
+      <ellipse cx="-24" cy="-39" rx="20" ry="9"
+               transform="rotate(-25 -24 -39)"
+               fill="#ffffff" opacity=".17"/>
+    </g>
+
+    <circle r="65" fill="none" stroke="#478e85" stroke-width="3.5"/>
+    <path d="M-55 -28 Q-49 -44 -34 -51"
+          fill="none" stroke="#e0f6e5" stroke-width="3" opacity=".65"/>
+  </g>
+</svg>
