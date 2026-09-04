@@ -1,7 +1,15 @@
 {
   "base": "https://katehuuh.github.io/demos/CatBench/",
-  "updated": "2026-09-03T21:13:33Z",
+  "updated": "2026-09-04T22:14:42Z",
   "models": {
+    "gpt-6-astra": {
+      "display_name": "gpt-6-astra",
+      "python_render": "assets/gpt-6-astra-python.jpg",
+      "svg": "assets/gpt-6-astra-svg.jpg",
+      "python_source": "assets/gpt-6-astra.py",
+      "svg_source": "assets/gpt-6-astra.svg",
+      "added": "2026-09-04T22:14:42Z"
+    },
     "muse-spark-1.3": {
       "display_name": "muse-spark-1.3",
       "python_render": "assets/muse-spark-1.3-python.jpg",
