@@ -17,3 +17,5 @@ Turnstile means the session has to be created by hand, once per account:
 Then **do not log out** - that destroys the session server-side and the stored
 cookie with it. Close the tab instead. For several accounts, capture each from
 a separate browser profile so they are signed in at the same time.
+
+Update:  Turnstile blocks datacenter IPs regardless of browser stealth; login mode needs a residential exit (Cloudflare Tunnel or manual cookies).
