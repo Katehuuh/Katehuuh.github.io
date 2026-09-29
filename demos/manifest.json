@@ -1,6 +1,12 @@
 {
   "demos": [
     {
+      "name": "[GAME]-Blendrooms",
+      "type": "file",
+      "filename": "[GAME]-Blendrooms.html",
+      "description": "A found-footage walk through the endless yellow halls that turns into a film, from a looping suburb to a narrow ledge above the Vertigo Room."
+    },
+    {
       "name": "[SHOW]-Black-Hole-fable-5.1",
       "type": "file",
       "filename": "[SHOW]-Black-Hole-fable-5.1.html"
