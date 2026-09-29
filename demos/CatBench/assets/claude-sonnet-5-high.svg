@@ -1,0 +1,93 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="400" height="400">
+  <!-- Background -->
+  <rect width="400" height="400" fill="#FDF6E3" rx="20"/>
+  
+  <!-- Soft shadow under kitten -->
+  <ellipse cx="200" cy="375" rx="130" ry="15" fill="#000000" opacity="0.08"/>
+  
+  <!-- Tail (behind body) -->
+  <path d="M270,310 C335,300 355,245 325,205 C310,185 280,195 288,222 
+           C295,248 278,280 250,298 Z" 
+        fill="#F7B267" stroke="#E0955F" stroke-width="2"/>
+  <path d="M300,230 Q290,240 295,255" stroke="#E0955F" stroke-width="4" fill="none" stroke-linecap="round"/>
+  <path d="M295,260 Q283,270 285,285" stroke="#E0955F" stroke-width="4" fill="none" stroke-linecap="round"/>
+
+  <!-- Body -->
+  <ellipse cx="200" cy="300" rx="88" ry="78" fill="#F7B267" stroke="#E0955F" stroke-width="2"/>
+  
+  <!-- Belly patch -->
+  <ellipse cx="200" cy="332" rx="52" ry="42" fill="#FFFFFF"/>
+
+  <!-- Body stripes -->
+  <path d="M118,270 Q140,258 152,275" stroke="#E0955F" stroke-width="5" fill="none" stroke-linecap="round"/>
+  <path d="M115,295 Q138,286 150,300" stroke="#E0955F" stroke-width="5" fill="none" stroke-linecap="round"/>
+  <path d="M282,270 Q260,258 248,275" stroke="#E0955F" stroke-width="5" fill="none" stroke-linecap="round"/>
+  <path d="M285,295 Q262,286 250,300" stroke="#E0955F" stroke-width="5" fill="none" stroke-linecap="round"/>
+
+  <!-- Front paws -->
+  <ellipse cx="172" cy="366" rx="20" ry="15" fill="#FFFFFF" stroke="#E0955F" stroke-width="1.5"/>
+  <ellipse cx="228" cy="366" rx="20" ry="15" fill="#FFFFFF" stroke="#E0955F" stroke-width="1.5"/>
+  <path d="M165,362 Q166,370 165,375" stroke="#E0955F" stroke-width="1.2" fill="none"/>
+  <path d="M172,362 Q173,370 172,375" stroke="#E0955F" stroke-width="1.2" fill="none"/>
+  <path d="M179,362 Q180,370 179,375" stroke="#E0955F" stroke-width="1.2" fill="none"/>
+  <path d="M221,362 Q222,370 221,375" stroke="#E0955F" stroke-width="1.2" fill="none"/>
+  <path d="M228,362 Q229,370 228,375" stroke="#E0955F" stroke-width="1.2" fill="none"/>
+  <path d="M235,362 Q236,370 235,375" stroke="#E0955F" stroke-width="1.2" fill="none"/>
+
+  <!-- Ears (outer + inner) -->
+  <path d="M145,150 L108,72 L176,133 Z" fill="#F7B267" stroke="#E0955F" stroke-width="2" stroke-linejoin="round"/>
+  <path d="M150,140 L126,92 L170,126 Z" fill="#FFC1CC"/>
+  
+  <path d="M255,150 L292,72 L224,133 Z" fill="#F7B267" stroke="#E0955F" stroke-width="2" stroke-linejoin="round"/>
+  <path d="M250,140 L274,92 L230,126 Z" fill="#FFC1CC"/>
+
+  <!-- Head -->
+  <circle cx="200" cy="192" r="72" fill="#F7B267" stroke="#E0955F" stroke-width="2"/>
+
+  <!-- Forehead stripes -->
+  <path d="M178,128 Q200,108 222,128" stroke="#E0955F" stroke-width="4" fill="none" stroke-linecap="round"/>
+  <path d="M168,140 Q185,124 200,136" stroke="#E0955F" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+  <path d="M232,140 Q215,124 200,136" stroke="#E0955F" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+
+  <!-- Muzzle -->
+  <ellipse cx="200" cy="218" rx="44" ry="33" fill="#FFFFFF"/>
+
+  <!-- Cheek blush -->
+  <ellipse cx="148" cy="208" rx="13" ry="9" fill="#FFB6C1" opacity="0.6"/>
+  <ellipse cx="252" cy="208" rx="13" ry="9" fill="#FFB6C1" opacity="0.6"/>
+
+  <!-- Eyes -->
+  <circle cx="171" cy="186" r="21" fill="#FFFFFF" stroke="#3B2412" stroke-width="1.5"/>
+  <circle cx="171" cy="189" r="13" fill="#8BC34A"/>
+  <ellipse cx="171" cy="189" rx="6" ry="9.5" fill="#1A1A1A"/>
+  <circle cx="176" cy="183" r="3.2" fill="#FFFFFF"/>
+  <path d="M152,172 Q171,160 190,170" stroke="#3B2412" stroke-width="2" fill="none" stroke-linecap="round"/>
+
+  <circle cx="229" cy="186" r="21" fill="#FFFFFF" stroke="#3B2412" stroke-width="1.5"/>
+  <circle cx="229" cy="189" r="13" fill="#8BC34A"/>
+  <ellipse cx="229" cy="189" rx="6" ry="9.5" fill="#1A1A1A"/>
+  <circle cx="234" cy="183" r="3.2" fill="#FFFFFF"/>
+  <path d="M210,170 Q229,160 248,172" stroke="#3B2412" stroke-width="2" fill="none" stroke-linecap="round"/>
+
+  <!-- Nose -->
+  <path d="M193,210 Q200,201 207,210 Q200,218 193,210 Z" fill="#FF8FA3" stroke="#E0708A" stroke-width="0.8"/>
+
+  <!-- Mouth -->
+  <path d="M200,218 L200,225" stroke="#3B2412" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+  <path d="M200,225 Q188,235 176,226" stroke="#3B2412" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+  <path d="M200,225 Q212,235 224,226" stroke="#3B2412" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+
+  <!-- Whiskers -->
+  <line x1="158" y1="205" x2="95" y2="196" stroke="#B0864E" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="158" y1="215" x2="93" y2="216" stroke="#B0864E" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="158" y1="224" x2="96" y2="232" stroke="#B0864E" stroke-width="1.5" stroke-linecap="round"/>
+
+  <line x1="242" y1="205" x2="305" y2="196" stroke="#B0864E" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="242" y1="215" x2="307" y2="216" stroke="#B0864E" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="242" y1="224" x2="304" y2="232" stroke="#B0864E" stroke-width="1.5" stroke-linecap="round"/>
+
+  <!-- Little bow at neck -->
+  <path d="M186,254 L200,262 L186,270 Z" fill="#FF6F91" stroke="#D6446B" stroke-width="1"/>
+  <path d="M214,254 L200,262 L214,270 Z" fill="#FF6F91" stroke="#D6446B" stroke-width="1"/>
+  <circle cx="200" cy="262" r="5" fill="#FF4C7B" stroke="#D6446B" stroke-width="1"/>
+</svg>

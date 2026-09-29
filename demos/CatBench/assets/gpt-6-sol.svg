@@ -1,0 +1,168 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 800" role="img" aria-labelledby="title desc">
+  <title id="title">A cute kitten</title>
+  <desc id="desc">A fluffy cream-and-ginger kitten with bright green eyes, pink ears, a little blue bow, and a curled tail sits against a pastel background.</desc>
+
+  <defs>
+    <radialGradient id="background">
+      <stop offset="0" stop-color="#fffdf8"/>
+      <stop offset="1" stop-color="#e9f1f7"/>
+    </radialGradient>
+    <linearGradient id="fur" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fff4db"/>
+      <stop offset=".58" stop-color="#f8d7a4"/>
+      <stop offset="1" stop-color="#eebc80"/>
+    </linearGradient>
+    <linearGradient id="ear" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#e99a9b"/>
+      <stop offset="1" stop-color="#ffd4c3"/>
+    </linearGradient>
+    <radialGradient id="eye">
+      <stop offset="0" stop-color="#c9e8a5"/>
+      <stop offset=".65" stop-color="#79b78e"/>
+      <stop offset="1" stop-color="#477c73"/>
+    </radialGradient>
+    <linearGradient id="bow" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#a9dcea"/>
+      <stop offset="1" stop-color="#68b6d0"/>
+    </linearGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="12"/>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="800" height="800" fill="url(#background)"/>
+  <circle cx="115" cy="145" r="55" fill="#fff" opacity=".35"/>
+  <circle cx="684" cy="210" r="82" fill="#fff" opacity=".28"/>
+  <circle cx="150" cy="550" r="70" fill="#f9dfe1" opacity=".27"/>
+  <ellipse cx="402" cy="700" rx="233" ry="28" fill="#8097a0" opacity=".17" filter="url(#shadow)"/>
+
+  <!-- Tiny floating decorations -->
+  <g fill="#f3b8a7" opacity=".8">
+    <path d="M172 287c-13-17-38-2-24 17l24 23 24-23c14-19-11-34-24-17z" transform="scale(.65) translate(90 125)"/>
+    <path d="M631 351c-10-13-28-1-18 12l18 17 18-17c10-13-8-25-18-12z"/>
+  </g>
+  <g fill="#e8c777" opacity=".8">
+    <path d="M640 130l4 12 12 4-12 4-4 12-4-12-12-4 12-4z"/>
+    <path d="M180 405l3 9 9 3-9 3-3 9-3-9-9-3 9-3z"/>
+    <circle cx="611" cy="277" r="3"/>
+    <circle cx="203" cy="225" r="3"/>
+  </g>
+
+  <!-- Curled tail, behind the body -->
+  <path d="M506 602c67 18 143-1 155-69 9-49-21-87-59-82-25 3-39 23-34 43 4 17 21 24 35 14"
+        fill="none" stroke="#d7a574" stroke-width="72" stroke-linecap="round"/>
+  <path d="M506 602c67 18 143-1 155-69 9-49-21-87-59-82-25 3-39 23-34 43 4 17 21 24 35 14"
+        fill="none" stroke="#f4d4a4" stroke-width="60" stroke-linecap="round"/>
+  <path d="M636 465c14 13 23 31 25 50M602 451c-12 2-22 8-28 17"
+        fill="none" stroke="#dcaa79" stroke-width="9" stroke-linecap="round" opacity=".65"/>
+
+  <!-- Body -->
+  <path d="M301 497c-52 21-77 80-63 135 10 41 45 66 95 68h143c64 0 106-29 111-76 6-53-34-104-88-127-57-25-139-26-198 0z"
+        fill="url(#fur)" stroke="#c9956d" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M342 506c-30 34-34 97-13 149 11 27 38 42 74 42 41 0 70-18 81-48 18-48 9-108-28-142z"
+        fill="#fff5e2"/>
+  <path d="M275 554c-13 37-11 72 4 92M530 551c19 28 25 56 19 78"
+        fill="none" stroke="#e9b889" stroke-width="13" stroke-linecap="round" opacity=".8"/>
+
+  <!-- Ears -->
+  <path d="M269 309c-13-54-17-113-5-177 2-12 15-17 25-9 42 35 75 73 91 110z"
+        fill="url(#fur)" stroke="#c9956d" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M293 270c-7-38-9-76-6-109 27 24 49 52 62 78z"
+        fill="url(#ear)"/>
+  <path d="M528 309c13-54 17-113 5-177-2-12-15-17-25-9-42 35-75 73-91 110z"
+        fill="url(#fur)" stroke="#c9956d" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M504 270c7-38 9-76 6-109-27 24-49 52-62 78z"
+        fill="url(#ear)"/>
+  <path d="M302 234l13 23m-7-38 24 34m170-19-13 23m7-38-24 34"
+        stroke="#fff4df" stroke-width="5" stroke-linecap="round" opacity=".8"/>
+
+  <!-- Fluffy head outline -->
+  <path d="M400 220
+           C345 217 302 240 278 276
+           C254 309 247 341 254 372
+           L238 390 257 398 247 416 269 422
+           C292 464 340 494 400 497
+           C460 494 508 464 531 422
+           L553 416 543 398 562 390 546 372
+           C553 341 546 309 522 276
+           C498 240 455 217 400 220z"
+        fill="url(#fur)" stroke="#c9956d" stroke-width="5" stroke-linejoin="round"/>
+
+  <!-- Forehead and cheek markings -->
+  <path d="M400 230c-12 20-15 38 0 57 15-19 12-37 0-57z
+           M360 237c-8 22-6 39 10 54 5-23 1-39-10-54z
+           M440 237c8 22 6 39-10 54-5-23-1-39 10-54z"
+        fill="#e7ae77" opacity=".8"/>
+  <path d="M271 335l31 14-30 3m255-17-31 14 30 3
+           M274 377l27 9-29 5m254-14-27 9 29 5"
+        fill="none" stroke="#dfa871" stroke-width="8" stroke-linecap="round" opacity=".65"/>
+  <path d="M315 280c-13 11-22 25-25 39m195-39c13 11 22 25 25 39"
+        fill="none" stroke="#fff8e9" stroke-width="7" stroke-linecap="round" opacity=".75"/>
+
+  <!-- Eyes -->
+  <g stroke="#785d56" stroke-width="5">
+    <ellipse cx="344" cy="354" rx="38" ry="45" fill="#fffaf1"/>
+    <ellipse cx="456" cy="354" rx="38" ry="45" fill="#fffaf1"/>
+  </g>
+  <ellipse cx="348" cy="358" rx="28" ry="36" fill="url(#eye)"/>
+  <ellipse cx="452" cy="358" rx="28" ry="36" fill="url(#eye)"/>
+  <ellipse cx="349" cy="360" rx="12" ry="27" fill="#263d3b"/>
+  <ellipse cx="451" cy="360" rx="12" ry="27" fill="#263d3b"/>
+  <g fill="#fff">
+    <circle cx="338" cy="340" r="10"/>
+    <circle cx="442" cy="340" r="10"/>
+    <circle cx="359" cy="372" r="4"/>
+    <circle cx="463" cy="372" r="4"/>
+  </g>
+  <path d="M306 326c16-18 42-22 63-9m62 0c21-13 47-9 63 9"
+        fill="none" stroke="#936c5b" stroke-width="6" stroke-linecap="round"/>
+
+  <!-- Blush and muzzle -->
+  <ellipse cx="295" cy="409" rx="28" ry="15" fill="#ed9e96" opacity=".35"/>
+  <ellipse cx="505" cy="409" rx="28" ry="15" fill="#ed9e96" opacity=".35"/>
+  <ellipse cx="372" cy="415" rx="40" ry="28" fill="#fff9ed"/>
+  <ellipse cx="428" cy="415" rx="40" ry="28" fill="#fff9ed"/>
+  <path d="M385 397q15-10 30 0-1 12-15 18-14-6-15-18z"
+        fill="#db8f93" stroke="#b96f77" stroke-width="2"/>
+  <path d="M400 414v13m0 0q-10 15-24 4m24-4q10 15 24 4"
+        fill="none" stroke="#8d6861" stroke-width="4" stroke-linecap="round"/>
+  <g fill="#b98870" opacity=".8">
+    <circle cx="340" cy="411" r="2.6"/><circle cx="348" cy="423" r="2.3"/>
+    <circle cx="330" cy="422" r="2.2"/><circle cx="460" cy="411" r="2.6"/>
+    <circle cx="452" cy="423" r="2.3"/><circle cx="470" cy="422" r="2.2"/>
+  </g>
+
+  <!-- Whiskers -->
+  <g fill="none" stroke="#947367" stroke-width="2.5" stroke-linecap="round">
+    <path d="M337 416c-41-17-69-17-95-11m95 19c-42-4-75 1-98 12m102-2c-36 9-58 22-73 38"/>
+    <path d="M463 416c41-17 69-17 95-11m-95 19c42-4 75 1 98 12m-102-2c36 9 58 22 73 38"/>
+  </g>
+
+  <!-- Collar and bow -->
+  <path d="M325 482q75 43 150 0" fill="none" stroke="#75b9cf" stroke-width="11" stroke-linecap="round"/>
+  <path d="M394 494c-23-21-53-25-58-8-5 19 15 39 58 32zm12 0c23-21 53-25 58-8 5 19-15 39-58 32z"
+        fill="url(#bow)" stroke="#549caf" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M391 499l-37-10m55 10 37-10" stroke="#d8f3f3" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="400" cy="504" r="13" fill="#8ccbd9" stroke="#549caf" stroke-width="3"/>
+  <circle cx="400" cy="504" r="4" fill="#ecfbf6"/>
+
+  <!-- Front legs and rounded paws -->
+  <path d="M338 560c-7 38-8 78-2 111m128-111c7 38 8 78 2 111"
+        fill="none" stroke="#e3b184" stroke-width="8" stroke-linecap="round" opacity=".7"/>
+  <path d="M302 639c-22 10-27 36-12 50 13 13 64 15 87 5 14-7 16-29 4-42-14-15-54-22-79-13z"
+        fill="#fff0d5" stroke="#c9956d" stroke-width="4"/>
+  <path d="M498 639c22 10 27 36 12 50-13 13-64 15-87 5-14-7-16-29-4-42 14-15 54-22 79-13z"
+        fill="#fff0d5" stroke="#c9956d" stroke-width="4"/>
+  <g fill="none" stroke="#d7a078" stroke-width="3" stroke-linecap="round">
+    <path d="M316 665l-2 22m23-21v25m22-21 3 19"/>
+    <path d="M484 665l2 22m-23-21v25m-22-21-3 19"/>
+  </g>
+  <path d="M374 691q26 9 52 0" fill="none" stroke="#d6a578" stroke-width="4" stroke-linecap="round"/>
+
+  <!-- A few wisps of fur -->
+  <g fill="none" stroke="#fff9e9" stroke-width="4" stroke-linecap="round" opacity=".9">
+    <path d="M287 457l-12 12m20-5-9 15m227-22 12 12m-20-5 9 15"/>
+    <path d="M367 548l-5 22m76-22 5 22"/>
+  </g>
+</svg>
