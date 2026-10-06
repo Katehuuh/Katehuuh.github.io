@@ -7,6 +7,12 @@
       "description": "A dreamy 3D scene created from a gen img by Sonnet 5.5."
     },
     {
+      "name": "[GAME]-Dual-Grid",
+      "type": "file",
+      "filename": "[GAME]-Dual-Grid.html",
+      "description": "Connect the glowing core to every dark socket and watch the whole grid wake up from night to day."
+    },
+    {
       "name": "[GAME]-Blendrooms",
       "type": "file",
       "filename": "[GAME]-Blendrooms.html",
