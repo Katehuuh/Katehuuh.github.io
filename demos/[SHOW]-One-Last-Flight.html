@@ -905,6 +905,7 @@ return { MEMORIES };
     return out;
   }
 
+  // inspired sound from https://soundcloud.com/relaxing-white-noise/private-jet-sound-white-noise-75-minutes
   function generate(sampleRate = 44100, seconds = 47, opts = {}) {
     const rnd = mulberry32(opts.seed != null ? opts.seed : 1234567);
     const lineGain = opts.lines != null ? opts.lines : 1;   // 0 = no engine tones
