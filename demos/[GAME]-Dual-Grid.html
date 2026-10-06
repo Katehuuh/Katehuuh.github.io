@@ -1,0 +1,1220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Dual Grid</title>
+    <meta name="description" content="Connect the glowing core to every dark socket and watch the whole grid wake up from night to day.">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        html, body { height: 100%; }
+        body {
+            background: #020304; overflow: hidden; display: flex; flex-direction: column;
+            height: 100vh; height: 100dvh; font-family: monospace; color: #0ff;
+            overscroll-behavior: none; touch-action: none; user-select: none; -webkit-user-select: none;
+        }
+
+        #loading-screen {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; height: 100dvh;
+            background: #050508; display: flex; flex-direction: column;
+            justify-content: center; align-items: center; z-index: 2000;
+            transition: opacity 0.3s ease-out;
+        }
+        #loading-screen.fade-out { opacity: 0; pointer-events: none; }
+        #loading-screen .symbol-container { position: relative; width: 200px; height: 200px; }
+        #loading-screen canvas { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); }
+        #loading-screen #symBack { opacity: 0.3; filter: blur(1px); }
+        #loading-screen #symFront { z-index: 1; }
+        #loading-screen .loading-text {
+            margin-top: 30px; color: #0ff; font-family: monospace; font-size: 12px;
+            letter-spacing: 4px; text-shadow: 0 0 15px #0ff;
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+        #loading-screen .progress { margin-top: 15px; color: #0ff8; font-family: monospace; font-size: 10px; }
+        @keyframes pulse { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }
+
+        #hud {
+            flex: none; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap;
+            gap: 6px 14px; min-height: 42px;
+            padding: max(8px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) 6px max(12px, env(safe-area-inset-left));
+            font-size: 12px; letter-spacing: 1px; background: #020304;
+            opacity: 0; transition: opacity 0.5s ease-in; position: relative; z-index: 100;
+        }
+        #hud.visible { opacity: 1; }
+        .grp { display: flex; align-items: center; gap: 7px; }
+        .lab { color: #0ff9; }
+        #ttl { color: #0ff; font-weight: bold; margin-right: 8px; text-shadow: 0 0 12px #0ff8; letter-spacing: 3px; }
+        #lvtxt { min-width: 34px; text-align: center; text-shadow: 0 0 10px #0ff8; }
+        button {
+            background: #0a1015; border: 1px solid #0ff4; color: #0ff; padding: 5px 11px; border-radius: 4px;
+            cursor: pointer; font-family: monospace; font-size: 12px; letter-spacing: 1px; touch-action: manipulation;
+            min-height: 28px;
+        }
+        button:hover { background: #0ff1; }
+        button:active { background: #0ff3; }
+        button:disabled { opacity: 0.3; cursor: default; }
+        button.nav { padding: 4px 9px; }
+        .pips { display: flex; align-items: center; gap: 4px; }
+        .pip { width: 10px; height: 10px; border: 1px solid #0ff9; background: #0ff; box-shadow: 0 0 7px #0ff9; transition: background 0.25s, box-shadow 0.25s, border-color 0.25s; }
+        .pip.u { background: transparent; box-shadow: none; border-color: #0ff3; }
+        .pips.nodes .pip { border-radius: 50%; width: 11px; height: 11px; background: transparent; box-shadow: none; border-color: #0ff8; }
+        .pips.nodes .pip.u { background: #0ff; box-shadow: 0 0 9px #0ff; border-color: #0ff; }
+        .pips.warn .pip { border-color: #fa6; box-shadow: 0 0 7px #fa68; }
+        .pips.warn .pip.u { box-shadow: none; }
+        #msg { color: #0ffc; text-shadow: 0 0 12px #0ff8; letter-spacing: 2px; }
+
+        #stage { flex: 1; min-height: 0; position: relative; }
+        #stage canvas { position: absolute; top: 0; left: 0; display: block; }
+        #foot {
+            flex: none; height: calc(26px + env(safe-area-inset-bottom)); padding-bottom: env(safe-area-inset-bottom);
+            text-align: center; color: #0ffc; font-size: 12px; letter-spacing: 4px; text-shadow: 0 0 14px #0ff;
+            line-height: 26px; opacity: 0; transition: opacity 0.4s; pointer-events: none; background: #020304;
+        }
+        #foot.on { opacity: 1; }
+        @media (max-height: 460px) {
+            #hud { min-height: 34px; padding-top: max(4px, env(safe-area-inset-top)); padding-bottom: 3px; }
+            #foot { height: calc(20px + env(safe-area-inset-bottom)); line-height: 20px; }
+        }
+        @media (max-width: 640px) { #ttl { display: none; } }
+        @media (max-width: 430px) {
+            #hud { gap: 6px 8px; letter-spacing: 0; padding-left: max(8px, env(safe-area-inset-left)); padding-right: max(8px, env(safe-area-inset-right)); }
+            button { padding: 5px 8px; }
+            button.nav { padding: 4px 7px; }
+            .grp { gap: 5px; }
+            .pips { gap: 3px; }
+            .pip { width: 8px; height: 8px; }
+            .pips.nodes .pip { width: 10px; height: 10px; }
+            #lvtxt { min-width: 28px; }
+        }
+    </style>
+</head>
+<body>
+    <div id="loading-screen">
+        <div class="symbol-container">
+            <canvas id="symBack"></canvas>
+            <canvas id="symFront"></canvas>
+        </div>
+        <div class="loading-text">INITIALIZING</div>
+        <div class="progress" id="progress">...</div>
+    </div>
+
+    <div id="hud">
+        <div class="grp">
+            <span id="ttl">DUAL GRID</span>
+            <button class="nav" id="prev" aria-label="Previous level">&lt;</button>
+            <span id="lvtxt">1/9</span>
+            <button class="nav" id="next" aria-label="Next level">&gt;</button>
+        </div>
+        <div class="grp">
+            <div class="pips nodes" id="nodes" aria-label="Sockets"></div>
+            <div class="pips" id="blocks" aria-label="Blocks left"></div>
+            <span id="msg"></span>
+        </div>
+        <div class="grp"><button id="reset">reset</button></div>
+    </div>
+    <div id="stage"></div>
+    <div id="foot"></div>
+
+    <script>
+        (function() {
+            const layer1 = "⊕∩⊇∪⊆", layer2 = "∵∴", fontSize = 120, padding = 10;
+            function measure(chars) {
+                const c = document.createElement('canvas'), x = c.getContext('2d', { willReadFrequently: true });
+                c.width = c.height = fontSize * 2;
+                x.font = `${fontSize}px monospace`; x.textBaseline = 'middle'; x.textAlign = 'center';
+                return [...chars].map(ch => {
+                    x.clearRect(0,0,c.width,c.height); x.fillStyle = '#fff'; x.fillText(ch, c.width/2, c.height/2);
+                    const d = x.getImageData(0,0,c.width,c.height).data;
+                    let x1=c.width, x2=0, y1=c.height, y2=0;
+                    for (let y=0; y<c.height; y++) for (let i=0; i<c.width; i++) if (d[(y*c.width+i)*4+3]>0) { x1=Math.min(x1,i); x2=Math.max(x2,i); y1=Math.min(y1,y); y2=Math.max(y2,y); }
+                    return { ch, w: x2-x1+1, h: y2-y1+1, cx: (x1+x2)/2, cy: (y1+y2)/2, cs: c.width };
+                });
+            }
+            function setup(id, m, col) {
+                const mW = Math.max(...m.map(v=>v.w)), mH = Math.max(...m.map(v=>v.h));
+                const c = document.getElementById(id), x = c.getContext('2d');
+                c.width = mW + padding*2; c.height = mH + padding*2;
+                m.forEach(v => v.sc = Math.min(mW/v.w, mH/v.h));
+                return { c, x, m, col };
+            }
+            function draw(L, i) {
+                const { x, c, m, col } = L, v = m[i % m.length];
+                x.clearRect(0,0,c.width,c.height); x.save();
+                x.translate(c.width/2, c.height/2); x.scale(v.sc, v.sc);
+                x.font = `${fontSize}px monospace`; x.textBaseline = 'middle'; x.textAlign = 'center';
+                x.fillStyle = col; x.shadowColor = col; x.shadowBlur = 20;
+                x.fillText(v.ch, v.cs/2 - v.cx, v.cs/2 - v.cy);
+                x.restore();
+            }
+            const m1 = measure(layer1), m2 = measure(layer2);
+            const L1 = setup('symFront', m1, '#0ff'), L2 = setup('symBack', m2, '#0ff');
+            let i1=0, i2=0; draw(L1,i1); draw(L2,i2);
+            window.loadingAnim = [setInterval(()=>draw(L1,++i1), 150), setInterval(()=>draw(L2,++i2), 300)];
+            window.setProgress = (txt) => { document.getElementById('progress').textContent = txt; };
+        })();
+    </script>
+
+    <script type="importmap">
+    { "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+    }}
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // ================= LEVELS =================
+        // 7x7 playable area. S source (always the centre), N dark socket, # wall, . open tile,
+        // B block that is already placed. "hint" is an open tile that gets a marker (first level only).
+        const LEVELS = [
+            { budget: 2,  hint: [5, 3], map: ['.......', '.......', '.......', '...SB.N', '.......', '.......', '.......'] },
+            { budget: 4,  hint: null,   map: ['.......', '...N...', '.......', '...S..N', '.......', '.......', '.......'] },
+            { budget: 5,  hint: null,   map: ['.......', '....N..', '..###..', '...S...', '.......', '.......', '.......'] },
+            { budget: 4,  hint: null,   map: ['#.....#', '..N.N..', '.#...#.', '...S...', '.#...#.', '..N.N..', '#.....#'] },
+            { budget: 6,  hint: null,   map: ['.......', '......N', '.......', '...S...', '.......', '......N', '.......'] },
+            { budget: 7,  hint: null,   map: ['.......', '.N...N.', '.......', '...S...', '.......', '.......', '...N...'] },
+            { budget: 9,  hint: null,   map: ['#N...N#', '.......', '.##.##.', '...S...', '.##.##.', '.......', '#...N.#'] },
+            { budget: 9,  hint: null,   map: ['#.....#', '.N...N.', '.......', '...S...', '.......', '.N...N.', '#.....#'] },
+            { budget: 10, hint: null,   map: ['..N....', '.......', '.####..', '...S.#.', '.#...#.', '.#.###.', 'N......'] },
+        ];
+
+        // ================= CONSTANTS =================
+        const GRID = 11, N = GRID * GRID, HALF = (GRID - 1) / 2, ARENA = 7, A0 = 2;
+        const TILE = 0.8, FISS = 0.05, PITCH = TILE + FISS, CUBE = 0.68, RAD = 0.12, GAP = 0.06;
+        const GROUND_Y = -CUBE / 2 - GAP / 2 - 0.04;
+        const CUBE_Y = GAP / 2;
+        const FLOOR_Y = GROUND_Y + 0.04;
+        const TOP_Y = CUBE_Y + CUBE / 2 + 0.01;
+        const LIGHT_Y = GROUND_Y + GAP / 2 + 0.02;
+        const CELL_X = i => ((i % GRID) - HALF) * PITCH;
+        const CELL_Z = i => (Math.floor(i / GRID) - HALF) * PITCH;
+        const K_EMPTY = 0, K_WALL = 1, K_SRC = 2, K_NODE = 3, K_BLOCK = 4;
+        const SRC = HALF * GRID + HALF;
+        const DX = [1, -1, 0, 0], DZ = [0, 0, 1, -1];
+
+        // ================= LOOK: dark (power 0) to lit (power 1) =================
+        const LOOK = {
+            sunDark: new THREE.Color(0x203040), sunLit: new THREE.Color(0xfff8f0), sunI0: 0.15, sunI1: 2.8,
+            ambDark: new THREE.Color(0x040506), ambLit: new THREE.Color(0x151618), ambI0: 0.15, ambI1: 0.3,
+            exp0: 1.0, exp1: 1.1,
+            lightI0: 1.25, lightI1: 1.2,
+        };
+        const MAX_LIGHTS = 25, LIGHT_COLOR = 0x00ffff, LIGHT_DISTANCE = 2.8;
+
+        // ================= MATERIAL PALETTE (textures) =================
+        const COLORS = {
+            ground: { light: {r:51,g:57,b:62}, dark: {r:31,g:38,b:43} },
+            andesite: { light: {r:115,g:126,b:133}, dark: {r:47,g:55,b:60} },
+            stoneBrick: { light: {r:78,g:88,b:96}, dark: {r:48,g:58,b:64} },
+            bedrock: { light: {r:42,g:48,b:52}, dark: {r:24,g:30,b:32} }
+        };
+        const PROPS = {
+            ground: { metal:0.08, rough:0.75, metalR:0.05, roughR:0.15, grain:0.04, env:0.3 },
+            andesite: { metal:0.88, rough:0.22, metalR:0.12, roughR:0.25, grain:0.06, env:0.9 },
+            stoneBrick: { metal:0.12, rough:0.35, metalR:0.08, roughR:0.2, grain:0.03, env:0.6 },
+            bedrock: { metal:0.15, rough:0.52, metalR:0.1, roughR:0.22, grain:0.05, env:0.4 }
+        };
+        const TYPES = ['andesite', 'stoneBrick', 'bedrock', 'ground'];
+        const T_AND = 0, T_BRICK = 1, T_BED = 2, T_GROUND = 3;
+
+        // ================= NOISE + TEXTURE DATA =================
+        class Noise {
+            constructor(seed) {
+                this.p = new Uint8Array(512);
+                const pm = new Uint8Array(256);
+                for (let i = 0; i < 256; i++) pm[i] = i;
+                for (let i = 255; i > 0; i -= 1) { const j = Math.floor((seed = (seed * 16807) % 2147483647) / 2147483647 * (i + 1)); [pm[i], pm[j]] = [pm[j], pm[i]]; }
+                for (let i = 0; i < 512; i++) this.p[i] = pm[i & 255];
+            }
+            n2(x, y) {
+                const fx = Math.floor(x), fy = Math.floor(y);
+                const X = fx & 255, Y = fy & 255, xf = x - fx, yf = y - fy;
+                const u = xf * xf * xf * (xf * (xf * 6 - 15) + 10), v = yf * yf * yf * (yf * (yf * 6 - 15) + 10);
+                const p = this.p, a = p[X] + Y, b = p[X + 1] + Y;
+                const p0 = p[a] / 255, p1 = p[b] / 255, p2 = p[a + 1] / 255, p3 = p[b + 1] / 255;
+                const l0 = p0 + u * (p1 - p0), l1 = p2 + u * (p3 - p2);
+                return (l0 + v * (l1 - l0)) * 2 - 1;
+            }
+            fbm(x, y, o) { let v = 0, a = 1, f = 1, m = 0; for (let i = 0; i < o; i++) { v += a * this.n2(x * f, y * f); m += a; a *= 0.5; f *= 2; } return v / m; }
+        }
+        const TEX = 512;
+        function genTexData(palette, props, seed) {
+            const n1 = new Noise(seed), n2 = new Noise(seed + 500), n3 = new Noise(seed + 1000);
+            const hMap = new Float32Array(TEX * TEX);
+            let rs = seed + 7;
+            for (let y = 0; y < TEX; y++) for (let x = 0; x < TEX; x++) {
+                rs = (rs * 16807) % 2147483647;
+                let h = n1.fbm(x * props.grain, y * props.grain, 4) * 0.5;
+                h += n2.fbm(x * props.grain * 2.5, y * props.grain * 2.5, 3) * 0.3;
+                h += n3.fbm(x * props.grain * 6, y * props.grain * 6, 2) * 0.15;
+                h += (rs / 2147483647 - 0.5) * 0.05;
+                hMap[y * TEX + x] = (h + 1) * 0.5;
+            }
+            const diff = new Uint8Array(TEX * TEX * 4), norm = new Uint8Array(TEX * TEX * 4), rm = new Uint8Array(TEX * TEX * 4);
+            const pd = palette.dark, pl = palette.light;
+            for (let y = 0; y < TEX; y++) for (let x = 0; x < TEX; x++) {
+                const i = y * TEX + x, p = i * 4, h = hMap[i];
+                diff[p] = pd.r + h * (pl.r - pd.r); diff[p + 1] = pd.g + h * (pl.g - pd.g); diff[p + 2] = pd.b + h * (pl.b - pd.b); diff[p + 3] = 255;
+                const hL = hMap[y * TEX + ((x - 1 + TEX) % TEX)], hR = hMap[y * TEX + ((x + 1) % TEX)];
+                const hU = hMap[((y - 1 + TEX) % TEX) * TEX + x], hD = hMap[((y + 1) % TEX) * TEX + x];
+                let nx = (hL - hR) * 2, ny = (hU - hD) * 2, nz = 1;
+                const nl = Math.sqrt(nx * nx + ny * ny + nz * nz); nx /= nl; ny /= nl; nz /= nl;
+                norm[p] = (nx * 0.5 + 0.5) * 255; norm[p + 1] = (ny * 0.5 + 0.5) * 255; norm[p + 2] = (nz * 0.5 + 0.5) * 255; norm[p + 3] = 255;
+                // packed: roughness in G, metalness in B
+                rm[p] = 255;
+                rm[p + 1] = Math.max(0.05, Math.min(1, props.rough + (1 - h) * props.roughR - props.roughR * 0.5)) * 255;
+                rm[p + 2] = Math.max(0, Math.min(1, props.metal + (h - 0.5) * props.metalR * 2)) * 255;
+                rm[p + 3] = 255;
+            }
+            return { diff, norm, rm };
+        }
+        function dataTex(data, aniso) {
+            const t = new THREE.DataTexture(data, TEX, TEX, THREE.RGBAFormat, THREE.UnsignedByteType);
+            t.wrapS = t.wrapT = THREE.RepeatWrapping;
+            t.magFilter = THREE.LinearFilter; t.minFilter = THREE.LinearMipmapLinearFilter;
+            t.generateMipmaps = true; t.anisotropy = aniso; t.needsUpdate = true;
+            return t;
+        }
+        // variants share the same image source: only the uv transform differs
+        const VARIANTS = [
+            { rot: 0, ox: 0, oy: 0, fx: 1 },
+            { rot: Math.PI / 2, ox: 0.31, oy: 0.17, fx: 1 },
+            { rot: Math.PI, ox: 0.57, oy: 0.83, fx: -1 },
+        ];
+        function variantTex(tex, v) {
+            if (v === 0) return tex;
+            const t = tex.clone(), V = VARIANTS[v];
+            t.center.set(0.5, 0.5); t.rotation = V.rot; t.offset.set(V.ox, V.oy); t.repeat.set(V.fx, 1);
+            t.matrixAutoUpdate = false; t.updateMatrix();
+            return t;
+        }
+
+        // ================= ENV MAP =================
+        function genEnvMap(renderer) {
+            const pmrem = new THREE.PMREMGenerator(renderer);
+            const c = document.createElement('canvas'); c.width = 512; c.height = 256;
+            const x = c.getContext('2d');
+            x.fillStyle = '#010203'; x.fillRect(0, 0, c.width, c.height);
+            const g = x.createRadialGradient(c.width / 2, c.height, 0, c.width / 2, c.height, c.height * 0.8);
+            g.addColorStop(0, 'rgba(0,40,50,0.1)'); g.addColorStop(1, 'rgba(0,5,8,0)');
+            x.fillStyle = g; x.fillRect(0, 0, c.width, c.height);
+            const t = new THREE.CanvasTexture(c); t.mapping = THREE.EquirectangularReflectionMapping;
+            const env = pmrem.fromEquirectangular(t).texture;
+            t.dispose(); pmrem.dispose();
+            return env;
+        }
+
+        // ================= GLOBALS =================
+        let renderer, scene, camera, controls, sun, ambient, envMap;
+        let stage;
+        const MATS = [];            // MATS[type][variant]
+        let nodeMat, sourceMat;
+const poweredMats = [];
+        const GEO = [];             // 16 shared mask geometries
+        const cubes = [], tiles = [];
+        const lights = [];
+        const slotCell = new Int16Array(MAX_LIGHTS).fill(-1), slotI = new Float32Array(MAX_LIGHTS), slotT = new Float32Array(MAX_LIGHTS);
+
+        // board state
+        const kind = new Uint8Array(N), appear = new Uint8Array(N), wallVar = new Uint8Array(N);
+        const dist = new Int16Array(N).fill(-1), sArr = new Float32Array(N);
+        const armed = new Uint8Array(N), glow = new Float32Array(N), tg = new Float32Array(N), flash = new Float32Array(N), onAt = new Float64Array(N), pend = new Uint8Array(N);
+        const NB = new Int16Array(N * 4);
+        for (let i = 0; i < N; i++) { const x = i % GRID, z = (i - x) / GRID; for (let d = 0; d < 4; d++) { const nx = x + DX[d], nz = z + DZ[d]; NB[i * 4 + d] = (nx < 0 || nz < 0 || nx >= GRID || nz >= GRID) ? -1 : nz * GRID + nx; } }
+
+        let mode = 'level', phase = 'play', levelIdx = 0, budget = 0, hintCell = -1;
+        let power = 0, powerTarget = 0, litNodes = 0, nodeTotal = 0, nodeList = [];
+        let epoch = 0, shadowDirty = false, lightsBusy = false;
+        let animUntil = 0, pkStart = -1e9, rafId = 0, lastT = 0, hoverCell = -1, ready = false;
+        const stats = { renders: 0 };
+        const PK_DUR = 3400;
+
+        // seeded appearance for the decorative ring (stable between loads)
+        function hash01(n) { let h = (n * 2654435761) >>> 0; h ^= h >>> 15; h = Math.imul(h, 2246822519) >>> 0; h ^= h >>> 13; return (h >>> 0) / 4294967296; }
+        for (let i = 0; i < N; i++) {
+            const r = hash01(i + 11);
+            appear[i] = r < 0.0943 ? T_AND : r < 0.2641 ? T_BRICK : T_BED;
+            wallVar[i] = Math.floor(hash01(i + 977) * 3) % 3;
+        }
+
+        // ================= GEOMETRY =================
+        function mkGeo(mask) {
+            const h = CUBE / 2, r = RAD;
+            const tl = !!(mask & 8), tr = !!(mask & 4), br = !!(mask & 2), bl = !!(mask & 1);
+            const s = new THREE.Shape();
+            if (bl) s.moveTo(-h, -h); else { s.moveTo(-h, -h + r); s.quadraticCurveTo(-h, -h, -h + r, -h); }
+            if (br) s.lineTo(h, -h); else { s.lineTo(h - r, -h); s.quadraticCurveTo(h, -h, h, -h + r); }
+            if (tr) s.lineTo(h, h); else { s.lineTo(h, h - r); s.quadraticCurveTo(h, h, h - r, h); }
+            if (tl) s.lineTo(-h, h); else { s.lineTo(-h + r, h); s.quadraticCurveTo(-h, h, -h, h - r); }
+            if (bl) s.lineTo(-h, -h); else s.lineTo(-h, -h + r);
+            s.closePath();
+            const geo = new THREE.ExtrudeGeometry(s, { depth: CUBE, bevelEnabled: true, bevelThickness: 0.01, bevelSize: 0.01, bevelSegments: 1, curveSegments: 8 });
+            geo.rotateX(-Math.PI / 2);
+            geo.translate(0, -CUBE / 2, 0);
+            return geo;
+        }
+        function maskOf(i) {
+            const f = NB[i * 4 + 2] >= 0 && kind[NB[i * 4 + 2]] !== K_EMPTY;
+            const b = NB[i * 4 + 3] >= 0 && kind[NB[i * 4 + 3]] !== K_EMPTY;
+            const l = NB[i * 4 + 1] >= 0 && kind[NB[i * 4 + 1]] !== K_EMPTY;
+            const r = NB[i * 4 + 0] >= 0 && kind[NB[i * 4 + 0]] !== K_EMPTY;
+            let m = 0;
+            if (b || l) m |= 8; if (b || r) m |= 4; if (f || r) m |= 2; if (f || l) m |= 1;
+            return m;
+        }
+
+        // ================= GLOW OVERLAY (one dynamic mesh, one draw call) =================
+        // vertex attribute aD = (kind, amount, s, style). kind 0 strip, 1 pad, 2 link, 4 expanding ring
+        const Q_STRIP = 0, Q_PAD = N * 4, Q_LINKE = Q_PAD + N, Q_LINKS = Q_LINKE + N;
+        const Q_HINT = Q_LINKS + N, Q_CURSOR = Q_HINT + 1, Q_BURST = Q_CURSOR + 1, N_BURST = 6, Q_WAVE = Q_BURST + N_BURST, QUADS = Q_WAVE + 1;
+        let glowGeo, glowMesh, glowU, aDarr, posArr;
+        function buildGlow() {
+            posArr = new Float32Array(QUADS * 12); const uvA = new Float32Array(QUADS * 8);
+            aDarr = new Float32Array(QUADS * 16); const idx = new Uint16Array(QUADS * 6);
+            const put = (q, cx, cy, cz, ax, az, bx, bz, uvMode) => {
+                const p = q * 12;
+                posArr.set([cx - ax - bx, cy, cz - az - bz, cx + ax - bx, cy, cz + az - bz, cx + ax + bx, cy, cz + az + bz, cx - ax + bx, cy, cz - az + bz], p);
+                const u0 = uvMode ? -1 : 0;
+                uvA.set([u0, -1, 1, -1, 1, 1, u0, 1], q * 8);
+                idx.set([q * 4, q * 4 + 1, q * 4 + 2, q * 4, q * 4 + 2, q * 4 + 3], q * 6);
+            };
+            const SY = GROUND_Y + 0.045, PY = TOP_Y + 0.006, L = TILE * 0.9, W = 0.075;
+            for (let i = 0; i < N; i++) {
+                const x = CELL_X(i), z = CELL_Z(i), o = TILE / 2 + FISS / 2;
+                put(Q_STRIP + i * 4 + 0, x + o, SY, z, 0, L / 2, W, 0, 0);
+                put(Q_STRIP + i * 4 + 1, x - o, SY, z, 0, L / 2, W, 0, 0);
+                put(Q_STRIP + i * 4 + 2, x, SY, z + o, L / 2, 0, 0, W, 0);
+                put(Q_STRIP + i * 4 + 3, x, SY, z - o, L / 2, 0, 0, W, 0);
+                put(Q_PAD + i, x, PY, z, 0.4, 0, 0, 0.4, 1);
+                put(Q_LINKE + i, x + PITCH / 2, PY, z, PITCH / 2, 0, 0, 0.07, 0);
+                put(Q_LINKS + i, x, PY, z + PITCH / 2, 0, PITCH / 2, 0.07, 0, 0);
+            }
+            put(Q_HINT, 0, FLOOR_Y + 0.012, 0, 0.4, 0, 0, 0.4, 1);
+            put(Q_CURSOR, 0, 0, 0, 0.4, 0, 0, 0.4, 1);
+            for (let k = 0; k < N_BURST; k++) put(Q_BURST + k, 0, TOP_Y + 0.02, 0, 1.5, 0, 0, 1.5, 1);
+            put(Q_WAVE, 0, TOP_Y + 0.03, 0, 12, 0, 0, 12, 1);
+            // kinds
+            for (let q = 0; q < QUADS; q++) {
+                let k = 0;
+                if (q >= Q_PAD && q < Q_LINKE) k = 1; else if (q >= Q_LINKE && q < Q_HINT) k = 2; else if (q === Q_HINT || q === Q_CURSOR) k = 1; else if (q >= Q_BURST) k = 4;
+                for (let v = 0; v < 4; v++) aDarr[(q * 4 + v) * 4] = k;
+            }
+            glowGeo = new THREE.BufferGeometry();
+            glowGeo.setAttribute('position', new THREE.BufferAttribute(posArr, 3).setUsage(THREE.DynamicDrawUsage));
+            glowGeo.setAttribute('uv', new THREE.BufferAttribute(uvA, 2));
+            glowGeo.setAttribute('aD', new THREE.BufferAttribute(aDarr, 4).setUsage(THREE.DynamicDrawUsage));
+            glowGeo.setIndex(new THREE.BufferAttribute(idx, 1));
+            glowGeo.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 30);
+            glowU = { uTime: { value: 0 }, uPk: { value: 0 }, uPhase: { value: 0 }, uPower: { value: 0 } };
+            const mat = new THREE.ShaderMaterial({
+                uniforms: glowU, transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending,
+                polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
+                vertexShader: `
+                    attribute vec4 aD;
+                    varying vec2 vUv; varying vec4 vD;
+                    void main() {
+                        vUv = uv; vD = aD;
+                        if (aD.y < 0.004) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
+                        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                    }`,
+                fragmentShader: `
+                    uniform float uTime; uniform float uPk; uniform float uPhase; uniform float uPower;
+                    varying vec2 vUv; varying vec4 vD;
+                    float prof(float a, float w) { return (1.0 - smoothstep(w * 0.55, w, a)) + 0.42 * exp(-a * 20.0); }
+                    float sdRB(vec2 p, float b, float r) { vec2 q = abs(p) - vec2(b - r); return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r; }
+                    float packet(float s) { return uPk * pow(0.5 + 0.5 * cos(6.2832 * (s * 0.25 - uPhase)), 6.0); }
+                    void main() {
+                        float k = vD.x, amt = vD.y, s = vD.z, w = vD.w;
+                        float I = 0.0;
+                        if (k < 0.5) {
+                            float a = abs(vUv.y) * 0.075;
+                            float e = smoothstep(0.0, 0.1, vUv.x) * smoothstep(1.0, 0.9, vUv.x);
+                            I = prof(a, 0.017) * e * amt * (1.0 + 1.6 * packet(s)) * mix(1.0, mix(0.8, 0.3, w), uPower);
+                        } else if (k < 1.5) {
+                            vec2 p = vUv * 0.4;
+                            float r = length(p);
+                            if (w < 0.5) {
+                                I = prof(abs(sdRB(p, 0.27, 0.07)), 0.017) + (1.0 - smoothstep(0.03, 0.055, r)) * 1.3;
+                                I *= amt * (1.0 + 1.4 * packet(s));
+                            } else if (w < 1.5) {
+                                I = prof(abs(sdRB(p, 0.30, 0.08)), 0.02) + 0.8 * prof(abs(sdRB(p, 0.17, 0.05)), 0.014)
+                                  + (1.0 - smoothstep(0.05, 0.095, r)) * 1.5;
+                                I *= amt * (1.0 + 0.8 * packet(s));
+                            } else if (w < 2.5) {
+                                float lit = smoothstep(0.45, 0.95, amt);
+                                float ring = prof(abs(r - 0.2), 0.016);
+                                float fr = prof(abs(sdRB(p, 0.28, 0.08)), 0.012) * 0.55;
+                                float disc = (1.0 - smoothstep(0.1, 0.185, r)) * lit * 1.5;
+                                I = (ring + fr + disc) * (0.35 + amt) * (1.0 + 0.9 * packet(s) * lit);
+                            } else if (w < 3.5) {
+                                float a = abs(sdRB(p, 0.3, 0.09));
+                                float plus = (1.0 - smoothstep(0.012, 0.024, min(abs(p.x), abs(p.y)))) * (1.0 - smoothstep(0.11, 0.13, max(abs(p.x), abs(p.y))));
+                                I = (prof(a, 0.016) * 0.8 + plus * 1.0) * amt;
+                            } else {
+                                I = prof(abs(sdRB(p, 0.335, 0.1)), 0.02) * 1.15 * amt;
+                            }
+                        } else if (k < 2.5) {
+                            float a = abs(vUv.y) * 0.075;
+                            I = prof(a, 0.016) * amt * (1.0 + 1.8 * packet(s));
+                        } else {
+                            float age = uTime - s;
+                            if (age < 0.0) discard;
+                            float R = age * w;
+                            float fade = clamp(1.0 - R / amt, 0.0, 1.0);
+                            float r = length(vUv) * amt;
+                            I = prof(abs(r - R), 0.045) * fade * fade * 1.6;
+                        }
+                        if (k < 3.5) I *= mix(1.0, 0.85, uPower);
+                        if (I < 0.01) discard;
+                        vec3 col = mix(vec3(0.0, 0.85, 1.0), vec3(0.72, 1.0, 1.0), clamp(I - 1.0, 0.0, 1.0));
+                        gl_FragColor = vec4(col * I, 1.0);
+                        #include <tonemapping_fragment>
+                        #include <colorspace_fragment>
+                    }`,
+            });
+            glowMesh = new THREE.Mesh(glowGeo, mat);
+            glowMesh.frustumCulled = false; glowMesh.renderOrder = 5; glowMesh.matrixAutoUpdate = false;
+            scene.add(glowMesh);
+            // burst, wave and cursor start hidden
+            for (let q = Q_BURST; q <= Q_WAVE; q += 1) setQ(q, 0, 0, 0);
+            setQ(Q_HINT, 0, 0, 0); setQ(Q_CURSOR, 0, 0, 0, 4);
+        }
+        function setQ(q, amt, s, w) {
+            const b = q * 16;
+            for (let v = 0; v < 4; v++) { const o = b + v * 4; aDarr[o + 1] = amt; aDarr[o + 2] = s; if (w !== undefined) aDarr[o + 3] = w; }
+        }
+        function setQLink(q, amt, s0, s1) {
+            const b = q * 16;
+            for (let v = 0; v < 4; v++) { const o = b + v * 4; aDarr[o + 1] = amt; aDarr[o + 2] = (v === 0 || v === 3) ? s0 : s1; }
+        }
+        function moveQuad(q, cx, cy, cz, half) {
+            const p = q * 12;
+            posArr.set([cx - half, cy, cz - half, cx + half, cy, cz - half, cx + half, cy, cz + half, cx - half, cy, cz + half], p);
+            glowGeo.attributes.position.needsUpdate = true;
+        }
+
+        // refresh the per-cell glow quads from the eased cell values
+        const BASE_STRIP = [0, 0.62, 1.0, 0.7, 0.28];
+        function refreshGlow() {
+            for (let i = 0; i < N; i++) {
+                const k = kind[i], g = glow[i], f = flash[i];
+                const s = sArr[i];
+                // strips: around solid cells facing open tiles, faint grid lines between open tiles
+                for (let d = 0; d < 4; d++) {
+                    const n = NB[i * 4 + d];
+                    let amt = 0;
+                    if (n >= 0 && kind[n] === K_EMPTY) {
+                        if (k !== K_EMPTY) {
+                            const b = BASE_STRIP[k];
+                            amt = b + (1.15 - b) * g + 0.8 * f;
+                        } else if ((d === 0 || d === 2) && gridLines) amt = 0.1;
+                    }
+                    setQ(Q_STRIP + i * 4 + d, amt, s, k === K_EMPTY ? 1 : 0);
+                }
+                // pad
+                let pa = 0, pw = 0;
+                if (k === K_SRC) { pa = 1.0 + 0.5 * f; pw = 1; }
+                else if (k === K_NODE) { pa = 0.3 + 0.75 * g + 0.8 * f; pw = 2; }
+                else if (k === K_BLOCK && (g > 0.01 || f > 0.01)) { pa = g + 0.8 * f; pw = 0; }
+                setQ(Q_PAD + i, pa, s, pw);
+                // links east / south
+                for (let d = 0; d < 3; d += 2) {
+                    const n = NB[i * 4 + d]; const q = d === 0 ? Q_LINKE + i : Q_LINKS + i;
+                    let la = 0;
+                    if (n >= 0) {
+                        const ci = conducts(i), cn = conducts(n);
+                        if ((ci && (cn || (kind[n] === K_NODE && glow[n] > 0.01))) || (cn && kind[i] === K_NODE && g > 0.01)) la = Math.min(g, glow[n]);
+                    }
+                    setQLink(q, la, s, n >= 0 ? sArr[n] : 0);
+                }
+            }
+            glowGeo.attributes.aD.needsUpdate = true;
+        }
+        let gridLines = true;
+        function conducts(i) { return kind[i] === K_SRC || (kind[i] === K_BLOCK && dist[i] >= 0); }
+
+        // ================= LEVEL LOADING =================
+        function parseLevel(idx) {
+            const L = LEVELS[idx];
+            const out = new Uint8Array(N);
+            for (let i = 0; i < N; i++) out[i] = K_WALL;
+            for (let r = 0; r < ARENA; r++) for (let c = 0; c < ARENA; c++) {
+                const ch = L.map[r][c], i = (A0 + r) * GRID + (A0 + c);
+                out[i] = ch === '#' ? K_WALL : ch === 'S' ? K_SRC : ch === 'N' ? K_NODE : ch === 'B' ? K_BLOCK : K_EMPTY;
+            }
+            return out;
+        }
+        function parseSandbox() {
+            const out = new Uint8Array(N);
+            for (let z = 0; z < GRID; z++) for (let x = 0; x < GRID; x++) {
+                const dx = Math.abs(x - HALF), dz = Math.abs(z - HALF);
+                out[z * GRID + x] = (x === HALF && z === HALF) ? K_SRC : (dx <= 2 && dz <= 2) ? K_EMPTY : K_WALL;
+            }
+            return out;
+        }
+        // cell look: which material a solid cell uses
+        function cubeMat(i) {
+            const k = kind[i];
+            if (k === K_SRC) return sourceMat;
+            if (k === K_NODE) return nodeMat;
+            if (k === K_BLOCK) return armed[i] ? poweredMats[i % 3] : MATS[T_AND][i % 3];
+            const x = i % GRID, z = (i - x) / GRID;
+            const inArena = mode === 'level' && x >= A0 && x < A0 + ARENA && z >= A0 && z < A0 + ARENA;
+            const t = inArena ? T_BED : appear[i];
+            return MATS[t][wallVar[i]];
+        }
+        function setArmed(i, v) {
+            armed[i] = v ? 1 : 0;
+            if (kind[i] === K_BLOCK) cubes[i].material = cubeMat(i);
+        }
+        const anim = new Array(N).fill(null);
+        const curScale = new Float32Array(N).fill(1);
+        function placeCubeMatrix(i, s) {
+            const m = cubes[i];
+            m.position.set(CELL_X(i), (CUBE_Y - 0.35) + 0.35 * s, CELL_Z(i));
+            m.scale.set(1, s, 1);
+            m.updateMatrix();
+        }
+        function refreshGeo(i) { if (kind[i] !== K_EMPTY) cubes[i].geometry = GEO[maskOf(i)]; }
+        function startAnim(i, from, to, dur, delay) {
+            anim[i] = { t0: performance.now() + delay * 1000, dur: dur * 1000, from, to };
+            if (delay === 0) { curScale[i] = from; placeCubeMatrix(i, from); }
+        }
+        function easeOutBack(t) { const c1 = 1.4, c3 = c1 + 1; return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2); }
+        function stepAnims(now) {
+            let busy = false;
+            for (let i = 0; i < N; i++) {
+                const a = anim[i]; if (!a) continue;
+                busy = true;
+                const t = (now - a.t0) / a.dur;
+                if (t < 0) { if (a.from < 0.03) { curScale[i] = 0.02; placeCubeMatrix(i, 0.02); } continue; }
+                const e = t >= 1 ? 1 : (a.to >= a.from ? easeOutBack(t) : t * t * (3 - 2 * t));
+                const s = Math.max(0.02, a.from + (a.to - a.from) * e);
+                curScale[i] = s; placeCubeMatrix(i, s);
+                if (t >= 1) {
+                    anim[i] = null; curScale[i] = a.to === 0 ? 0 : 1;
+                    if (a.to === 0) { if (kind[i] === K_EMPTY) cubes[i].visible = false; else { curScale[i] = 1; placeCubeMatrix(i, 1); } } else placeCubeMatrix(i, 1);
+                }
+            }
+            if (busy) shadowDirty = true;
+            return busy;
+        }
+
+        // Fill the board arrays from a kind array. Cells that are hidden or shrunk rise again with a centre-out stagger.
+        function applyBoard(newKind, opts) {
+            opts = opts || {};
+            kind.set(newKind);
+            for (let i = 0; i < N; i++) { glow[i] = 0; tg[i] = 0; flash[i] = 0; pend[i] = 0; armed[i] = 0; dist[i] = -1; sArr[i] = 0; }
+            for (let i = 0; i < N; i++) {
+                const m = cubes[i];
+                if (kind[i] === K_EMPTY) {
+                    if (m.visible) { anim[i] = null; m.visible = false; curScale[i] = 0; }
+                    continue;
+                }
+                m.material = cubeMat(i);
+                const hidden = !m.visible || curScale[i] < 0.999 || (anim[i] && anim[i].to === 0);
+                if (opts.instant) { anim[i] = null; curScale[i] = 1; placeCubeMatrix(i, 1); m.visible = true; }
+                else if (hidden) {
+                    const x = i % GRID, z = (i - x) / GRID, d = Math.abs(x - HALF) + Math.abs(z - HALF);
+                    const from = m.visible && curScale[i] > 0.02 ? curScale[i] : 0.02;
+                    m.visible = true; anim[i] = null; curScale[i] = from; placeCubeMatrix(i, from);
+                    startAnim(i, from, 1, 0.3, 0.05 + d * 0.035);
+                }
+            }
+            for (let i = 0; i < N; i++) refreshGeo(i);
+            shadowDirty = true;
+        }
+
+        // Power flow: flood fill from the source through placed blocks. Nodes light up next to power.
+        function recompute(opts) {
+            opts = opts || {};
+            const now = performance.now();
+            const prevTg = Float32Array.from(tg);
+            dist.fill(-1);
+            const q = [SRC]; dist[SRC] = 0;
+            for (let h = 0; h < q.length; h++) {
+                const c = q[h];
+                for (let d = 0; d < 4; d++) { const n = NB[c * 4 + d]; if (n >= 0 && kind[n] === K_BLOCK && dist[n] < 0) { dist[n] = dist[c] + 1; q.push(n); } }
+            }
+            nodeList = []; litNodes = 0;
+            tg.fill(0);
+            for (let i = 0; i < N; i++) {
+                if (kind[i] === K_SRC) { tg[i] = 1; sArr[i] = 0; }
+                else if (kind[i] === K_BLOCK) { if (dist[i] >= 0) { tg[i] = 1; sArr[i] = dist[i]; } else sArr[i] = 0; }
+                else if (kind[i] === K_NODE) {
+                    let m = -1;
+                    for (let d = 0; d < 4; d++) { const n = NB[i * 4 + d]; if (n >= 0 && dist[n] >= 0 && (kind[n] === K_SRC || kind[n] === K_BLOCK) && (m < 0 || dist[n] < m)) m = dist[n]; }
+                    nodeList.push(i);
+                    if (m >= 0) { tg[i] = 1; sArr[i] = m + 1; litNodes += 1; } else sArr[i] = 0;
+                }
+            }
+            nodeTotal = nodeList.length;
+            // staggered arrival for newly powered cells, instant fade for the others
+            let base = 1e9;
+            for (let i = 0; i < N; i++) if (tg[i] > 0.5 && prevTg[i] < 0.5 && kind[i] !== K_SRC) base = Math.min(base, sArr[i]);
+            for (let i = 0; i < N; i++) {
+                if (tg[i] > 0.5 && prevTg[i] < 0.5 && kind[i] !== K_SRC) {
+                    if (opts.silent) { glow[i] = 1; pend[i] = 0; setArmed(i, 1); }
+                    else { pend[i] = 1; onAt[i] = now + 90 + (sArr[i] - base) * 75; }
+                } else if (tg[i] < 0.5) { pend[i] = 0; if (armed[i]) setArmed(i, 0); }
+            }
+            if (kind[SRC] === K_SRC) { glow[SRC] = 1; }
+            pkStart = now;
+            powerTarget = mode === 'sandbox' ? 1 : (nodeTotal ? litNodes / nodeTotal : 0);
+            assignLights();
+            refreshGlow();
+            return nodeTotal > 0 && litNodes === nodeTotal;
+        }
+
+        // ================= LIGHTS: pooled, dynamic, follow the circuit =================
+        function wantLights() {
+            const out = [], chosen = new Set();
+            const push = (i, w) => { if (out.length < MAX_LIGHTS && !chosen.has(i)) { out.push({ i, w }); chosen.add(i); } };
+            push(SRC, 1);
+            const powered = []; for (let i = 0; i < N; i++) if (kind[i] === K_BLOCK && dist[i] >= 0) powered.push(i);
+            powered.sort((a, b) => dist[a] - dist[b]);
+            for (const i of nodeList) if (tg[i] > 0.5) push(i, 1);
+            for (const i of powered) push(i, 1);
+            for (const i of nodeList) if (tg[i] < 0.5) push(i, 0.6);
+            // standby glow on the solid cells that face open tiles, spread out
+            const cand = [];
+            for (let i = 0; i < N; i++) {
+                if (chosen.has(i) || kind[i] === K_EMPTY || kind[i] === K_SRC || kind[i] === K_BLOCK) continue;
+                let e = 0; for (let d = 0; d < 4; d++) { const n = NB[i * 4 + d]; if (n >= 0 && kind[n] === K_EMPTY) e += 1; }
+                if (e) cand.push({ i, e, d: Math.abs((i % GRID) - HALF) + Math.abs(Math.floor(i / GRID) - HALF) });
+            }
+            cand.sort((a, b) => b.e - a.e || a.d - b.d || a.i - b.i);
+            const near = (i) => { const x = i % GRID, z = Math.floor(i / GRID); for (const c of chosen) { if (Math.abs((c % GRID) - x) <= 1 && Math.abs(Math.floor(c / GRID) - z) <= 1) return true; } return false; };
+            const rest = [];
+            const sw = mode === 'sandbox' ? 1 : 0.85;
+            for (const c of cand) { if (out.length >= MAX_LIGHTS) break; if (!near(c.i)) push(c.i, sw); else rest.push(c); }
+            for (const c of rest) push(c.i, sw);
+            return out;
+        }
+        function assignLights() {
+            const want = wantLights();
+            const byCell = new Map(); for (let k = 0; k < MAX_LIGHTS; k++) if (slotCell[k] >= 0) byCell.set(slotCell[k], k);
+            const taken = new Set(); slotT.fill(0);
+            const pending = [];
+            for (const w of want) { const k = byCell.get(w.i); if (k !== undefined) { slotT[k] = w.w; taken.add(k); } else pending.push(w); }
+            for (const w of pending) {
+                let k = -1;
+                for (let j = 0; j < MAX_LIGHTS; j++) if (slotCell[j] < 0) { k = j; break; }
+                if (k < 0) { let best = 1e9; for (let j = 0; j < MAX_LIGHTS; j++) if (!taken.has(j) && slotI[j] < best) { best = slotI[j]; k = j; } }
+                if (k < 0) continue;
+                slotCell[k] = w.i; slotT[k] = w.w; taken.add(k);
+                if (slotI[k] > 0.2) slotI[k] = 0.2;
+                lights[k].position.set(CELL_X(w.i), LIGHT_Y, CELL_Z(w.i));
+            }
+            lightsBusy = true;
+        }
+        function stepLights(dt) {
+            let busy = false;
+            const k0 = 1 - Math.exp(-dt * 8);
+            const scale = LOOK.lightI0 + (LOOK.lightI1 - LOOK.lightI0) * power;
+            for (let k = 0; k < MAX_LIGHTS; k++) {
+                const d = slotT[k] - slotI[k];
+                if (Math.abs(d) > 0.004) { slotI[k] += d * k0; busy = true; } else slotI[k] = slotT[k];
+                if (slotT[k] === 0 && slotI[k] < 0.01 && slotCell[k] >= 0) { slotCell[k] = -1; slotI[k] = 0; lights[k].position.set(0, -100, 0); }
+                lights[k].intensity = slotI[k] * scale;
+            }
+            lightsBusy = busy;
+            return busy;
+        }
+
+        // ================= POWER LOOK =================
+        const tmpC = new THREE.Color();
+        function applyPower(p) {
+            // sun intensity is interpolated in log space so every lit socket feels like the same step brighter
+            sun.intensity = LOOK.sunI0 * Math.pow(LOOK.sunI1 / LOOK.sunI0, p);
+            sun.color.copy(LOOK.sunDark).lerp(LOOK.sunLit, p);
+            ambient.color.copy(LOOK.ambDark).lerp(LOOK.ambLit, p);
+            ambient.intensity = LOOK.ambI0 + (LOOK.ambI1 - LOOK.ambI0) * p;
+            renderer.toneMappingExposure = LOOK.exp0 + (LOOK.exp1 - LOOK.exp0) * p;
+            const sc = LOOK.lightI0 + (LOOK.lightI1 - LOOK.lightI0) * p;
+            for (let k = 0; k < MAX_LIGHTS; k++) lights[k].intensity = slotI[k] * sc;
+            glowU.uPower.value = p;
+        }
+
+        // ================= GAME LOGIC =================
+        const hud = {
+            el: null, lv: null, nodes: null, blocks: null, msg: null, foot: null, prev: null, next: null,
+        };
+        function usedBlocks() { let c = 0; for (let i = 0; i < N; i++) if (kind[i] === K_BLOCK) c += 1; return c; }
+        function updateHud() {
+            if (mode === 'sandbox') {
+                hud.lv.textContent = 'free';
+                hud.nodes.innerHTML = ''; hud.blocks.innerHTML = '';
+                hud.msg.textContent = 'build';
+            } else {
+                hud.lv.textContent = (levelIdx + 1) + '/' + LEVELS.length;
+                hud.msg.textContent = '';
+                let h = ''; for (let k = 0; k < nodeTotal; k++) h += '<span class="pip' + (k < litNodes ? ' u' : '') + '"></span>';
+                hud.nodes.innerHTML = h;
+                const used = usedBlocks(); h = '';
+                for (let k = 0; k < budget; k++) h += '<span class="pip' + (k < used ? ' u' : '') + '"></span>';
+                hud.blocks.innerHTML = h;
+            }
+        }
+        function say(txt, ms) {
+            hud.foot.textContent = txt; hud.foot.classList.toggle('on', !!txt);
+            if (ms) { const e = epoch; setTimeout(() => { if (e === epoch || !txt) hud.foot.classList.remove('on'); }, ms); }
+        }
+        function nudgeBudget() {
+            hud.blocks.classList.add('warn'); setTimeout(() => hud.blocks.classList.remove('warn'), 380);
+            say('no blocks left', 1400);
+        }
+
+        function startLevel(idx, opts) {
+            opts = opts || {};
+            epoch += 1; phase = 'play';
+            mode = 'level'; levelIdx = idx; budget = LEVELS[idx].budget;
+            const h = LEVELS[idx].hint; hintCell = h ? (A0 + h[1]) * GRID + (A0 + h[0]) : -1;
+            applyBoard(parseLevel(idx), { instant: !!opts.instant, all: !!opts.all, modeChanged: true });
+            recompute({ silent: true });
+            for (let i = 0; i < N; i++) glow[i] = tg[i];
+            refreshGlow();
+            if (opts.instant) { power = powerTarget; applyPower(power); }
+            say('', 0); updateHud(); updateHint();
+            pkStart = performance.now(); wake(PK_DUR + 200);
+        }
+        function startSandbox(opts) {
+            opts = opts || {};
+            epoch += 1; phase = 'play'; mode = 'sandbox'; budget = 0; hintCell = -1;
+            applyBoard(parseSandbox(), { instant: !!opts.instant, all: !!opts.all, modeChanged: true });
+            recompute({ silent: true });
+            for (let i = 0; i < N; i++) glow[i] = tg[i];
+            refreshGlow();
+            if (opts.instant) { power = powerTarget; applyPower(power); }
+            say('free build', 2600); updateHud(); updateHint();
+            wake(PK_DUR + 200);
+        }
+        function updateHint() {
+            if (hintCell >= 0 && kind[hintCell] === K_EMPTY && mode === 'level' && phase === 'play') {
+                moveQuad(Q_HINT, CELL_X(hintCell), FLOOR_Y + 0.012, CELL_Z(hintCell), 0.4);
+                setQ(Q_HINT, 0.85, 0, 3);
+            } else setQ(Q_HINT, 0, 0, 3);
+            glowGeo.attributes.aD.needsUpdate = true;
+        }
+
+        // change level with a short sink and rise
+        function gotoIndex(idx, instantPower) {
+            const e0 = epoch + 1; epoch += 1; phase = 'trans';
+            hud.foot.classList.remove('on');
+            const total = LEVELS.length;
+            idx = ((idx % (total + 1)) + (total + 1)) % (total + 1);
+            // sink everything that is not part of the permanent frame
+            for (let i = 0; i < N; i++) if (cubes[i].visible && (kind[i] === K_BLOCK || kind[i] === K_NODE || kind[i] === K_SRC || (kind[i] === K_WALL && isInside(i)))) { anim[i] = null; startAnim(i, curScale[i], 0, 0.2, 0); }
+            powerTarget = idx >= total ? 1 : 0;
+            wake(500);
+            setTimeout(() => {
+                if (epoch !== e0) return;
+                if (idx >= total) startSandbox({ all: true }); else startLevel(idx, { all: true });
+                wake(1800);
+            }, 260);
+        }
+        function isInside(i) { const x = i % GRID, z = (i - x) / GRID; return x >= A0 && x < A0 + ARENA && z >= A0 && z < A0 + ARENA; }
+
+        let holdWin = false;
+        function onWin() {
+            phase = 'won'; const e = epoch;
+            const now = performance.now();
+            moveQuad(Q_WAVE, CELL_X(SRC), TOP_Y + 0.03, CELL_Z(SRC), 12);
+            setQ(Q_WAVE, 12, now / 1000, 7.5); waveEnd = now + 1800; glowGeo.attributes.aD.needsUpdate = true;
+            say(levelIdx === LEVELS.length - 1 ? 'all clear' : 'level clear', 0);
+            wake(2400);
+            setTimeout(() => { if (epoch !== e || holdWin) return; hud.foot.classList.remove('on'); gotoIndex(levelIdx + 1); }, 2700);
+        }
+
+        function place(i) {
+            kind[i] = K_BLOCK; syncCubeNew(i);
+        }
+        function syncCubeNew(i) {
+            const m = cubes[i];
+            m.material = cubeMat(i); m.geometry = GEO[maskOf(i)];
+            m.visible = true; anim[i] = null;
+            startAnim(i, 0.02, 1, 0.24, 0);
+            for (let d = 0; d < 4; d++) { const n = NB[i * 4 + d]; if (n >= 0) refreshGeo(n); }
+        }
+        function removeCell(i) {
+            kind[i] = K_EMPTY; armed[i] = 0; pend[i] = 0;
+            startAnim(i, curScale[i], 0, 0.16, 0);
+            for (let d = 0; d < 4; d++) { const n = NB[i * 4 + d]; if (n >= 0) refreshGeo(n); }
+        }
+        function actOn(i, rightClick) {
+            if (phase !== 'play' || i < 0) return false;
+            const k = kind[i];
+            let changed = false;
+            if (mode === 'level') {
+                if (k === K_EMPTY && !rightClick) { if (usedBlocks() >= budget) { nudgeBudget(); return false; } place(i); changed = true; }
+                else if (k === K_BLOCK) { removeCell(i); changed = true; }
+            } else {
+                if (k === K_EMPTY && !rightClick) { place(i); changed = true; }
+                else if (k === K_BLOCK || k === K_WALL) { removeCell(i); changed = true; }
+            }
+            if (!changed) return false;
+            hud.foot.classList.remove('on');
+            const was = litNodes;
+            const win = recompute();
+            updateHud(); updateHint(); shadowDirty = true;
+            if (usedBlocks() >= budget && mode === 'level' && !win) say('', 0);
+            wake(PK_DUR + 200);
+            if (win && mode === 'level') onWin();
+            return true;
+        }
+
+        // ================= LOOP =================
+        function wake(ms) { animUntil = Math.max(animUntil, performance.now() + (ms || 0)); request(); }
+        function request() { if (ready && !rafId) rafId = requestAnimationFrame(frame); }
+        function onFire(i, now) {
+            if (kind[i] === K_NODE) {
+                const k = Q_BURST + (burstN % N_BURST); burstN += 1;
+                moveQuad(k, CELL_X(i), TOP_Y + 0.02, CELL_Z(i), 1.5);
+                setQ(k, 1.5, now / 1000, 2.6); burstEnd[k - Q_BURST] = now + 800;
+                glowGeo.attributes.aD.needsUpdate = true;
+                wake(1500);
+            }
+        }
+        let burstN = 0;
+        const burstEnd = new Float64Array(N_BURST); let waveEnd = 0;
+        function expireFx(now) {
+            let ch = false;
+            for (let k = 0; k < N_BURST; k++) if (burstEnd[k] && now > burstEnd[k]) { burstEnd[k] = 0; setQ(Q_BURST + k, 0, 0); ch = true; }
+            if (waveEnd && now > waveEnd) { waveEnd = 0; setQ(Q_WAVE, 0, 0); ch = true; }
+            if (ch) glowGeo.attributes.aD.needsUpdate = true;
+        }
+        function step(now, dt) {
+            let busy = false;
+            expireFx(now);
+            if (power !== powerTarget) {
+                power += (powerTarget - power) * (1 - Math.exp(-dt * 2.2));
+                if (Math.abs(powerTarget - power) < 0.003) power = powerTarget; else busy = true;
+                applyPower(power);
+            }
+            let gb = false;
+            for (let i = 0; i < N; i++) {
+                if (pend[i]) { if (now >= onAt[i]) { pend[i] = 0; flash[i] = 1; setArmed(i, 1); onFire(i, now); gb = true; } else { busy = true; continue; } }
+                const t = tg[i], g = glow[i];
+                if (g !== t) { const sp = dt * (t > g ? 5 : 3.5); glow[i] = Math.abs(t - g) <= sp ? t : g + Math.sign(t - g) * sp; gb = true; busy = true; }
+                if (flash[i] > 0) { flash[i] = Math.max(0, flash[i] - dt * 1.7); gb = true; busy = true; }
+            }
+            if (gb) refreshGlow();
+            if (stepLights(dt)) busy = true;
+            if (stepAnims(now)) busy = true;
+            const pk = Math.max(0, 1 - (now - pkStart) / PK_DUR);
+            glowU.uPk.value = pk * pk * (3 - 2 * pk);
+            glowU.uPhase.value = (now / 1000) * 1.1;
+            glowU.uTime.value = now / 1000;
+            if (pk > 0) busy = true;
+            return busy;
+        }
+        function render() {
+            stats.renders += 1;
+            if (shadowDirty) { sun.shadow.needsUpdate = true; shadowDirty = false; }
+            renderer.render(scene, camera);
+        }
+        function frame() {
+            rafId = 0;
+            const now = performance.now();
+            const dt = Math.min(0.5, Math.max(0.001, (now - lastT) / 1000)); lastT = now;
+            const busy = step(now, dt);
+            const moved = controls.update();
+            render();
+            if (busy || moved || now < animUntil) request();
+        }
+
+        // ================= CAMERA FIT =================
+        const fitCam = new THREE.PerspectiveCamera(40, 1, 0.1, 100);
+        const DIR_WIDE = new THREE.Vector3(0, 11, 8).normalize(), DIR_TALL = new THREE.Vector3(0, 14, 7.5).normalize();
+        let DIR = DIR_WIDE, userMoved = false;
+        function fitView(aspect) {
+            const half = aspect < 0.8 ? 3.9 : 4.8, y0 = -0.45, y1 = 0.42;
+            fitCam.aspect = aspect; fitCam.updateProjectionMatrix();
+            const lim = aspect < 0.8 ? 0.97 : 0.94;
+            let lo = 4, hi = 60, cY = 0; const v = new THREE.Vector3();
+            for (let it = 0; it < 24; it++) {
+                const D = (lo + hi) / 2;
+                fitCam.position.copy(DIR).multiplyScalar(D); fitCam.lookAt(0, 0, 0); fitCam.updateMatrixWorld(true);
+                let mnY = 9, mxY = -9, mxX = 0;
+                for (let c = 0; c < 8; c++) {
+                    v.set(c & 1 ? half : -half, c & 2 ? y1 : y0, c & 4 ? half : -half).project(fitCam);
+                    mnY = Math.min(mnY, v.y); mxY = Math.max(mxY, v.y); mxX = Math.max(mxX, Math.abs(v.x));
+                }
+                if ((mxY - mnY) / 2 <= lim && mxX <= lim) { hi = D; cY = (mxY + mnY) / 2; } else lo = D;
+            }
+            return { D: hi, cY };
+        }
+        let fitD = 14;
+        function onResize() {
+            const r = stage.getBoundingClientRect();
+            const w = Math.max(1, Math.floor(r.width)), h = Math.max(1, Math.floor(r.height));
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+            renderer.setSize(w, h);
+            camera.aspect = w / h;
+            const wantDir = w / h < 0.8 ? DIR_TALL : DIR_WIDE;
+            if (wantDir !== DIR) { DIR = wantDir; if (!userMoved) { const len = camera.position.length(); camera.position.copy(DIR).multiplyScalar(len); } }
+            const f = fitView(w / h);
+            camera.setViewOffset(w, h, 0, -f.cY * h / 2, w, h);
+            const cur = camera.position.length(), ratio = cur / fitD;
+            fitD = f.D;
+            const dir = camera.position.clone().normalize();
+            camera.position.copy(dir.multiplyScalar(Math.min(Math.max(fitD * ratio, fitD * 0.45), fitD * 1.5)));
+            controls.minDistance = fitD * 0.42; controls.maxDistance = fitD * 1.6;
+            controls.update();
+            wake(0);
+        }
+
+        // ================= PICKING (analytic, cheap) =================
+        const ray = new THREE.Ray(), box = new THREE.Box3(), hitV = new THREE.Vector3(), ndc = new THREE.Vector2();
+        const rc = new THREE.Raycaster();
+        function pick(clientX, clientY) {
+            const r = renderer.domElement.getBoundingClientRect();
+            ndc.set(((clientX - r.left) / r.width) * 2 - 1, -((clientY - r.top) / r.height) * 2 + 1);
+            rc.setFromCamera(ndc, camera);
+            ray.copy(rc.ray);
+            let best = Infinity, cell = -1;
+            for (let i = 0; i < N; i++) {
+                if (kind[i] === K_EMPTY) continue;
+                const x = CELL_X(i), z = CELL_Z(i);
+                box.min.set(x - 0.35, CUBE_Y - 0.35, z - 0.35); box.max.set(x + 0.35, CUBE_Y + 0.35, z + 0.35);
+                if (ray.intersectBox(box, hitV)) { const t = hitV.distanceTo(ray.origin); if (t < best) { best = t; cell = i; } }
+            }
+            // floor
+            if (Math.abs(ray.direction.y) > 1e-5) {
+                const t = (FLOOR_Y - ray.origin.y) / ray.direction.y;
+                if (t > 0 && t < best) {
+                    const px = ray.origin.x + ray.direction.x * t, pz = ray.origin.z + ray.direction.z * t;
+                    const gx = Math.round(px / PITCH + HALF), gz = Math.round(pz / PITCH + HALF);
+                    if (gx >= 0 && gz >= 0 && gx < GRID && gz < GRID && Math.abs(px - (gx - HALF) * PITCH) <= TILE / 2 + 0.02 && Math.abs(pz - (gz - HALF) * PITCH) <= TILE / 2 + 0.02) { cell = gz * GRID + gx; best = t; }
+                }
+            }
+            return cell;
+        }
+        function setHover(i) {
+            let show = i >= 0 && phase === 'play';
+            if (show) {
+                const k = kind[i];
+                show = mode === 'level' ? (k === K_EMPTY || k === K_BLOCK) : (k === K_EMPTY || k === K_BLOCK || k === K_WALL);
+            }
+            const t = show ? i : -1;
+            if (t === hoverCell) return;
+            hoverCell = t;
+            if (t < 0) setQ(Q_CURSOR, 0, 0, 4);
+            else {
+                const onTop = kind[t] !== K_EMPTY;
+                moveQuad(Q_CURSOR, CELL_X(t), onTop ? TOP_Y + 0.012 : FLOOR_Y + 0.016, CELL_Z(t), 0.4);
+                setQ(Q_CURSOR, 1, 0, 4);
+            }
+            glowGeo.attributes.aD.needsUpdate = true;
+            wake(0);
+        }
+
+        // ================= INPUT =================
+        function bindInput(canvas) {
+            let down = null;
+            canvas.addEventListener('pointerdown', e => {
+                if (!down) down = { id: e.pointerId, x: e.clientX, y: e.clientY, t: performance.now(), btn: e.button, multi: false, moved: false, touch: e.pointerType !== 'mouse' };
+                else down.multi = true;
+            });
+            canvas.addEventListener('pointermove', e => {
+                if (down && e.pointerId === down.id) {
+                    const lim = down.touch ? 9 : 5;
+                    if (Math.abs(e.clientX - down.x) > lim || Math.abs(e.clientY - down.y) > lim) down.moved = true;
+                }
+                if (e.pointerType === 'mouse' && e.buttons === 0) setHover(pick(e.clientX, e.clientY));
+            });
+            canvas.addEventListener('pointerleave', () => setHover(-1));
+            const end = e => {
+                if (!down || e.pointerId !== down.id) return;
+                const d = down; down = null;
+                if (e.type === 'pointercancel' || d.multi || d.moved) return;
+                if (performance.now() - d.t > 700) return;
+                if (d.btn !== 0 && d.btn !== 2) return;
+                actOn(pick(e.clientX, e.clientY), d.btn === 2);
+                if (!d.touch) setHover(pick(e.clientX, e.clientY));
+            };
+            canvas.addEventListener('pointerup', end);
+            canvas.addEventListener('pointercancel', end);
+            canvas.addEventListener('contextmenu', e => e.preventDefault());
+        }
+
+        // ================= INIT =================
+        const nextFrame = () => new Promise(r => requestAnimationFrame(r));
+        async function init() {
+            const T0 = performance.now();
+            hud.el = document.getElementById('hud'); hud.lv = document.getElementById('lvtxt'); hud.nodes = document.getElementById('nodes');
+            hud.blocks = document.getElementById('blocks'); hud.msg = document.getElementById('msg'); hud.foot = document.getElementById('foot');
+            hud.prev = document.getElementById('prev'); hud.next = document.getElementById('next');
+            stage = document.getElementById('stage');
+            setProgress('Creating scene...');
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x020304);
+            camera = new THREE.PerspectiveCamera(40, 1, 0.1, 100);
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+            const r0 = stage.getBoundingClientRect();
+            renderer.setSize(Math.max(1, r0.width), Math.max(1, r0.height));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.toneMappingExposure = LOOK.exp0;
+            renderer.outputColorSpace = THREE.SRGBColorSpace;
+            stage.appendChild(renderer.domElement);
+            await nextFrame();
+
+            setProgress('Generating environment...');
+            envMap = genEnvMap(renderer);
+
+            setProgress('Setting up lighting...');
+            ambient = new THREE.AmbientLight(0x040506, 0.15); scene.add(ambient);
+            sun = new THREE.DirectionalLight(0x203040, 0.15);
+            sun.position.set(8, 12, 8); sun.target.position.set(0, 0, 0);
+            sun.castShadow = true;
+            sun.shadow.mapSize.set(1024, 1024);
+            sun.shadow.camera.near = 1; sun.shadow.camera.far = 30;
+            sun.shadow.camera.left = -8; sun.shadow.camera.right = 8; sun.shadow.camera.top = 8; sun.shadow.camera.bottom = -8;
+            sun.shadow.bias = -0.001; sun.shadow.normalBias = 0.02;
+            sun.shadow.autoUpdate = false;
+            scene.add(sun); scene.add(sun.target);
+            for (let k = 0; k < MAX_LIGHTS; k++) {
+                const l = new THREE.PointLight(LIGHT_COLOR, 0, LIGHT_DISTANCE, 2);
+                l.position.set(0, -100, 0); scene.add(l); lights.push(l);
+            }
+            await nextFrame();
+
+            // 4 texture sets, 3 variants each (shared image data, different uv transform)
+            const texSets = [];
+            for (let ti = 0; ti < TYPES.length; ti++) {
+                setProgress(`Generating ${TYPES[ti]} ${ti + 1}/4...`);
+                const td = genTexData(COLORS[TYPES[ti]], PROPS[TYPES[ti]], ti * 1000 + 100);
+                const aniso = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+                texSets.push({ map: dataTex(td.diff, aniso), norm: dataTex(td.norm, aniso), rm: dataTex(td.rm, aniso), env: PROPS[TYPES[ti]].env });
+                await nextFrame();
+            }
+            for (let ti = 0; ti < TYPES.length; ti++) {
+                MATS[ti] = [];
+                const S = texSets[ti];
+                for (let v = 0; v < 3; v++) {
+                    const rm = variantTex(S.rm, v);
+                    MATS[ti].push(new THREE.MeshStandardMaterial({
+                        map: variantTex(S.map, v), normalMap: variantTex(S.norm, v), normalScale: new THREE.Vector2(0.55, 0.55),
+                        roughnessMap: rm, roughness: 1, metalnessMap: rm, metalness: 1,
+                        envMap, envMapIntensity: S.env,
+                    }));
+                }
+            }
+            // dark glossy socket and the glowing core brick
+            nodeMat = MATS[T_BED][0].clone(); nodeMat.color.setHex(0x40484c); nodeMat.roughness = 0.5; nodeMat.metalness = 0.8; nodeMat.emissive.setHex(0x001a20);
+            for (let v = 0; v < 3; v++) { const m = MATS[T_AND][v].clone(); m.emissive.setHex(0x0098a8); m.emissiveIntensity = 0.3; poweredMats.push(m); }
+            sourceMat = MATS[T_BRICK][0].clone(); sourceMat.emissive.setHex(0x00b8c8); sourceMat.emissiveIntensity = 0.35;
+
+            setProgress('Building blocks...');
+            for (let m = 0; m < 16; m++) GEO.push(mkGeo(m));
+            await nextFrame();
+
+            setProgress('Building grid...');
+            const tileGeo = new THREE.BoxGeometry(TILE, 0.08, TILE);
+            for (let i = 0; i < N; i++) {
+                const t = new THREE.Mesh(tileGeo, MATS[T_GROUND][((i % GRID) + Math.floor(i / GRID)) % 3]);
+                t.position.set(CELL_X(i), GROUND_Y, CELL_Z(i)); t.receiveShadow = true; t.matrixAutoUpdate = false; t.updateMatrix();
+                scene.add(t); tiles.push(t);
+                const c = new THREE.Mesh(GEO[0], MATS[T_BED][0]);
+                c.castShadow = true; c.receiveShadow = true; c.matrixAutoUpdate = false; c.visible = false;
+                c.position.set(CELL_X(i), CUBE_Y, CELL_Z(i)); c.updateMatrix();
+                scene.add(c); cubes.push(c);
+            }
+            // same program as every other block (only uniforms differ), so there is one big shader to compile
+            const baseMat = MATS[T_GROUND][0].clone();
+            baseMat.color.setHex(0x030506); baseMat.roughness = 0.4; baseMat.metalness = 0.6; baseMat.envMapIntensity = 0.3;
+            baseMat.normalScale.set(0, 0);
+            const base = new THREE.Mesh(new THREE.PlaneGeometry(GRID * PITCH + 2, GRID * PITCH + 2), baseMat);
+            base.rotation.x = -Math.PI / 2; base.position.y = GROUND_Y - 0.05; base.receiveShadow = true; base.matrixAutoUpdate = false; base.updateMatrix();
+            scene.add(base);
+            buildGlow();
+
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true; controls.dampingFactor = 0.07;
+            controls.enablePan = false; controls.rotateSpeed = 0.8; controls.zoomSpeed = 0.9;
+            controls.maxPolarAngle = Math.PI / 2.1; controls.minPolarAngle = 0.25;
+            controls.addEventListener('change', request);
+            controls.addEventListener('start', () => { userMoved = true; });
+            DIR = r0.width / Math.max(1, r0.height) < 0.8 ? DIR_TALL : DIR_WIDE;
+            fitD = fitView(r0.width / Math.max(1, r0.height)).D;
+            camera.position.copy(DIR).multiplyScalar(fitD); camera.lookAt(0, 0, 0);
+            controls.minDistance = fitD * 0.42; controls.maxDistance = fitD * 1.6;
+            controls.update();
+            bindInput(renderer.domElement);
+            await nextFrame();
+
+            setProgress('Warming up...');
+            for (const S of texSets) { renderer.initTexture(S.map); renderer.initTexture(S.norm); renderer.initTexture(S.rm); }
+            startLevel(0, { instant: true, all: true });
+            for (let i = 0; i < N; i++) { cubes[i].updateMatrix(); }
+            lastT = performance.now();
+            // show every mask geometry once so all of them are uploaded before the game starts
+            for (let m = 0; m < 16; m++) { cubes[m].visible = true; cubes[m].geometry = GEO[m]; }
+            sun.shadow.needsUpdate = true;
+            if (renderer.extensions.has('KHR_parallel_shader_compile')) await renderer.compileAsync(scene, camera); else renderer.compile(scene, camera);
+            applyPower(power);
+            stepLights(10);
+            refreshGlow();
+            step(performance.now(), 0.016);
+            render();
+            for (let i = 0; i < N; i++) { cubes[i].visible = kind[i] !== K_EMPTY; refreshGeo(i); }
+            shadowDirty = true;
+            await nextFrame();
+
+            setProgress('Ready!');
+            ready = true;
+            window.loadingAnim.forEach(i => clearInterval(i));
+            const ls = document.getElementById('loading-screen');
+            ls.classList.add('fade-out');
+            hud.el.classList.add('visible');
+            setTimeout(() => { ls.style.display = 'none'; }, 330);
+
+            window.addEventListener('resize', onResize);
+            new ResizeObserver(() => onResize()).observe(stage);
+            window.addEventListener('orientationchange', () => setTimeout(onResize, 120));
+            hud.prev.addEventListener('click', () => gotoIndex(mode === 'sandbox' ? LEVELS.length - 1 : levelIdx - 1));
+            hud.next.addEventListener('click', () => gotoIndex(mode === 'sandbox' ? 0 : levelIdx + 1));
+            document.getElementById('reset').addEventListener('click', () => { if (mode === 'sandbox') gotoIndex(LEVELS.length); else gotoIndex(levelIdx); });
+            onResize();
+            pkStart = performance.now();
+            wake(PK_DUR + 200);
+            window.__game = makeApi(T0);
+        }
+
+        // ================= TEST API (harmless) =================
+        function makeApi(T0) {
+            const toXZ = i => [i % GRID, Math.floor(i / GRID)];
+            return {
+                levels: LEVELS, loadMs: performance.now() - T0,
+                state: () => ({ mode, phase, level: levelIdx, used: usedBlocks(), budget, lit: litNodes, nodes: nodeTotal, power, powerTarget, renders: stats.renders, rafPending: !!rafId, hover: hoverCell, kinds: Array.from(kind), tg: Array.from(tg) }),
+                info: () => ({ geometries: renderer.info.memory.geometries, textures: renderer.info.memory.textures, programs: renderer.info.programs.length, calls: renderer.info.render.calls, triangles: renderer.info.render.triangles }),
+                setLevel: (n) => { gotoIndex(n); },
+                setLevelNow: (n) => { if (n >= LEVELS.length) startSandbox({ instant: true, all: true }); else startLevel(n, { instant: true, all: true }); wake(0); },
+                toggle: (x, z, right) => actOn(z * GRID + x, !!right),
+                setPower: (p) => { power = powerTarget = p; applyPower(p); wake(0); },
+                setGridLines: (v) => { gridLines = !!v; },
+                holdWin: (v) => { holdWin = !!v; },
+                lights: () => lights.map((l, k) => ({ i: slotCell[k], I: l.intensity, y: l.position.y })),
+                screenOf: (x, z, top) => {
+                    const v = new THREE.Vector3(CELL_X(z * GRID + x), top ? TOP_Y : FLOOR_Y, CELL_Z(z * GRID + x)).project(camera);
+                    const r = renderer.domElement.getBoundingClientRect();
+                    return { x: r.left + (v.x + 1) / 2 * r.width, y: r.top + (1 - v.y) / 2 * r.height };
+                },
+                pickAt: (x, y) => pick(x, y),
+                renderOnce: () => { render(); },
+                counts: () => ({ cubes: cubes.length, visible: cubes.filter(c => c.visible).length }),
+                camera: () => camera.position.toArray(),
+                fit: () => ({ fitD, dist: camera.position.length(), min: controls.minDistance, max: controls.maxDistance }),
+                setCamera: (x, y, z) => { camera.position.set(x, y, z); controls.update(); wake(0); },
+            };
+        }
+
+        init().catch(err => { console.error(err); setProgress('Error: ' + err.message); });
+    </script>
+</body>
+</html>
