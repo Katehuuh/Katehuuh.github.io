@@ -1,6 +1,11 @@
 {
   "demos": [
     {
+      "name": "[SHOW]-One-Last-Flight",
+      "type": "file",
+      "filename": "[SHOW]-One-Last-Flight.html"
+    },
+    {
       "name": "[GAME]-Blendrooms",
       "type": "file",
       "filename": "[GAME]-Blendrooms.html",
