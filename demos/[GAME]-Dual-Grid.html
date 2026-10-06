@@ -325,7 +325,15 @@ const poweredMats = [];
         for (let i = 0; i < N; i++) { const x = i % GRID, z = (i - x) / GRID; for (let d = 0; d < 4; d++) { const nx = x + DX[d], nz = z + DZ[d]; NB[i * 4 + d] = (nx < 0 || nz < 0 || nx >= GRID || nz >= GRID) ? -1 : nz * GRID + nx; } }
 
         let mode = 'level', phase = 'play', levelIdx = 0, budget = 0, hintCell = -1;
-        let power = 0, powerTarget = 0, litNodes = 0, nodeTotal = 0, nodeList = [];
+        let power = 0, powerTarget = 0, litNodes = 0, nodeTotal = 0;
+        // scratch buffers reused by every edit (nothing is allocated per edit)
+        const prevTg = new Float32Array(N), bfsQ = new Int16Array(N), nodeList = new Int16Array(N);
+        let bfsN = 0, nodeCount = 0;
+        const cellSlot = new Int16Array(N).fill(-1), taken = new Uint8Array(MAX_LIGHTS), pendIdx = new Int16Array(MAX_LIGHTS);
+        const wantC = new Int16Array(MAX_LIGHTS), wantW = new Float32Array(MAX_LIGHTS);
+        let wantN = 0;
+        const chosenF = new Uint8Array(N), candI = new Int16Array(N), candKey = new Float64Array(N), candE = new Uint8Array(N);
+        const strictI = new Int16Array(N), restI = new Int16Array(N), minD = new Float32Array(N), usedF = new Uint8Array(N);
         let epoch = 0, shadowDirty = false, lightsBusy = false;
         let animUntil = 0, pkStart = -1e9, rafId = 0, lastT = 0, hoverCell = -1, ready = false;
         const stats = { renders: 0 };
@@ -631,14 +639,14 @@ const poweredMats = [];
         function recompute(opts) {
             opts = opts || {};
             const now = performance.now();
-            const prevTg = Float32Array.from(tg);
+            prevTg.set(tg);
             dist.fill(-1);
-            const q = [SRC]; dist[SRC] = 0;
-            for (let h = 0; h < q.length; h++) {
-                const c = q[h];
-                for (let d = 0; d < 4; d++) { const n = NB[c * 4 + d]; if (n >= 0 && kind[n] === K_BLOCK && dist[n] < 0) { dist[n] = dist[c] + 1; q.push(n); } }
+            bfsQ[0] = SRC; bfsN = 1; dist[SRC] = 0;
+            for (let h = 0; h < bfsN; h++) {
+                const c = bfsQ[h];
+                for (let d = 0; d < 4; d++) { const n = NB[c * 4 + d]; if (n >= 0 && kind[n] === K_BLOCK && dist[n] < 0) { dist[n] = dist[c] + 1; bfsQ[bfsN] = n; bfsN += 1; } }
             }
-            nodeList = []; litNodes = 0;
+            nodeCount = 0; litNodes = 0;
             tg.fill(0);
             for (let i = 0; i < N; i++) {
                 if (kind[i] === K_SRC) { tg[i] = 1; sArr[i] = 0; }
@@ -646,11 +654,11 @@ const poweredMats = [];
                 else if (kind[i] === K_NODE) {
                     let m = -1;
                     for (let d = 0; d < 4; d++) { const n = NB[i * 4 + d]; if (n >= 0 && dist[n] >= 0 && (kind[n] === K_SRC || kind[n] === K_BLOCK) && (m < 0 || dist[n] < m)) m = dist[n]; }
-                    nodeList.push(i);
+                    nodeList[nodeCount] = i; nodeCount += 1;
                     if (m >= 0) { tg[i] = 1; sArr[i] = m + 1; litNodes += 1; } else sArr[i] = 0;
                 }
             }
-            nodeTotal = nodeList.length;
+            nodeTotal = nodeCount;
             // staggered arrival for newly powered cells, instant fade for the others
             let base = 1e9;
             for (let i = 0; i < N; i++) if (tg[i] > 0.5 && prevTg[i] < 0.5 && kind[i] !== K_SRC) base = Math.min(base, sArr[i]);
@@ -669,44 +677,73 @@ const poweredMats = [];
         }
 
         // ================= LIGHTS: pooled, dynamic, follow the circuit =================
+        function wantPush(i, w) { if (wantN < MAX_LIGHTS && !chosenF[i]) { wantC[wantN] = i; wantW[wantN] = w; wantN += 1; chosenF[i] = 1; } }
+        function near1(i, list, n) {
+            const x = i % GRID, z = (i - x) / GRID;
+            for (let k = 0; k < n; k++) { const c = list[k], cx = c % GRID, cz = (c - cx) / GRID; if (Math.abs(cx - x) <= 1 && Math.abs(cz - z) <= 1) return true; }
+            return false;
+        }
+        // Which cells get a light: circuit first, then the borders where a solid block meets an open tile, spread out.
         function wantLights() {
-            const out = [], chosen = new Set();
-            const push = (i, w) => { if (out.length < MAX_LIGHTS && !chosen.has(i)) { out.push({ i, w }); chosen.add(i); } };
-            push(SRC, 1);
-            const powered = []; for (let i = 0; i < N; i++) if (kind[i] === K_BLOCK && dist[i] >= 0) powered.push(i);
-            powered.sort((a, b) => dist[a] - dist[b]);
-            for (const i of nodeList) if (tg[i] > 0.5) push(i, 1);
-            for (const i of powered) push(i, 1);
-            for (const i of nodeList) if (tg[i] < 0.5) push(i, 0.6);
-            // standby glow on the solid cells that face open tiles, spread out
-            const cand = [];
+            wantN = 0; chosenF.fill(0);
+            wantPush(SRC, 1);
+            for (let k = 0; k < nodeCount; k++) if (tg[nodeList[k]] > 0.5) wantPush(nodeList[k], 1);
+            for (let h = 0; h < bfsN; h++) { const i = bfsQ[h]; if (kind[i] === K_BLOCK) wantPush(i, 1); }
+            for (let k = 0; k < nodeCount; k++) if (tg[nodeList[k]] < 0.5) wantPush(nodeList[k], 0.6);
+            const circuitN = wantN;
+            // exposed border cells, most exposed first, then closest to the centre (insertion sort on a typed buffer)
+            let nc = 0;
             for (let i = 0; i < N; i++) {
-                if (chosen.has(i) || kind[i] === K_EMPTY || kind[i] === K_SRC || kind[i] === K_BLOCK) continue;
+                const k = kind[i];
+                if (chosenF[i] || k === K_EMPTY || k === K_SRC || k === K_BLOCK) continue;
                 let e = 0; for (let d = 0; d < 4; d++) { const n = NB[i * 4 + d]; if (n >= 0 && kind[n] === K_EMPTY) e += 1; }
-                if (e) cand.push({ i, e, d: Math.abs((i % GRID) - HALF) + Math.abs(Math.floor(i / GRID) - HALF) });
+                if (!e) continue;
+                candE[i] = e; candKey[i] = (4 - e) * 1e6 + (Math.abs((i % GRID) - HALF) + Math.abs(Math.floor(i / GRID) - HALF)) * 1000 + i;
+                let p = nc; while (p > 0 && candKey[candI[p - 1]] > candKey[i]) { candI[p] = candI[p - 1]; p -= 1; }
+                candI[p] = i; nc += 1;
             }
-            cand.sort((a, b) => b.e - a.e || a.d - b.d || a.i - b.i);
-            const near = (i) => { const x = i % GRID, z = Math.floor(i / GRID); for (const c of chosen) { if (Math.abs((c % GRID) - x) <= 1 && Math.abs(Math.floor(c / GRID) - z) <= 1) return true; } return false; };
-            const rest = [];
-            const sw = mode === 'sandbox' ? 1 : 0.85;
-            for (const c of cand) { if (out.length >= MAX_LIGHTS) break; if (!near(c.i)) push(c.i, sw); else rest.push(c); }
-            for (const c of rest) push(c.i, sw);
-            return out;
+            // pass 1: no two lights on touching cells
+            let ns = 0, nr = 0;
+            for (let c = 0; c < nc; c++) {
+                const i = candI[c];
+                if (near1(i, wantC, circuitN) || near1(i, strictI, ns)) { restI[nr] = i; nr += 1; } else { strictI[ns] = i; ns += 1; }
+            }
+            const sw = mode === 'sandbox' ? 1 : 0.85, remaining = MAX_LIGHTS - wantN;
+            if (ns <= remaining) {
+                for (let s = 0; s < ns; s++) wantPush(strictI[s], sw);
+                for (let r = 0; r < nr; r++) wantPush(restI[r], sw);
+            } else {
+                // more borders than lights: farthest point sampling, with a bonus for cells that already hold a light (less flicker)
+                for (let s = 0; s < ns; s++) {
+                    usedF[s] = 0; const i = strictI[s], x = i % GRID, z = (i - x) / GRID; let m = 99;
+                    for (let k = 0; k < circuitN; k++) { const c = wantC[k], cx = c % GRID, cz = (c - cx) / GRID; const d = Math.hypot(cx - x, cz - z); if (d < m) m = d; }
+                    minD[s] = m;
+                }
+                for (let r = 0; r < remaining; r++) {
+                    let best = -1, bs = -1e9;
+                    for (let s = 0; s < ns; s++) if (!usedF[s]) { const i = strictI[s], sc = Math.min(minD[s], 4) + (cellSlot[i] >= 0 ? 0.8 : 0) + 0.1 * candE[i]; if (sc > bs) { bs = sc; best = s; } }
+                    if (best < 0) break;
+                    usedF[best] = 1; const bi = strictI[best]; wantPush(bi, sw);
+                    const bx = bi % GRID, bz = (bi - bx) / GRID;
+                    for (let s = 0; s < ns; s++) if (!usedF[s]) { const i = strictI[s], x = i % GRID, z = (i - x) / GRID; const d = Math.hypot(bx - x, bz - z); if (d < minD[s]) minD[s] = d; }
+                }
+            }
         }
         function assignLights() {
-            const want = wantLights();
-            const byCell = new Map(); for (let k = 0; k < MAX_LIGHTS; k++) if (slotCell[k] >= 0) byCell.set(slotCell[k], k);
-            const taken = new Set(); slotT.fill(0);
-            const pending = [];
-            for (const w of want) { const k = byCell.get(w.i); if (k !== undefined) { slotT[k] = w.w; taken.add(k); } else pending.push(w); }
-            for (const w of pending) {
+            cellSlot.fill(-1); for (let k = 0; k < MAX_LIGHTS; k++) if (slotCell[k] >= 0) cellSlot[slotCell[k]] = k;
+            wantLights();
+            taken.fill(0); slotT.fill(0);
+            let pn = 0;
+            for (let w = 0; w < wantN; w++) { const k = cellSlot[wantC[w]]; if (k >= 0) { slotT[k] = wantW[w]; taken[k] = 1; } else { pendIdx[pn] = w; pn += 1; } }
+            for (let p = 0; p < pn; p++) {
+                const w = pendIdx[p], i = wantC[w];
                 let k = -1;
-                for (let j = 0; j < MAX_LIGHTS; j++) if (slotCell[j] < 0) { k = j; break; }
-                if (k < 0) { let best = 1e9; for (let j = 0; j < MAX_LIGHTS; j++) if (!taken.has(j) && slotI[j] < best) { best = slotI[j]; k = j; } }
+                for (let j = 0; j < MAX_LIGHTS; j++) if (slotCell[j] < 0 && !taken[j]) { k = j; break; }
+                if (k < 0) { let best = 1e9; for (let j = 0; j < MAX_LIGHTS; j++) if (!taken[j] && slotI[j] < best) { best = slotI[j]; k = j; } }
                 if (k < 0) continue;
-                slotCell[k] = w.i; slotT[k] = w.w; taken.add(k);
+                slotCell[k] = i; slotT[k] = wantW[w]; taken[k] = 1;
                 if (slotI[k] > 0.2) slotI[k] = 0.2;
-                lights[k].position.set(CELL_X(w.i), LIGHT_Y, CELL_Z(w.i));
+                lights[k].position.set(CELL_X(i), LIGHT_Y, CELL_Z(i));
             }
             lightsBusy = true;
         }
@@ -777,7 +814,7 @@ const poweredMats = [];
             for (let i = 0; i < N; i++) glow[i] = tg[i];
             refreshGlow();
             if (opts.instant) { power = powerTarget; applyPower(power); }
-            say('', 0); updateHud(); updateHint();
+            say('', 0); updateHud(); updateHint(); refreshHover();
             pkStart = performance.now(); wake(PK_DUR + 200);
         }
         function startSandbox(opts) {
@@ -788,7 +825,7 @@ const poweredMats = [];
             for (let i = 0; i < N; i++) glow[i] = tg[i];
             refreshGlow();
             if (opts.instant) { power = powerTarget; applyPower(power); }
-            say('free build', 2600); updateHud(); updateHint();
+            say('free build', 2600); updateHud(); updateHint(); refreshHover();
             wake(PK_DUR + 200);
         }
         function updateHint() {
@@ -801,7 +838,7 @@ const poweredMats = [];
 
         // change level with a short sink and rise
         function gotoIndex(idx, instantPower) {
-            const e0 = epoch + 1; epoch += 1; phase = 'trans';
+            const e0 = epoch + 1; epoch += 1; phase = 'trans'; refreshHover();
             hud.foot.classList.remove('on');
             const total = LEVELS.length;
             idx = ((idx % (total + 1)) + (total + 1)) % (total + 1);
@@ -819,7 +856,7 @@ const poweredMats = [];
 
         let holdWin = false;
         function onWin() {
-            phase = 'won'; const e = epoch;
+            phase = 'won'; refreshHover(); const e = epoch;
             const now = performance.now();
             moveQuad(Q_WAVE, CELL_X(SRC), TOP_Y + 0.03, CELL_Z(SRC), 12);
             setQ(Q_WAVE, 12, now / 1000, 7.5); waveEnd = now + 1800; glowGeo.attributes.aD.needsUpdate = true;
@@ -843,24 +880,34 @@ const poweredMats = [];
             startAnim(i, curScale[i], 0, 0.16, 0);
             for (let d = 0; d < 4; d++) { const n = NB[i * 4 + d]; if (n >= 0) refreshGeo(n); }
         }
+        // Ring blocks (outside the play area) can always be carved away and put back, for free. They never touch the circuit.
+        function ringCell(i) {
+            const x = i % GRID, z = (i - x) / GRID;
+            if (mode === 'sandbox') return Math.abs(x - HALF) > 2 || Math.abs(z - HALF) > 2;
+            return !(x >= A0 && x < A0 + ARENA && z >= A0 && z < A0 + ARENA);
+        }
+        function placeRock(i) { kind[i] = K_WALL; syncCubeNew(i); }
         function actOn(i, rightClick) {
             if (phase !== 'play' || i < 0) return false;
-            const k = kind[i];
-            let changed = false;
-            if (mode === 'level') {
-                if (k === K_EMPTY && !rightClick) { if (usedBlocks() >= budget) { nudgeBudget(); return false; } place(i); changed = true; }
-                else if (k === K_BLOCK) { removeCell(i); changed = true; }
-            } else {
-                if (k === K_EMPTY && !rightClick) { place(i); changed = true; }
-                else if (k === K_BLOCK || k === K_WALL) { removeCell(i); changed = true; }
+            const k = kind[i], ring = ringCell(i);
+            let changed = false, ringEdit = false;
+            if (k === K_EMPTY && !rightClick) {
+                if (ring) { placeRock(i); ringEdit = true; }
+                else { if (mode === 'level' && usedBlocks() >= budget) { nudgeBudget(); return false; } place(i); changed = true; }
+            } else if (k === K_WALL && ring) { removeCell(i); ringEdit = true; }
+            else if (k === K_BLOCK) { removeCell(i); changed = true; }
+            if (ringEdit) {
+                // lights and strips follow the new borders; power flow, sockets and budget are untouched
+                assignLights(); refreshGlow(); shadowDirty = true; wake(900); refreshHover();
+                return true;
             }
             if (!changed) return false;
             hud.foot.classList.remove('on');
-            const was = litNodes;
             const win = recompute();
             updateHud(); updateHint(); shadowDirty = true;
             if (usedBlocks() >= budget && mode === 'level' && !win) say('', 0);
             wake(PK_DUR + 200);
+            refreshHover();
             if (win && mode === 'level') onWin();
             return true;
         }
@@ -992,24 +1039,23 @@ const poweredMats = [];
             }
             return cell;
         }
+        // hover cursor: always re-evaluated against what is under the pointer now (also after every edit)
+        let hoverTop = false, ptrX = 0, ptrY = 0, ptrOn = false;
         function setHover(i) {
-            let show = i >= 0 && phase === 'play';
-            if (show) {
-                const k = kind[i];
-                show = mode === 'level' ? (k === K_EMPTY || k === K_BLOCK) : (k === K_EMPTY || k === K_BLOCK || k === K_WALL);
-            }
-            const t = show ? i : -1;
-            if (t === hoverCell) return;
-            hoverCell = t;
+            let t = -1;
+            if (i >= 0 && phase === 'play') { const k = kind[i]; if (k === K_EMPTY || k === K_BLOCK || (k === K_WALL && ringCell(i))) t = i; }
+            const top = t >= 0 && kind[t] !== K_EMPTY;
+            if (t === hoverCell && top === hoverTop) return;
+            hoverCell = t; hoverTop = top;
             if (t < 0) setQ(Q_CURSOR, 0, 0, 4);
             else {
-                const onTop = kind[t] !== K_EMPTY;
-                moveQuad(Q_CURSOR, CELL_X(t), onTop ? TOP_Y + 0.012 : FLOOR_Y + 0.016, CELL_Z(t), 0.4);
+                moveQuad(Q_CURSOR, CELL_X(t), top ? TOP_Y + 0.012 : FLOOR_Y + 0.016, CELL_Z(t), 0.4);
                 setQ(Q_CURSOR, 1, 0, 4);
             }
             glowGeo.attributes.aD.needsUpdate = true;
             wake(0);
         }
+        function refreshHover() { setHover(ptrOn ? pick(ptrX, ptrY) : -1); }
 
         // ================= INPUT =================
         function bindInput(canvas) {
@@ -1023,17 +1069,18 @@ const poweredMats = [];
                     const lim = down.touch ? 9 : 5;
                     if (Math.abs(e.clientX - down.x) > lim || Math.abs(e.clientY - down.y) > lim) down.moved = true;
                 }
-                if (e.pointerType === 'mouse' && e.buttons === 0) setHover(pick(e.clientX, e.clientY));
+                if (e.pointerType === 'mouse' && e.buttons === 0) { ptrX = e.clientX; ptrY = e.clientY; ptrOn = true; setHover(pick(ptrX, ptrY)); }
             });
-            canvas.addEventListener('pointerleave', () => setHover(-1));
+            canvas.addEventListener('pointerleave', () => { ptrOn = false; setHover(-1); });
             const end = e => {
                 if (!down || e.pointerId !== down.id) return;
                 const d = down; down = null;
+                if (d.touch) { ptrOn = false; setHover(-1); }
+                else { ptrX = e.clientX; ptrY = e.clientY; ptrOn = true; }
                 if (e.type === 'pointercancel' || d.multi || d.moved) return;
                 if (performance.now() - d.t > 700) return;
                 if (d.btn !== 0 && d.btn !== 2) return;
                 actOn(pick(e.clientX, e.clientY), d.btn === 2);
-                if (!d.touch) setHover(pick(e.clientX, e.clientY));
             };
             canvas.addEventListener('pointerup', end);
             canvas.addEventListener('pointercancel', end);
@@ -1206,10 +1253,13 @@ const poweredMats = [];
                     return { x: r.left + (v.x + 1) / 2 * r.width, y: r.top + (1 - v.y) / 2 * r.height };
                 },
                 pickAt: (x, y) => pick(x, y),
+                cursor: () => ({ cell: hoverCell, top: hoverTop, amt: aDarr[Q_CURSOR * 16 + 1], y: posArr[Q_CURSOR * 12 + 1], x: posArr[Q_CURSOR * 12] + 0.4, z: posArr[Q_CURSOR * 12 + 2] + 0.4 }),
+                ringCell: (x, z) => ringCell(z * GRID + x),
                 renderOnce: () => { render(); },
                 counts: () => ({ cubes: cubes.length, visible: cubes.filter(c => c.visible).length }),
                 camera: () => camera.position.toArray(),
                 fit: () => ({ fitD, dist: camera.position.length(), min: controls.minDistance, max: controls.maxDistance }),
+                resetCamera: () => { camera.position.copy(DIR).multiplyScalar(fitD); controls.update(); wake(0); },
                 setCamera: (x, y, z) => { camera.position.set(x, y, z); controls.update(); wake(0); },
             };
         }
