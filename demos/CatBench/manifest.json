@@ -1,7 +1,13 @@
 {
   "base": "https://katehuuh.github.io/demos/CatBench/",
-  "updated": "2026-09-29T00:12:20Z",
+  "updated": "2026-10-07T01:30:26Z",
   "models": {
+    "mistral-large-4": {
+      "display_name": "mistral-large-4",
+      "svg": "assets/mistral-large-4-svg.jpg",
+      "svg_source": "assets/mistral-large-4.svg",
+      "added": "2026-10-07T01:30:26Z"
+    },
     "claude-sonnet-5-high": {
       "display_name": "claude-sonnet-5-high",
       "python_render": "assets/claude-sonnet-5-high-python.jpg",
