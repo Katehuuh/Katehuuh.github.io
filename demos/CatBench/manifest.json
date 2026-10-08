@@ -1,12 +1,22 @@
 {
   "base": "https://katehuuh.github.io/demos/CatBench/",
-  "updated": "2026-10-07T01:30:26Z",
+  "updated": "2026-10-08T01:59:05Z",
   "models": {
+    "claude-haiku-5.5": {
+      "display_name": "claude-haiku-5.5",
+      "python_render": "assets/claude-haiku-5.5-python.jpg",
+      "svg": "assets/claude-haiku-5.5-svg.jpg",
+      "python_source": "assets/claude-haiku-5.5.py",
+      "svg_source": "assets/claude-haiku-5.5.svg",
+      "added": "2026-10-08T01:59:05Z"
+    },
     "mistral-large-4": {
       "display_name": "mistral-large-4",
+      "python_render": "assets/mistral-large-4-python.jpg",
       "svg": "assets/mistral-large-4-svg.jpg",
+      "python_source": "assets/mistral-large-4.py",
       "svg_source": "assets/mistral-large-4.svg",
-      "added": "2026-10-07T01:30:26Z"
+      "added": "2026-10-07T01:30:46Z"
     },
     "claude-sonnet-5-high": {
       "display_name": "claude-sonnet-5-high",
