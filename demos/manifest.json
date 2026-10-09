@@ -4,7 +4,7 @@
       "name": "[SHOW]-Jelly-Slider",
       "type": "file",
       "filename": "[SHOW]-Jelly-Slider.html",
-      "description": "A WebGL2 port of a jelly slider where a simulated rope drives a ray marched jelly body with temporal anti aliasing."
+      "description": "A WebGL2 jelly slider where a simulated rope drives a ray marched jelly body whose crispy edge wears with use."
     },
     {
       "name": "[SHOW]-One-Last-Flight",
