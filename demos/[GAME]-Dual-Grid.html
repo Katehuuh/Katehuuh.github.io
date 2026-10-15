@@ -387,6 +387,7 @@
     <script type="module">
         import * as THREE from 'three';
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js';
 
         // ================= LEVELS =================
         // 7x7 playable area. S source (always the centre), N dark socket, # wall, . open tile,
@@ -529,9 +530,259 @@
             return env;
         }
 
+        // ================= CRYSTALS: glass shards floating under the board (decor) =================
+        // Taken from the "Crystal Shatter" render: every shard sits in ONE merged geometry and spins and drifts in the
+        // vertex shader from uTime. The glass sees only its own baked studio cubemap: no scene lights, no shadows.
+        // key shards traced from the reference (1920x1202 pixel outlines): [depth, thickness, x,y, x,y, ...]
+        const CR_TRACE = [
+            [5.2,.35,680,235,705,222,740,210,800,210,845,225,870,260,890,300,855,312,800,305,750,295,705,272,685,250],
+            [5.4,.5,1290,85,1330,75,1410,25,1440,20,1490,90,1540,195,1520,215,1440,230,1385,235,1340,215,1315,160,1300,110],
+            [5.2,.4,660,478,700,495,760,520,800,530,860,545,870,580,850,630,820,670,780,650,740,610,700,570,655,520],
+            [5.6,.3,585,405,640,405,670,420,665,500,650,560,625,590,610,560,595,480],
+            [5.1,.4,570,915,610,860,650,820,700,835,760,840,770,880,855,940,850,975,800,1010,760,1050,720,1040,660,990,610,950],
+            [4.6,.35,330,1060,400,1020,460,985,500,980,560,1040,600,1060,640,1130,600,1160,500,1165,420,1150,350,1100],
+            [6.2,.25,745,690,830,650,900,610,1000,598,1100,610,1170,640,1195,700,1180,770,1100,760,1000,730,880,700],
+            [7.0,.3,1300,385,1360,375,1440,390,1500,330,1545,275,1555,340,1520,420,1460,500,1400,560,1340,550,1310,500],
+            [7.5,.25,1040,840,1100,790,1150,780,1200,800,1215,860,1190,930,1120,880],
+            [5.6,.3,1730,600,1760,560,1820,525,1860,525,1880,575,1830,590,1760,605],
+            [5.4,.5,920,60,950,40,985,50,992,85,965,110,930,100],
+            [5.3,.4,890,500,910,450,950,420,980,430,975,480,930,515],
+            [4.4,.4,190,650,260,600,330,610,400,680,440,760,420,820,320,860,240,820,190,740],
+            [4.5,.35,170,560,230,540,300,560,330,610,260,600,190,650,160,610],
+            [5.0,.4,690,0,860,0,855,60,810,140,760,150,720,110,700,50],
+            [5.2,.4,785,130,810,105,840,120,835,170,810,190],
+            [3.3,.3,500,175,560,150,650,155,700,200,705,300,660,330,560,300,510,240],
+            [6.8,.3,430,470,470,430,530,400,560,410,555,470,520,520,460,515],
+            [9.0,.3,1060,20,1150,0,1210,30,1170,110,1100,150,1050,120,1020,60],
+            [8.5,.3,1520,40,1600,20,1680,40,1700,90,1640,130,1560,120],
+            [8.5,.3,1640,170,1720,190,1760,240,1720,265,1650,235],
+            [9.0,.3,1520,210,1600,200,1630,260,1600,330,1530,320,1505,260]];
+        // crumpled cellophane map, baked once: rgb = tangent normal, a = crease mask
+        const CR_BAKE_VS = `varying vec2 vUv; void main(){ vUv=uv; gl_Position=vec4(position.xy,0.,1.); }`;
+        const CR_BAKE_FS = `varying vec2 vUv;
+vec2 h22(vec2 p){ vec3 p3=fract(vec3(p.xyx)*vec3(.1031,.1030,.0973)); p3+=dot(p3,p3.yzx+33.33); return fract((p3.xx+p3.yz)*p3.zy); }
+vec2 grd(vec2 i,vec2 P){ float a=h22(mod(i,P)).x*6.2831853; return vec2(cos(a),sin(a)); }
+// gradient noise with its analytic derivative: (value, d/dx, d/dy)
+vec3 gnd(vec2 p,vec2 P){ vec2 i=floor(p), f=fract(p), u=f*f*f*(f*(f*6.-15.)+10.), du=30.*f*f*(f*(f-2.)+1.);
+  vec2 ga=grd(i,P), gb=grd(i+vec2(1,0),P), gc=grd(i+vec2(0,1),P), gd=grd(i+vec2(1,1),P);
+  float va=dot(ga,f), vb=dot(gb,f-vec2(1,0)), vc=dot(gc,f-vec2(0,1)), vd=dot(gd,f-vec2(1,1)), k=va-vb-vc+vd;
+  return vec3(va+u.x*(vb-va)+u.y*(vc-va)+u.x*u.y*k, ga+u.x*(gb-ga)+u.y*(gc-ga)+u.x*u.y*(ga-gb-gc+gd)+du*(u.yx*k+vec2(vb,vc)-va))*1.4; }
+vec2 facet(vec2 p,vec2 P,float sd){ vec2 ip=floor(p), fp=fract(p), s=vec2(0); float d1=9.;
+  for(int j=-1;j<=1;j++) for(int i=-1;i<=1;i++){ vec2 g=vec2(i,j), id=mod(ip+g,P), r=g+h22(id+sd)-fp; float d=dot(r,r);
+    if(d<d1){ d1=d; s=h22(id*1.37+sd+17.)*2.-1.; } }
+  return s; }
+const vec2 PS[5]=vec2[5](vec2(5,7),vec2(11,9),vec2(19,23),vec2(41,37),vec2(83,79));
+// gradient of the ridged height (one analytic pass instead of three samples), cr = crease mask
+vec2 hgt(vec2 uv,out float cr){ vec3 w1=gnd(uv*3.,vec2(3)), w2=gnd(uv*3.+vec2(7,3),vec2(3));
+  vec2 q=uv+vec2(w1.x,w2.x)*.06, gq=vec2(0); float a=1.; cr=0.;
+  for(int i=0;i<5;i++){ vec3 n=gnd(q*PS[i]+float(i)*13.,PS[i]); float r=1.-abs(n.x); gq-=a*2.*r*sign(n.x)*n.yz*PS[i]; cr+=a*pow(r,12.)*(i<2?1.:.35); a*=.42; }
+  return mat2(1.+.18*w1.y,.18*w1.z,.18*w2.y,1.+.18*w2.z)*gq; }
+void main(){ float c0;
+  vec2 g=hgt(vUv,c0)*.02;
+  g+=facet(vUv*vec2(4,6),vec2(4,6),1.)*.35+facet(vUv*vec2(10,9),vec2(10,9),5.)*.2;
+  gl_FragColor=vec4(normalize(vec3(-g,1.))*.5+.5, clamp(c0*.9,0.,1.)); }`;
+        // studio lighting the glass sees, baked once into a cube; uRot turns a game direction into the reference frame.
+        // Added: a blue glow band below the horizon, so the glass body reads blue from every orbit angle.
+        const CR_ENV_VS = `uniform mat3 uRot; varying vec3 vDir,vG; void main(){ vG=position; vDir=uRot*position; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }`;
+        const CR_ENV_FS = `varying vec3 vDir,vG; uniform vec3 uL0,uKey;
+float rectL(vec3 d,vec3 dir,vec2 sz,float soft){ float c=dot(d,dir); if(c<=0.) return 0.;
+  vec3 t=normalize(cross(dir,abs(dir.y)>.9?vec3(1,0,0):vec3(0,1,0))), b=cross(dir,t);
+  vec2 m=1.-smoothstep(sz*soft,sz,abs(vec2(dot(d,t),dot(d,b))/c)); return m.x*m.y; }
+void main(){ vec3 d=normalize(vDir); float g0=max(dot(d,uL0),0.);
+  vec3 col=mix(vec3(.002,.004,.012),vec3(.008,.018,.06),smoothstep(-.3,.9,d.y));
+  col+=vec3(.05,.11,.4)*pow(g0,12.)+vec3(.45,.55,1.)*pow(g0,80.)*2.;
+  col+=vec3(.95,.92,1.12)*9.5*rectL(d,uKey,vec2(.75,.38),.4);
+  col+=vec3(.5,.6,1.1)*1.2*rectL(d,normalize(vec3(-.6,.6,.4)),vec2(.6,.25),.5);
+  col+=vec3(.7,.8,1.2)*7.*rectL(d,normalize(vec3(.95,.12,.2)),vec2(.07,.6),.6);
+  col+=vec3(.55,.65,1.2)*5.*rectL(d,normalize(vec3(-.9,.05,-.45)),vec2(.08,.7),.6);
+  col+=vec3(.65,.72,1.2)*4.*rectL(d,normalize(vec3(.15,.95,-.3)),vec2(.6,.2),.7);
+  col+=vec3(.55,.65,1.15)*3.*rectL(d,normalize(vec3(0,.3,.95)),vec2(.5,.08),.6);
+  col+=vec3(.28,.22,.55)*pow(max(dot(d,normalize(vec3(.1,-.7,.7))),0.),3.)*.3;
+  col+=vec3(.8,.35,.12)*pow(max(dot(d,normalize(vec3(.75,-.45,.5))),0.),16.)*.8;
+  float gy=(normalize(vG).y+.5)/.38; col+=vec3(.05,.12,.42)*exp(-gy*gy);
+  gl_FragColor=vec4(col,1.); }`;
+        // spin + drift per vertex (heroes only wobble); barycentrics from gl_VertexID for the thin edge line
+        const CR_VS = `attribute vec3 aTan; attribute vec4 aC,aAxis,aVel,aInfo; uniform float uTime;
+varying vec3 vW,vN,vT,vBary; varying vec2 vUv; varying vec4 vInfo;
+void main(){
+  float hero=step(aVel.w,-.5), ang=mix(aC.w+uTime*aAxis.w, sin(uTime*.045+aC.w)*aAxis.w*3., hero);
+  vec3 a=aAxis.xyz; float s=sin(ang), c=cos(ang), o=1.-c;
+  mat3 Rm=mat3(o*a.x*a.x+c,o*a.x*a.y+a.z*s,o*a.z*a.x-a.y*s, o*a.x*a.y-a.z*s,o*a.y*a.y+c,o*a.y*a.z+a.x*s, o*a.z*a.x+a.y*s,o*a.y*a.z-a.x*s,o*a.z*a.z+c);
+  vW=aC.xyz+aVel.xyz*sin(uTime*.05+aVel.w*(1.-hero))+Rm*position;
+  vN=Rm*normal; vT=Rm*aTan; vUv=uv; vInfo=aInfo;
+  int k=gl_VertexID%3; vBary=vec3(k==0,k==1,k==2);
+  gl_Position=projectionMatrix*viewMatrix*vec4(vW,1.);
+}`;
+        // glass: crumpled entry surface, parallax shifted inner crumple, refracted exit, Beer absorption, key light self shadow,
+        // core light scattering through the folds. uPow: dim and cold in the dark look, brighter as the grid wakes up
+        const CR_FS = `uniform sampler2D tCr; uniform samplerCube tEnv; uniform vec3 uKey,uLP,uSigma; uniform float uNS,uShadow,uPow;
+varying vec3 vW,vN,vT,vBary; varying vec2 vUv; varying vec4 vInfo;
+vec3 env(vec3 d){ return textureCube(tEnv,d).rgb; }
+vec3 exitDir(vec3 I,vec3 N,vec3 Nb,float ior,inout float tir){
+  vec3 T=refract(I,N,1./ior), E=refract(T,Nb,ior);
+  if(dot(E,E)<1e-4){ vec3 r=reflect(T,Nb); E=refract(r,-N,ior); if(dot(E,E)<1e-4) E=reflect(r,-N); tir+=1.; }
+  return E; }
+vec3 tn(vec3 n,vec3 T,vec3 B,vec3 N0,float s){ return normalize((T*n.x+B*n.y)*s+N0*max(n.z,.2)); }
+void main(){
+  vec3 N0=normalize(vN), V=normalize(cameraPosition-vW), I=-V;
+  if(dot(N0,V)<0.) N0=-N0;
+  vec3 T=normalize(vT-N0*dot(vT,N0)), B=cross(N0,T);
+  vec4 c1=texture2D(tCr,vUv);
+  vec3 N=tn(c1.xyz*2.-1.,T,B,N0,uNS);
+  float nv=dot(N,V); if(nv<.05) N=normalize(N+V*(.05-nv));
+  float F=.04+.96*pow(1.-clamp(dot(N,V),0.,1.),5.);
+  vec3 reflF=env(reflect(I,N0)), refl=env(reflect(I,N))*.8+reflF*.2, Tg=refract(I,N,1./1.55);
+  float ct=max(abs(dot(Tg,N0)),.25), th=vInfo.x*.4;
+  vec4 c2=texture2D(tCr,mat2(.8,.6,-.6,.8)*vUv*1.37+vec2(dot(Tg,T),dot(Tg,B))/ct*min(th,.5)*.9+vInfo.y*7.);
+  vec3 n2=c2.xyz*2.-1., Nb=tn(n2,T,B,N0,uNS*1.3);
+  float tir=0.;
+  vec3 tr=env(exitDir(I,N,Nb,1.555,tir)), ab=exp(-uSigma*th/ct*(1.+tir*.6));
+  float lit=mix(uShadow,1.,smoothstep(-.1,.85,dot(N0,uKey)));
+  float b3=pow(max(dot(normalize(uLP-vW),I),0.),3.);
+  float k=exp2(-4.2*(1.-uPow)); // follows the sun: about 1/18 in the dark look
+  vec3 fc=mix(vec3(.15,.8,1.),vec3(.72,.82,1.),k);
+  vec3 fold=fc*clamp(c1.a+c2.a*.6,0.,1.)*(lit*lit*.18+vInfo.z*(.3+2.2*b3*b3))+fc*fc*vInfo.z*(.08+.5*b3)*(.4+.6*n2.z);
+  float mb=min(min(vBary.x,vBary.y),vBary.z), edge=1.-smoothstep(0.,1.3,mb/max(fwidth(mb),1e-6));
+  vec3 col=(refl*F*1.5*mix(.6,1.,lit)+tr*ab*mix(.3,1.,lit)*(1.-F)+edge*(reflF*.06+vec3(.02,.03,.06)*lit))*mix(vec3(.07,.12,.15),vec3(1),k)
+    +(fold*sqrt(ab)*(1.-F)+(edge*.35+c1.a*(.4+.6*lit))*vec3(0,.2,.24)*(1.-k))*mix(.7,1.,k);
+  col=clamp(col*vInfo.w*mix(.15,.55,smoothstep(-6.5,-1.,vW.y)),0.,40.); if(!(col.r+col.g+col.b>=0.)) col=vec3(0);
+  gl_FragColor=vec4(col,1.);
+  #include <tonemapping_fragment>
+  #include <colorspace_fragment>
+}`;
+        // Step 1, once the lights exist: creates the bake targets and the glass mesh (geometry still empty) and starts compiling
+        // the three shaders, which runs while the main thread builds the block textures. Returns step 2: bake once, build the shards.
+        function startCrystals() {
+            const crumple = new THREE.WebGLRenderTarget(512, 512, { minFilter: THREE.LinearMipmapLinearFilter, magFilter: THREE.LinearFilter, generateMipmaps: true,
+                depthBuffer: false, wrapS: THREE.RepeatWrapping, wrapT: THREE.RepeatWrapping, anisotropy: Math.min(4, renderer.capabilities.getMaxAnisotropy()) });
+            const hdr = renderer.extensions.has('EXT_color_buffer_float') || renderer.extensions.has('EXT_color_buffer_half_float');
+            const envRT = new THREE.WebGLCubeRenderTarget(128, { type: hdr ? THREE.HalfFloatType : THREE.UnsignedByteType, generateMipmaps: true,
+                minFilter: THREE.LinearMipmapLinearFilter, depthBuffer: false }); // mips tame the crumple sparkle
+            const tri = new THREE.BufferGeometry();
+            tri.setAttribute('position', new THREE.Float32BufferAttribute([-1, -1, 0, 3, -1, 0, -1, 3, 0], 3));
+            tri.setAttribute('uv', new THREE.Float32BufferAttribute([0, 0, 2, 0, 0, 2], 2));
+            const bakeM = new THREE.ShaderMaterial({ vertexShader: CR_BAKE_VS, fragmentShader: CR_BAKE_FS, depthTest: false, depthWrite: false });
+            const envM = new THREE.ShaderMaterial({ vertexShader: CR_ENV_VS, fragmentShader: CR_ENV_FS, side: THREE.BackSide, depthTest: false, depthWrite: false,
+                uniforms: { uRot: { value: CR_ROT }, uL0: { value: new THREE.Vector3(1.52, .79, -11.5).normalize() }, uKey: { value: CR_KEY } } });
+            const quad = new THREE.Mesh(tri, bakeM), box = new THREE.Mesh(new THREE.BoxGeometry(50, 50, 50), envM);
+            quad.frustumCulled = false;
+            const qs = new THREE.Scene().add(quad), es = new THREE.Scene().add(box), cam = new THREE.Camera(), cube = new THREE.CubeCamera(0.1, 100, envRT);
+            const U = {
+                tCr: { value: crumple.texture }, tEnv: { value: envRT.texture }, uKey: { value: CR_KEY.clone().applyMatrix3(CR_ROT.clone().transpose()) },
+                uLP: { value: new THREE.Vector3(0, -1.2, 0) }, uSigma: { value: new THREE.Vector3(4.6, 2.7, .65) }, uNS: { value: 1 }, uShadow: { value: .05 }, uTime: { value: 0 }, uPow: { value: 0 },
+            };
+            const mesh = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.ShaderMaterial({ vertexShader: CR_VS, fragmentShader: CR_FS, uniforms: U }));
+            mesh.frustumCulled = false; mesh.matrixAutoUpdate = false; mesh.renderOrder = 1; // after the board, so its depth hides most of the glass
+            scene.add(mesh);
+            // compile each with its own target bound, so the later passes find these programs instead of compiling again
+            for (const [rt, sc, c] of [[crumple, qs, cam], [envRT, es, cam], [null, scene, camera]]) { renderer.setRenderTarget(rt); renderer.compile(sc, c); }
+            return () => {
+                cube.update(renderer, es); // cheap one first: the heavy crumple pass then runs on the GPU while the shards are built
+                renderer.setRenderTarget(crumple); renderer.render(qs, cam); renderer.setRenderTarget(null);
+                for (const x of [bakeM, envM, tri, box.geometry]) x.dispose();
+                mesh.geometry = crystalGeometry();
+                return U;
+            };
+        }
+        const CR_ROT = new THREE.Matrix3().setFromMatrix4(new THREE.Matrix4().makeRotationX(Math.atan2(11, 8))); // default view looks down the reference -z
+        const CR_KEY = new THREE.Vector3(.55, .65, .5).normalize();
+        // the seeded layout (identical on every load) as one geometry
+        function crystalGeometry() {
+            const V3 = THREE.Vector3, SC = 1.7, UVS = .34, TH = Math.tan(19 * Math.PI / 180); // SC: reference units to game units, UVS: crumple scale
+            let seed = 90210;
+            const rnd = () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+            const ru = (a = 0, b = 1) => a + rnd() * b, rp = (p, b, a = 0) => a + Math.pow(rnd(), p) * b;
+            const randDir = () => { const z = rnd() * 2 - 1, a = rnd() * 6.2831853, r = Math.sqrt(1 - z * z); return new V3(r * Math.cos(a), r * Math.sin(a), z); };
+            const spinOf = s => ru(.025, .09) * (rnd() < .5 ? -1 : 1) / (.5 + s);
+            const ring = (s, e) => { const k = Math.floor(s) & 3, t = (s % 1) * 2 - 1; return k === 0 ? [e, t * e] : k === 1 ? [t * e, -e] : k === 2 ? [-e, t * e] : [t * e, e]; };
+            // random convex chunk (k 1 sliver, 2 plate, 0 lump), in reference units
+            function hullGeo(size, k, n) {
+                const sy = k === 1 ? ru(.5, .5) : k === 2 ? ru(.22, .25) : ru(.55, .45), sz = k === 1 ? ru(.16, .18) : k === 2 ? ru(.18, .22) : ru(.4, .45);
+                const e = new THREE.Euler(ru(0, 6.28), ru(0, 6.28), ru(0, 6.28)), pts = [];
+                for (let i = 0; i < n; i++) { const d = randDir(); let r = ru(.55, .45); if (rnd() < .12) r *= 1.4; pts.push(new V3(d.x * r, d.y * r * sy, d.z * r * sz).multiplyScalar(size * .5).applyEuler(e)); }
+                try { const g = new ConvexGeometry(pts); if (g.attributes.position.count >= 12) return g; } catch (_) {}
+                return new THREE.OctahedronGeometry(size * .4, 0);
+            }
+            // traced outline as a slanted slab: full outline in front, inset outline behind, a bulge toward +z
+            function heroGeo([d, tk, ...p]) {
+                const k = 2 * d * TH / 1202, W = [], c = new V3();
+                for (let i = 0; i < p.length; i += 2) { const w = new V3(p[i] * k, -p[i + 1] * k, 0); W.push(w); c.add(w); }
+                c.divideScalar(W.length); for (const w of W) w.sub(c);
+                const size = Math.max(...W.map(w => w.length() * 2)), th = size * tk, tilt = randDir().multiplyScalar(.45), pts = [];
+                for (const w of W) { const dz = w.dot(tilt) + (rnd() - .5) * .14 * size; pts.push(new V3(w.x, w.y, th / 2 - dz), w.clone().multiplyScalar(ru(.86, .08)).setZ(-th / 2 - dz)); }
+                for (let i = 0; i < 3; i++) pts.push(W[Math.floor(rnd() * W.length)].clone().multiplyScalar(ru(.35, .3)).setZ(th * ru(.75, .3)));
+                let g; try { g = new ConvexGeometry(pts); } catch (_) { g = new THREE.OctahedronGeometry(size * .4, 0); }
+                return { g, size };
+            }
+            // flat faces with per face planar uvs and tangents (the crinkle lies flat on every facet)
+            const _v = new V3(), _n = new V3(), _t = new V3(), _b = new V3(), _u = new V3();
+            function faces(g, us) {
+                const P = g.attributes.position.array, Nr = g.attributes.normal.array, n = P.length / 3;
+                const f = { n, pos: new Float32Array(P), nor: new Float32Array(n * 3), tan: new Float32Array(n * 3), uv: new Float32Array(n * 2) };
+                for (let i = 0; i < n; i += 3) {
+                    _n.fromArray(Nr, i * 3); const l = _n.length(); l > 1e-6 ? _n.divideScalar(l) : _n.set(0, 0, 1);
+                    const side = Math.abs(_n.y) < .9; _u.set(+!side, +side, 0); _t.crossVectors(_u, _n).normalize(); _b.crossVectors(_n, _t);
+                    const ox = rnd(), oy = rnd();
+                    for (let k = i; k < i + 3; k++) { _v.fromArray(P, k * 3); f.uv[k * 2] = _v.dot(_t) * us + ox; f.uv[k * 2 + 1] = _v.dot(_b) * us + oy; _n.toArray(f.nor, k * 3); _t.toArray(f.tan, k * 3); }
+                }
+                g.dispose();
+                return f;
+            }
+            // scale to game units, orient, then sink it so no spin or drift ever reaches the board
+            const parts = [], CORE = new V3(0, -2, 0);
+            function put(f, size, c, q, hero, dim, spin) {
+                let r = 0;
+                for (let i = 0; i < f.pos.length; i += 3) {
+                    _v.fromArray(f.pos, i).multiplyScalar(SC).applyQuaternion(q).toArray(f.pos, i); r = Math.max(r, _v.length());
+                    _v.fromArray(f.nor, i).applyQuaternion(q).toArray(f.nor, i); _v.fromArray(f.tan, i).applyQuaternion(q).toArray(f.tan, i);
+                }
+                const vel = new V3(c.x, 0, c.z).normalize().multiplyScalar(hero ? .06 : ru(.08, .06)).add(randDir().multiplyScalar(hero ? .01 : .04)).multiplyScalar(SC);
+                c.y = Math.min(c.y, -.62 - r - vel.length());
+                const info = [size, rnd(), 1.3 * Math.exp(-c.distanceToSquared(CORE) / 18), dim];
+                parts.push({ f, info, c, ax: randDir(), spin, phase: ru(0, 6.2832), vel, w: hero ? -1 : ru(0, 6.2832) });
+            }
+            const Q0 = new THREE.Quaternion(), Z = new V3(0, 0, 1), UPV = new V3(0, .81, .59);
+            // heroes: biggest first, dealt round the four edges (big ones mid side, where the default view shows them), partly tucked under
+            const hs = CR_TRACE.map(heroGeo).sort((a, b) => b.size - a.size);
+            const SIDES = 'RLRLBFRLBFRLBFRLBFBFRL', SLOT = { R: [2.4, -1, .6, -3.2, 5, -5.2], L: [-1.2, 2.6, -3.6, .8, 4.9, -5.3], B: [-2, 2.2, -4.6, 4.8, .1], F: [1.8, -2.2, 4.4, -4.4, 0] };
+            hs.forEach(({ g, size }, rank) => {
+                const sd = SIDES[rank], t = SLOT[sd].shift() + ru(-.4, .8), e = 5.6 + size * SC * .35 + ru(0, .8);
+                const x = sd === 'R' ? e : sd === 'L' ? -e : t, z = sd === 'B' ? -e : sd === 'F' ? e : t;
+                const n = UPV.clone().addScaledVector(new V3(x, 0, z).normalize(), .45).add(randDir().multiplyScalar(.55)).normalize();
+                const q = new THREE.Quaternion().setFromUnitVectors(Z, n).multiply(new THREE.Quaternion().setFromAxisAngle(Z, ru(0, 6.2832)));
+                put(faces(g, UVS / (.35 + .5 * size)), size, new V3(x, -.7 - ru(0, 1.6) - (z < -5 ? 1 : 0), z), q, true, 1, spinOf(size));
+            });
+            const kindOf = () => { const r = rnd(); return r < .4 ? 1 : r < .58 ? 2 : 0; };
+            const hull = (size, c, dim) => put(faces(hullGeo(size, kindOf(), 9 + Math.floor(rnd() * 7)), UVS / (.35 + .5 * size)), size, c, Q0, false, dim, spinOf(size));
+            for (let i = 0; i < 70; i++) { const [x, z] = ring(ru(0, 4), 5.3 + rp(1.6, 4.2)); hull(rp(1.5, .5, .15), new V3(x, -.8 - rp(1.2, 3.6) - (z < -5 ? 1 : 0), z), 1); }   // round the edges
+            for (let i = 0; i < 40; i++) hull(rp(1.5, .5, .15), new V3(ru(-5.2, 10.4), -1.3 - ru(0, 4.2), ru(-5.2, 10.4)), ru(.6, .4));           // under the board
+            for (let i = 0; i < 16; i++) hull(rp(1.5, .5, .2), new V3(ru(-7, 14), -3.4 - ru(0, 2), ru(-12, 3.5)), 1);                             // far back: phones see it over the board
+            const sf = faces(new ConvexGeometry(Array.from({ length: 7 }, () => randDir().multiplyScalar(ru(.5, .5)))), 3);
+            for (let i = 0; i < 160; i++) { // specks
+                const band = rnd() < .6, [x, z] = band ? ring(ru(0, 4), 5.2 + rp(1.3, 4.5)) : [ru(-5.5, 11), ru(-5.5, 11)], sc = rp(2, .05, .012);
+                put({ ...sf, pos: sf.pos.map(v => v * sc), nor: sf.nor.slice(), tan: sf.tan.slice() }, .05, new V3(x, band ? -.8 - rp(1.3, 3.8) : -1.3 - ru(0, 4), z), Q0, false, .35, ru(.1, .2));
+            }
+            const CAM0 = new V3(0, 10.2, 7.4);
+            parts.sort((a, b) => a.c.distanceToSquared(CAM0) - b.c.distanceToSquared(CAM0)); // front to back: early z skips hidden glass
+
+            const SZ = { position: 3, normal: 3, uv: 2, aTan: 3, aC: 4, aAxis: 4, aVel: 4, aInfo: 4 }, A = {}, VN = parts.reduce((s, p) => s + p.f.n, 0);
+            for (const k in SZ) A[k] = new Float32Array(VN * SZ[k]);
+            let o = 0;
+            for (const p of parts) {
+                const f = p.f, cw = [p.c.x, p.c.y, p.c.z, p.phase], aw = [p.ax.x, p.ax.y, p.ax.z, p.spin], vw = [p.vel.x, p.vel.y, p.vel.z, p.w];
+                A.position.set(f.pos, o * 3); A.normal.set(f.nor, o * 3); A.aTan.set(f.tan, o * 3); A.uv.set(f.uv, o * 2);
+                for (let j = o; j < o + f.n; j++) { A.aC.set(cw, j * 4); A.aAxis.set(aw, j * 4); A.aVel.set(vw, j * 4); A.aInfo.set(p.info, j * 4); }
+                o += f.n;
+            }
+            const geo = new THREE.BufferGeometry();
+            for (const k in SZ) geo.setAttribute(k, new THREE.BufferAttribute(A[k], SZ[k]));
+            return geo;
+        }
+
         // ================= GLOBALS =================
         let renderer, scene, camera, controls, sun, ambient, envMap;
         let stage;
+        let crystalU = null;        // crystal uniforms, null without WebGL2
         const MATS = [];            // MATS[type][variant]
         let nodeMat, sourceMat;
 const poweredMats = [];
@@ -996,6 +1247,7 @@ const poweredMats = [];
             const sc = LOOK.lightI0 + (LOOK.lightI1 - LOOK.lightI0) * p;
             for (let k = 0; k < MAX_LIGHTS; k++) lights[k].intensity = slotI[k] * sc;
             glowU.uPower.value = p;
+            if (crystalU) crystalU.uPow.value = p;
         }
 
         // ================= GAME LOGIC =================
@@ -1177,6 +1429,7 @@ const poweredMats = [];
             glowU.uPk.value = pk * pk * (3 - 2 * pk);
             glowU.uPhase.value = (now / 1000) * 1.1;
             glowU.uTime.value = now / 1000;
+            if (crystalU) crystalU.uTime.value += Math.min(dt, 0.1); // shards move only in frames the game renders anyway
             if (pk > 0) busy = true;
             return busy;
         }
@@ -1354,6 +1607,8 @@ const poweredMats = [];
                 l.position.set(0, -100, 0); scene.add(l); lights.push(l);
             }
             await nextFrame();
+            // after the lights (the glass compiles for this light setup) and right before the CPU heavy textures, which hide the compile
+            const crystals = renderer.capabilities.isWebGL2 ? startCrystals() : null;
 
             // 4 texture sets, 3 variants each (shared image data, different uv transform)
             const texSets = [];
@@ -1381,6 +1636,7 @@ const poweredMats = [];
             for (let v = 0; v < 3; v++) { const m = MATS[T_AND][v].clone(); m.emissive.setHex(0x0098a8); m.emissiveIntensity = 0.3; poweredMats.push(m); }
             sourceMat = MATS[T_BRICK][0].clone(); sourceMat.emissive.setHex(0x00b8c8); sourceMat.emissiveIntensity = 0.35;
 
+            if (crystals) crystalU = crystals(); // the GPU bakes while the shards, blocks and grid are built
             setProgress('Building blocks...');
             for (let m = 0; m < 16; m++) GEO.push(mkGeo(m));
             await nextFrame();
