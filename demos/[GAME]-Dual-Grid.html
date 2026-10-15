@@ -531,8 +531,9 @@
         }
 
         // ================= CRYSTALS: glass shards floating under the board (decor) =================
-        // Taken from the "Crystal Shatter" render: every shard sits in ONE merged geometry and spins and drifts in the
-        // vertex shader from uTime. The glass sees only its own baked studio cubemap: no scene lights, no shadows.
+        // Crystals inspired by the Steam profile background "On the Ice": https://steamcommunity.com/market/listings/753/299890-On%20the%20Ice
+        // One merged geometry that spins and drifts in the vertex shader, drawn into its own layer (depth of field, glow, shafts and a
+        // slight colour fringe live there only) shown behind the board. Lit by a core peeking past the board and the board's own neon.
         // key shards traced from the reference (1920x1202 pixel outlines): [depth, thickness, x,y, x,y, ...]
         const CR_TRACE = [
             [5.2,.35,680,235,705,222,740,210,800,210,845,225,870,260,890,300,855,312,800,305,750,295,705,272,685,250],
@@ -601,63 +602,145 @@ void main(){ vec3 d=normalize(vDir); float g0=max(dot(d,uL0),0.);
   col+=vec3(.8,.35,.12)*pow(max(dot(d,normalize(vec3(.75,-.45,.5))),0.),16.)*.8;
   float gy=(normalize(vG).y+.5)/.38; col+=vec3(.05,.12,.42)*exp(-gy*gy);
   gl_FragColor=vec4(col,1.); }`;
-        // spin + drift per vertex (heroes only wobble); barycentrics from gl_VertexID for the thin edge line
-        const CR_VS = `attribute vec3 aTan; attribute vec4 aC,aAxis,aVel,aInfo; uniform float uTime;
-varying vec3 vW,vN,vT,vBary; varying vec2 vUv; varying vec4 vInfo;
+        // spin + drift per vertex (heroes only wobble); vBary: edge line on creases only (aInfo.z bits); vF: the board as an area light
+        const CR_VS = `attribute vec3 aTan; attribute vec4 aC,aAxis,aVel,aInfo; uniform float uTime,uBY,uBH;
+varying vec3 vW,vN,vT,vBary,vF; varying vec2 vUv; varying vec4 vInfo;
+vec3 eF(vec3 a,vec3 b){ float x=dot(a,b), y=abs(x), v=(.8543985+(.4965155+.0145206*y)*y)/(3.417594+(4.1616724+y)*y);
+  return cross(a,b)*(x>0.?v:.5*inversesqrt(max(1.-x*x,1e-7))-v); }
 void main(){
   float hero=step(aVel.w,-.5), ang=mix(aC.w+uTime*aAxis.w, sin(uTime*.045+aC.w)*aAxis.w*3., hero);
   vec3 a=aAxis.xyz; float s=sin(ang), c=cos(ang), o=1.-c;
   mat3 Rm=mat3(o*a.x*a.x+c,o*a.x*a.y+a.z*s,o*a.z*a.x-a.y*s, o*a.x*a.y-a.z*s,o*a.y*a.y+c,o*a.y*a.z+a.x*s, o*a.z*a.x+a.y*s,o*a.y*a.z-a.x*s,o*a.z*a.z+c);
   vW=aC.xyz+aVel.xyz*sin(uTime*.05+aVel.w*(1.-hero))+Rm*position;
   vN=Rm*normal; vT=Rm*aTan; vUv=uv; vInfo=aInfo;
-  int k=gl_VertexID%3; vBary=vec3(k==0,k==1,k==2);
+  vec3 p=normalize(vec3(-uBH,uBY,-uBH)-vW), q=normalize(vec3(uBH,uBY,-uBH)-vW), r=normalize(vec3(uBH,uBY,uBH)-vW), t=normalize(vec3(-uBH,uBY,uBH)-vW);
+  vF=eF(p,q)+eF(q,r)+eF(r,t)+eF(t,p); vF*=sign(vF.y);
+  int k=gl_VertexID%3, m=int(aInfo.z+.5);
+  vBary=max(vec3(k==0,k==1,k==2),vec3((m&1)==0,(m&2)==0,(m&4)==0));
   gl_Position=projectionMatrix*viewMatrix*vec4(vW,1.);
 }`;
-        // glass: crumpled entry surface, parallax shifted inner crumple, refracted exit, Beer absorption, key light self shadow,
-        // core light scattering through the folds. uPow: dim and cold in the dark look, brighter as the grid wakes up
-        const CR_FS = `uniform sampler2D tCr; uniform samplerCube tEnv; uniform vec3 uKey,uLP,uSigma; uniform float uNS,uShadow,uPow;
-varying vec3 vW,vN,vT,vBary; varying vec2 vUv; varying vec4 vInfo;
+        // glowing void: closed form in-scatter of the key core along a ray from O to t1, a quarter as strong above the board plane
+        const CR_FOG = `uniform vec3 uLP,uFogA,uFogB; uniform float uBY;
+vec3 fog(vec3 O,vec3 D,float t1){ vec3 C=uLP-O; float tc=dot(C,D), h2=max(dot(C,C)-tc*tc,1e-3), h=sqrt(h2), tp=(uBY-O.y)/D.y, w=O.y<uBY?1.:.25;
+  tp=tp>0.?min(tp,t1):t1; float a0=atan(-tc/h), ap=atan((tp-tc)/h);
+  float f=1.+h2*.12; return ((ap-a0)*w+(atan((t1-tc)/h)-ap)*(1.25-w))*(uFogA/(f*f)+uFogB*exp(-h2*.6)); }`;
+        // without float render targets the layer stores sqrt(colour/8) in 8 bits
+        const CR_LDR = `#ifdef LDR
+#define DE(c) ((c)*(c)*8.)
+#define EN(c) sqrt((c)/8.)
+#else
+#define DE(c) (c)
+#define EN(c) (c)
+#endif
+`;
+        // glass: crumpled entry surface, refracted exit through an inner crumple, Beer absorption; out: linear colour, a = signed blur
+        const CR_FS = `${CR_LDR}uniform sampler2D tCr,tBoard; uniform samplerCube tEnv; uniform vec3 uSigma,uCore,uBAvg,uLF,uBack,uGrey,uKey; uniform float uNS,uPow,uBT,uFocus,uTop,uRing,uBH;
+varying vec3 vW,vN,vT,vBary,vF; varying vec2 vUv; varying vec4 vInfo;
+${CR_FOG}
 vec3 env(vec3 d){ return textureCube(tEnv,d).rgb; }
 vec3 exitDir(vec3 I,vec3 N,vec3 Nb,float ior,inout float tir){
   vec3 T=refract(I,N,1./ior), E=refract(T,Nb,ior);
   if(dot(E,E)<1e-4){ vec3 r=reflect(T,Nb); E=refract(r,-N,ior); if(dot(E,E)<1e-4) E=reflect(r,-N); tir+=1.; }
   return E; }
 vec3 tn(vec3 n,vec3 T,vec3 B,vec3 N0,float s){ return normalize((T*n.x+B*n.y)*s+N0*max(n.z,.2)); }
+vec3 neon(float I){ return mix(vec3(0,.85,1),vec3(.72,1,1),clamp(I-1.,0.,1.))*I; }
+// the board as a box (glow map underneath, neon and grey blocks on the walls); rays that miss read it from a probe below (a cheap globe)
+vec3 board(vec3 P,vec3 R,float lod){
+  float t=(uBY-P.y)/R.y, side=0., fade=1.; vec2 q=P.xz+R.xz*t;
+  if(R.y<.02||t<0.||max(abs(q.x),abs(q.y))>uBH){
+    vec2 s=sign(P.xz), tw=(s*uBH-P.xz)/R.xz; vec3 hx=P+R*tw.x, hz=P+R*tw.y;
+    bool bx=tw.x>0.&&abs(hx.z)<uBH&&hx.y>uBY&&hx.y<uTop, bz=tw.y>0.&&abs(hz.x)<uBH&&hz.y>uBY&&hz.y<uTop;
+    if(bx||bz){ t=bx?tw.x:tw.y; q=bx?vec2(s.x*uRing,hx.z):vec2(hz.x,s.y*uRing); side=1.; }
+    else { if(R.y<.05) return vec3(0); t=3./R.y; q=P.xz*.3+R.xz*t; fade=.5/(1.+dot(P.xz,P.xz)*.01); }
+  }
+  vec2 u=q*uBT+.5;
+  return (neon(textureLod(tBoard,u,lod).r*6.+textureLod(tBoard,u,3.5).r*2.)+uGrey*side)*max(smoothstep(.02,.2,R.y),side)*fade/(1.+t*.15); }
 void main(){
-  vec3 N0=normalize(vN), V=normalize(cameraPosition-vW), I=-V;
+  vec3 N0=normalize(vN), Vd=cameraPosition-vW; float dist=length(Vd); vec3 V=Vd/dist, I=-V;
   if(dot(N0,V)<0.) N0=-N0;
   vec3 T=normalize(vT-N0*dot(vT,N0)), B=cross(N0,T);
+  float lit=mix(.05,1.,smoothstep(-.1,.85,dot(N0,uKey))); // the studio key, as in the env
   vec4 c1=texture2D(tCr,vUv);
-  vec3 N=tn(c1.xyz*2.-1.,T,B,N0,uNS);
+  vec3 N=tn(c1.xyz*2.-1.,T,B,N0,uNS*(1.+.35*lit));
   float nv=dot(N,V); if(nv<.05) N=normalize(N+V*(.05-nv));
   float F=.04+.96*pow(1.-clamp(dot(N,V),0.,1.),5.);
-  vec3 reflF=env(reflect(I,N0)), refl=env(reflect(I,N))*.8+reflF*.2, Tg=refract(I,N,1./1.55);
+  vec3 R=reflect(I,N), reflF=env(reflect(I,N0)), Tg=refract(I,N,1./1.55);
   float ct=max(abs(dot(Tg,N0)),.25), th=vInfo.x*.4;
   vec4 c2=texture2D(tCr,mat2(.8,.6,-.6,.8)*vUv*1.37+vec2(dot(Tg,T),dot(Tg,B))/ct*min(th,.5)*.9+vInfo.y*7.);
   vec3 n2=c2.xyz*2.-1., Nb=tn(n2,T,B,N0,uNS*1.3);
-  float tir=0.;
-  vec3 tr=env(exitDir(I,N,Nb,1.555,tir)), ab=exp(-uSigma*th/ct*(1.+tir*.6));
-  float lit=mix(uShadow,1.,smoothstep(-.1,.85,dot(N0,uKey)));
-  float b3=pow(max(dot(normalize(uLP-vW),I),0.),3.);
-  float k=exp2(-4.2*(1.-uPow)); // follows the sun: about 1/18 in the dark look
-  vec3 fc=mix(vec3(.15,.8,1.),vec3(.72,.82,1.),k);
-  vec3 fold=fc*clamp(c1.a+c2.a*.6,0.,1.)*(lit*lit*.18+vInfo.z*(.3+2.2*b3*b3))+fc*fc*vInfo.z*(.08+.5*b3)*(.4+.6*n2.z);
+  float tir=0.; vec3 E=exitDir(I,N,Nb,1.555,tir), ab=exp(-uSigma*th/ct*(1.+tir*.6));
+  float k=exp2(-4.2*(1.-uPow)), cr=clamp(c1.a+c2.a*.6,0.,1.), spk=step(vInfo.x,.06); // k follows the sun: about 1/18 in the dark look
   float mb=min(min(vBary.x,vBary.y),vBary.z), edge=1.-smoothstep(0.,1.3,mb/max(fwidth(mb),1e-6));
-  vec3 col=(refl*F*1.5*mix(.6,1.,lit)+tr*ab*mix(.3,1.,lit)*(1.-F)+edge*(reflF*.06+vec3(.02,.03,.06)*lit))*mix(vec3(.07,.12,.15),vec3(1),k)
-    +(fold*sqrt(ab)*(1.-F)+(edge*.35+c1.a*(.4+.6*lit))*vec3(0,.2,.24)*(1.-k))*mix(.7,1.,k);
-  col=clamp(col*vInfo.w*mix(.15,.55,smoothstep(-6.5,-1.,vW.y)),0.,40.); if(!(col.r+col.g+col.b>=0.)) col=vec3(0);
-  gl_FragColor=vec4(col,1.);
+  // studio look: crumpled reflections and the studio seen through the glass, dimmer deep down
+  vec3 col=(((env(R)*.8+reflF*.2)*F*1.5*mix(.6,1.,lit)+env(E)*ab*mix(.3,1.,lit)*(1.-F)+edge*(reflF*.06+vec3(.02,.03,.06)*lit))*mix(vec3(.07,.12,.15),vec3(1),k)
+    +(edge*.35+c1.a*(.4+.6*lit))*vec3(0,.2,.24)*(1.-k))*mix(.2,.6,smoothstep(-6.5,-1.,vW.y));
+  // key core, fill core under the board, back light on the view axis: glints on the crinkle ridges, light through the glass
+  vec3 Lk=uLP-vW, Lf=uLF-vW, Lb=normalize(uBack-vW); float dk=dot(Lk,Lk), df=dot(Lf,Lf); Lk*=inversesqrt(dk); Lf*=inversesqrt(df);
+  vec3 ck=uCore/(1.+dk*.03), cf=uCore*(.3/(1.+df*.07)), cb=uCore*.2;
+  float lk=smoothstep(-.2,.6,dot(N0,Lk)), lf=smoothstep(-.2,.6,dot(N0,Lf)), lb=smoothstep(-.2,.6,dot(N0,Lb));
+  float nk=max(dot(N,normalize(Lk+V)),0.), nb=max(dot(N,normalize(Lb+V)),0.);
+  float bk=pow(max(dot(Lk,I),0.),3.), bf=pow(max(dot(Lf,I),0.),3.), bb=pow(max(dot(Lb,I),0.),3.);
+  float fl=length(vF); vec3 bl=uBAvg*max((fl*fl+dot(vF,N0))/(fl+1.),0.); // the board as an area light (clipped sphere form factor)
+  float ek=pow(max(dot(Lk,E),0.),16.), eb=pow(max(dot(Lb,E),0.),16.); // the lights seen through the crumple: crinkled caustics
+  vec3 thru=ck*(.02+.1*lk+.6*bk+2.*ek)+cf*(.05+.6*bf)+cb*(bb*.4+eb*1.5)+fog(vW,E,1e4)*(.3+1.2*cr); // the void glows through
+  vec3 fold=(ck*(.05+.8*lk+1.5*bk)+cf*(.2+lf+bf)+cb*bb+bl)*cr*.6;
+  col+=ck*lk*(pow(nk,60.)*2.*(F+.08)+pow(nk,200.)*cr*8.)+cb*lb*pow(nb,200.)*cr*6.+board(vW,reflect(I,normalize(N0*3.+N)),1.)*(F*4.+.15)+(thru+fold)*ab*(1.-F)+bl*(.05+.6*cr)+edge*(ck*lk+cb*lb)*.15;
+  col=clamp(col*vInfo.w+spk*(ck*bk+cb*bb)*pow(1.-max(nv,0.),4.),0.,40.); if(!(col.r+col.g+col.b>=0.)) col=vec3(0); // specks: dark chips, backlit rim
+  float q=dist/uFocus-1., bz=clamp(abs(q)*(q>0.?1.2:2.)-.1,0.,1.); // a: .5 in focus, below near, above far
+  gl_FragColor=vec4(EN(col*mix(1.,.7,clamp(-q*2.5,0.,1.))),clamp(.5+.5*sign(q)*bz,.02,1.)); // no haze in front: shards keep their contrast
+}`;
+        // fullscreen triangle at the far plane (vRay: world view ray) and the 2x downsamples
+        const CR_POST_VS = `uniform mat4 uIP,uCW; varying vec3 vRay; varying vec2 vUv;
+void main(){ vUv=position.xy*.5+.5; vec4 v=uIP*vec4(position.xy,1.,1.); vRay=(uCW*vec4(v.xyz/v.w,0.)).xyz; gl_Position=vec4(position.xy,1.,1.); }`;
+        // first level: the void (alpha 0) is filled with the core's glow here, at half size, so blurs and glow average against it
+        const CR_DOWN0_FS = `${CR_LDR}${CR_FOG}
+uniform sampler2D tSrc; uniform vec3 uEye; varying vec3 vRay;
+void main(){ vec3 f=fog(uEye,normalize(vRay),1e4); ivec2 p=ivec2(gl_FragCoord.xy)*2; vec4 s=vec4(0);
+  for(int i=0;i<4;i++){ vec4 c=texelFetch(tSrc,p+ivec2(i&1,i>>1),0); s+=c.a>0.?vec4(DE(c.rgb),c.a):vec4(f,.5); }
+  gl_FragColor=vec4(EN(s.rgb*.25),s.a*.25); }`;
+        const CR_DOWN_FS = `uniform sampler2D tSrc; uniform vec2 uTx,uVS; varying vec2 vUv;
+vec4 tp(vec2 u){ return texture2D(tSrc,clamp(u,vec2(0),uVS-uTx*.5)); }
+void main(){ vec2 u=vUv*uVS, d=vec2(uTx.x,-uTx.y); gl_FragColor=(tp(u-uTx)+tp(u+uTx)+tp(u-d)+tp(u+d))*.25; }`;
+        // light shafts (eighth size): bright parts smeared toward the core on screen, so shards and the board cut streaks (an eclipse)
+        const CR_RAY_FS = `${CR_LDR}uniform sampler2D tSrc; uniform vec2 uC,uVS,uTx; uniform float uRay; varying vec2 vUv;
+void main(){ vec2 u=vUv*uVS, d=(uC-u)*.018, m=uVS-uTx; vec3 s=vec3(0); float w=1.;
+  for(int i=0;i<32;i++){ s+=max(DE(texture2D(tSrc,clamp(u,vec2(0),m)).rgb)-.12,0.)*w; w*=.95; u+=d; }
+  float r=length(uC-vUv*uVS)*6.; gl_FragColor=vec4(EN(s*uRay/(1.+r*r)),1.); }`;
+        // depth of field (near blur spreads past the outline, far stays local) plus glow on bright glints and the shafts; a = blur weight
+        const CR_DOF_FS = `${CR_LDR}uniform sampler2D t1,t2,t3,t4,tR; uniform float uGlow; uniform vec2 uVS; varying vec2 vUv;
+void main(){ vec2 u=vUv*uVS;
+  vec4 a=texture2D(t1,u), b=texture2D(t2,u), c=texture2D(t3,u), d=texture2D(t4,u); a.rgb=DE(a.rgb); b.rgb=DE(b.rgb); c.rgb=DE(c.rgb); d.rgb=DE(d.rgb);
+  float nr=max(max(.5-a.a,(.5-b.a)*1.6),max(.5-c.a,.5-d.a)*2.), x=clamp(max(nr,a.a-.5)*2.-.03,0.,1.)*3., w=min(x,1.);
+  vec3 bl=x<1.?a.rgb:x<2.?mix(a.rgb,b.rgb,x-1.):mix(b.rgb,c.rgb,x-2.);
+  gl_FragColor=vec4(EN(bl*w+(max(b.rgb-1.,0.)*.3+max(c.rgb-.7,0.)*.35+max(d.rgb-.5,0.)*.35)*uGlow+DE(texture2D(tR,u).rgb)),w); }`;
+        // shows the layer behind the board (the depth test leaves only the void): the only place with the fringe, the blur and the glow
+        const CR_COMP_FS = `${CR_LDR}uniform sampler2D t0,tD,tP; uniform float uCA,uK; uniform vec2 uVS,uLs; varying vec2 vUv;
+void main(){
+  vec2 u=vUv*uVS, m=uVS-.5/uLs, cc=vUv-.5;
+  vec4 g=texture2D(t0,min(u,m)), d=texture2D(tD,min(u,m));
+  vec2 o=cc*uCA*(.3+dot(cc,cc)*4.)*mix(.35,1.,abs(g.a-.5)*2.)*uVS; o*=min(1.,1.5/max(length(o*uLs),1e-4)); // at most 1.5 texels
+  vec3 f=DE(texture2D(tP,min(u,m)).rgb), s=f; // f: the void
+  if(g.a>0.){ vec4 r=texture2D(t0,clamp(u-o,vec2(0),m)), b=texture2D(t0,clamp(u+o,vec2(0),m)); // in focus a = .5: exact on edges
+    s=vec3(DE(r.rgb).r+f.r*(1.-min(r.a*2.,1.)),DE(g.rgb).g+f.g*(1.-min(g.a*2.,1.)),DE(b.rgb).b+f.b*(1.-min(b.a*2.,1.))); }
+  gl_FragColor=vec4((s*(1.-d.a)+DE(d.rgb))*uK,1.);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
+  gl_FragColor.rgb=max(gl_FragColor.rgb+(fract(sin(dot(gl_FragCoord.xy,vec2(12.9898,78.233)))*43758.5453)-.5)/255.,vec3(.008,.012,.016)); // dither, page floor
 }`;
-        // Step 1, once the lights exist: creates the bake targets and the glass mesh (geometry still empty) and starts compiling
-        // the three shaders, which runs while the main thread builds the block textures. Returns step 2: bake once, build the shards.
+        // Step 1, once the lights exist: creates the targets and meshes (shard geometry still empty) and starts compiling the
+        // shaders, which runs while the main thread builds the block textures. Returns step 2: bake once, build the shards.
         function startCrystals() {
             const crumple = new THREE.WebGLRenderTarget(512, 512, { minFilter: THREE.LinearMipmapLinearFilter, magFilter: THREE.LinearFilter, generateMipmaps: true,
                 depthBuffer: false, wrapS: THREE.RepeatWrapping, wrapT: THREE.RepeatWrapping, anisotropy: Math.min(4, renderer.capabilities.getMaxAnisotropy()) });
-            const hdr = renderer.extensions.has('EXT_color_buffer_float') || renderer.extensions.has('EXT_color_buffer_half_float');
-            const envRT = new THREE.WebGLCubeRenderTarget(128, { type: hdr ? THREE.HalfFloatType : THREE.UnsignedByteType, generateMipmaps: true,
-                minFilter: THREE.LinearMipmapLinearFilter, depthBuffer: false }); // mips tame the crumple sparkle
+            const gl = renderer.getContext(), xt = renderer.extensions;
+            // half float layer when it is renderable (checked), else 8 bit with an encoded colour
+            let type = xt.has('EXT_color_buffer_float') || xt.has('EXT_color_buffer_half_float') ? THREE.HalfFloatType : THREE.UnsignedByteType;
+            let lay = new THREE.WebGLRenderTarget(2, 2, { type });
+            renderer.setRenderTarget(lay);
+            if (type !== THREE.UnsignedByteType && gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) { lay.dispose(); type = THREE.UnsignedByteType; lay = new THREE.WebGLRenderTarget(2, 2, { type }); }
+            renderer.setRenderTarget(null);
+            const defines = type === THREE.UnsignedByteType ? { LDR: '' } : {};
+            const envRT = new THREE.WebGLCubeRenderTarget(128, { type, generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter, depthBuffer: false }); // mips tame the crumple sparkle
             const tri = new THREE.BufferGeometry();
             tri.setAttribute('position', new THREE.Float32BufferAttribute([-1, -1, 0, 3, -1, 0, -1, 3, 0], 3));
             tri.setAttribute('uv', new THREE.Float32BufferAttribute([0, 0, 2, 0, 0, 2], 2));
@@ -667,20 +750,122 @@ void main(){
             const quad = new THREE.Mesh(tri, bakeM), box = new THREE.Mesh(new THREE.BoxGeometry(50, 50, 50), envM);
             quad.frustumCulled = false;
             const qs = new THREE.Scene().add(quad), es = new THREE.Scene().add(box), cam = new THREE.Camera(), cube = new THREE.CubeCamera(0.1, 100, envRT);
+            const BH = (GRID * PITCH + 2) / 2, BW = 104; // board glow map: 13 cells of 8 px, the grid plus one cell all round
+            const bmap = new Uint8Array(BW * BW), boardTex = new THREE.DataTexture(bmap, BW, BW, THREE.RedFormat, THREE.UnsignedByteType);
+            boardTex.minFilter = THREE.LinearMipmapLinearFilter; boardTex.magFilter = THREE.LinearFilter; boardTex.generateMipmaps = true; boardTex.needsUpdate = true;
             const U = {
-                tCr: { value: crumple.texture }, tEnv: { value: envRT.texture }, uKey: { value: CR_KEY.clone().applyMatrix3(CR_ROT.clone().transpose()) },
-                uLP: { value: new THREE.Vector3(0, -1.2, 0) }, uSigma: { value: new THREE.Vector3(4.6, 2.7, .65) }, uNS: { value: 1 }, uShadow: { value: .05 }, uTime: { value: 0 }, uPow: { value: 0 },
+                tCr: { value: crumple.texture }, tEnv: { value: envRT.texture }, tBoard: { value: boardTex },
+                uLP: { value: new THREE.Vector3(8, -6, -4) }, uLF: { value: new THREE.Vector3(0, -2.4, -1) }, uBack: { value: new THREE.Vector3() },
+                uSigma: { value: new THREE.Vector3(4.6, 2.7, .65) }, uNS: { value: 1 }, uKey: { value: CR_KEY.clone().applyMatrix3(CR_ROT.clone().transpose()) }, uTime: { value: 0 }, uPow: { value: 0 },
+                uCore: { value: new THREE.Vector3() }, uBAvg: { value: new THREE.Vector3() }, uFogA: { value: new THREE.Vector3() }, uFogB: { value: new THREE.Vector3() }, uGrey: { value: new THREE.Vector3() },
+                uBY: { value: GROUND_Y - 0.05 }, uBH: { value: BH }, uBT: { value: 1 / (13 * PITCH) }, uTop: { value: TOP_Y }, uRing: { value: HALF * PITCH }, uFocus: { value: 15 },
             };
-            const mesh = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.ShaderMaterial({ vertexShader: CR_VS, fragmentShader: CR_FS, uniforms: U }));
-            mesh.frustumCulled = false; mesh.matrixAutoUpdate = false; mesh.renderOrder = 1; // after the board, so its depth hides most of the glass
-            scene.add(mesh);
+            // the layer (shards, no MSAA), 4 half size levels and the blur and glow pass; phones draw moving frames into a half viewport
+            const pyr = [0, 1, 2, 3, 4, 5].map(() => new THREE.WebGLRenderTarget(2, 2, { type, depthBuffer: false })), rayT = pyr.pop(), dofT = pyr.pop();
+            const cs = new THREE.Scene(), ray = { uIP: { value: camera.projectionMatrixInverse }, uCW: { value: camera.matrixWorld } }, uVS = { value: new THREE.Vector2(1, 1) };
+            const occ = new THREE.Mesh(new THREE.PlaneGeometry(BH * 2, BH * 2).rotateX(-Math.PI / 2).translate(0, GROUND_Y - 0.05, 0), new THREE.ShaderMaterial({ vertexShader: 'void main(){ gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }', fragmentShader: 'void main(){ gl_FragColor=vec4(0,0,0,.5); }' }));
+            const mesh = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.ShaderMaterial({ vertexShader: CR_VS, fragmentShader: CR_FS, uniforms: U, defines }));
+            occ.renderOrder = -1; // base plane first (black, in focus): glass under the board is never shaded
+            for (const m of [occ, mesh]) { m.frustumCulled = false; m.matrixAutoUpdate = false; cs.add(m); }
+            const post = (fs, uniforms) => { const m = new THREE.Mesh(tri, new THREE.ShaderMaterial({ vertexShader: CR_POST_VS, fragmentShader: fs, uniforms: { ...ray, ...uniforms }, defines, depthTest: false, depthWrite: false })); m.frustumCulled = false; return new THREE.Scene().add(m); };
+            const ps0 = post(CR_DOWN0_FS, { tSrc: { value: lay.texture }, uEye: { value: camera.position }, uLP: U.uLP, uFogA: U.uFogA, uFogB: U.uFogB, uBY: U.uBY });
+            const downU = { tSrc: { value: null }, uTx: { value: new THREE.Vector2() }, uVS }, ps = post(CR_DOWN_FS, downU);
+            const rayU = { tSrc: { value: pyr[2].texture }, uC: { value: new THREE.Vector2() }, uTx: { value: new THREE.Vector2() }, uRay: { value: 0 }, uVS }, rayS = post(CR_RAY_FS, rayU);
+            const dofU = { uGlow: { value: .1 }, uVS, tR: { value: rayT.texture } };
+            pyr.forEach((p, i) => { dofU['t' + (i + 1)] = { value: p.texture }; });
+            const dofS = post(CR_DOF_FS, dofU);
+            const compU = { t0: { value: lay.texture }, tD: { value: dofT.texture }, tP: { value: pyr[0].texture }, uCA: { value: .0025 }, uK: { value: 1 }, uVS, uLs: { value: new THREE.Vector2(2, 2) } };
+            const comp = new THREE.Mesh(tri, new THREE.ShaderMaterial({ vertexShader: CR_POST_VS, fragmentShader: CR_COMP_FS, uniforms: { ...ray, ...compU }, defines, depthWrite: false }));
+            comp.frustumCulled = false; comp.matrixAutoUpdate = false; comp.visible = false;
+            comp.renderOrder = 1e4; // after the board: the depth test leaves only the void, the board and the HUD never see the layer
+            scene.add(comp);
+            renderer.setClearColor(0, 0); // used only by scenes without a background: in the layer, alpha 0 marks the void
             // compile each with its own target bound, so the later passes find these programs instead of compiling again
-            for (const [rt, sc, c] of [[crumple, qs, cam], [envRT, es, cam], [null, scene, camera]]) { renderer.setRenderTarget(rt); renderer.compile(sc, c); }
+            for (const [rt, sc, c] of [[crumple, qs, cam], [envRT, es, cam], [lay, cs, camera], [pyr[0], ps0, cam], [pyr[1], ps, cam], [rayT, rayS, cam], [dofT, dofS, cam]]) { renderer.setRenderTarget(rt); renderer.compile(sc, c); }
+            renderer.setRenderTarget(null);
+
+            // board glow map from the glow overlay amounts: pads in the middle of each cell, neon strips on its borders
+            let avgI = 0;
+            const edgeAmt = (i, d) => { const n = NB[i * 4 + d]; return Math.max(aDarr[(Q_STRIP + i * 4 + d) * 16 + 1], n >= 0 ? aDarr[(Q_STRIP + n * 4 + (d ^ 1)) * 16 + 1] : 0); };
+            function boardMap() {
+                let sum = 0;
+                for (let y = 0, o = 0; y < BW; y++) {
+                    const gz = (y >> 3) - 1, fz = y & 7, ez = fz === 7 ? 2 : fz === 0 ? 3 : -1;
+                    for (let x = 0; x < BW; x++, o++) {
+                        const gx = (x >> 3) - 1, fx = x & 7, ex = fx === 7 ? 0 : fx === 0 ? 1 : -1;
+                        let I = 0;
+                        if (gx >= 0 && gz >= 0 && gx < GRID && gz < GRID) {
+                            const i = gz * GRID + gx, pq = (Q_PAD + i) * 16, w = aDarr[pq + 3], pad = aDarr[pq + 1] * (w === 1 ? 2 : w === 2 ? 1.2 : 1);
+                            if (ex < 0 && ez < 0) I = pad * (1 - .08 * Math.max(Math.abs(fx - 3.5), Math.abs(fz - 3.5)));
+                            else I = Math.max(ex < 0 ? 0 : edgeAmt(i, ex), ez < 0 ? 0 : edgeAmt(i, ez), pad * .5);
+                        }
+                        bmap[o] = Math.min(255, I * 127.5); sum += I;
+                    }
+                }
+                avgI = sum / (BW * BW); boardTex.needsUpdate = true;
+            }
+            // power look: cold cyan and dim in the dark, icy white and stronger as the sockets light up; returns a brightness proxy
+            const CC0 = new THREE.Vector3(.1, .55, .7), CC1 = new THREE.Vector3(.7, .85, 1.1), FA0 = new THREE.Vector3(.001, .004, .007), FA1 = new THREE.Vector3(.014, .024, .055);
+            const FB0 = new THREE.Vector3(.005, .025, .04), FB1 = new THREE.Vector3(.1, .14, .26);
+            function tone(p) {
+                U.uCore.value.lerpVectors(CC0, CC1, p).multiplyScalar(.5 + 2.5 * p);
+                U.uFogA.value.lerpVectors(FA0, FA1, p); U.uFogB.value.lerpVectors(FB0, FB1, p);
+                U.uBAvg.value.set(0, .85, 1).multiplyScalar(avgI * 5);
+                U.uGrey.value.setScalar(.12 * p * p);
+                dofU.uGlow.value = .3 + .3 * p;
+                return U.uFogB.value.z + .02 * U.uCore.value.z;
+            }
+            // redrawn when the camera moved; else, while more frames follow, at most every 3rd frame (always on the last one)
+            const coarse = matchMedia('(pointer: coarse)'), sz = new THREE.Vector2(), last = new Float64Array(33), cp = new THREE.Vector3();
+            let fc = 0, drawFc = -9, lastVS = 1, kDraw = 1;
+            const CORE_W = new THREE.Vector3(8, -6, -4), CORE_T = new THREE.Vector3(5.5, -4.5, -10); // peeks past the board: right side when wide, far right corner when tall
+            function layer(more) {
+                if (!ready) return;
+                fc++;
+                const p = U.uPow.value, kNow = tone(p); // the composite follows power on every frame
+                renderer.getDrawingBufferSize(sz);
+                const s = Math.min(1, Math.sqrt(2.1e6 / (sz.x * sz.y)));
+                const w = Math.max(2, Math.round(sz.x * s)), h = Math.max(2, Math.round(sz.y * s));
+                let go = false;
+                if (w !== lay.width || h !== lay.height) {
+                    lay.setSize(w, h); pyr.forEach((t, i) => t.setSize(Math.max(1, w >> (i + 1)), Math.max(1, h >> (i + 1)))); dofT.setSize(pyr[0].width, pyr[0].height); rayT.setSize(pyr[2].width, pyr[2].height);
+                    compU.uLs.value.set(w, h); U.uLP.value.copy(w < h * .8 ? CORE_T : CORE_W); go = true;
+                }
+                camera.updateMatrixWorld();
+                const e = camera.matrixWorld.elements, pe = camera.projectionMatrix.elements;
+                for (let i = 0; i < 16; i++) if (Math.abs(last[i] - e[i]) > 4e-4 || Math.abs(last[16 + i] - pe[i]) > 4e-4) go = true; // under a third of a pixel: an orbit's damping tail may wait
+                const vs = more && coarse.matches ? .5 : 1;
+                if (vs > lastVS) go = true;
+                if (!go && (last[32] !== p || crBoardDirty || crPend >= .25) && (!more || fc - drawFc >= 3)) go = true;
+                if (!go) { compU.uK.value = kNow / kDraw; return; }
+                drawFc = fc; lastVS = vs; last[32] = p; kDraw = kNow; compU.uK.value = 1;
+                for (let i = 0; i < 16; i++) { last[i] = e[i]; last[16 + i] = pe[i]; }
+                U.uTime.value += crPend; crPend = 0; // shard time only moves in a redraw, so the layer always shows uTime
+                if (crBoardDirty) { crBoardDirty = false; boardMap(); tone(p); }
+                U.uFocus.value = camera.position.length() + 2;
+                U.uBack.value.copy(camera.position).multiplyScalar(-1.5).y += 2.5 * U.uBY.value; // behind the board on the view axis
+                let lw = Math.round(w * vs), lh = Math.round(h * vs);
+                lay.viewport.set(0, 0, lw, lh); uVS.value.set(lw / w, lh / h);
+                for (let i = 0; i < 4; i++) { lw = Math.max(1, lw >> 1); lh = Math.max(1, lh >> 1); pyr[i].viewport.set(0, 0, lw, lh); }
+                dofT.viewport.copy(pyr[0].viewport); rayT.viewport.copy(pyr[2].viewport);
+                renderer.setRenderTarget(lay); renderer.render(cs, camera);
+                renderer.autoClear = false; // the passes below write every pixel
+                renderer.setRenderTarget(pyr[0]); renderer.render(ps0, cam);
+                for (let i = 1; i < 4; i++) { const src = pyr[i - 1]; downU.tSrc.value = src.texture; downU.uTx.value.set(1 / src.width, 1 / src.height); renderer.setRenderTarget(pyr[i]); renderer.render(ps, cam); }
+                cp.copy(U.uLP.value).applyMatrix4(camera.matrixWorldInverse); // the core on screen; no shafts when it is behind the camera
+                const front = cp.z < -1; cp.applyMatrix4(camera.projectionMatrix);
+                rayU.uC.value.set(cp.x * .5 + .5, cp.y * .5 + .5).multiply(uVS.value); rayU.uTx.value.set(.5 / pyr[2].width, .5 / pyr[2].height);
+                rayU.uRay.value = front ? (.015 + .03 * p) : 0;
+                renderer.setRenderTarget(rayT); renderer.render(rayS, cam);
+                renderer.setRenderTarget(dofT); renderer.render(dofS, cam); renderer.setRenderTarget(null); renderer.autoClear = true;
+                comp.visible = true;
+            }
             return () => {
                 cube.update(renderer, es); // cheap one first: the heavy crumple pass then runs on the GPU while the shards are built
                 renderer.setRenderTarget(crumple); renderer.render(qs, cam); renderer.setRenderTarget(null);
-                for (const x of [bakeM, envM, tri, box.geometry]) x.dispose();
+                for (const x of [bakeM, envM, box.geometry]) x.dispose();
                 mesh.geometry = crystalGeometry();
+                crystalLayer = layer;
                 return U;
             };
         }
@@ -709,27 +894,54 @@ void main(){
                 for (let i = 0; i < p.length; i += 2) { const w = new V3(p[i] * k, -p[i + 1] * k, 0); W.push(w); c.add(w); }
                 c.divideScalar(W.length); for (const w of W) w.sub(c);
                 const size = Math.max(...W.map(w => w.length() * 2)), th = size * tk, tilt = randDir().multiplyScalar(.45), pts = [];
-                for (const w of W) { const dz = w.dot(tilt) + (rnd() - .5) * .14 * size; pts.push(new V3(w.x, w.y, th / 2 - dz), w.clone().multiplyScalar(ru(.86, .08)).setZ(-th / 2 - dz)); }
+                for (const w of W) { const dz = w.dot(tilt) + (rnd() - .5) * .04 * size; pts.push(new V3(w.x, w.y, th / 2 - dz), w.clone().multiplyScalar(ru(.86, .08)).setZ(-th / 2 - dz)); }
                 for (let i = 0; i < 3; i++) pts.push(W[Math.floor(rnd() * W.length)].clone().multiplyScalar(ru(.35, .3)).setZ(th * ru(.75, .3)));
                 let g; try { g = new ConvexGeometry(pts); } catch (_) { g = new THREE.OctahedronGeometry(size * .4, 0); }
                 return { g, size };
             }
-            // flat faces with per face planar uvs and tangents (the crinkle lies flat on every facet)
-            const _v = new V3(), _n = new V3(), _t = new V3(), _b = new V3(), _u = new V3();
+            // faces within 12 degrees of a chart's first face share its plane, uv frame and crumple; edge lines only on creases over 20
+            const _v = new V3(), _n = new V3(), _t = new V3(), _b = new V3(), _u = new V3(), _w = new V3();
+            let fs = 7; const frnd = () => (fs = fs * 48271 % 2147483647) / 2147483647; // own stream: facet tweaks never move the layout
             function faces(g, us) {
-                const P = g.attributes.position.array, Nr = g.attributes.normal.array, n = P.length / 3;
-                const f = { n, pos: new Float32Array(P), nor: new Float32Array(n * 3), tan: new Float32Array(n * 3), uv: new Float32Array(n * 2) };
-                for (let i = 0; i < n; i += 3) {
-                    _n.fromArray(Nr, i * 3); const l = _n.length(); l > 1e-6 ? _n.divideScalar(l) : _n.set(0, 0, 1);
+                const P = g.attributes.position.array, Nr = g.attributes.normal.array, n = P.length / 3, nt = n / 3;
+                const f = { n, pos: new Float32Array(P), nor: new Float32Array(n * 3), tan: new Float32Array(n * 3), uv: new Float32Array(n * 2), crease: new Float32Array(n) };
+                const tn = new Float32Array(nt * 3), area = new Float32Array(nt), off = new Float32Array(nt * 2), chart = new Int32Array(nt).fill(-1), nbr = new Int32Array(nt * 3).fill(-1);
+                const key = k => Math.round(P[k * 3] * 1e4) + ',' + Math.round(P[k * 3 + 1] * 1e4) + ',' + Math.round(P[k * 3 + 2] * 1e4), edges = new Map();
+                for (let t = 0; t < nt; t++) {
+                    _v.fromArray(P, t * 9); _u.fromArray(P, t * 9 + 3).sub(_v); _w.fromArray(P, t * 9 + 6).sub(_v); _n.crossVectors(_u, _w);
+                    area[t] = _n.length(); if (_n.dot(_b.fromArray(Nr, t * 9)) < 0) _n.negate(); _n.normalize().toArray(tn, t * 3);
+                    off[t * 2] = frnd(); off[t * 2 + 1] = frnd();
+                    for (let j = 0; j < 3; j++) {
+                        const k1 = key(t * 3 + (j + 1) % 3), k2 = key(t * 3 + (j + 2) % 3), ek = k1 < k2 ? k1 + '|' + k2 : k2 + '|' + k1, o = edges.get(ek);
+                        if (o === undefined) edges.set(ek, t * 3 + j); else { nbr[t * 3 + j] = o / 3 | 0; nbr[o] = t; }
+                    }
+                }
+                const order = Array.from(area.keys()).sort((x, y) => area[y] - area[x]), cn = [];
+                for (const t0 of order) {
+                    if (chart[t0] >= 0) continue;
+                    const c = cn.length / 4, st = [t0], s = new V3(); chart[t0] = c; _n.fromArray(tn, t0 * 3); _u.copy(_n);
+                    while (st.length) {
+                        const t = st.pop(); s.addScaledVector(_w.fromArray(tn, t * 3), area[t]);
+                        for (let j = 0; j < 3; j++) { const t2 = nbr[t * 3 + j]; if (t2 >= 0 && chart[t2] < 0 && _w.fromArray(tn, t2 * 3).dot(_u) > .978) { chart[t2] = c; st.push(t2); } }
+                    }
+                    s.normalize(); cn.push(s.x, s.y, s.z, t0);
+                }
+                for (let t = 0; t < nt; t++) {
+                    const c = chart[t], c4 = c * 4; _n.fromArray(cn, c4);
                     const side = Math.abs(_n.y) < .9; _u.set(+!side, +side, 0); _t.crossVectors(_u, _n).normalize(); _b.crossVectors(_n, _t);
-                    const ox = rnd(), oy = rnd();
-                    for (let k = i; k < i + 3; k++) { _v.fromArray(P, k * 3); f.uv[k * 2] = _v.dot(_t) * us + ox; f.uv[k * 2 + 1] = _v.dot(_b) * us + oy; _n.toArray(f.nor, k * 3); _t.toArray(f.tan, k * 3); }
+                    const t0 = cn[c4 + 3], ox = off[t0 * 2], oy = off[t0 * 2 + 1];
+                    let m = 0;
+                    for (let j = 0; j < 3; j++) { const t2 = nbr[t * 3 + j]; if (t2 < 0 || (chart[t2] !== c && _w.fromArray(cn, chart[t2] * 4).dot(_n) < .94)) m |= 1 << j; }
+                    for (let k = t * 3; k < t * 3 + 3; k++) {
+                        _v.fromArray(P, k * 3); f.uv[k * 2] = _v.dot(_t) * us + ox; f.uv[k * 2 + 1] = _v.dot(_b) * us + oy;
+                        _n.toArray(f.nor, k * 3); _t.toArray(f.tan, k * 3); f.crease[k] = m;
+                    }
                 }
                 g.dispose();
                 return f;
             }
             // scale to game units, orient, then sink it so no spin or drift ever reaches the board
-            const parts = [], CORE = new V3(0, -2, 0);
+            const parts = [];
             function put(f, size, c, q, hero, dim, spin) {
                 let r = 0;
                 for (let i = 0; i < f.pos.length; i += 3) {
@@ -738,7 +950,7 @@ void main(){
                 }
                 const vel = new V3(c.x, 0, c.z).normalize().multiplyScalar(hero ? .06 : ru(.08, .06)).add(randDir().multiplyScalar(hero ? .01 : .04)).multiplyScalar(SC);
                 c.y = Math.min(c.y, -.62 - r - vel.length());
-                const info = [size, rnd(), 1.3 * Math.exp(-c.distanceToSquared(CORE) / 18), dim];
+                const info = [size, rnd(), 0, dim];
                 parts.push({ f, info, c, ax: randDir(), spin, phase: ru(0, 6.2832), vel, w: hero ? -1 : ru(0, 6.2832) });
             }
             const Q0 = new THREE.Quaternion(), Z = new V3(0, 0, 1), UPV = new V3(0, .81, .59);
@@ -760,7 +972,7 @@ void main(){
             const sf = faces(new ConvexGeometry(Array.from({ length: 7 }, () => randDir().multiplyScalar(ru(.5, .5)))), 3);
             for (let i = 0; i < 160; i++) { // specks
                 const band = rnd() < .6, [x, z] = band ? ring(ru(0, 4), 5.2 + rp(1.3, 4.5)) : [ru(-5.5, 11), ru(-5.5, 11)], sc = rp(2, .05, .012);
-                put({ ...sf, pos: sf.pos.map(v => v * sc), nor: sf.nor.slice(), tan: sf.tan.slice() }, .05, new V3(x, band ? -.8 - rp(1.3, 3.8) : -1.3 - ru(0, 4), z), Q0, false, .35, ru(.1, .2));
+                put({ ...sf, pos: sf.pos.map(v => v * sc), nor: sf.nor.slice(), tan: sf.tan.slice() }, .05, new V3(x, band ? -.8 - rp(1.3, 3.8) : -1.3 - ru(0, 4), z), Q0, false, .15, ru(.1, .2));
             }
             const CAM0 = new V3(0, 10.2, 7.4);
             parts.sort((a, b) => a.c.distanceToSquared(CAM0) - b.c.distanceToSquared(CAM0)); // front to back: early z skips hidden glass
@@ -771,7 +983,7 @@ void main(){
             for (const p of parts) {
                 const f = p.f, cw = [p.c.x, p.c.y, p.c.z, p.phase], aw = [p.ax.x, p.ax.y, p.ax.z, p.spin], vw = [p.vel.x, p.vel.y, p.vel.z, p.w];
                 A.position.set(f.pos, o * 3); A.normal.set(f.nor, o * 3); A.aTan.set(f.tan, o * 3); A.uv.set(f.uv, o * 2);
-                for (let j = o; j < o + f.n; j++) { A.aC.set(cw, j * 4); A.aAxis.set(aw, j * 4); A.aVel.set(vw, j * 4); A.aInfo.set(p.info, j * 4); }
+                for (let j = o; j < o + f.n; j++) { A.aC.set(cw, j * 4); A.aAxis.set(aw, j * 4); A.aVel.set(vw, j * 4); A.aInfo.set(p.info, j * 4); A.aInfo[j * 4 + 2] = f.crease[j - o]; }
                 o += f.n;
             }
             const geo = new THREE.BufferGeometry();
@@ -783,6 +995,7 @@ void main(){
         let renderer, scene, camera, controls, sun, ambient, envMap;
         let stage;
         let crystalU = null;        // crystal uniforms, null without WebGL2
+        let crystalLayer = null, crBoardDirty = true, crPend = 0; // draws the crystal layer when needed; board glow map stale; shard time not shown yet
         const MATS = [];            // MATS[type][variant]
         let nodeMat, sourceMat;
 const poweredMats = [];
@@ -1013,6 +1226,7 @@ const poweredMats = [];
                 }
             }
             glowGeo.attributes.aD.needsUpdate = true;
+            crBoardDirty = true;
         }
         let gridLines = true;
         function conducts(i) { return kind[i] === K_SRC || (kind[i] === K_BLOCK && dist[i] >= 0); }
@@ -1429,13 +1643,14 @@ const poweredMats = [];
             glowU.uPk.value = pk * pk * (3 - 2 * pk);
             glowU.uPhase.value = (now / 1000) * 1.1;
             glowU.uTime.value = now / 1000;
-            if (crystalU) crystalU.uTime.value += Math.min(dt, 0.1); // shards move only in frames the game renders anyway
+            if (crystalU) crPend += Math.min(dt, 0.1); // shards move only in frames the game renders anyway (applied by the layer)
             if (pk > 0) busy = true;
             return busy;
         }
-        function render() {
+        function render(more) {
             stats.renders += 1;
             if (shadowDirty) { sun.shadow.needsUpdate = true; shadowDirty = false; }
+            if (crystalLayer) crystalLayer(more); // more: another frame follows, so a shard only change may wait
             renderer.render(scene, camera);
         }
         function frame() {
@@ -1443,9 +1658,9 @@ const poweredMats = [];
             const now = performance.now();
             const dt = Math.min(0.5, Math.max(0.001, (now - lastT) / 1000)); lastT = now;
             const busy = step(now, dt);
-            const moved = controls.update();
-            render();
-            if (busy || moved || now < animUntil) request();
+            const moved = controls.update(), more = busy || moved || now < animUntil;
+            render(more);
+            if (more) request();
         }
 
         // ================= CAMERA FIT =================
