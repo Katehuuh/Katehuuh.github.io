@@ -104,6 +104,9 @@ a:hover { color: #ffb98d; }
   font-family: var(--mono); font-size: .78rem;
   letter-spacing: .1em; text-transform: uppercase;
 }
+@property --gloss-angle { syntax: '<angle>'; inherits: true; initial-value: 90deg; }
+.tag-filter { transition: --gloss-angle .35s ease-out; }
+@media (prefers-reduced-motion: reduce) { .tag-filter { transition: none; } }
 .tag-filter::before {
   content: ''; position: absolute; inset: 0; border-radius: inherit;
   pointer-events: none; z-index: -1;
@@ -698,14 +701,20 @@ function initRunFilter() {
     btn.setAttribute('aria-pressed', String(active));
     applyRunFilter();
   });
-  // Specular sweep follows the cursor, same as the landing page.
+  // Specular sweep follows the cursor, same as the landing page: offsets
+  // scaled to the pill's half size, angle unwrapped for the transition.
+  let gloss = 90;
+  const setGloss = (deg) => {
+    gloss += ((deg - gloss) % 360 + 540) % 360 - 180;
+    bar.style.setProperty('--gloss-angle', `${gloss}deg`);
+  };
   bar.addEventListener('mousemove', (e) => {
     const r = bar.getBoundingClientRect();
-    const ang = Math.atan2(e.clientY - (r.top + r.height / 2),
-                           e.clientX - (r.left + r.width / 2)) * 180 / Math.PI;
-    bar.style.setProperty('--gloss-angle', `${ang + 90}deg`);
+    const dx = (e.clientX - (r.left + r.width / 2)) / (r.width / 2);
+    const dy = (e.clientY - (r.top + r.height / 2)) / (r.height / 2);
+    setGloss(Math.atan2(dy, dx) * 180 / Math.PI + 90);
   });
-  bar.addEventListener('mouseleave', () => bar.style.setProperty('--gloss-angle', '90deg'));
+  bar.addEventListener('mouseleave', () => setGloss(90));
   applyRunFilter();
 }
 

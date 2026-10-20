@@ -328,7 +328,15 @@ section h2 .alias-mark {
   text-transform: uppercase;
 }
 
-/* Mouse-tracked specular sweep */
+/* Mouse-tracked specular sweep. Registered so the angle can transition
+   instead of snapping on every mousemove. */
+@property --gloss-angle {
+  syntax: '<angle>';
+  inherits: true;
+  initial-value: 90deg;
+}
+.tag-filter { transition: --gloss-angle .35s ease-out; }
+@media (prefers-reduced-motion: reduce) { .tag-filter { transition: none; } }
 .tag-filter::before {
   content: '';
   position: absolute;
@@ -843,22 +851,28 @@ function setupTagFilter() {
   // Mouse-tracked specular: rotate the conic-gradient highlight on the
   // glass pill so it points roughly at the cursor. Listener is on `root`
   // (not document) so the gloss only animates when the cursor is actually
-  // over the pill - no global cursor-following everywhere on the page.
-  // On leave, the angle eases back to the default 90deg.
+  // over the pill. Offsets are scaled by the pill's half size, otherwise
+  // the wide pill reads almost every spot as "left" or "right" and the
+  // gloss flips between the two sides. The angle is unwrapped so the CSS
+  // transition always takes the short way round. On leave it eases to 90deg.
   let rafId = 0;
+  let gloss = 90;
+  const setGloss = (deg) => {
+    gloss += ((deg - gloss) % 360 + 540) % 360 - 180;
+    root.style.setProperty('--gloss-angle', `${gloss}deg`);
+  };
   const onMove = (e) => {
     if (rafId) return;
     rafId = requestAnimationFrame(() => {
       rafId = 0;
       const r = root.getBoundingClientRect();
-      const cx = r.left + r.width / 2;
-      const cy = r.top + r.height / 2;
-      const ang = Math.atan2(e.clientY - cy, e.clientX - cx) * 180 / Math.PI;
-      root.style.setProperty('--gloss-angle', `${ang + 90}deg`);
+      const dx = (e.clientX - (r.left + r.width / 2)) / (r.width / 2);
+      const dy = (e.clientY - (r.top + r.height / 2)) / (r.height / 2);
+      setGloss(Math.atan2(dy, dx) * 180 / Math.PI + 90);
     });
   };
   root.addEventListener('mousemove', onMove, { passive: true });
-  root.addEventListener('mouseleave', () => root.style.setProperty('--gloss-angle', '90deg'));
+  root.addEventListener('mouseleave', () => setGloss(90));
 }
 
 // Sims-4-style flyout: hovers on GitHub / HF icons reveal a tree of
