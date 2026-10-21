@@ -1,0 +1,1065 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Contagion — Global Strategy Sim</title>
+<meta name="description" content="A strategy sim of a spreading outbreak: dot-matrix world map, air and sea routes, an upgrade tree bought with research points, and a race against the global cure bar.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='78' font-size='78'%3E%F0%9F%A6%A0%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #04070a;
+  --bg-1: #0a1017;
+  --bg-2: #101a24;
+  --line: rgba(255,255,255,.08);
+  --line-2: rgba(255,255,255,.16);
+  --text: #e8f0f5;
+  --text-2: rgba(232,240,245,.62);
+  --text-3: rgba(232,240,245,.34);
+  --inf: #ff8a3d;
+  --inf-soft: rgba(255,138,61,.14);
+  --dead: #a855f7;
+  --cure: #38bdf8;
+  --cure-soft: rgba(56,189,248,.14);
+  --good: #4ade80;
+  --bad: #f87171;
+  --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --sans: "Manrope", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+html, body { height: 100%; overflow: hidden; }
+body {
+  background:
+    radial-gradient(1100px 700px at 50% -15%, rgba(255,138,61,.07), transparent 65%),
+    radial-gradient(900px 600px at 50% 115%, rgba(56,189,248,.07), transparent 65%),
+    var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  user-select: none; -webkit-user-select: none;
+}
+
+#app { position: relative; width: 100vw; height: 100dvh; height: 100vh; display: flex; flex-direction: column; }
+
+/* ---------------- TOP STATS ---------------- */
+.topbar {
+  flex-shrink: 0;
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px 8px;
+  border-bottom: 1px solid var(--line);
+  background: linear-gradient(180deg, rgba(10,16,23,.9), rgba(10,16,23,.3));
+  backdrop-filter: blur(10px);
+}
+.pts {
+  display: flex; align-items: center; gap: 7px;
+  font-family: var(--mono); font-weight: 700; font-size: .92rem;
+  color: var(--inf);
+  padding: 5px 11px; border-radius: 999px;
+  background: var(--inf-soft);
+  box-shadow: inset 0 0 0 1px rgba(255,138,61,.3);
+  cursor: pointer;
+}
+.pts svg { width: 15px; height: 15px; }
+.pts.bump { animation: bump .35s ease-out; }
+@keyframes bump { 0%{transform:scale(1)} 40%{transform:scale(1.14)} 100%{transform:scale(1)} }
+
+.bars { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+.bar-row { display: flex; align-items: center; gap: 8px; }
+.bar-label {
+  font-family: var(--mono); font-size: .58rem; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--text-3); width: 52px; flex-shrink: 0;
+}
+.bar {
+  flex: 1; height: 7px; border-radius: 999px; position: relative; overflow: hidden;
+  background: rgba(255,255,255,.06); box-shadow: inset 0 0 0 1px var(--line);
+}
+.bar > i { position: absolute; inset: 0 auto 0 0; width: 0; border-radius: 999px; transition: width .3s linear; }
+#bar-inf > i { background: linear-gradient(90deg, #ff6b35, var(--inf)); box-shadow: 0 0 10px rgba(255,138,61,.5); }
+#bar-cure > i { background: linear-gradient(90deg, #0ea5e9, var(--cure)); box-shadow: 0 0 10px rgba(56,189,248,.5); }
+.bar-val { font-family: var(--mono); font-size: .62rem; color: var(--text-2); width: 46px; text-align: right; flex-shrink: 0; }
+
+.clock { text-align: right; flex-shrink: 0; }
+.clock .day { font-family: var(--mono); font-size: .8rem; font-weight: 700; }
+.clock .sub { font-family: var(--mono); font-size: .55rem; color: var(--text-3); letter-spacing: .08em; }
+
+/* ---------------- MAP ---------------- */
+#map-wrap { flex: 1; position: relative; min-height: 0; }
+#map { display: block; width: 100%; height: 100%; cursor: crosshair; }
+
+#tooltip {
+  position: absolute; pointer-events: none; opacity: 0;
+  transform: translate(-50%, -112%); transition: opacity .12s;
+  padding: 9px 11px; border-radius: 10px; min-width: 150px;
+  background: rgba(8,13,19,.94); backdrop-filter: blur(8px);
+  box-shadow: 0 0 0 1px var(--line-2), 0 10px 30px -8px rgba(0,0,0,.8);
+  font-family: var(--mono); font-size: .64rem; line-height: 1.55; z-index: 6;
+}
+#tooltip.on { opacity: 1; }
+#tooltip h4 { font-family: var(--sans); font-size: .76rem; margin-bottom: 4px; letter-spacing: .01em; }
+#tooltip .r { display: flex; justify-content: space-between; gap: 14px; color: var(--text-2); }
+#tooltip .r b { font-weight: 500; color: var(--text); }
+#tooltip .tagline { color: var(--text-3); font-size: .58rem; margin-top: 5px; letter-spacing: .04em; }
+
+/* news ticker */
+#news {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  display: flex; align-items: center; gap: 9px;
+  padding: 7px 12px;
+  background: linear-gradient(0deg, rgba(4,7,10,.92), rgba(4,7,10,.3));
+  font-family: var(--mono); font-size: .64rem; color: var(--text-2);
+  border-top: 1px solid var(--line);
+}
+#news .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--bad); flex-shrink: 0; animation: pulse 1.6s ease-in-out infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.25} }
+#news span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ---------------- BOTTOM BAR ---------------- */
+.bottombar {
+  flex-shrink: 0;
+  display: flex; align-items: center; gap: 8px;
+  padding: 9px 12px;
+  border-top: 1px solid var(--line);
+  background: linear-gradient(0deg, rgba(10,16,23,.95), rgba(10,16,23,.55));
+  backdrop-filter: blur(10px);
+}
+button {
+  font-family: var(--sans); font-size: .76rem; font-weight: 600;
+  color: var(--text-2); background: rgba(255,255,255,.05);
+  border: 0; border-radius: 10px; padding: 9px 13px; cursor: pointer;
+  box-shadow: inset 0 0 0 1px var(--line);
+  transition: color .15s, background .15s, box-shadow .15s;
+}
+button:hover { color: var(--text); background: rgba(255,255,255,.09); }
+button.primary { color: #0b0f14; background: linear-gradient(180deg, #ffa264, var(--inf)); box-shadow: 0 6px 18px -8px rgba(255,138,61,.8); }
+button.primary:hover { filter: brightness(1.08); }
+button[disabled] { opacity: .4; cursor: not-allowed; }
+.speeds { display: flex; gap: 4px; margin-left: auto; }
+.speeds button { font-family: var(--mono); padding: 8px 10px; min-width: 38px; }
+.speeds button.on { color: var(--text); background: rgba(255,138,61,.16); box-shadow: inset 0 0 0 1px rgba(255,138,61,.4); }
+
+/* ---------------- PANEL (trait tree) ---------------- */
+.sheet {
+  position: absolute; inset: 0; z-index: 10;
+  display: none; flex-direction: column;
+  background: rgba(4,7,10,.82); backdrop-filter: blur(14px);
+}
+.sheet.on { display: flex; }
+.sheet-head {
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px 16px 12px; border-bottom: 1px solid var(--line); flex-shrink: 0;
+}
+.sheet-head h2 { font-size: 1rem; letter-spacing: -.01em; }
+.sheet-head .close { margin-left: auto; }
+.tabs { display: flex; gap: 5px; padding: 11px 16px 0; flex-shrink: 0; flex-wrap: wrap; }
+.tabs button { font-family: var(--mono); font-size: .64rem; letter-spacing: .1em; text-transform: uppercase; padding: 7px 11px; }
+.tabs button.on { color: var(--text); background: rgba(255,138,61,.16); box-shadow: inset 0 0 0 1px rgba(255,138,61,.4); }
+.trait-list { flex: 1; overflow-y: auto; padding: 12px 16px 20px; display: grid; gap: 7px; grid-template-columns: repeat(auto-fill, minmax(255px, 1fr)); align-content: start; }
+.trait {
+  text-align: left; padding: 10px 12px; border-radius: 12px; display: block; width: 100%;
+  background: rgba(255,255,255,.035);
+}
+.trait .t-top { display: flex; align-items: baseline; gap: 8px; }
+.trait .t-name { font-size: .83rem; font-weight: 700; color: var(--text); }
+.trait .t-cost { margin-left: auto; font-family: var(--mono); font-size: .72rem; font-weight: 700; color: var(--inf); }
+.trait .t-desc { font-size: .68rem; color: var(--text-3); margin-top: 3px; line-height: 1.5; }
+.trait .t-stats { display: flex; gap: 9px; margin-top: 6px; font-family: var(--mono); font-size: .58rem; letter-spacing: .04em; color: var(--text-2); flex-wrap: wrap; }
+.trait .t-stats i { font-style: normal; opacity: .55; }
+.trait.owned { background: rgba(74,222,128,.09); box-shadow: inset 0 0 0 1px rgba(74,222,128,.3); }
+.trait.owned .t-cost { color: var(--good); }
+.trait.locked { opacity: .45; cursor: not-allowed; }
+.trait.afford { box-shadow: inset 0 0 0 1px rgba(255,138,61,.35); }
+.sheet-foot {
+  display: flex; align-items: center; gap: 14px; padding: 11px 16px;
+  border-top: 1px solid var(--line); flex-shrink: 0;
+  font-family: var(--mono); font-size: .62rem; color: var(--text-2); flex-wrap: wrap;
+}
+.sheet-foot b { color: var(--text); font-weight: 700; }
+
+/* ---------------- MODALS ---------------- */
+.modal {
+  position: absolute; inset: 0; z-index: 20; display: none;
+  align-items: center; justify-content: center; padding: 22px;
+  background: rgba(4,7,10,.86); backdrop-filter: blur(16px);
+}
+.modal.on { display: flex; }
+.card {
+  width: 100%; max-width: 420px; max-height: 100%; overflow-y: auto;
+  padding: 24px; border-radius: 18px;
+  background: linear-gradient(180deg, var(--bg-2), var(--bg-1));
+  box-shadow: 0 0 0 1px var(--line-2), 0 28px 70px -20px rgba(0,0,0,.9);
+}
+.card h1 { font-size: 1.5rem; letter-spacing: -.02em; margin-bottom: 7px; }
+.card .kicker { font-family: var(--mono); font-size: .6rem; letter-spacing: .22em; text-transform: uppercase; color: var(--inf); margin-bottom: 10px; }
+.card p { font-size: .82rem; color: var(--text-2); line-height: 1.65; margin-bottom: 13px; }
+.card ul { margin: 0 0 15px 16px; font-size: .78rem; color: var(--text-2); line-height: 1.7; }
+.card .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin: 4px 0 17px; }
+.card .stats div { padding: 9px 11px; border-radius: 10px; background: rgba(255,255,255,.04); box-shadow: inset 0 0 0 1px var(--line); }
+.card .stats span { display: block; font-family: var(--mono); font-size: .55rem; letter-spacing: .12em; text-transform: uppercase; color: var(--text-3); }
+.card .stats b { font-family: var(--mono); font-size: .98rem; }
+.card .row { display: flex; gap: 9px; flex-wrap: wrap; }
+.card .row button { flex: 1; min-width: 120px; padding: 12px; }
+.pick { display: grid; gap: 8px; margin-bottom: 16px; }
+.pick button { text-align: left; padding: 12px 13px; border-radius: 12px; }
+.pick button.on { box-shadow: inset 0 0 0 1px rgba(255,138,61,.45); background: rgba(255,138,61,.1); }
+.pick b { display: block; font-size: .85rem; color: var(--text); margin-bottom: 2px; }
+.pick small { font-size: .68rem; color: var(--text-3); line-height: 1.5; }
+
+@media (max-width: 560px) {
+  .bar-label { display: none; }
+  .clock .sub { display: none; }
+  button { font-size: .72rem; padding: 8px 10px; }
+  .trait-list { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <div class="topbar">
+    <div class="pts" id="pts" title="research points - click bubbles on the map to collect">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M7 3v4.5M17 3v4.5M7 21v-4.5M17 21v-4.5"/><path d="M7 7.5c0 3 10 6 10 9M17 7.5c0 3-10 6-10 9"/><path d="M8.5 10h7M8.5 14h7"/></svg>
+      <b id="pts-val">0</b>
+    </div>
+    <div class="bars">
+      <div class="bar-row">
+        <div class="bar-label">Spread</div>
+        <div class="bar" id="bar-inf"><i></i></div>
+        <div class="bar-val" id="inf-val">0</div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label">Cure</div>
+        <div class="bar" id="bar-cure"><i></i></div>
+        <div class="bar-val" id="cure-val">0%</div>
+      </div>
+    </div>
+    <div class="clock">
+      <div class="day" id="day">Day 1</div>
+      <div class="sub" id="dead-val">0 lost</div>
+    </div>
+  </div>
+
+  <div id="map-wrap">
+    <canvas id="map"></canvas>
+    <div id="tooltip"></div>
+    <div id="news"><i class="dot"></i><span id="news-text">Patient zero reported. Nobody has noticed yet.</span></div>
+  </div>
+
+  <div class="bottombar">
+    <button class="primary" id="open-tree">Upgrades</button>
+    <button id="open-stats">World</button>
+    <div class="speeds">
+      <button data-speed="0" id="sp0">❙❙</button>
+      <button data-speed="1" class="on">1×</button>
+      <button data-speed="2">2×</button>
+      <button data-speed="4">4×</button>
+    </div>
+  </div>
+
+  <!-- upgrade tree -->
+  <div class="sheet" id="sheet">
+    <div class="sheet-head">
+      <h2>Upgrade tree</h2>
+      <div class="pts" style="cursor:default"><b id="pts-val-2">0</b> pts</div>
+      <button class="close" id="close-sheet">Back to map</button>
+    </div>
+    <div class="tabs" id="tabs">
+      <button data-cat="spread" class="on">Spread</button>
+      <button data-cat="effects">Effects</button>
+      <button data-cat="resist">Resilience</button>
+    </div>
+    <div class="trait-list" id="trait-list"></div>
+    <div class="sheet-foot">
+      <div>Spread <b id="f-inf">0</b></div>
+      <div>Visibility <b id="f-sev">0</b></div>
+      <div>Severity <b id="f-let">0</b></div>
+      <div style="margin-left:auto;color:var(--text-3)">Owned <b id="f-owned">0</b></div>
+    </div>
+  </div>
+
+  <!-- world stats -->
+  <div class="modal" id="stats-modal">
+    <div class="card">
+      <div class="kicker">Situation report</div>
+      <h1 id="sr-title">Day 1</h1>
+      <div class="stats">
+        <div><span>Carriers</span><b id="sr-inf">0</b></div>
+        <div><span>Unaffected</span><b id="sr-well">0</b></div>
+        <div><span>Lost</span><b id="sr-dead">0</b></div>
+        <div><span>Cure</span><b id="sr-cure">0%</b></div>
+      </div>
+      <p id="sr-body" style="margin-bottom:8px"></p>
+      <div id="sr-regions" style="font-family:var(--mono);font-size:.64rem;line-height:1.75;color:var(--text-2);margin-bottom:16px"></div>
+      <div class="row"><button class="primary" id="close-stats">Back</button></div>
+    </div>
+  </div>
+
+  <!-- start -->
+  <div class="modal on" id="start-modal">
+    <div class="card">
+      <div class="kicker">Contagion</div>
+      <h1>Pick a starting country</h1>
+      <p>You steer one outbreak. Collect research points from the bubbles that pop up on the map, spend them on spread, effects and resilience, and cover the planet before the labs finish the cure. Go loud too early and every border slams shut.</p>
+      <div class="pick" id="start-pick"></div>
+      <p style="font-size:.72rem;color:var(--text-3);margin-bottom:14px">A fictional simulation: made-up numbers, abstract traits, no real-world biology in it.</p>
+      <div class="row"><button class="primary" id="begin">Begin</button></div>
+    </div>
+  </div>
+
+  <!-- end -->
+  <div class="modal" id="end-modal">
+    <div class="card">
+      <div class="kicker" id="end-kicker">Game over</div>
+      <h1 id="end-title">—</h1>
+      <p id="end-body">—</p>
+      <div class="stats">
+        <div><span>Days</span><b id="end-days">0</b></div>
+        <div><span>Reached</span><b id="end-reach">0</b></div>
+        <div><span>Peak carriers</span><b id="end-peak">0</b></div>
+        <div><span>Cure</span><b id="end-cure">0%</b></div>
+      </div>
+      <div class="row"><button class="primary" id="again">Play again</button></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+'use strict';
+/* ===========================================================================
+   CONTAGION - a single-file global strategy sim.
+
+   Shape of it:
+     - 14 abstract regions on a dot-matrix world map (equirectangular).
+     - Each region runs a logistic infection curve whose rate comes from the
+       upgrade tree, filtered through the region's climate / wealth / density.
+     - Regions are linked by air, sea and land routes. Each tick rolls for a
+       jump along a route; governments close routes once they notice you.
+     - "Visibility" (severity) feeds the cure bar and the government response.
+       "Severity" (lethality) kills carriers - and dead carriers spread nothing,
+       so going lethal early is the classic trap.
+     - Research points come from clickable bubbles + first-infection bonuses.
+   =========================================================================== */
+
+/* ---------------------------------------------------------------- regions -- */
+// lon/lat are map coordinates. pop in millions. wealth 0..1 drives cure
+// research and how fast a government reacts. density drives local spread.
+// climate: 'hot' | 'cold' | 'arid' | 'humid' | 'temperate'
+const REGIONS = [
+  { id:'na',  name:'North America',  lon:-100, lat: 45, pop: 580, wealth:.95, density:.45, climate:'temperate', tag:'rich, well connected, closes borders fast' },
+  { id:'ca',  name:'Caribbean',      lon: -74, lat: 18, pop:  45, wealth:.40, density:.55, climate:'humid',     tag:'small, humid, cruise and ferry hub' },
+  { id:'sa',  name:'South America',  lon: -58, lat:-12, pop: 430, wealth:.45, density:.40, climate:'humid',     tag:'hot and humid, patchy healthcare' },
+  { id:'we',  name:'Western Europe', lon:   6, lat: 48, pop: 420, wealth:.92, density:.70, climate:'temperate', tag:'dense, rich, huge airport traffic' },
+  { id:'ee',  name:'Eastern Europe', lon:  30, lat: 52, pop: 230, wealth:.55, density:.45, climate:'cold',      tag:'cold winters, land routes everywhere' },
+  { id:'ru',  name:'Northern Asia',  lon:  90, lat: 62, pop: 150, wealth:.55, density:.15, climate:'cold',      tag:'freezing and empty, hard to cross' },
+  { id:'naf', name:'North Africa',   lon:  15, lat: 22, pop: 260, wealth:.35, density:.30, climate:'arid',      tag:'dry heat, thin water infrastructure' },
+  { id:'caf', name:'Central Africa', lon:  20, lat:  0, pop: 420, wealth:.20, density:.35, climate:'hot',       tag:'poor, hot, almost no cure research' },
+  { id:'saf', name:'Southern Africa',lon:  25, lat:-26, pop: 180, wealth:.35, density:.25, climate:'arid',      tag:'dry, isolated, few flights in' },
+  { id:'me',  name:'Middle East',    lon:  45, lat: 27, pop: 320, wealth:.60, density:.40, climate:'arid',      tag:'arid crossroads between three continents' },
+  { id:'ca2', name:'Central Asia',   lon:  70, lat: 45, pop: 180, wealth:.40, density:.20, climate:'cold',      tag:'landlocked, cold, low traffic' },
+  { id:'sas', name:'South Asia',     lon:  78, lat: 22, pop:1850, wealth:.30, density:.95, climate:'hot',       tag:'the densest population on the board' },
+  { id:'eas', name:'East Asia',      lon: 112, lat: 33, pop:1650, wealth:.70, density:.80, climate:'temperate', tag:'dense, wealthy, fast to react' },
+  { id:'sea', name:'Southeast Asia', lon: 106, lat:  6, pop: 680, wealth:.45, density:.65, climate:'humid',     tag:'island chains, heavy sea traffic' },
+  { id:'oce', name:'Oceania',        lon: 138, lat:-26, pop:  45, wealth:.88, density:.12, climate:'arid',      tag:'island fortress, shuts the door early' },
+];
+const RI = {}; REGIONS.forEach((r,i) => { RI[r.id] = i; });
+
+// routes: [a, b, kind]  kind: 'air' | 'sea' | 'land'
+const ROUTES = [
+  ['na','we','air'], ['na','eas','air'], ['na','ca','air'], ['na','ca','sea'],
+  ['na','sa','air'], ['na','oce','air'], ['na','me','air'], ['na','sas','air'],
+  ['ca','sa','sea'], ['ca','we','air'], ['ca','naf','sea'],
+  ['sa','we','air'], ['sa','saf','sea'], ['sa','caf','sea'], ['sa','oce','sea'],
+  ['we','ee','land'], ['we','naf','sea'], ['we','me','air'], ['we','sas','air'],
+  ['we','eas','air'], ['we','caf','air'], ['we','ru','land'], ['we','oce','air'],
+  ['ee','ru','land'], ['ee','me','land'], ['ee','ca2','land'], ['ee','naf','sea'],
+  ['ru','ca2','land'], ['ru','eas','land'],
+  ['naf','me','land'], ['naf','caf','land'], ['naf','we','air'],
+  ['caf','saf','land'], ['caf','me','sea'], ['caf','sas','sea'],
+  ['saf','oce','sea'], ['saf','sas','sea'],
+  ['me','sas','land'], ['me','ca2','land'], ['me','eas','air'], ['me','naf','sea'],
+  ['ca2','sas','land'], ['ca2','eas','land'],
+  ['sas','sea','land'], ['sas','eas','land'], ['sas','me','air'],
+  ['eas','sea','land'], ['eas','oce','air'], ['eas','na','sea'], ['eas','sea','sea'],
+  ['sea','oce','sea'], ['sea','oce','air'], ['sea','sas','sea'],
+];
+
+/* ----------------------------------------------------------------- traits -- */
+// inf: spread rate, sev: how visible/alarming, let: how deadly.
+// mods: climate / wealth multipliers folded into the per-region rate.
+const TRAITS = [
+  // ----- spread -----
+  { id:'air1', cat:'spread', name:'Airborne I', cost:9, inf:.26, sev:.3,
+    desc:'Carried on breath between people sharing a room.', mods:{ density:.35 } },
+  { id:'air2', cat:'spread', name:'Airborne II', cost:17, req:['air1'], inf:.40, sev:.6,
+    desc:'Hangs in the air long after the room empties.', mods:{ density:.55 } },
+  { id:'wat1', cat:'spread', name:'Waterborne I', cost:8, inf:.22, sev:.3,
+    desc:'Survives in standing water and poor plumbing.', mods:{ poor:.40, humid:.25 } },
+  { id:'wat2', cat:'spread', name:'Waterborne II', cost:16, req:['wat1'], inf:.36, sev:.5,
+    desc:'Shrugs off chlorination and river treatment.', mods:{ poor:.55, humid:.4 } },
+  { id:'live', cat:'spread', name:'Livestock vector', cost:12, inf:.24, sev:.4,
+    desc:'Rides along farm animals and the trucks that move them.', mods:{ rural:.55, poor:.2 } },
+  { id:'rod',  cat:'spread', name:'Rodent vector', cost:14, inf:.26, sev:.5,
+    desc:'City rats carry it between neighbourhoods.', mods:{ density:.3, cold:.3 } },
+  { id:'bug',  cat:'spread', name:'Insect vector', cost:18, inf:.34, sev:.6,
+    desc:'Biting insects do the work in warm, wet places.', mods:{ hot:.6, humid:.5, arid:-.3, cold:-.5 } },
+  { id:'cargo',cat:'spread', name:'Cargo stowaway', cost:20, req:['rod'], inf:.16, sev:.3, route:{ sea:1.9 },
+    desc:'Hides in shipping containers. Sea routes get far busier.', mods:{} },
+  { id:'cabin',cat:'spread', name:'Cabin recirculation', cost:24, req:['air2'], inf:.16, sev:.4, route:{ air:1.9 },
+    desc:'Thrives in recycled cabin air. Flights carry it much further.', mods:{} },
+  { id:'cross',cat:'spread', name:'Crossing hardy', cost:22, req:['live'], inf:.18, sev:.3, route:{ land:2.1 },
+    desc:'Survives long overland hauls between checkpoints.', mods:{} },
+
+  // ----- effects -----
+  { id:'tired', cat:'effects', name:'Fatigue', cost:4, inf:.07, sev:.5, let:.01,
+    desc:'Everyone is a little tired. Nobody files a report over it.' },
+  { id:'cough', cat:'effects', name:'Coughing', cost:5, inf:.20, sev:1.1, let:.02,
+    desc:'Cheap extra spread, and the first thing a doctor notices.' },
+  { id:'rash',  cat:'effects', name:'Skin rash', cost:6, inf:.08, sev:1.4, let:.03,
+    desc:'Visible, so it gets reported early. Spreads little.' },
+  { id:'nausea',cat:'effects', name:'Nausea', cost:6, inf:.10, sev:1.0, let:.04,
+    desc:'Crowded clinics, more contact, more spread.' },
+  { id:'fever', cat:'effects', name:'Fever', cost:12, req:['nausea'], inf:.22, sev:2.4, let:.14,
+    desc:'Unmistakable on a thermometer at every border.' },
+  { id:'insom', cat:'effects', name:'Insomnia', cost:9, req:['tired'], inf:.12, sev:1.6, let:.08,
+    desc:'Weeks without sleep wear carriers down.' },
+  { id:'para',  cat:'effects', name:'Paranoia', cost:13, req:['insom'], inf:.06, sev:2.0, let:.10, cureSlow:.12,
+    desc:'Nobody trusts the official advice. Cure work slows.' },
+  { id:'seiz',  cat:'effects', name:'Seizures', cost:15, req:['insom'], inf:.04, sev:2.6, let:.34,
+    desc:'Hospitals fill up and the response hardens.' },
+  { id:'lung',  cat:'effects', name:'Lung scarring', cost:19, req:['cough'], inf:.26, sev:3.0, let:.46,
+    desc:'Heavy spread, heavy toll, impossible to hide.' },
+  { id:'bleed', cat:'effects', name:'Internal bleeding', cost:23, req:['fever'], inf:.08, sev:3.4, let:.78,
+    desc:'Fast, grim, and it burns through your carriers.' },
+  { id:'organ', cat:'effects', name:'Organ failure', cost:30, req:['bleed','seiz'], inf:.04, sev:3.8, let:1.25,
+    desc:'The endgame pick. Only worth it once the world is covered.' },
+  { id:'collapse', cat:'effects', name:'Systemic collapse', cost:38, req:['organ','lung'], inf:.02, sev:4.2, let:1.9,
+    desc:'Nothing survives it for long. Save it for the last stretch.' },
+
+  // ----- resilience -----
+  { id:'cold1', cat:'resist', name:'Cold adaptation I', cost:10, inf:.06, sev:.2, mods:{ cold:.55 },
+    desc:'Holds together through freezing winters.' },
+  { id:'cold2', cat:'resist', name:'Cold adaptation II', cost:18, req:['cold1'], inf:.06, sev:.3, mods:{ cold:.75 },
+    desc:'Northern regions stop being a dead end.' },
+  { id:'heat1', cat:'resist', name:'Heat adaptation I', cost:10, inf:.06, sev:.2, mods:{ hot:.5, arid:.35 },
+    desc:'Survives dry heat and long dusty transit.' },
+  { id:'heat2', cat:'resist', name:'Heat adaptation II', cost:18, req:['heat1'], inf:.06, sev:.3, mods:{ hot:.7, arid:.55 },
+    desc:'Desert regions become ordinary ground.' },
+  { id:'drug1', cat:'resist', name:'Treatment resistance I', cost:13, cureSlow:.18, inf:.05, sev:.4, mods:{ rich:.2 },
+    desc:'Standard treatment stops working. Cure work slows.' },
+  { id:'drug2', cat:'resist', name:'Treatment resistance II', cost:22, req:['drug1'], cureSlow:.30, inf:.05, sev:.6, mods:{ rich:.3 },
+    desc:'Every lab has to start over.' },
+  { id:'hard1', cat:'resist', name:'Sample instability', cost:16, cureSlow:.22, sev:.3,
+    desc:'Lab samples fall apart before they can be studied.' },
+  { id:'hard2', cat:'resist', name:'Mutation churn', cost:26, req:['hard1'], cureSlow:.34, sev:.5,
+    desc:'It drifts faster than the labs can sequence it.' },
+  { id:'quiet', cat:'resist', name:'Long silent phase', cost:15, sev:-1.6,
+    desc:'Weeks pass before a carrier shows anything. Buys you time.' },
+  { id:'stealth',cat:'resist',name:'Screening blind spot', cost:24, req:['quiet'], sev:-2.2, slowClose:.45,
+    desc:'Airport screening misses it. Borders stay open longer.' },
+];
+const TMAP = {}; TRAITS.forEach(t => { TMAP[t.id] = t; });
+
+const NEWS_EARLY = [
+  'Health ministry calls it a seasonal bug.',
+  'A clinic in a border town reports an odd cluster.',
+  'Online rumours outpace official statements.',
+  'Wastewater sampling flags something unnamed.',
+];
+const NEWS_MID = [
+  'Emergency committee convenes behind closed doors.',
+  'Hospitals postpone elective procedures.',
+  'Markets slide as travel bookings collapse.',
+  'Volunteers queue outside overwhelmed clinics.',
+  'Universities move everything online.',
+];
+const NEWS_LATE = [
+  'Curfews declared in a dozen capitals.',
+  'Supply chains fail in the worst-hit regions.',
+  'Labs share sequences in a last-ditch pact.',
+  'Governments stop publishing daily figures.',
+];
+
+/* ------------------------------------------------------------------ state -- */
+let G = null;
+function freshState(startIdx) {
+  const regions = REGIONS.map(r => ({
+    pop: r.pop * 1e6, inf: 0, dead: 0,
+    airOpen: true, seaOpen: true, landOpen: true,
+    noticed: false, lockdown: 0, seen: false,
+  }));
+  regions[startIdx].inf = 1;
+  regions[startIdx].seen = true;
+  return {
+    day: 0, acc: 0, speed: 1, running: true, over: false,
+    pts: 0, owned: new Set(), cure: 0, peak: 0, reached: 1,
+    start: startIdx, regions,
+    bubbles: [], saturated: false, news: 'Patient zero reported. Nobody has noticed yet.',
+    newsAt: 0, nextBubble: 3, mutateAt: 60, mutations: 0, globalAlarm: 0,
+  };
+}
+
+/* --------------------------------------------------------------- derived --- */
+function totals() {
+  let inf = 0, dead = 0, pop = 0;
+  for (const r of G.regions) { inf += r.inf; dead += r.dead; pop += r.pop; }
+  return { inf, dead, pop, well: pop - inf - dead };
+}
+function stats() {
+  let inf = 0, sev = 0, let_ = 0, cureSlow = 0, slowClose = 0;
+  const mods = { density:0, poor:0, rich:0, rural:0, hot:0, cold:0, arid:0, humid:0 };
+  const route = { air:1, sea:1, land:1 };
+  for (const id of G.owned) {
+    const t = TMAP[id];
+    inf += t.inf || 0; sev += t.sev || 0; let_ += t.let || 0;
+    cureSlow += t.cureSlow || 0; slowClose += t.slowClose || 0;
+    if (t.mods) for (const k in t.mods) mods[k] += t.mods[k];
+    if (t.route) for (const k in t.route) route[k] *= t.route[k];
+  }
+  return { inf, sev: Math.max(0, sev), let: let_, cureSlow, slowClose, mods, route };
+}
+// per-region spread multiplier from climate / wealth / density
+function regionMul(i, S) {
+  const r = REGIONS[i], m = S.mods;
+  let mul = 1;
+  mul += m.density * (r.density - .45);
+  mul += m.rural * (.5 - r.density);
+  mul += m.poor * (.6 - r.wealth);
+  mul += m.rich * (r.wealth - .5);
+  if (r.climate === 'hot')  mul += m.hot  * .8 + m.humid * .2;
+  if (r.climate === 'humid')mul += m.humid * .8 + m.hot * .3;
+  if (r.climate === 'arid') mul += m.arid * .8 + m.hot * .3;
+  if (r.climate === 'cold') mul += m.cold * .9;
+  // untouched climates fight back a little
+  if (r.climate === 'cold' && m.cold <= 0) mul -= .35;
+  if ((r.climate === 'hot' || r.climate === 'arid') && m.hot <= 0 && m.arid <= 0) mul -= .22;
+  const st = G.regions[i];
+  mul *= 1 - .55 * st.lockdown;
+  return Math.max(.08, mul);
+}
+
+/* ------------------------------------------------------------------- sim --- */
+function step() {                              // one in-game day
+  const S = stats();
+  G.day++;
+  const T = totals();
+  const infRatio = T.inf / T.pop;
+
+  // ---- local growth
+  for (let i = 0; i < G.regions.length; i++) {
+    const st = G.regions[i];
+    if (st.inf <= 0) continue;
+    const alive = st.pop - st.dead;
+    const well = alive - st.inf;
+    if (well > 0) {
+      const rate = (0.030 + S.inf * 0.300) * regionMul(i, S);
+      let grow = st.inf * rate * (well / Math.max(1, alive));
+      if (st.inf < 12) grow = Math.max(grow, rate * 0.9);   // seed doesn't stall
+      st.inf = Math.min(alive, st.inf + grow);
+    }
+    // ---- deaths: lethality eats your own carriers
+    if (S.let > 0) {
+      const d = st.inf * S.let * 0.032 * (1 + 0.5 * (1 - REGIONS[i].wealth));
+      const d2 = Math.min(st.inf, d);
+      st.inf -= d2; st.dead += d2;
+    }
+    // Below one carrier there is nobody left. Once a region has no healthy
+    // people left to infect, round off the dying tail too - otherwise the
+    // last stragglers decay asymptotically and the game never ends.
+    const hosts = st.pop - st.dead - st.inf;
+    const floor = hosts < 1 ? Math.max(1, st.pop * 1e-7) : 1;
+    if (st.inf < floor) { st.dead += st.inf; st.inf = 0; }
+    // ---- getting noticed
+    const local = st.inf / Math.max(1, st.pop);
+    const thresh = 0.012 / (1 + S.sev * 0.5);
+    if (!st.noticed && (local > thresh || S.sev > 2.4) && Math.random() < 0.2 + REGIONS[i].wealth * 0.3) {
+      st.noticed = true;
+      pushNews(`${REGIONS[i].name} confirms an outbreak and names it.`);
+    }
+    // ---- government response
+    if (st.noticed) {
+      const push = (0.003 + local * 0.22) * (0.5 + REGIONS[i].wealth) * (1 - S.slowClose);
+      st.lockdown = Math.min(1, st.lockdown + push * 0.5);
+      if (st.airOpen && Math.random() < push * 0.85) { st.airOpen = false; pushNews(`${REGIONS[i].name} closes its airports.`); }
+      if (st.seaOpen && Math.random() < push * 0.60) { st.seaOpen = false; pushNews(`${REGIONS[i].name} shuts its ports.`); }
+      if (st.landOpen && Math.random() < push * 0.40) { st.landOpen = false; pushNews(`${REGIONS[i].name} seals its land borders.`); }
+    }
+  }
+
+  // ---- route jumps
+  for (const [a, b, kind] of ROUTES) {
+    const ia = RI[a], ib = RI[b];
+    for (const [from, to] of [[ia, ib], [ib, ia]]) {
+      const sf = G.regions[from], stt = G.regions[to];
+      if (sf.inf < 20 || stt.inf > 0 || stt.dead > 0) continue;
+      const openKey = kind === 'air' ? 'airOpen' : kind === 'sea' ? 'seaOpen' : 'landOpen';
+      if (!sf[openKey] || !stt[openKey]) continue;
+      const base = kind === 'air' ? 0.026 : kind === 'sea' ? 0.019 : 0.032;
+      const carriers = Math.log10(sf.inf) / 7;
+      const traffic = (REGIONS[from].wealth + REGIONS[to].wealth) / 2 + 0.25;
+      const p = base * carriers * traffic * S.route[kind] * (0.12 + S.inf * 0.9);
+      if (Math.random() < p) {
+        stt.inf = 1;
+        G.reached++;
+        if (!stt.seen) {
+          stt.seen = true;
+          G.pts += 3;
+          bump();
+        }
+        pushNews(`First case confirmed in ${REGIONS[to].name} (${kind} route).`);
+      }
+    }
+  }
+
+  // ---- cure effort, driven by wealthy regions that know about it
+  let effort = 0;
+  for (let i = 0; i < G.regions.length; i++) {
+    const r = REGIONS[i], st = G.regions[i];
+    const aliveFrac = Math.sqrt(Math.max(0, (st.pop - st.dead) / st.pop));
+    if (st.noticed || G.globalAlarm > 0) effort += r.wealth * r.wealth * (r.pop / 1000) * aliveFrac;
+  }
+  if (infRatio > 0.01 || G.globalAlarm > 0) G.globalAlarm = 1;
+  const slow = 1 / (1 + S.cureSlow);
+  G.cure = Math.min(100, G.cure + effort * 0.085 * slow * (1 + S.sev * 0.22) * (0.4 + infRatio * 1.4));
+
+  // ---- random mutation adds an effect you did not buy
+  if (G.day >= G.mutateAt && G.mutations < 3) {
+    G.mutateAt = G.day + 130 + Math.floor(Math.random() * 90);
+    const pool = TRAITS.filter(t => t.cat === 'effects' && t.cost <= 9 && !G.owned.has(t.id)
+      && (!t.req || t.req.every(q => G.owned.has(q))));
+    if (pool.length && T.inf > 2e7) {
+      G.mutations++;
+      const t = pool[Math.floor(Math.random() * Math.min(3, pool.length))];
+      G.owned.add(t.id);
+      pushNews(`It mutated on its own: ${t.name.toLowerCase()}.`);
+      renderTraits();
+    }
+  }
+
+  // ---- bubbles
+  if (G.day >= G.nextBubble) {
+    G.nextBubble = G.day + 3 + Math.floor(Math.random() * 6);
+    spawnBubble();
+  }
+  G.bubbles = G.bubbles.filter(b => G.day - b.born < 14);
+
+  // ---- ambient news
+  if (G.day - G.newsAt > 22) {
+    const pool = infRatio > 0.35 ? NEWS_LATE : infRatio > 0.02 ? NEWS_MID : NEWS_EARLY;
+    pushNews(pool[Math.floor(Math.random() * pool.length)]);
+  }
+
+  G.peak = Math.max(G.peak, T.inf);
+  checkEnd();
+}
+
+function spawnBubble() {
+  const live = [];
+  for (let i = 0; i < G.regions.length; i++) if (G.regions[i].inf > 0) live.push(i);
+  if (!live.length) return;
+  const i = live[Math.floor(Math.random() * live.length)];
+  const cureKind = G.cure > 20 && Math.random() < 0.22;
+  G.bubbles.push({
+    r: i, born: G.day, kind: cureKind ? 'cure' : 'pts',
+    ox: (Math.random() - .5) * 26, oy: -14 - Math.random() * 16,
+    val: cureKind ? 0 : 1 + Math.floor(Math.random() * 3),
+  });
+}
+
+function checkEnd() {
+  const T = totals();
+  if (G.cure >= 100) return end(false, 'Cure distributed',
+    `The labs got there on day ${G.day}. Vaccination campaigns rolled out across ${G.reached} regions and the outbreak was declared over.`);
+  const dust = Math.max(1, T.pop * 1e-6);
+  if (T.inf < dust && T.well >= dust && G.peak > dust * 20 && G.day > 25) return end(false, 'Burned out',
+    `It killed its carriers faster than it could find new ones. By day ${G.day} nobody was left carrying it.`);
+  if (T.well < dust && !G.saturated) {
+    G.saturated = true;
+    pushNews('Every region is saturated. There is nobody left to infect.');
+  }
+  if (T.well < dust && T.inf < dust) return end(true, 'End of the line',
+    `Day ${G.day}. Every region fell and ${fmt(T.dead)} were lost. The cure stalled at ${G.cure.toFixed(0)}%.`);
+  if (G.day > 1200) return end(false, 'Stalemate',
+    `It never broke out of its corner of the world. After ${G.day} days the outbreak was written off as contained.`);
+}
+function end(win, title, body) {
+  if (G.over) return;
+  G.over = true; G.running = false;
+  const T = totals();
+  $('#end-kicker').textContent = win ? 'Victory' : 'Defeat';
+  $('#end-title').textContent = title;
+  $('#end-body').textContent = body;
+  $('#end-days').textContent = G.day;
+  $('#end-reach').textContent = `${Math.min(G.reached, REGIONS.length)}/${REGIONS.length}`;
+  $('#end-peak').textContent = fmt(G.peak);
+  $('#end-cure').textContent = `${G.cure.toFixed(0)}%`;
+  $('#end-modal').classList.add('on');
+}
+
+/* -------------------------------------------------------------------- map -- */
+const canvas = $('#map'), ctx = canvas.getContext('2d');
+let W = 0, H = 0, DPR = 1, dots = [], proj = null, hover = -1;
+
+// coarse continent outlines in lon/lat - enough for a recognisable dot map
+const LAND = [
+  [[-168,65],[-140,70],[-100,73],[-80,70],[-62,52],[-70,44],[-80,26],[-97,16],[-106,22],[-124,40],[-140,58]],
+  [[-55,60],[-20,70],[-26,83],[-52,79]],
+  [[-80,9],[-60,11],[-35,-5],[-38,-23],[-55,-35],[-68,-54],[-74,-40],[-79,-4]],
+  [[-17,14],[0,36],[32,32],[43,12],[51,12],[40,-4],[35,-25],[20,-35],[12,-18],[8,4],[-10,5]],
+  [[-10,36],[0,51],[6,58],[30,70],[41,60],[40,45],[28,40],[10,38]],
+  [[40,45],[62,46],[76,35],[88,22],[100,10],[106,20],[120,25],[122,40],[130,45],[142,52],[162,60],[180,66],[180,72],[100,76],[60,70],[41,61]],
+  [[113,-22],[130,-12],[142,-11],[153,-27],[146,-39],[131,-32],[115,-34]],
+  [[95,6],[119,6],[121,-5],[105,-9],[95,-1]],
+  [[129,32],[141,41],[146,44],[138,34]],
+  [[166,-45],[174,-34],[178,-39],[170,-47]],
+];
+function inPoly(px, py, poly) {
+  let hit = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [xi, yi] = poly[i], [xj, yj] = poly[j];
+    if ((yi > py) !== (yj > py) && px < (xj - xi) * (py - yi) / (yj - yi) + xi) hit = !hit;
+  }
+  return hit;
+}
+function makeProj() {
+  const LAT0 = 84, LAT1 = -58, pad = 8;
+  const availW = W - pad * 2, availH = H - pad * 2 - 26;
+  // keep 2:1 equirect aspect
+  let mw = availW, mh = mw * (LAT0 - LAT1) / 360 * 1.35;
+  if (mh > availH) { mh = availH; mw = mh * 360 / (LAT0 - LAT1) / 1.35; }
+  const ox = (W - mw) / 2, oy = pad + (availH - mh) / 2;
+  proj = {
+    mw, mh, ox, oy,
+    x: lon => ox + (lon + 180) / 360 * mw,
+    y: lat => oy + (LAT0 - lat) / (LAT0 - LAT1) * mh,
+  };
+}
+function buildDots() {
+  makeProj();
+  dots = [];
+  const step = Math.max(5, Math.min(9, proj.mw / 150));
+  for (let sy = 0; sy <= proj.mh; sy += step * .92) {
+    for (let sx = 0; sx <= proj.mw; sx += step) {
+      const lon = sx / proj.mw * 360 - 180;
+      const lat = 84 - sy / proj.mh * 142;
+      let land = false;
+      for (const poly of LAND) if (inPoly(lon, lat, poly)) { land = true; break; }
+      if (!land) continue;
+      // nearest region centre, longitude wrapped
+      let best = 0, bd = 1e9;
+      for (let i = 0; i < REGIONS.length; i++) {
+        let dl = Math.abs(lon - REGIONS[i].lon); if (dl > 180) dl = 360 - dl;
+        const d = dl * dl * .55 + (lat - REGIONS[i].lat) ** 2;
+        if (d < bd) { bd = d; best = i; }
+      }
+      dots.push({ x: proj.ox + sx, y: proj.oy + sy, r: best, j: Math.random() });
+    }
+  }
+}
+function resize() {
+  const wrap = $('#map-wrap');
+  DPR = Math.min(2, window.devicePixelRatio || 1);
+  W = wrap.clientWidth; H = wrap.clientHeight;
+  canvas.width = W * DPR; canvas.height = H * DPR;
+  canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  buildDots();
+}
+new ResizeObserver(resize).observe(document.body);
+
+function mix(a, b, t) {
+  return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+}
+const C_WELL = [38, 58, 72], C_INF = [255, 138, 61], C_DEAD = [126, 70, 180];
+
+function draw(now) {
+  ctx.clearRect(0, 0, W, H);
+  if (!G) return;
+
+  // routes
+  ctx.lineWidth = 1;
+  for (const [a, b, kind] of ROUTES) {
+    const ra = G.regions[RI[a]], rb = G.regions[RI[b]];
+    const live = ra.inf > 0 || rb.inf > 0;
+    if (!live) continue;
+    const openKey = kind === 'air' ? 'airOpen' : kind === 'sea' ? 'seaOpen' : 'landOpen';
+    const open = ra[openKey] && rb[openKey];
+    const x1 = proj.x(REGIONS[RI[a]].lon), y1 = proj.y(REGIONS[RI[a]].lat);
+    const x2 = proj.x(REGIONS[RI[b]].lon), y2 = proj.y(REGIONS[RI[b]].lat);
+    ctx.beginPath();
+    if (kind === 'air') {
+      const mx = (x1 + x2) / 2, my = (y1 + y2) / 2 - Math.hypot(x2 - x1, y2 - y1) * .14;
+      ctx.moveTo(x1, y1); ctx.quadraticCurveTo(mx, my, x2, y2);
+    } else { ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); }
+    ctx.setLineDash(open ? (kind === 'sea' ? [3, 4] : []) : [1, 5]);
+    ctx.strokeStyle = open ? 'rgba(255,138,61,.16)' : 'rgba(248,113,113,.16)';
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+
+  // land dots, tinted by region state
+  for (const d of dots) {
+    const st = G.regions[d.r];
+    const alive = st.pop - st.dead;
+    const fi = st.inf / st.pop, fd = st.dead / st.pop;
+    let col;
+    if (d.j < fd) col = C_DEAD;
+    else if (d.j < fd + fi) col = mix(C_WELL, C_INF, Math.min(1, .35 + fi));
+    else col = C_WELL;
+    const lit = d.j < fd + fi;
+    ctx.fillStyle = `rgb(${col[0] | 0},${col[1] | 0},${col[2] | 0})`;
+    const rad = lit ? 1.9 : 1.4;
+    ctx.beginPath(); ctx.arc(d.x, d.y, rad, 0, 6.2832); ctx.fill();
+    if (alive <= 0) { /* fully gone - dead colour already */ }
+  }
+
+  // region markers
+  for (let i = 0; i < REGIONS.length; i++) {
+    const st = G.regions[i];
+    const x = proj.x(REGIONS[i].lon), y = proj.y(REGIONS[i].lat);
+    const on = st.inf > 0;
+    if (on) {
+      const p = (now / 1400 + i * .37) % 1;
+      ctx.beginPath(); ctx.arc(x, y, 5 + p * 16, 0, 6.2832);
+      ctx.strokeStyle = `rgba(255,138,61,${(1 - p) * .35})`; ctx.lineWidth = 1.4; ctx.stroke();
+    }
+    ctx.beginPath(); ctx.arc(x, y, i === hover ? 5 : 3.6, 0, 6.2832);
+    ctx.fillStyle = on ? '#ff8a3d' : (st.noticed ? '#38bdf8' : 'rgba(232,240,245,.4)');
+    ctx.fill();
+    if (!st.airOpen || !st.seaOpen || !st.landOpen) {
+      ctx.beginPath(); ctx.arc(x, y, 8, 0, 6.2832);
+      ctx.strokeStyle = 'rgba(248,113,113,.5)'; ctx.lineWidth = 1; ctx.stroke();
+    }
+  }
+
+  // bubbles
+  for (const b of G.bubbles) {
+    const x = proj.x(REGIONS[b.r].lon) + b.ox;
+    const y = proj.y(REGIONS[b.r].lat) + b.oy + Math.sin(now / 700 + b.r) * 3;
+    b._x = x; b._y = y;
+    const age = (G.day - b.born) / 14;
+    const a = .35 + .65 * (1 - age);
+    const cure = b.kind === 'cure';
+    ctx.beginPath(); ctx.arc(x, y, 11, 0, 6.2832);
+    ctx.fillStyle = cure ? `rgba(56,189,248,${.16 * a})` : `rgba(255,138,61,${.16 * a})`;
+    ctx.fill();
+    ctx.beginPath(); ctx.arc(x, y, 7.5, 0, 6.2832);
+    ctx.fillStyle = cure ? `rgba(56,189,248,${.85 * a})` : `rgba(255,138,61,${.9 * a})`;
+    ctx.fill();
+    ctx.fillStyle = `rgba(6,10,14,${a})`;
+    ctx.font = '700 9px ' + getComputedStyle(document.body).getPropertyValue('--mono');
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(cure ? '✦' : String(b.val), x, y + .5);
+  }
+}
+
+/* ------------------------------------------------------------------- loop -- */
+let last = performance.now();
+function loop(now) {
+  const dt = Math.min(120, now - last); last = now;
+  if (G && G.running) {
+    // 1x = roughly one day every 330ms
+    G.acc += dt * G.speed / 330;
+    let guard = 0;
+    while (G.acc >= 1 && guard++ < 12) { G.acc -= 1; if (G.running) step(); }
+    paintHUD();
+  }
+  draw(now);
+  requestAnimationFrame(loop);
+}
+
+/* -------------------------------------------------------------------- ui --- */
+function $(s) { return document.querySelector(s); }
+function fmt(n) {
+  n = Math.floor(n);
+  if (n >= 1e9) return (n / 1e9).toFixed(2) + 'B';
+  if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
+  if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K';
+  return String(n);
+}
+function pushNews(t) { G.news = t; G.newsAt = G.day; $('#news-text').textContent = t; }
+function bump() { const e = $('#pts'); e.classList.remove('bump'); void e.offsetWidth; e.classList.add('bump'); }
+
+function paintHUD() {
+  const T = totals(), S = stats();
+  $('#pts-val').textContent = Math.floor(G.pts);
+  $('#pts-val-2').textContent = Math.floor(G.pts);
+  $('#day').textContent = 'Day ' + G.day;
+  $('#dead-val').textContent = fmt(T.dead) + ' lost';
+  const ir = T.inf / T.pop * 100;
+  $('#bar-inf').firstElementChild.style.width = Math.min(100, ir) + '%';
+  $('#inf-val').textContent = fmt(T.inf);
+  $('#bar-cure').firstElementChild.style.width = G.cure + '%';
+  $('#cure-val').textContent = G.cure.toFixed(0) + '%';
+  $('#f-inf').textContent = S.inf.toFixed(2);
+  $('#f-sev').textContent = S.sev.toFixed(1);
+  $('#f-let').textContent = S.let.toFixed(2);
+  $('#f-owned').textContent = G.owned.size;
+}
+
+let tab = 'spread';
+function renderTraits() {
+  const list = $('#trait-list');
+  list.innerHTML = '';
+  for (const t of TRAITS) {
+    if (t.cat !== tab) continue;
+    const owned = G.owned.has(t.id);
+    const locked = !!(t.req && !t.req.every(q => G.owned.has(q)));
+    const afford = !owned && !locked && G.pts >= t.cost;
+    const el = document.createElement('button');
+    el.className = 'trait' + (owned ? ' owned' : locked ? ' locked' : afford ? ' afford' : '');
+    const bits = [];
+    if (t.inf) bits.push(`<i>spread</i> +${t.inf.toFixed(2)}`);
+    if (t.sev) bits.push(`<i>visible</i> ${t.sev > 0 ? '+' : ''}${t.sev.toFixed(1)}`);
+    if (t.let) bits.push(`<i>severity</i> +${t.let.toFixed(2)}`);
+    if (t.cureSlow) bits.push(`<i>cure</i> −${(t.cureSlow * 100) | 0}%`);
+    if (t.route) for (const k in t.route) bits.push(`<i>${k}</i> ×${t.route[k]}`);
+    if (t.slowClose) bits.push(`<i>borders</i> slower`);
+    el.innerHTML =
+      `<div class="t-top"><span class="t-name">${t.name}</span>
+        <span class="t-cost">${owned ? '✓' : t.cost}</span></div>
+       <div class="t-desc">${t.desc}${locked ? ' <b style="color:var(--text-2)">Needs ' + t.req.map(q => TMAP[q].name).join(' + ') + '.</b>' : ''}</div>
+       <div class="t-stats">${bits.join('')}</div>`;
+    if (!owned && !locked) el.onclick = () => buy(t);
+    list.appendChild(el);
+  }
+}
+function buy(t) {
+  if (G.owned.has(t.id) || G.pts < t.cost) return;
+  G.pts -= t.cost; G.owned.add(t.id);
+  renderTraits(); paintHUD();
+}
+
+function showStats() {
+  const T = totals();
+  $('#sr-title').textContent = 'Day ' + G.day;
+  $('#sr-inf').textContent = fmt(T.inf);
+  $('#sr-well').textContent = fmt(T.well);
+  $('#sr-dead').textContent = fmt(T.dead);
+  $('#sr-cure').textContent = G.cure.toFixed(0) + '%';
+  const S = stats();
+  $('#sr-body').textContent =
+    `Spread ${S.inf.toFixed(2)}, visibility ${S.sev.toFixed(1)}, severity ${S.let.toFixed(2)}. ` +
+    (S.sev < 1.5 ? 'Still flying under the radar.' : S.sev < 3 ? 'Governments are watching closely.' : 'Every ministry on earth knows.');
+  const rows = REGIONS.map((r, i) => {
+    const st = G.regions[i];
+    const pct = (st.inf / st.pop * 100);
+    const flags = [st.airOpen ? '' : '✈', st.seaOpen ? '' : '⚓', st.landOpen ? '' : '⛔'].join('');
+    const bar = '█'.repeat(Math.round(pct / 10)) + '·'.repeat(10 - Math.round(pct / 10));
+    return { pct, html: `<div style="display:flex;gap:8px"><span style="flex:1">${r.name}</span>
+      <span style="color:${st.inf > 0 ? 'var(--inf)' : 'var(--text-3)'}">${bar}</span>
+      <span style="width:46px;text-align:right">${st.inf > 0 ? pct.toFixed(1) + '%' : '—'}</span>
+      <span style="width:34px;color:var(--bad)">${flags}</span></div>` };
+  }).sort((a, b) => b.pct - a.pct).map(x => x.html).join('');
+  $('#sr-regions').innerHTML = rows;
+  $('#stats-modal').classList.add('on');
+}
+
+/* ------------------------------------------------------------- input ------ */
+canvas.addEventListener('pointerdown', e => {
+  if (!G) return;
+  const r = canvas.getBoundingClientRect();
+  const x = e.clientX - r.left, y = e.clientY - r.top;
+  for (let i = G.bubbles.length - 1; i >= 0; i--) {
+    const b = G.bubbles[i];
+    if (b._x == null) continue;
+    if (Math.hypot(x - b._x, y - b._y) < 16) {
+      if (b.kind === 'cure') { G.cure = Math.max(0, G.cure - 0.9); }
+      else { G.pts += b.val; bump(); }
+      G.bubbles.splice(i, 1);
+      paintHUD();
+      return;
+    }
+  }
+});
+canvas.addEventListener('pointermove', e => {
+  if (!G || !proj) return;
+  const rct = canvas.getBoundingClientRect();
+  const x = e.clientX - rct.left, y = e.clientY - rct.top;
+  let best = -1, bd = 26 * 26;
+  for (let i = 0; i < REGIONS.length; i++) {
+    const d = (x - proj.x(REGIONS[i].lon)) ** 2 + (y - proj.y(REGIONS[i].lat)) ** 2;
+    if (d < bd) { bd = d; best = i; }
+  }
+  hover = best;
+  const tip = $('#tooltip');
+  if (best < 0) { tip.classList.remove('on'); return; }
+  const r = REGIONS[best], st = G.regions[best];
+  const closed = [st.airOpen ? null : 'air', st.seaOpen ? null : 'sea', st.landOpen ? null : 'land'].filter(Boolean);
+  tip.innerHTML = `<h4>${r.name}</h4>
+    <div class="r"><span>Carriers</span><b>${st.inf > 0 ? fmt(st.inf) : 'none'}</b></div>
+    <div class="r"><span>Unaffected</span><b>${fmt(st.pop - st.inf - st.dead)}</b></div>
+    <div class="r"><span>Lost</span><b>${fmt(st.dead)}</b></div>
+    <div class="r"><span>Climate</span><b>${r.climate}</b></div>
+    <div class="r"><span>Response</span><b>${st.noticed ? (closed.length ? 'closed ' + closed.join('/') : 'alert') : 'none'}</b></div>
+    <div class="tagline">${r.tag}</div>`;
+  tip.style.left = proj.x(r.lon) + 'px';
+  tip.style.top = proj.y(r.lat) + 'px';
+  tip.classList.add('on');
+});
+canvas.addEventListener('pointerleave', () => { hover = -1; $('#tooltip').classList.remove('on'); });
+
+$('#open-tree').onclick = () => { renderTraits(); $('#sheet').classList.add('on'); };
+$('#close-sheet').onclick = () => $('#sheet').classList.remove('on');
+$('#open-stats').onclick = showStats;
+$('#close-stats').onclick = () => $('#stats-modal').classList.remove('on');
+$('#tabs').onclick = e => {
+  const b = e.target.closest('button'); if (!b) return;
+  tab = b.dataset.cat;
+  for (const x of $('#tabs').children) x.classList.toggle('on', x === b);
+  renderTraits();
+};
+$('.speeds').onclick = e => {
+  const b = e.target.closest('button'); if (!b || !G) return;
+  const s = +b.dataset.speed;
+  G.speed = s; G.running = s > 0 && !G.over;
+  for (const x of $('.speeds').children) x.classList.toggle('on', x === b);
+};
+document.addEventListener('keydown', e => {
+  if (!G) return;
+  if (e.key === ' ') {
+    e.preventDefault();
+    const btn = G.running ? $('#sp0') : $('[data-speed="1"]');
+    btn.click();
+  }
+  if (e.key === 'u' || e.key === 'U') $('#open-tree').click();
+  if (e.key === 'Escape') { $('#sheet').classList.remove('on'); $('#stats-modal').classList.remove('on'); }
+});
+
+/* ------------------------------------------------------------- start ------ */
+let pickIdx = RI['sas'];
+function renderPick() {
+  const box = $('#start-pick');
+  box.innerHTML = '';
+  const options = ['sas', 'caf', 'na', 'we', 'ca', 'sea'];
+  for (const id of options) {
+    const r = REGIONS[RI[id]];
+    const b = document.createElement('button');
+    b.className = RI[id] === pickIdx ? 'on' : '';
+    b.innerHTML = `<b>${r.name}</b><small>${fmt(r.pop * 1e6)} people · ${r.climate} · ${r.tag}</small>`;
+    b.onclick = () => { pickIdx = RI[id]; renderPick(); };
+    box.appendChild(b);
+  }
+}
+function startGame() {
+  G = freshState(pickIdx);
+  G.pts = 6;
+  hover = -1;
+  $('#start-modal').classList.remove('on');
+  $('#end-modal').classList.remove('on');
+  $('#sheet').classList.remove('on');
+  for (const x of $('.speeds').children) x.classList.toggle('on', x.dataset.speed === '1');
+  resize(); renderTraits(); paintHUD();
+  pushNews(`Patient zero in ${REGIONS[pickIdx].name}. Nobody has noticed yet.`);
+}
+$('#begin').onclick = startGame;
+$('#again').onclick = () => { $('#end-modal').classList.remove('on'); $('#start-modal').classList.add('on'); renderPick(); };
+
+renderPick();
+resize();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
