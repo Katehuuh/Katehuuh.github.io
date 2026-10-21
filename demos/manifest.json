@@ -1,6 +1,12 @@
 {
   "demos": [
     {
+      "name": "[GAME]-Contagion",
+      "type": "file",
+      "filename": "[GAME]-Contagion.html",
+      "description": "A strategy sim of a spreading outbreak: dot-matrix world map, air and sea routes, an upgrade tree bought with research points, and a race against the global cure bar."
+    },
+    {
       "name": "[SHOW]-Jelly-Slider",
       "type": "file",
       "filename": "[SHOW]-Jelly-Slider.html",
