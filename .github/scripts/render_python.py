@@ -21,6 +21,10 @@ import matplotlib.pyplot as plt
 
 def render(src: Path, out: Path) -> int:
     plt.show = lambda *a, **kw: None  # capture-and-continue
+    # Entries often save their own PNG and then plt.close(fig), which left no
+    # figure for us to capture. Keep figures alive until we've saved ours.
+    real_close = plt.close
+    plt.close = lambda *a, **kw: None
 
     # Pretend the user script was launched bare (no extra args), so any
     # argparse.parse_args() inside it sees no positional arguments and uses
@@ -52,6 +56,7 @@ def render(src: Path, out: Path) -> int:
         return 1
     finally:
         sys.argv = saved_argv
+        plt.close = real_close
 
     if not plt.get_fignums():
         print(f"WARN: no figure produced by {src}", file=sys.stderr)
