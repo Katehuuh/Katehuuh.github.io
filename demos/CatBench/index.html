@@ -625,6 +625,7 @@ async function liveAugment(manifest) {
 
   if (!Array.isArray(contents)) return;
 
+  const fresh = [];
   for (const file of contents) {
     if (file.type !== 'file') continue;
     const dot = file.name.lastIndexOf('.');
@@ -642,8 +643,23 @@ async function liveAugment(manifest) {
     } else {
       baseStem = stem; key = normKey(stem); kind = KIND_BY_EXT[ext];
     }
-    if (!manifest.models[key]) manifest.models[key] = { display_name: displayFromStem(baseStem) };
+    if (!manifest.models[key]) {
+      manifest.models[key] = { display_name: displayFromStem(baseStem) };
+      fresh.push(key);
+    }
     if (!manifest.models[key][kind]) manifest.models[key][kind] = `assets/${file.name}`;
+  }
+
+  // A model missing from the manifest is newer than everything in it: the
+  // build just hasn't caught up. Appending put it in the oldest column, so
+  // move the manifest's own entries behind it to keep the grid newest-first.
+  if (fresh.length) {
+    for (const k of Object.keys(manifest.models)) {
+      if (fresh.includes(k)) continue;
+      const v = manifest.models[k];
+      delete manifest.models[k];
+      manifest.models[k] = v;
+    }
   }
 }
 
