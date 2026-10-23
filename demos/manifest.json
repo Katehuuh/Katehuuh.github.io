@@ -1,6 +1,12 @@
 {
   "demos": [
     {
+      "name": "[TOOL]-Neko-Minecraft-Collection-Mod-Pack",
+      "type": "file",
+      "filename": "[TOOL]-Neko-Minecraft-Collection-Mod-Pack.html",
+      "description": "Minecraft texture packs, shaders, maps and mods from 2013 to 2023, with screenshots and download links."
+    },
+    {
       "name": "[GAME]-Contagion",
       "type": "file",
       "filename": "[GAME]-Contagion.html",
