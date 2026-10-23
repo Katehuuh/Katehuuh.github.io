@@ -1,0 +1,346 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-labelledby="title description">
+  <title id="title">Marmalade, a cute little tabby kitten</title>
+  <desc id="description">A detailed storybook illustration of an orange tabby kitten with large teal eyes, cream-colored cheeks and paws, a curled striped tail, a sage collar with a golden bell, and tiny flowers and a butterfly on a warm cream background.</desc>
+
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fffdf8"/>
+      <stop offset="1" stop-color="#f7ecdf"/>
+    </linearGradient>
+    <radialGradient id="halo" cx="45%" cy="35%" r="70%">
+      <stop offset="0" stop-color="#fff9e9"/>
+      <stop offset="0.65" stop-color="#fce9d5"/>
+      <stop offset="1" stop-color="#f4d8c2"/>
+    </radialGradient>
+    <linearGradient id="fur" x1="0.15" y1="0" x2="0.85" y2="1">
+      <stop offset="0" stop-color="#ffd08f"/>
+      <stop offset="0.5" stop-color="#f2a661"/>
+      <stop offset="1" stop-color="#df874b"/>
+    </linearGradient>
+    <linearGradient id="headFur" x1="0.2" y1="0" x2="0.75" y2="1">
+      <stop offset="0" stop-color="#ffd596"/>
+      <stop offset="0.5" stop-color="#f5ae69"/>
+      <stop offset="1" stop-color="#e99455"/>
+    </linearGradient>
+    <linearGradient id="tailFur" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffc67f"/>
+      <stop offset="0.55" stop-color="#efa05c"/>
+      <stop offset="1" stop-color="#df864b"/>
+    </linearGradient>
+    <linearGradient id="cream" x1="0.2" y1="0" x2="0.8" y2="1">
+      <stop offset="0" stop-color="#fffaf0"/>
+      <stop offset="0.6" stop-color="#ffefd5"/>
+      <stop offset="1" stop-color="#efcfaa"/>
+    </linearGradient>
+    <linearGradient id="innerEar" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f8b9aa"/>
+      <stop offset="1" stop-color="#dc817a"/>
+    </linearGradient>
+    <radialGradient id="iris" cx="35%" cy="28%" r="75%">
+      <stop offset="0" stop-color="#d5f2cf"/>
+      <stop offset="0.35" stop-color="#8bcab1"/>
+      <stop offset="0.72" stop-color="#4a9384"/>
+      <stop offset="1" stop-color="#285e59"/>
+    </radialGradient>
+    <radialGradient id="groundShadow">
+      <stop offset="0" stop-color="#9e7259" stop-opacity="0.28"/>
+      <stop offset="0.65" stop-color="#b89074" stop-opacity="0.13"/>
+      <stop offset="1" stop-color="#b89074" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="gold" x1="0.2" y1="0" x2="0.8" y2="1">
+      <stop offset="0" stop-color="#fff0a6"/>
+      <stop offset="0.45" stop-color="#eec35d"/>
+      <stop offset="1" stop-color="#c88a35"/>
+    </linearGradient>
+    <filter id="softBlur" x="-30%" y="-100%" width="160%" height="300%">
+      <feGaussianBlur stdDeviation="9"/>
+    </filter>
+
+    <path id="headShape" d="M338 291 C380 254 438 235 500 235 C565 235 623 254 665 292 C707 332 727 389 724 451 C722 481 716 510 703 535 L712 550 L691 551 C681 572 662 590 640 604 L640 621 L619 615 C584 632 545 641 501 641 C456 641 416 632 382 615 L361 621 L361 604 C338 590 320 572 309 551 L288 550 L297 535 C284 509 278 481 276 451 C273 389 294 332 338 291 Z"/>
+    <clipPath id="headClip"><use href="#headShape"/></clipPath>
+    <path id="leftLegShape" d="M407 632 C400 680 391 746 396 789 C399 818 418 832 449 831 C480 830 494 815 490 786 L479 650 Z"/>
+    <path id="rightLegShape" d="M529 650 L518 786 C514 815 529 830 559 831 C590 832 610 818 613 789 C618 746 609 680 602 632 Z"/>
+    <clipPath id="leftLegClip"><use href="#leftLegShape"/></clipPath>
+    <clipPath id="rightLegClip"><use href="#rightLegShape"/></clipPath>
+  </defs>
+
+  <!-- Warm paper-like backdrop -->
+  <rect width="1024" height="1024" fill="url(#background)"/>
+  <rect x="28" y="28" width="968" height="968" rx="64" fill="none" stroke="#e8d8c6" stroke-width="2"/>
+  <circle cx="512" cy="464" r="365" fill="url(#halo)"/>
+  <circle cx="512" cy="464" r="365" fill="none" stroke="#edcfba" stroke-width="2"/>
+  <path d="M206 298 C254 204 350 132 455 113" fill="none" stroke="#ffffff" stroke-width="5" stroke-linecap="round" opacity="0.55"/>
+  <path d="M802 657 C778 727 729 783 670 815" fill="none" stroke="#dfbda6" stroke-width="3" stroke-linecap="round" opacity="0.45"/>
+
+  <!-- Quiet background confetti and glints -->
+  <g fill="#dcae91" opacity="0.55">
+    <circle cx="177" cy="413" r="4"/>
+    <circle cx="213" cy="266" r="3"/>
+    <circle cx="811" cy="213" r="4"/>
+    <circle cx="852" cy="487" r="3"/>
+    <circle cx="166" cy="610" r="3"/>
+    <circle cx="833" cy="570" r="4"/>
+  </g>
+  <g fill="none" stroke="#d8a985" stroke-width="4" stroke-linecap="round">
+    <path d="M224 351 V375 M212 363 H236"/>
+    <path d="M790 424 V444 M780 434 H800"/>
+    <path d="M759 166 V180 M752 173 H766" stroke-width="3"/>
+  </g>
+  <g fill="#fffaf0" stroke="#e5b995" stroke-width="2">
+    <path d="M179 505 L184 517 L196 522 L184 527 L179 539 L174 527 L162 522 L174 517 Z"/>
+    <path d="M837 344 L841 353 L850 357 L841 361 L837 370 L833 361 L824 357 L833 353 Z"/>
+  </g>
+
+  <!-- Ground -->
+  <ellipse cx="518" cy="831" rx="325" ry="58" fill="url(#groundShadow)" filter="url(#softBlur)"/>
+  <ellipse cx="511" cy="830" rx="263" ry="26" fill="#d9b392" opacity="0.13"/>
+
+  <!-- Small botanical accents behind the kitten -->
+  <g stroke-linecap="round" stroke-linejoin="round">
+    <g fill="none" stroke="#7f9b77" stroke-width="4">
+      <path d="M274 803 C259 751 246 701 217 663"/>
+      <path d="M262 763 C241 741 222 730 198 724"/>
+      <path d="M251 726 C263 702 269 682 267 657"/>
+      <path d="M746 810 C775 773 795 733 807 690"/>
+      <path d="M777 758 C801 747 820 730 832 710"/>
+    </g>
+    <g fill="#a7b793" stroke="#7f9b77" stroke-width="2">
+      <path d="M240 738 C217 741 199 730 193 710 C216 706 235 716 240 738 Z"/>
+      <path d="M253 712 C250 688 260 669 279 660 C285 683 275 703 253 712 Z"/>
+      <path d="M229 683 C207 682 194 669 192 651 C213 649 227 662 229 683 Z"/>
+      <path d="M787 739 C809 738 827 726 834 706 C812 702 793 716 787 739 Z"/>
+      <path d="M800 711 C782 696 779 676 788 658 C807 671 811 692 800 711 Z"/>
+      <path d="M767 776 C787 780 805 772 815 755 C795 747 776 756 767 776 Z"/>
+    </g>
+    <g fill="#d8e0c4">
+      <path d="M235 731 C219 730 207 723 199 715 C215 715 227 720 235 731 Z"/>
+      <path d="M793 732 C807 727 818 719 827 710 C812 712 801 720 793 732 Z"/>
+    </g>
+  </g>
+
+  <!-- Curled tail: dark contour, warm fur, then wrapped tabby bands -->
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M626 727 C700 792 792 769 807 699 C819 642 783 599 739 608 C707 614 692 641 706 662 C718 681 742 677 753 660" stroke="#a55f39" stroke-width="74"/>
+    <path d="M626 727 C700 792 792 769 807 699 C819 642 783 599 739 608 C707 614 692 641 706 662 C718 681 742 677 753 660" stroke="url(#tailFur)" stroke-width="64"/>
+    <path d="M626 727 C700 792 792 769 807 699 C819 642 783 599 739 608 C707 614 692 641 706 662 C718 681 742 677 753 660" stroke="#bd6c3e" stroke-width="64" stroke-dasharray="20 84" stroke-linecap="butt" opacity="0.82"/>
+    <path d="M652 731 C709 769 769 749 782 700" stroke="#ffd7a0" stroke-width="8" opacity="0.35"/>
+    <path d="M717 624 C731 615 750 617 764 626" stroke="#ffdaa4" stroke-width="7" opacity="0.4"/>
+  </g>
+
+  <!-- Seated body and soft haunches -->
+  <path d="M405 548 C356 583 337 655 343 725 C315 763 326 810 366 829 C401 846 444 835 463 817 C485 831 526 832 548 817 C574 840 623 843 655 820 C690 794 687 753 669 724 C675 650 648 580 603 548 C550 514 456 515 405 548 Z" fill="url(#fur)" stroke="#a55f39" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M368 615 C347 664 353 715 359 742 C337 777 351 810 382 820 C402 827 421 824 438 815 C402 781 390 717 398 654 C402 615 413 580 434 548 C407 559 384 582 368 615 Z" fill="#c97643" opacity="0.22"/>
+  <path d="M633 606 C658 653 651 701 653 736 C676 770 661 807 632 819 C611 828 589 824 572 814 C610 774 619 710 610 650 C605 609 593 574 574 545 C598 556 619 578 633 606 Z" fill="#c27040" opacity="0.2"/>
+
+  <!-- Cream belly and chest ruff -->
+  <path d="M443 584 C420 623 413 682 422 731 C429 773 447 811 475 823 L501 812 L525 824 C555 809 576 771 584 729 C594 679 584 621 560 584 C531 563 473 563 443 584 Z" fill="url(#cream)"/>
+  <path d="M449 605 L462 625 L475 615 L487 640 L502 625 L518 640 L530 615 L544 626 L557 604" fill="none" stroke="#fff9e9" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" opacity="0.72"/>
+
+  <!-- Body tabby markings -->
+  <g fill="#b9683d" opacity="0.8">
+    <path d="M350 641 C370 638 388 645 403 660 C382 655 365 658 348 668 Z"/>
+    <path d="M343 686 C363 679 383 683 397 695 C376 693 359 700 343 711 Z"/>
+    <path d="M654 638 C634 637 617 645 603 660 C623 654 640 657 657 667 Z"/>
+    <path d="M665 684 C644 679 625 683 610 696 C632 692 649 699 666 710 Z"/>
+  </g>
+  <g fill="none" stroke="#ffd9a4" stroke-width="4" stroke-linecap="round" opacity="0.52">
+    <path d="M366 606 Q378 590 391 582"/>
+    <path d="M356 621 Q367 608 379 602"/>
+    <path d="M634 594 Q646 610 651 627"/>
+    <path d="M373 754 Q365 773 371 789"/>
+    <path d="M639 751 Q648 770 642 787"/>
+  </g>
+
+  <!-- Front legs -->
+  <use href="#leftLegShape" fill="url(#fur)" stroke="#a55f39" stroke-width="4"/>
+  <use href="#rightLegShape" fill="url(#fur)" stroke="#a55f39" stroke-width="4"/>
+  <g clip-path="url(#leftLegClip)">
+    <path d="M386 779 C414 764 463 765 499 783 L500 845 L385 845 Z" fill="url(#cream)"/>
+    <path d="M400 781 C425 772 463 773 486 783" fill="none" stroke="#fff8e8" stroke-width="5" opacity="0.75"/>
+  </g>
+  <g clip-path="url(#rightLegClip)">
+    <path d="M508 783 C544 765 593 764 621 779 L622 845 L507 845 Z" fill="url(#cream)"/>
+    <path d="M522 783 C545 773 583 772 608 781" fill="none" stroke="#fff8e8" stroke-width="5" opacity="0.75"/>
+  </g>
+  <g fill="none" stroke="#b27b5d" stroke-width="3" stroke-linecap="round">
+    <path d="M422 800 Q418 814 423 824"/>
+    <path d="M450 801 Q446 816 450 827"/>
+    <path d="M473 800 Q477 812 473 822"/>
+    <path d="M535 800 Q531 812 535 822"/>
+    <path d="M558 801 Q562 816 558 827"/>
+    <path d="M586 800 Q590 814 585 824"/>
+  </g>
+  <g fill="none" stroke="#c77c47" stroke-width="8" stroke-linecap="round" opacity="0.75">
+    <path d="M404 702 Q426 695 448 702"/>
+    <path d="M560 702 Q582 695 604 702"/>
+  </g>
+
+  <!-- Sage collar and little bell, tucked behind the head -->
+  <path d="M370 583 Q502 653 635 583 L640 614 Q505 685 365 614 Z" fill="#568d80" stroke="#386a61" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M380 607 Q502 667 626 607" fill="none" stroke="#a8cbb7" stroke-width="5" stroke-linecap="round" opacity="0.7"/>
+  <circle cx="502" cy="648" r="29" fill="url(#gold)" stroke="#a87532" stroke-width="4"/>
+  <path d="M483 642 H521" stroke="#b27d32" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="502" cy="654" r="5" fill="#9f6c31"/>
+  <path d="M502 659 V669" stroke="#9f6c31" stroke-width="3" stroke-linecap="round"/>
+  <path d="M486 632 Q493 625 502 625" fill="none" stroke="#fff4ba" stroke-width="5" stroke-linecap="round" opacity="0.8"/>
+
+  <!-- Ears -->
+  <path d="M344 339 C313 318 281 244 291 190 C294 171 312 161 329 174 C367 202 400 233 426 267 L397 347 Z" fill="url(#fur)" stroke="#a55f39" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M580 267 C610 231 644 200 681 173 C699 160 716 171 719 190 C729 244 699 319 666 340 L609 348 Z" fill="url(#fur)" stroke="#a55f39" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M320 203 C314 238 330 283 351 309 L393 274 C370 247 346 224 320 203 Z" fill="url(#innerEar)" stroke="#c77c68" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M690 203 C696 238 680 283 659 309 L617 274 C640 247 665 224 690 203 Z" fill="url(#innerEar)" stroke="#c77c68" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M309 190 C300 224 312 268 326 292" fill="none" stroke="#ffe0b0" stroke-width="7" stroke-linecap="round" opacity="0.65"/>
+  <path d="M701 190 C710 224 698 268 684 292" fill="none" stroke="#ffe0b0" stroke-width="7" stroke-linecap="round" opacity="0.65"/>
+  <g fill="none" stroke="#ffe9cf" stroke-width="4" stroke-linecap="round" opacity="0.85">
+    <path d="M337 247 L359 278 M348 239 L368 269 M332 267 L348 288"/>
+    <path d="M673 247 L651 278 M662 239 L642 269 M678 267 L662 288"/>
+  </g>
+
+  <!-- Head silhouette and color -->
+  <use href="#headShape" fill="url(#headFur)" stroke="#a55f39" stroke-width="6" stroke-linejoin="round"/>
+  <g clip-path="url(#headClip)">
+    <ellipse cx="403" cy="315" rx="177" ry="118" fill="#ffe2aa" opacity="0.18"/>
+    <path d="M273 477 C338 568 409 601 501 604 C594 601 667 565 728 478 L738 660 L267 660 Z" fill="#ce7544" opacity="0.12"/>
+    <path d="M293 371 C304 328 331 298 367 277" fill="none" stroke="#ffe6b8" stroke-width="13" stroke-linecap="round" opacity="0.32"/>
+    <path d="M706 394 C715 445 703 492 681 527" fill="none" stroke="#c87343" stroke-width="15" stroke-linecap="round" opacity="0.14"/>
+  </g>
+
+  <!-- Forehead blaze and classic tabby markings -->
+  <path d="M471 251 C478 296 477 345 486 389 C490 411 487 432 500 449 C513 432 510 411 514 389 C523 345 522 296 529 251 C511 244 489 244 471 251 Z" fill="#ffdc9f" opacity="0.42"/>
+  <g fill="#b5663b" opacity="0.9">
+    <path d="M491 244 C487 274 488 305 494 327 L500 348 L506 327 C512 305 513 274 509 244 Z"/>
+    <path d="M446 253 C442 278 449 306 470 331 C467 301 475 272 477 245 Z"/>
+    <path d="M554 253 C558 278 551 306 530 331 C533 301 525 272 523 245 Z"/>
+    <path d="M397 269 C397 293 409 316 431 335 C422 306 424 280 430 257 Z"/>
+    <path d="M603 269 C603 293 591 316 569 335 C578 306 576 280 570 257 Z"/>
+    <path d="M292 405 C316 403 337 411 356 426 C331 422 312 429 296 441 Z"/>
+    <path d="M282 453 C306 445 329 448 347 459 C323 460 304 470 287 483 Z"/>
+    <path d="M708 405 C684 403 663 411 644 426 C669 422 688 429 704 441 Z"/>
+    <path d="M718 453 C694 445 671 448 653 459 C677 460 696 470 713 483 Z"/>
+  </g>
+  <g fill="none" stroke="#ffdfa9" stroke-width="4" stroke-linecap="round" opacity="0.55">
+    <path d="M359 316 Q372 301 389 291"/>
+    <path d="M641 316 Q628 301 611 291"/>
+    <path d="M312 383 Q319 364 332 350"/>
+    <path d="M688 383 Q681 364 668 350"/>
+  </g>
+
+  <!-- Cream cheeks and muzzle -->
+  <path d="M500 461 C474 438 435 438 401 455 C367 472 348 501 358 533 C373 581 430 611 500 613 C570 611 627 581 642 533 C652 501 633 472 599 455 C565 438 526 438 500 461 Z" fill="url(#cream)"/>
+  <ellipse cx="449" cy="513" rx="67" ry="51" fill="#fff9eb" opacity="0.55"/>
+  <ellipse cx="551" cy="513" rx="67" ry="51" fill="#fff9eb" opacity="0.55"/>
+  <path d="M422 582 Q500 620 578 582" fill="none" stroke="#e4bd98" stroke-width="3" stroke-linecap="round" opacity="0.45"/>
+
+  <!-- Soft cheek color -->
+  <ellipse cx="363" cy="503" rx="46" ry="23" fill="#ec8f7e" opacity="0.25"/>
+  <ellipse cx="637" cy="503" rx="46" ry="23" fill="#ec8f7e" opacity="0.25"/>
+  <g fill="none" stroke="#f8b39a" stroke-width="3" stroke-linecap="round" opacity="0.65">
+    <path d="M341 503 L352 497 M356 510 L367 503 M659 503 L648 497 M644 510 L633 503"/>
+  </g>
+
+  <!-- Large glossy eyes -->
+  <ellipse cx="404" cy="418" rx="72" ry="76" fill="#b66c43" opacity="0.16"/>
+  <ellipse cx="596" cy="418" rx="72" ry="76" fill="#b66c43" opacity="0.16"/>
+  <path d="M347 407 C351 371 377 350 410 351 C445 352 464 380 461 415 C458 454 435 476 402 475 C366 474 343 447 347 407 Z" fill="#593e32"/>
+  <path d="M653 407 C649 371 623 350 590 351 C555 352 536 380 539 415 C542 454 565 476 598 475 C634 474 657 447 653 407 Z" fill="#593e32"/>
+
+  <g>
+    <ellipse cx="404" cy="414" rx="49" ry="55" fill="url(#iris)" stroke="#314e45" stroke-width="3"/>
+    <g fill="none" stroke="#d2e8aa" stroke-width="2" opacity="0.42" stroke-linecap="round">
+      <path d="M369 393 L382 400 M372 378 L386 391 M397 363 L399 382 M425 369 L418 387 M442 386 L427 397 M446 423 L429 421 M435 448 L423 434 M377 445 L387 432"/>
+    </g>
+    <path d="M368 435 Q403 467 440 435" fill="none" stroke="#b8dfa9" stroke-width="6" stroke-linecap="round" opacity="0.65"/>
+    <ellipse cx="405" cy="414" rx="16" ry="39" fill="#203b37"/>
+    <ellipse cx="405" cy="414" rx="7" ry="31" fill="#142b29"/>
+    <circle cx="387" cy="387" r="14" fill="#ffffff"/>
+    <circle cx="426" cy="402" r="6" fill="#f7fff7"/>
+    <circle cx="424" cy="444" r="5" fill="#d7f7df" opacity="0.9"/>
+    <path d="M351 394 C365 359 418 342 451 376" fill="none" stroke="#70452f" stroke-width="7" stroke-linecap="round"/>
+  </g>
+  <g>
+    <ellipse cx="596" cy="414" rx="49" ry="55" fill="url(#iris)" stroke="#314e45" stroke-width="3"/>
+    <g fill="none" stroke="#d2e8aa" stroke-width="2" opacity="0.42" stroke-linecap="round">
+      <path d="M631 393 L618 400 M628 378 L614 391 M603 363 L601 382 M575 369 L582 387 M558 386 L573 397 M554 423 L571 421 M565 448 L577 434 M623 445 L613 432"/>
+    </g>
+    <path d="M632 435 Q597 467 560 435" fill="none" stroke="#b8dfa9" stroke-width="6" stroke-linecap="round" opacity="0.65"/>
+    <ellipse cx="595" cy="414" rx="16" ry="39" fill="#203b37"/>
+    <ellipse cx="595" cy="414" rx="7" ry="31" fill="#142b29"/>
+    <circle cx="579" cy="387" r="14" fill="#ffffff"/>
+    <circle cx="618" cy="402" r="6" fill="#f7fff7"/>
+    <circle cx="616" cy="444" r="5" fill="#d7f7df" opacity="0.9"/>
+    <path d="M649 394 C635 359 582 342 549 376" fill="none" stroke="#70452f" stroke-width="7" stroke-linecap="round"/>
+  </g>
+
+  <!-- Tiny nose, smile, whisker freckles -->
+  <path d="M479 484 C487 477 513 477 521 484 C523 492 512 501 500 506 C488 501 477 492 479 484 Z" fill="#d9827c" stroke="#a45e57" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M487 484 Q498 480 508 484" fill="none" stroke="#ffd6c7" stroke-width="4" stroke-linecap="round"/>
+  <g fill="none" stroke="#855a4a" stroke-width="4" stroke-linecap="round">
+    <path d="M500 506 V518"/>
+    <path d="M500 518 C490 533 472 533 463 522"/>
+    <path d="M500 518 C510 533 528 533 537 522"/>
+  </g>
+  <g fill="#a87a60" opacity="0.75">
+    <circle cx="425" cy="510" r="3"/>
+    <circle cx="439" cy="503" r="2.6"/>
+    <circle cx="438" cy="521" r="2.4"/>
+    <circle cx="575" cy="510" r="3"/>
+    <circle cx="561" cy="503" r="2.6"/>
+    <circle cx="562" cy="521" r="2.4"/>
+  </g>
+
+  <!-- Fine, sweeping whiskers -->
+  <g fill="none" stroke="#856552" stroke-width="3" stroke-linecap="round" opacity="0.8">
+    <path d="M408 517 C360 506 317 505 273 513"/>
+    <path d="M407 535 C355 533 309 545 269 564"/>
+    <path d="M416 550 C370 561 335 581 306 604"/>
+    <path d="M592 517 C640 506 683 505 727 513"/>
+    <path d="M593 535 C645 533 691 545 731 564"/>
+    <path d="M584 550 C630 561 665 581 694 604"/>
+  </g>
+  <g fill="none" stroke="#fff9e9" stroke-width="1.4" stroke-linecap="round" opacity="0.9">
+    <path d="M405 514 C359 503 320 503 284 509"/>
+    <path d="M595 514 C641 503 680 503 716 509"/>
+  </g>
+
+  <!-- Delicate face and chin fur accents -->
+  <g fill="none" stroke="#fff0d3" stroke-width="4" stroke-linecap="round" opacity="0.72">
+    <path d="M331 536 L316 541 M341 555 L326 562 M669 536 L684 541 M659 555 L674 562"/>
+    <path d="M462 587 L472 596 M481 591 L487 601 M538 587 L528 596 M519 591 L513 601"/>
+  </g>
+
+  <!-- Tiny flowers at the kitten's feet -->
+  <g stroke-linecap="round" stroke-linejoin="round">
+    <path d="M246 833 Q246 805 237 786 M278 836 Q276 817 284 800 M773 835 Q773 815 784 798" fill="none" stroke="#7f9b77" stroke-width="3"/>
+    <path d="M244 817 Q227 812 223 800 Q240 800 246 811 M276 824 Q291 815 299 820 Q290 832 278 832 M774 824 Q758 818 754 807 Q769 807 775 817" fill="#a7b793" stroke="#7f9b77" stroke-width="2"/>
+    <g fill="#fff8e8" stroke="#dba784" stroke-width="2">
+      <path d="M237 786 C225 784 222 773 229 768 C228 757 240 754 245 763 C255 759 263 769 256 777 C260 787 247 794 240 786 Z"/>
+      <path d="M784 798 C773 795 771 785 778 780 C778 770 789 768 794 776 C803 773 810 783 803 790 C806 800 794 806 788 798 Z"/>
+    </g>
+    <g fill="#e7b85f">
+      <circle cx="241" cy="774" r="5"/>
+      <circle cx="790" cy="786" r="5"/>
+    </g>
+    <g fill="#dfa092" stroke="#c77f74" stroke-width="2">
+      <path d="M284 801 C275 796 276 786 284 784 C289 776 299 781 298 790 C306 796 299 806 291 803 C288 808 282 806 284 801 Z"/>
+    </g>
+    <circle cx="290" cy="792" r="4" fill="#f4d186"/>
+  </g>
+
+  <!-- A little butterfly and its dotted flight path -->
+  <path d="M799 374 C824 389 824 408 810 420" fill="none" stroke="#c7a98f" stroke-width="2" stroke-linecap="round" stroke-dasharray="2 10"/>
+  <g transform="translate(780 303) rotate(-12)" stroke-linejoin="round">
+    <path d="M0 13 C-27 11 -42 -8 -31 -27 C-12 -27 -1 -11 0 13 Z" fill="#efa894" stroke="#b9796d" stroke-width="3"/>
+    <path d="M4 13 C31 11 46 -8 35 -27 C16 -27 5 -11 4 13 Z" fill="#f4b9a0" stroke="#b9796d" stroke-width="3"/>
+    <path d="M0 15 C-20 18 -27 34 -15 43 C-2 39 3 28 0 15 Z" fill="#f7c8a9" stroke="#b9796d" stroke-width="3"/>
+    <path d="M4 15 C24 18 31 34 19 43 C6 39 1 28 4 15 Z" fill="#f7c8a9" stroke="#b9796d" stroke-width="3"/>
+    <path d="M2 4 V30" stroke="#607d70" stroke-width="6" stroke-linecap="round"/>
+    <path d="M1 5 Q-5 -5 -12 -6 M3 5 Q9 -5 16 -6" fill="none" stroke="#607d70" stroke-width="2" stroke-linecap="round"/>
+    <circle cx="-23" cy="-13" r="5" fill="#ffd9bd" opacity="0.8"/>
+    <circle cx="27" cy="-13" r="5" fill="#ffd9bd" opacity="0.8"/>
+  </g>
+
+  <!-- A few foreground grass strokes anchor the scene -->
+  <g fill="none" stroke="#91a681" stroke-width="3" stroke-linecap="round" opacity="0.8">
+    <path d="M309 839 Q303 825 305 814 M315 839 Q322 824 330 819 M703 840 Q698 824 700 814 M710 840 Q717 826 726 821"/>
+  </g>
+</svg>
