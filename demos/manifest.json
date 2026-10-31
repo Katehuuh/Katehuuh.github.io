@@ -55,7 +55,8 @@
     {
       "name": "[TOOL]-Text-to-ASCII-QR",
       "type": "file",
-      "filename": "[TOOL]-Text-to-ASCII-QR.html"
+      "filename": "[TOOL]-Text-to-ASCII-QR.html",
+      "description": "Turn any text or link into a QR code and a one-line barcode made of text, to paste into Discord, Telegram, WhatsApp or Twitch so people can scan it with their phone."
     },
     {
       "name": "[SHOW]-Chaos-Lab",
