@@ -81,7 +81,8 @@
     {
       "name": "[TOOL]-Prompt-Library",
       "type": "file",
-      "filename": "[TOOL]-Prompt-Library.html"
+      "filename": "[TOOL]-Prompt-Library.html",
+      "description": "Prompts I use to benchmark frontier models, each with a Python and a single-file HTML version, plus a self-improving prompt engineer."
     },
     {
       "name": "[GAME]-Map2Mask-exploration",
