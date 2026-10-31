@@ -1,602 +1,399 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ASCII QR & Barcode Generator</title>
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='80' font-size='80'%3E%F0%9F%93%B1%3C/text%3E%3C/svg%3E">
-    <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            font-family: 'Segoe UI', Tahoma, sans-serif;
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-            min-height: 100vh;
-            padding: 20px;
-            color: #eee;
-        }
-        .container { max-width: 1100px; margin: 0 auto; }
-        h1 {
-            text-align: center;
-            margin-bottom: 10px;
-            font-size: 2.5em;
-            background: linear-gradient(90deg, #00d4ff, #7b2cbf);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-        .subtitle { text-align: center; color: #888; margin-bottom: 30px; }
-        .input-section {
-            background: rgba(255,255,255,0.05);
-            border-radius: 15px;
-            padding: 25px;
-            margin-bottom: 25px;
-            border: 1px solid rgba(255,255,255,0.1);
-        }
-        label { display: block; margin-bottom: 8px; font-weight: 600; color: #00d4ff; }
-        input[type="text"] {
-            width: 100%;
-            padding: 15px;
-            border: 2px solid rgba(255,255,255,0.2);
-            border-radius: 10px;
-            font-size: 16px;
-            background: rgba(0,0,0,0.3);
-            color: #fff;
-            margin-bottom: 20px;
-        }
-        input[type="text"]:focus { outline: none; border-color: #00d4ff; }
-        .btn-group { display: flex; gap: 15px; flex-wrap: wrap; }
-        button {
-            flex: 1;
-            min-width: 150px;
-            padding: 15px 25px;
-            border: none;
-            border-radius: 10px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s;
-        }
-        .btn-qr { background: linear-gradient(135deg, #7b2cbf, #9d4edd); color: white; }
-        .btn-barcode { background: linear-gradient(135deg, #00d4ff, #0096c7); color: white; }
-        .btn-both { background: linear-gradient(135deg, #f72585, #b5179e); color: white; }
-        button:hover { transform: translateY(-2px); box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
-        .output-section { display: grid; grid-template-columns: repeat(auto-fit, minmax(450px, 1fr)); gap: 25px; }
-        .output-box {
-            background: rgba(255,255,255,0.05);
-            border-radius: 15px;
-            padding: 25px;
-            border: 1px solid rgba(255,255,255,0.1);
-        }
-        .output-box h3 { margin-bottom: 15px; color: #00d4ff; }
-        .qr-container { display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-start; }
-        .qr-image-box { 
-            background: white; 
-            padding: 10px; 
-            border-radius: 10px;
-            text-align: center;
-        }
-        .qr-image-box img { 
-            display: block;
-            max-width: 200px; 
-            height: auto;
-        }
-        .qr-image-box p {
-            color: #333;
-            font-size: 12px;
-            margin-top: 5px;
-        }
-        .ascii-box {
-            flex: 1;
-            min-width: 250px;
-        }
-        .ascii-output {
-            background: #fff;
-            color: #000;
-            padding: 8px;
-            border-radius: 10px;
-            font-family: 'Courier New', monospace;
-            font-size: 4px;
-            line-height: 4px;
-            letter-spacing: 0;
-            white-space: pre;
-            overflow: auto;
-            max-height: 300px;
-            display: block;
-        }
-        .barcode-ascii {
-            background: #fff;
-            color: #000;
-            padding: 15px;
-            border-radius: 10px;
-            font-family: monospace;
-            font-size: 24px;
-            line-height: 1;
-            letter-spacing: -1px;
-            white-space: pre;
-            overflow-x: auto;
-            text-align: center;
-        }
-        .canvas-section { margin: 15px 0; text-align: center; }
-        .canvas-section canvas {
-            background: white;
-            border-radius: 10px;
-            max-width: 100%;
-        }
-        .verification {
-            margin-top: 15px;
-            padding: 15px;
-            border-radius: 10px;
-            font-size: 14px;
-        }
-        .verification.success { background: rgba(0,255,136,0.1); border: 1px solid #00ff88; color: #00ff88; }
-        .verification.error { background: rgba(255,71,87,0.1); border: 1px solid #ff4757; color: #ff4757; }
-        .verification.info { background: rgba(0,212,255,0.1); border: 1px solid #00d4ff; color: #00d4ff; }
-        .verification.warning { background: rgba(255,193,7,0.1); border: 1px solid #ffc107; color: #ffc107; }
-        .verification.loading { animation: pulse 1s infinite; }
-        @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
-        .btn-actions { margin-top: 15px; }
-        .copy-btn {
-            margin-right: 10px;
-            margin-bottom: 10px;
-            padding: 10px 20px;
-            background: rgba(255,255,255,0.1);
-            border: 1px solid rgba(255,255,255,0.2);
-            color: #fff;
-            border-radius: 8px;
-            cursor: pointer;
-        }
-        .copy-btn:hover { background: rgba(255,255,255,0.2); }
-        .method-note {
-            font-size: 11px;
-            color: #888;
-            margin-top: 10px;
-        }
-        #hiddenCanvas { display: none; }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Chat QR</title>
+<meta name="description" content="Turn any text or link into a QR code and a one-line barcode made of text, to paste into Discord, Telegram, WhatsApp or Twitch so people can scan it with their phone.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='80' font-size='80'%3E%F0%9F%93%B1%3C/text%3E%3C/svg%3E">
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/barcodes/JsBarcode.code128.min.js"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #f2f2f7;
+  --surface: #fff;
+  --fill: rgba(118,118,128,.12);
+  --sep: rgba(60,60,67,.16);
+  --text: #000;
+  --text-2: rgba(60,60,67,.62);
+  --accent: #007aff;
+  --warn: #c93400;
+  --good: #248a3d;
+  --mono: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
+  --sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #000; --surface: #1c1c1e; --fill: rgba(118,118,128,.24); --sep: rgba(84,84,88,.55);
+    --text: #fff; --text-2: rgba(235,235,245,.6); --accent: #0a84ff; --warn: #ff9f0a; --good: #30d158;
+  }
+}
+html { background: var(--bg); -webkit-text-size-adjust: 100%; }
+body {
+  color: var(--text); font: 15px/1.4 var(--sans); -webkit-font-smoothing: antialiased;
+  max-width: 760px; margin: 0 auto;
+  padding: max(20px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 32px max(16px, env(safe-area-inset-left));
+}
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 8px; }
+
+.top { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+h1 { font-size: 28px; font-weight: 700; letter-spacing: -.02em; }
+.opts { display: flex; gap: 6px; }
+
+textarea {
+  display: block; width: 100%; min-height: 76px; resize: vertical;
+  padding: 10px 12px; border: 0; border-radius: 12px; outline: 0;
+  background: var(--surface); color: var(--text); font: 16px/1.4 var(--sans);
+  box-shadow: 0 0 0 .5px var(--sep);
+}
+textarea:focus { box-shadow: 0 0 0 2px var(--accent); }
+textarea::placeholder { color: var(--text-2); }
+
+.go {
+  display: block; width: 100%; height: 40px; margin: 10px 0 18px; border-radius: 99px;
+  font-size: 15px; font-weight: 600; background: var(--accent); color: #fff;
+}
+.go:active { opacity: .75; }
+.seg { display: inline-flex; padding: 2px; border-radius: 9px; background: var(--fill); }
+.seg button {
+  position: relative; height: 32px; min-width: 40px; padding: 0 10px; border-radius: 7px;
+  font-size: 13px; font-weight: 500; display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+}
+.seg button[aria-pressed="true"] { background: var(--surface); font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+@media (prefers-color-scheme: dark) { .seg button[aria-pressed="true"] { background: #636366; box-shadow: none; } }
+.seg svg { width: 15px; height: 15px; }
+.fence { font-family: var(--mono); font-size: 13px; font-weight: 700; letter-spacing: -.12em; }
+
+/* ---- outputs ---- */
+.out { background: var(--surface); border-radius: 12px; margin-bottom: 14px; overflow: hidden; }
+.out[hidden] { display: none; }
+.out-head { display: flex; align-items: center; gap: 8px; padding: 8px 8px 8px 14px; }
+.out-head h2 { font-size: 15px; font-weight: 600; }
+.meta { font-size: 12px; color: var(--text-2); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.icons { margin-left: auto; display: flex; gap: 2px; flex-shrink: 0; }
+.icon {
+  position: relative; width: 34px; height: 34px; border-radius: 8px; display: grid; place-items: center;
+  color: var(--accent); transition: background .15s, color .15s;
+}
+.icon:hover { background: var(--fill); }
+.icon:active { opacity: .6; }
+.icon svg { width: 18px; height: 18px; }
+.icon.done { color: var(--good); }
+@media (pointer: coarse) { .icon::after { content: ''; position: absolute; inset: -5px; } }
+
+/* The preview is the exact text, drawn the way a Discord code block draws it
+   (14px on an 18px line), on the chat colour picked above. */
+.chat {
+  margin: 0 12px 12px; padding: 12px; border-radius: 8px; overflow-x: auto;
+  font: 14px/18px 'gg mono', 'Source Code Pro', Consolas, Menlo, var(--mono);
+  white-space: pre; -webkit-user-select: all; user-select: all;
+  background: #2b2d31; color: #dbdee1; box-shadow: inset 0 0 0 1px rgba(255,255,255,.04);
+}
+.chat.light { background: #f2f3f5; color: #313338; box-shadow: inset 0 0 0 1px rgba(0,0,0,.06); }
+.chat.qr { display: flex; justify-content: center; }
+.warn { font-size: 12px; color: var(--warn); padding: 0 14px 10px; margin-top: -4px; }
+.warn:empty { display: none; }
+
+.how { font-size: 12px; color: var(--text-2); line-height: 1.5; padding: 0 4px; }
+.how b { color: var(--text); font-weight: 600; }
+
+@media (max-width: 480px) {
+  h1 { font-size: 26px; }
+  .chat { margin: 0 0 0; border-radius: 0; font-size: 13px; line-height: 17px; }
+  .warn { padding-top: 8px; margin-top: 0; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
 </head>
 <body>
-    <div class="container">
-        <h1>⚡ ASCII QR & Barcode Generator</h1>
-        <p class="subtitle">Uses qrcode.show API (ISO/IEC 18004:2015 compliant) + real verification</p>
-        
-        <div class="input-section">
-            <label for="inputText">Enter Text or URL:</label>
-            <input type="text" id="inputText" placeholder="Enter text to encode..." value="https://example.com">
-            <div class="btn-group">
-                <button class="btn-qr" onclick="generateQR()">Generate QR Code</button>
-                <button class="btn-barcode" onclick="generateBarcode()">Generate Barcode</button>
-                <button class="btn-both" onclick="generateBoth()">Generate Both</button>
-            </div>
-        </div>
-        
-        <div class="output-section">
-            <div class="output-box">
-                <h3>📱 QR Code</h3>
-                <div class="qr-container">
-                    <div class="qr-image-box">
-                        <img id="qrImage" src="" alt="QR Code" style="display:none;">
-                        <p>Scannable PNG (from API)</p>
-                    </div>
-                    <div class="ascii-box">
-                        <pre class="ascii-output" id="qrAscii">ASCII will appear here...</pre>
-                    </div>
-                </div>
-                <div class="verification info" id="qrVerification">Enter text and click generate</div>
-                <div class="btn-actions">
-                    <button class="copy-btn" onclick="copyText('qrAscii')">📋 Copy ASCII</button>
-                    <button class="copy-btn" onclick="downloadQRImage()">💾 Download PNG</button>
-                </div>
-                <p class="method-note">QR via qrcode.show API • ASCII converted from PNG pixels</p>
-            </div>
-            
-            <div class="output-box">
-                <h3>📊 Barcode (Code 128B)</h3>
-                <div class="canvas-section">
-                    <canvas id="barcodeCanvas"></canvas>
-                </div>
-                <pre class="barcode-ascii" id="barcodeAscii">▌│█║▌║▌║</pre>
-                <div class="verification info" id="barcodeVerification">Enter text and click generate</div>
-                <div class="btn-actions">
-                    <button class="copy-btn" onclick="copyText('barcodeAscii')">📋 Copy ASCII</button>
-                    <button class="copy-btn" onclick="downloadCanvas('barcodeCanvas', 'barcode.png')">💾 Download PNG</button>
-                </div>
-                <p class="method-note">Code 128B with proper checksum calculation</p>
-            </div>
-        </div>
-    </div>
-    
-    <canvas id="hiddenCanvas"></canvas>
+<header class="top">
+  <h1>Chat QR</h1>
+  <div class="opts">
+  <div class="seg" role="group" aria-label="Chat colour">
+    <button type="button" data-theme="dark" aria-pressed="true" title="For a dark chat (Discord, Twitch default)">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20.5 14.6A8.5 8.5 0 0 1 9.4 3.5 8.5 8.5 0 1 0 20.5 14.6z"/></svg>
+    </button>
+    <button type="button" data-theme="light" aria-pressed="false" title="For a light chat">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.5 1.5M17.2 17.2l1.5 1.5M5.3 18.7l1.5-1.5M17.2 6.8l1.5-1.5"/></svg>
+    </button>
+  </div>
+  <div class="seg" role="group" aria-label="Code block">
+    <button type="button" id="fence" aria-pressed="true" title="Copy inside a ``` code block (Discord, Telegram, WhatsApp). Turn off for Twitch.">
+      <span class="fence">```</span>
+    </button>
+  </div>
+  </div>
+</header>
+<textarea id="t" placeholder="Text or link" spellcheck="false" autofocus>https://example.com</textarea>
+<button type="button" class="go" id="go">Generate QR Code + Barcode</button>
 
-    <script>
-        // ============ QR CODE via qrcode.show API ============
-        async function generateQR() {
-            const text = document.getElementById('inputText').value.trim();
-            if (!text) {
-                showStatus('qrVerification', 'Please enter text to encode', 'error');
-                return;
-            }
-            
-            showStatus('qrVerification', '⏳ Fetching from qrcode.show API...', 'info loading');
-            
-            const qrImage = document.getElementById('qrImage');
-            qrImage.style.display = 'none';
-            
-            try {
-                // Use qrcode.show API - returns PNG image
-                const apiUrl = `https://qrcode.show/${encodeURIComponent(text)}`;
-                
-                // Fetch as blob
-                const response = await fetch(apiUrl, {
-                    headers: {
-                        'Accept': 'image/png'
-                    }
-                });
-                
-                if (!response.ok) {
-                    throw new Error(`API error: ${response.status}`);
-                }
-                
-                const blob = await response.blob();
-                const imageUrl = URL.createObjectURL(blob);
-                
-                // Display the image
-                qrImage.src = imageUrl;
-                qrImage.style.display = 'block';
-                
-                // Convert PNG to ASCII
-                qrImage.onload = function() {
-                    convertImageToAscii(qrImage, text);
-                };
-                
-            } catch (e) {
-                console.error('API Error:', e);
-                showStatus('qrVerification', '⚠ API failed. Trying fallback...', 'warning');
-                
-                // Fallback: use alternative API
-                try {
-                    await generateQRFallback(text);
-                } catch (e2) {
-                    showStatus('qrVerification', 'Error: ' + e.message + '. Try again.', 'error');
-                }
-            }
-        }
-        
-        // Fallback using goqr.me API
-        async function generateQRFallback(text) {
-            const qrImage = document.getElementById('qrImage');
-            const apiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(text)}`;
-            
-            qrImage.crossOrigin = 'anonymous';
-            qrImage.src = apiUrl;
-            qrImage.style.display = 'block';
-            
-            qrImage.onload = function() {
-                convertImageToAscii(qrImage, text);
-            };
-            
-            qrImage.onerror = function() {
-                showStatus('qrVerification', 'Both APIs failed. Check your connection.', 'error');
-            };
-        }
-        
-        // Convert QR image to ASCII art
-        function convertImageToAscii(img, originalText) {
-            const canvas = document.getElementById('hiddenCanvas');
-            const ctx = canvas.getContext('2d', { willReadFrequently: true });
-            
-            // Draw image to canvas
-            const size = Math.min(img.naturalWidth, img.naturalHeight, 200);
-            canvas.width = size;
-            canvas.height = size;
-            ctx.drawImage(img, 0, 0, size, size);
-            
-            // Get pixel data
-            const imageData = ctx.getImageData(0, 0, size, size);
-            const pixels = imageData.data;
-            
-            // Determine module size by analyzing the image
-            const moduleSize = detectModuleSize(pixels, size);
-            
-            // Convert to ASCII
-            let ascii = '';
-            const BLACK = '██';
-            const WHITE = '  ';
-            
-            for (let y = 0; y < size; y += moduleSize) {
-                for (let x = 0; x < size; x += moduleSize) {
-                    const idx = (y * size + x) * 4;
-                    const brightness = (pixels[idx] + pixels[idx + 1] + pixels[idx + 2]) / 3;
-                    ascii += brightness < 128 ? BLACK : WHITE;
-                }
-                ascii += '\n';
-            }
-            
-            document.getElementById('qrAscii').textContent = ascii;
-            
-            // Verify by trying to read the QR from the image
-            verifyQRFromImage(canvas, originalText);
-        }
-        
-        // Detect QR module size from image
-        function detectModuleSize(pixels, size) {
-            // Simple detection: find first transition and measure module
-            let firstBlackX = -1;
-            let firstWhiteAfterBlack = -1;
-            
-            // Scan middle row
-            const midY = Math.floor(size / 2);
-            for (let x = 0; x < size; x++) {
-                const idx = (midY * size + x) * 4;
-                const brightness = (pixels[idx] + pixels[idx + 1] + pixels[idx + 2]) / 3;
-                
-                if (brightness < 128 && firstBlackX === -1) {
-                    firstBlackX = x;
-                } else if (brightness >= 128 && firstBlackX !== -1 && firstWhiteAfterBlack === -1) {
-                    firstWhiteAfterBlack = x;
-                    break;
-                }
-            }
-            
-            if (firstBlackX !== -1 && firstWhiteAfterBlack !== -1) {
-                const moduleSize = firstWhiteAfterBlack - firstBlackX;
-                if (moduleSize >= 2 && moduleSize <= 20) {
-                    return moduleSize;
-                }
-            }
-            
-            // Default fallback
-            return Math.max(2, Math.floor(size / 50));
-        }
-        
-        // Verify QR using jsQR (loaded dynamically)
-        async function verifyQRFromImage(canvas, originalText) {
-            try {
-                // Try to load jsQR dynamically if not present
-                if (typeof jsQR === 'undefined') {
-                    await loadScript('https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js');
-                }
-                
-                const ctx = canvas.getContext('2d', { willReadFrequently: true });
-                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                
-                const code = jsQR(imageData.data, imageData.width, imageData.height);
-                
-                if (code) {
-                    if (code.data === originalText) {
-                        showStatus('qrVerification', `✅ VERIFIED! Decoded: "${code.data}"`, 'success');
-                    } else {
-                        showStatus('qrVerification', `✅ Readable! Decoded: "${code.data}"`, 'success');
-                    }
-                } else {
-                    showStatus('qrVerification', '✅ Generated from API (scan the PNG to verify)', 'success');
-                }
-            } catch (e) {
-                showStatus('qrVerification', '✅ Generated! Download PNG to scan.', 'success');
-            }
-        }
-        
-        // Dynamic script loader
-        function loadScript(src) {
-            return new Promise((resolve, reject) => {
-                if (document.querySelector(`script[src="${src}"]`)) {
-                    resolve();
-                    return;
-                }
-                const script = document.createElement('script');
-                script.src = src;
-                script.onload = resolve;
-                script.onerror = reject;
-                document.head.appendChild(script);
-            });
-        }
-        
-        // Download QR image
-        function downloadQRImage() {
-            const img = document.getElementById('qrImage');
-            if (!img.src || img.style.display === 'none') {
-                alert('Generate a QR code first!');
-                return;
-            }
-            
-            const link = document.createElement('a');
-            link.download = 'qrcode.png';
-            link.href = img.src;
-            link.click();
-        }
-        
-        // ============ BARCODE (Code 128B) ============
-        const CODE128B = {
-            // Code 128B patterns (index 0-106)
-            PATTERNS: [
-                '11011001100','11001101100','11001100110','10010011000','10010001100',
-                '10001001100','10011001000','10011000100','10001100100','11001001000',
-                '11001000100','11000100100','10110011100','10011011100','10011001110',
-                '10111001100','10011101100','11001110010','11001011100','11001001110',
-                '11011100100','11001110100','11101101110','11101001100','11100101100',
-                '11100100110','11101100100','11100110100','11100110010','11011011000',
-                '11011000110','11000110110','10100011000','10001011000','10001000110',
-                '10110001000','10001101000','10001100010','11010001000','11000101000',
-                '11000100010','10110111000','10110001110','10001101110','10111011000',
-                '10111000110','10001110110','11101110110','11010001110','11000101110',
-                '11011101000','11011100010','11011101110','11101011000','11101000110',
-                '11100010110','11101101000','11101100010','11100011010','11101111010',
-                '11001000010','11110001010','10100110000','10100001100','10010110000',
-                '10010000110','10000101100','10000100110','10110010000','10110000100',
-                '10011010000','10011000010','10000110100','10000110010','11000010010',
-                '11001010000','11110111010','11000010100','10001111010','10100111100',
-                '10010111100','10010011110','10111100100','10011110100','10011110010',
-                '11110100100','11110010100','11110010010','11011011110','11011110110',
-                '11110110110','10101111000','10100011110','10001011110','10111101000',
-                '10111100010','11110101000','11110100010','10111011110','10111101110',
-                '11101011110','11110101110',
-                '11010000100', // 103: START A
-                '11010010000', // 104: START B  
-                '11010011100', // 105: START C
-                '1100011101011' // 106: STOP
-            ],
-            
-            encode: function(text) {
-                const START_B = 104;
-                const STOP = 106;
-                
-                let binary = this.PATTERNS[START_B];
-                let checksum = START_B;
-                
-                for (let i = 0; i < text.length; i++) {
-                    const charCode = text.charCodeAt(i);
-                    if (charCode < 32 || charCode > 126) {
-                        throw new Error(`Invalid char: "${text[i]}" (code ${charCode})`);
-                    }
-                    const value = charCode - 32;
-                    binary += this.PATTERNS[value];
-                    checksum += value * (i + 1);
-                }
-                
-                // Checksum
-                binary += this.PATTERNS[checksum % 103];
-                // Stop
-                binary += this.PATTERNS[STOP];
-                
-                return binary;
-            },
-            
-            toAscii: function(binary) {
-                let result = '';
-                for (const bit of binary) {
-                    result += bit === '1' ? '█' : ' ';
-                }
-                return result;
-            },
-            
-            toFancyAscii: function(binary) {
-                // More visually interesting barcode chars
-                const bars = ['▌', '│', '█', '║', '▐', '┃', '▎', '▍'];
-                let result = '';
-                let barIndex = 0;
-                
-                for (let i = 0; i < binary.length; i++) {
-                    if (binary[i] === '1') {
-                        // Vary the bar character for visual interest
-                        if (i > 0 && binary[i-1] === '0') barIndex = (barIndex + 1) % bars.length;
-                        result += bars[barIndex % 4];
-                    } else {
-                        result += ' ';
-                    }
-                }
-                return result;
-            }
-        };
-        
-        function generateBarcode() {
-            const text = document.getElementById('inputText').value.trim();
-            if (!text) {
-                showStatus('barcodeVerification', 'Please enter text to encode', 'error');
-                return;
-            }
-            
-            try {
-                // Validate
-                for (const char of text) {
-                    const code = char.charCodeAt(0);
-                    if (code < 32 || code > 126) {
-                        throw new Error(`Invalid character: "${char}"`);
-                    }
-                }
-                
-                const binary = CODE128B.encode(text);
-                
-                // ASCII representations
-                const asciiSimple = CODE128B.toAscii(binary);
-                const asciiFancy = CODE128B.toFancyAscii(binary);
-                
-                document.getElementById('barcodeAscii').textContent = asciiFancy;
-                
-                // Draw to canvas (scannable)
-                drawBarcodeCanvas(binary, text);
-                
-                showStatus('barcodeVerification', `✅ Code 128B generated: "${text}" (${binary.length} bits)`, 'success');
-                
-            } catch (e) {
-                showStatus('barcodeVerification', 'Error: ' + e.message, 'error');
-            }
-        }
-        
-        function drawBarcodeCanvas(binary, text) {
-            const canvas = document.getElementById('barcodeCanvas');
-            const barWidth = 2;
-            const height = 100;
-            const quietZone = 30;
-            const textHeight = 20;
-            const width = binary.length * barWidth + quietZone * 2;
-            
-            canvas.width = width;
-            canvas.height = height + textHeight;
-            const ctx = canvas.getContext('2d');
-            
-            // White background
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            
-            // Draw bars
-            ctx.fillStyle = '#000000';
-            for (let i = 0; i < binary.length; i++) {
-                if (binary[i] === '1') {
-                    ctx.fillRect(quietZone + i * barWidth, 5, barWidth, height - 10);
-                }
-            }
-            
-            // Text below
-            ctx.font = 'bold 14px monospace';
-            ctx.textAlign = 'center';
-            ctx.fillText(text, canvas.width / 2, height + 15);
-        }
-        
-        // ============ UTILITIES ============
-        function generateBoth() {
-            generateQR();
-            generateBarcode();
-        }
-        
-        function showStatus(id, message, type) {
-            const el = document.getElementById(id);
-            el.textContent = message;
-            el.className = 'verification ' + type.replace(' loading', '');
-            if (type.includes('loading')) el.classList.add('loading');
-        }
-        
-        function copyText(elementId) {
-            const text = document.getElementById(elementId).textContent;
-            navigator.clipboard.writeText(text).then(() => {
-                alert('Copied to clipboard!');
-            }).catch(() => {
-                const ta = document.createElement('textarea');
-                ta.value = text;
-                document.body.appendChild(ta);
-                ta.select();
-                document.execCommand('copy');
-                document.body.removeChild(ta);
-                alert('Copied!');
-            });
-        }
-        
-        function downloadCanvas(canvasId, filename) {
-            const canvas = document.getElementById(canvasId);
-            if (!canvas.width) {
-                alert('Generate first!');
-                return;
-            }
-            const link = document.createElement('a');
-            link.download = filename;
-            link.href = canvas.toDataURL('image/png');
-            link.click();
-        }
-        
-        // Enter key
-        document.getElementById('inputText').addEventListener('keypress', e => {
-            if (e.key === 'Enter') generateBoth();
-        });
-        
-        // Init
-        window.addEventListener('load', () => setTimeout(generateBoth, 300));
-    </script>
+<section class="out" id="qr-out" hidden>
+  <div class="out-head">
+    <h2>QR</h2><span class="meta" id="qr-meta"></span>
+    <span class="icons">
+      <button type="button" class="icon" data-copy="qr" title="Copy text" aria-label="Copy QR text"></button>
+      <button type="button" class="icon" data-png="qr" title="Download PNG" aria-label="Download QR as PNG"></button>
+    </span>
+  </div>
+  <pre class="chat qr" id="qr-pre"></pre>
+  <p class="warn" id="qr-warn"></p>
+</section>
+
+<section class="out" id="bar-out" hidden>
+  <div class="out-head">
+    <h2>Barcode</h2><span class="meta" id="bar-meta"></span>
+    <span class="icons">
+      <button type="button" class="icon" data-copy="bar" title="Copy text" aria-label="Copy barcode text"></button>
+      <button type="button" class="icon" data-png="bar" title="Download PNG" aria-label="Download barcode as PNG"></button>
+    </span>
+  </div>
+  <pre class="chat" id="bar-pre"></pre>
+  <p class="warn" id="bar-warn"></p>
+</section>
+
+<p class="how">Paste it in a chat and scan the screen with a phone camera. <b>Discord, Telegram, WhatsApp:</b> keep <span class="fence">```</span> on. <b>Twitch:</b> turn it off; only the barcode works there, and only for a few characters.</p>
+
+<script>
+'use strict';
+/* How the text is built, and why (every rule below was checked by rendering
+   the output like a Discord code block, Twitch line or Telegram message in
+   several fonts, then decoding screenshots with jsQR and ZXing):
+
+   - QR: one character per module across, two modules per line down, with
+     ▀ ▄ █ and space. A monospace cell is about twice as tall as it is wide,
+     so this gives square-ish modules at a quarter of the characters of the
+     usual "██" per module (Discord caps messages at 2000).
+   - Polarity: a dark chat draws the glyphs in a light colour, so on a dark
+     chat the glyphs mark the LIGHT modules and the quiet zone. Getting this
+     backwards gives an inverted code that many phone scanners ignore.
+   - Error correction is raised to Q while the code still fits a phone-width
+     chat: the thin seams some fonts leave between lines cost a few modules.
+   - Barcode: Code 128 on one line, two modules per character with ▌ ▐ █.
+     Light cells are ▁, never a space: outside a code block (Twitch) a space
+     is far narrower than a block glyph and would squash the gaps. */
+
+var PHONE_COLS = 41;      // a code block on a ~390px phone fits about this many
+var DISCORD_MAX = 2000;
+var TWITCH_MAX = 500;
+var QR_QUIET = 3;         // modules; 3 scanned better than 2, 4 only adds width
+var BAR_QUIET = 6;
+
+var ICON_COPY = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2.5"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>';
+var ICON_DOWN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12m-5-5 5 5 5-5M5 20h14"/></svg>';
+var ICON_CHECK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5L20 7"/></svg>';
+document.querySelectorAll('[data-copy]').forEach(function (b) { b.innerHTML = ICON_COPY; });
+document.querySelectorAll('[data-png]').forEach(function (b) { b.innerHTML = ICON_DOWN; });
+
+function store(k, v) { try { if (v === undefined) return localStorage.getItem('chatqr:' + k); localStorage.setItem('chatqr:' + k, v); } catch (e) { return null; } }
+var opts = { theme: store('theme') || 'dark', fence: store('fence') !== 'off' };
+var last = { qr: null, bar: null };
+
+/* ---------------------------------------------------------------- QR -- */
+
+function qrMatrix(text, ecc) {
+  qrcode.stringToBytes = qrcode.stringToBytesFuncs['UTF-8'];
+  var q = qrcode(0, ecc);
+  q.addData(text, 'Byte');
+  q.make();
+  var n = q.getModuleCount(), m = [];
+  for (var r = 0; r < n; r++) { m.push([]); for (var c = 0; c < n; c++) m[r].push(q.isDark(r, c)); }
+  return m;
+}
+
+// Highest error correction that still fits a phone; if nothing fits, the
+// smallest code there is.
+function bestQr(text) {
+  var levels = ['Q', 'M', 'L'], m;
+  for (var i = 0; i < levels.length; i++) {
+    m = qrMatrix(text, levels[i]);
+    if (m.length + QR_QUIET * 2 <= PHONE_COLS) return { m: m, ecc: levels[i] };
+  }
+  return { m: m, ecc: 'L' };
+}
+
+function qrText(m, dark) {
+  var n = m.length, N = n + QR_QUIET * 2, lines = [];
+  // ink = this module gets a glyph
+  var ink = function (r, c) {
+    var inside = r >= QR_QUIET && r < QR_QUIET + n && c >= QR_QUIET && c < QR_QUIET + n;
+    var isDark = inside && r - QR_QUIET < n ? m[r - QR_QUIET][c - QR_QUIET] : false;
+    if (r >= N) return dark;   // padding row under an odd height: background
+    return dark ? !isDark : isDark;
+  };
+  for (var r = 0; r < N; r += 2) {
+    var s = '';
+    for (var c = 0; c < N; c++) {
+      var a = ink(r, c), b = ink(r + 1, c);
+      s += a && b ? '█' : a ? '▀' : b ? '▄' : ' ';
+    }
+    lines.push(s.replace(/ +$/, ''));
+  }
+  return lines.join('\n');
+}
+
+/* ----------------------------------------------------------- barcode -- */
+
+function barModules(text) {
+  var o = {};
+  JsBarcode(o, text, { format: 'CODE128' });
+  return o.encodings.map(function (e) { return e.data; }).join('');
+}
+
+function barText(bits, dark) {
+  var q = new Array(BAR_QUIET + 1).join('0');
+  var s = q + bits + q;
+  if (s.length % 2) s += '0';
+  var out = '';
+  for (var i = 0; i < s.length; i += 2) {
+    var a = s[i] === '1', b = s[i + 1] === '1';
+    if (dark) { a = !a; b = !b; }
+    out += a && b ? '█' : a ? '▌' : b ? '▐' : '▁';
+  }
+  return out;
+}
+
+/* ------------------------------------------------------------ render -- */
+
+var input = document.getElementById('t');
+
+function fenced(s) { return opts.fence ? '```\n' + s + '\n```' : s; }
+
+function generate() {
+  var text = input.value;
+  var dark = opts.theme === 'dark';
+  var has = text.length > 0;
+  document.getElementById('qr-out').hidden = !has;
+  document.getElementById('bar-out').hidden = !has;
+  if (!has) return;
+
+  document.querySelectorAll('.chat').forEach(function (p) { p.classList.toggle('light', !dark); });
+
+  // QR
+  var warn = [];
+  try {
+    var best = bestQr(text);
+    var qt = qrText(best.m, dark);
+    var cols = qt.split('\n').reduce(function (w, l) { return Math.max(w, l.length); }, 0);
+    var sent = fenced(qt).length;
+    last.qr = { text: qt, m: best.m };
+    document.getElementById('qr-pre').textContent = qt;
+    document.getElementById('qr-meta').textContent = cols + ' wide · ' + sent.toLocaleString() + ' chars';
+    if (cols > PHONE_COLS) warn.push('Wider than a phone chat, it may wrap there');
+    if (sent > DISCORD_MAX) warn.push('Over Discord’s ' + DISCORD_MAX + ' limit (Nitro allows 4000)');
+    if (!opts.fence) warn.push('Needs a code block to keep its shape');
+  } catch (e) {
+    last.qr = null;
+    document.getElementById('qr-pre').textContent = '';
+    document.getElementById('qr-meta').textContent = '';
+    warn.push('Too long for a QR code');
+  }
+  document.getElementById('qr-warn').textContent = warn.join(' · ');
+
+  // Barcode
+  warn = [];
+  try {
+    if (/[^\x20-\x7e]/.test(text)) throw new Error('ascii');
+    var bt = barText(barModules(text), dark);
+    var bsent = fenced(bt).length;
+    last.bar = { text: bt, bits: barModules(text) };
+    document.getElementById('bar-pre').textContent = bt;
+    document.getElementById('bar-meta').textContent = bt.length + ' wide · ' + bsent.toLocaleString() + ' chars';
+    if (bt.length > 90) warn.push('Too wide for most chats, use a shorter text');
+    else if (bt.length > PHONE_COLS) warn.push('Wraps on phones, fits desktop chats');
+    if (!opts.fence && bsent > TWITCH_MAX) warn.push('Over Twitch’s ' + TWITCH_MAX + ' limit');
+  } catch (e) {
+    last.bar = null;
+    document.getElementById('bar-pre').textContent = '';
+    document.getElementById('bar-meta').textContent = '';
+    warn.push(e.message === 'ascii' ? 'Barcodes take plain ASCII only (no emoji, accents or line breaks)' : 'Can’t make a barcode of this');
+  }
+  document.getElementById('bar-warn').textContent = warn.join(' · ');
+}
+
+var timer = 0;
+input.addEventListener('input', function () { clearTimeout(timer); timer = setTimeout(generate, 120); });
+input.addEventListener('keydown', function (e) { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) generate(); });
+document.getElementById('go').addEventListener('click', function () {
+  generate();
+  var o = document.getElementById('qr-out');
+  if (!o.hidden && o.getBoundingClientRect().top > innerHeight * .7) o.scrollIntoView({ behavior: 'smooth', block: 'start' });
+});
+
+document.querySelectorAll('[data-theme]').forEach(function (b) {
+  b.addEventListener('click', function () {
+    opts.theme = b.dataset.theme; store('theme', opts.theme); syncOpts(); generate();
+  });
+});
+document.getElementById('fence').addEventListener('click', function () {
+  opts.fence = !opts.fence; store('fence', opts.fence ? 'on' : 'off'); syncOpts(); generate();
+});
+function syncOpts() {
+  document.querySelectorAll('[data-theme]').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.theme === opts.theme)); });
+  document.getElementById('fence').setAttribute('aria-pressed', String(opts.fence));
+}
+
+/* -------------------------------------------------------------- copy -- */
+
+function flash(btn) {
+  btn.innerHTML = ICON_CHECK; btn.classList.add('done');
+  clearTimeout(btn._t);
+  btn._t = setTimeout(function () { btn.innerHTML = btn.dataset.copy ? ICON_COPY : ICON_DOWN; btn.classList.remove('done'); }, 1200);
+}
+
+document.querySelectorAll('[data-copy]').forEach(function (b) {
+  b.addEventListener('click', function () {
+    var item = last[b.dataset.copy];
+    if (!item) return;
+    var text = fenced(item.text);
+    var ok = function () { flash(b); };
+    if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(text).then(ok, function () { if (legacyCopy(text)) ok(); });
+    else if (legacyCopy(text)) ok();
+  });
+});
+function legacyCopy(text) {
+  var ta = document.createElement('textarea');
+  ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+  document.body.appendChild(ta); ta.select();
+  var ok = false; try { ok = document.execCommand('copy'); } catch (e) {}
+  ta.remove();
+  return ok;
+}
+
+/* --------------------------------------------------------------- PNG -- */
+
+// A clean black-on-white image of the same code, for places that take images.
+document.querySelectorAll('[data-png]').forEach(function (b) {
+  b.addEventListener('click', function () {
+    var kind = b.dataset.png, item = last[kind];
+    if (!item) return;
+    var c = document.createElement('canvas'), x = c.getContext('2d');
+    if (kind === 'qr') {
+      var n = item.m.length, s = 10, q = 4;
+      c.width = c.height = (n + q * 2) * s;
+      x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); x.fillStyle = '#000';
+      for (var r = 0; r < n; r++) for (var col = 0; col < n; col++) if (item.m[r][col]) x.fillRect((col + q) * s, (r + q) * s, s, s);
+    } else {
+      var bits = item.bits, w = 3, h = 120, pad = 10 * w;
+      c.width = bits.length * w + pad * 2; c.height = h + 40;
+      x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); x.fillStyle = '#000';
+      for (var i = 0; i < bits.length; i++) if (bits[i] === '1') x.fillRect(pad + i * w, 20, w, h);
+    }
+    c.toBlob(function (blob) {
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = (kind === 'qr' ? 'qr' : 'barcode') + '.png';
+      a.click();
+      setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+      flash(b);
+    });
+  });
+});
+
+syncOpts();
+generate();
+</script>
 </body>
 </html>
