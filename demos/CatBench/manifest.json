@@ -1,7 +1,15 @@
 {
   "base": "https://katehuuh.github.io/demos/CatBench/",
-  "updated": "2026-10-23T23:38:04Z",
+  "updated": "2026-11-10T02:47:08Z",
   "models": {
+    "claude-fable-5.2": {
+      "display_name": "claude-fable-5.2",
+      "python_render": "assets/claude-fable-5.2-python.jpg",
+      "svg": "assets/claude-fable-5.2-svg.jpg",
+      "python_source": "assets/claude-fable-5.2.py",
+      "svg_source": "assets/claude-fable-5.2.svg",
+      "added": "2026-11-10T02:47:08Z"
+    },
     "kimi-k3.1-pro": {
       "display_name": "kimi-k3.1-pro",
       "python_render": "assets/kimi-k3.1-pro-python.jpg",
