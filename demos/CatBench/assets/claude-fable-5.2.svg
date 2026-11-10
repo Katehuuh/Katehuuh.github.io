@@ -1,0 +1,322 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 800 800" width="800" height="800" role="img" aria-labelledby="kittenTitle kittenDesc">
+  <title id="kittenTitle">Cute ginger kitten</title>
+  <desc id="kittenDesc">A fluffy orange tabby kitten with big green eyes, a teal collar and a golden bell, sitting on a pink rug beside a ball of blue yarn while a butterfly flutters past.</desc>
+
+  <defs>
+    <!-- Gradients -->
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#c9e8f7"/>
+      <stop offset="1" stop-color="#eaf4fb"/>
+    </linearGradient>
+    <linearGradient id="floor" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f9eede"/>
+      <stop offset="1" stop-color="#efdcc5"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.95"/>
+      <stop offset="0.55" stop-color="#ffffff" stop-opacity="0.5"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="rug" cx="0.5" cy="0.4" r="0.6">
+      <stop offset="0" stop-color="#fcc9d6"/>
+      <stop offset="1" stop-color="#f2a0b7"/>
+    </radialGradient>
+    <radialGradient id="fur" cx="0.5" cy="0.32" r="0.75">
+      <stop offset="0" stop-color="#ffc474"/>
+      <stop offset="0.55" stop-color="#f8a748"/>
+      <stop offset="1" stop-color="#ea892b"/>
+    </radialGradient>
+    <linearGradient id="earPink" x1="0" y1="0" x2="0.7" y2="1">
+      <stop offset="0" stop-color="#ffd3d1"/>
+      <stop offset="1" stop-color="#f295a5"/>
+    </linearGradient>
+    <radialGradient id="iris" cx="0.5" cy="0.7" r="0.7">
+      <stop offset="0" stop-color="#dcfeea"/>
+      <stop offset="0.45" stop-color="#62d3ac"/>
+      <stop offset="1" stop-color="#1a7d6f"/>
+    </radialGradient>
+    <radialGradient id="bell" cx="0.35" cy="0.3" r="0.8">
+      <stop offset="0" stop-color="#fff6bf"/>
+      <stop offset="0.5" stop-color="#ffd351"/>
+      <stop offset="1" stop-color="#dd9616"/>
+    </radialGradient>
+    <radialGradient id="yarn" cx="0.35" cy="0.3" r="0.8">
+      <stop offset="0" stop-color="#c6e4fc"/>
+      <stop offset="0.6" stop-color="#7db8eb"/>
+      <stop offset="1" stop-color="#4e8ed0"/>
+    </radialGradient>
+    <filter id="soft" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="3"/>
+    </filter>
+
+    <!-- Reusable kitten shapes -->
+    <path id="headShape" d="M400 188 C480 188 556 228 576 300 C580 318 582 334 580 348 L606 366 Q588 372 576 382 L598 408 Q578 410 562 416 L574 442 Q552 440 536 444 C500 466 440 474 400 474 C360 474 300 466 264 444 Q248 440 226 442 L238 416 Q222 410 202 408 L224 382 Q212 372 194 366 L220 348 C218 334 220 318 224 300 C244 228 320 188 400 188 Z"/>
+    <path id="bodyShape" d="M330 440 C290 480 262 560 266 630 C268 690 310 722 400 722 C490 722 532 690 534 630 C538 560 510 480 470 440 Z"/>
+    <path id="haunchShape" d="M322 582 C286 584 256 622 258 672 C259 704 280 722 318 722 C340 722 348 700 346 660 C345 628 340 588 322 582 Z"/>
+    <path id="legShape" d="M350 545 C344 600 340 650 338 692 C331 715 347 727 366 727 C387 727 402 715 395 692 C394 650 394 600 392 545"/>
+    <path id="tailShape" d="M500 690 C590 712 675 668 668 580 C663 520 690 478 728 486"/>
+
+    <clipPath id="headClip"><use xlink:href="#headShape"/></clipPath>
+    <clipPath id="bodyClip"><use xlink:href="#bodyShape"/></clipPath>
+    <clipPath id="haunchClip"><use xlink:href="#haunchShape"/></clipPath>
+    <clipPath id="legClip"><use xlink:href="#legShape"/></clipPath>
+    <clipPath id="yarnClip"><circle r="52"/></clipPath>
+
+    <!-- Eye (centered on 0,0) -->
+    <g id="eye">
+      <ellipse rx="44" ry="48" fill="#3b2314"/>
+      <ellipse rx="39.5" ry="43.5" fill="url(#iris)"/>
+      <path d="M-38.8 -8 A39.5 43.5 0 0 1 38.8 -8 Q0 -26 -38.8 -8 Z" fill="#0d3f38" opacity=".35"/>
+      <ellipse rx="23" ry="29" fill="#1a110d"/>
+      <path d="M-43.5 -7 A44 48 0 0 1 43.5 -7" fill="none" stroke="#2a170c" stroke-width="6" stroke-linecap="round"/>
+      <circle cx="-15" cy="-19" r="12.5" fill="#ffffff"/>
+      <circle cx="15" cy="18" r="6" fill="#ffffff" opacity=".9"/>
+      <circle cx="-25" cy="4" r="3" fill="#ffffff" opacity=".85"/>
+    </g>
+
+    <!-- Whiskers (left side, mirrored for the right) -->
+    <g id="whiskers">
+      <path d="M366 410 Q292 388 206 384"/>
+      <path d="M360 419 Q284 416 196 424"/>
+      <path d="M367 428 Q296 446 212 468"/>
+    </g>
+
+    <!-- Decorations -->
+    <g id="pawprint">
+      <path d="M0 3 C-13 3 -19 15 -11 22 C-5 27 5 27 11 22 C19 15 13 3 0 3 Z"/>
+      <ellipse cx="-16" cy="-4" rx="5.5" ry="7.5" transform="rotate(-28 -16 -4)"/>
+      <ellipse cx="-6" cy="-13" rx="5.5" ry="7.5" transform="rotate(-9 -6 -13)"/>
+      <ellipse cx="6" cy="-13" rx="5.5" ry="7.5" transform="rotate(9 6 -13)"/>
+      <ellipse cx="16" cy="-4" rx="5.5" ry="7.5" transform="rotate(28 16 -4)"/>
+    </g>
+    <path id="sparkle" d="M0 -12 Q2 -2 12 0 Q2 2 0 12 Q-2 2 -12 0 Q-2 -2 0 -12 Z"/>
+    <path id="heart" d="M0 7 C-14 -3 -8 -13 0 -6 C8 -13 14 -3 0 7 Z"/>
+  </defs>
+
+  <!-- ================= BACKGROUND ================= -->
+  <rect width="800" height="800" fill="url(#bg)"/>
+  <circle cx="400" cy="370" r="330" fill="url(#glow)"/>
+
+  <!-- wallpaper paw prints -->
+  <g fill="#ffffff" opacity=".55">
+    <use xlink:href="#pawprint" transform="translate(88 118) rotate(-20) scale(1.25)"/>
+    <use xlink:href="#pawprint" transform="translate(112 345) rotate(14) scale(1.1)"/>
+    <use xlink:href="#pawprint" transform="translate(62 535) rotate(-10) scale(1.2)"/>
+    <use xlink:href="#pawprint" transform="translate(728 345) rotate(18) scale(1.2)"/>
+    <use xlink:href="#pawprint" transform="translate(585 58) rotate(-14) scale(1.1)"/>
+    <use xlink:href="#pawprint" transform="translate(748 565) rotate(-16) scale(1.05)"/>
+  </g>
+
+  <!-- sparkles -->
+  <g fill="#fffbe0" stroke="#ffe9a3" stroke-width="1">
+    <use xlink:href="#sparkle" transform="translate(180 150) scale(1.1)"/>
+    <use xlink:href="#sparkle" transform="translate(238 52) scale(.8)"/>
+    <use xlink:href="#sparkle" transform="translate(650 318) scale(.9)"/>
+    <use xlink:href="#sparkle" transform="translate(766 268) scale(.7)"/>
+    <use xlink:href="#sparkle" transform="translate(56 250) scale(.75)"/>
+  </g>
+
+  <!-- hearts -->
+  <g fill="#f79db8">
+    <use xlink:href="#heart" transform="translate(140 255) rotate(-14) scale(1.5)" opacity=".85"/>
+    <use xlink:href="#heart" transform="translate(108 204) rotate(12)" opacity=".7"/>
+    <use xlink:href="#heart" transform="translate(170 212) rotate(-6) scale(.7)" opacity=".6"/>
+  </g>
+
+  <!-- butterfly with flight trail -->
+  <path d="M682 224 C708 252 746 238 739 202 C734 178 706 182 713 202 C721 224 764 204 772 152" fill="none" stroke="#b79bef" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="1 8" opacity=".85"/>
+  <g transform="translate(668 205) rotate(-32)">
+    <g id="wing">
+      <path d="M0 -2 C-8 -28 -40 -34 -42 -12 C-43 4 -18 7 0 2 Z" fill="#c9a8f7" stroke="#8a6bd0" stroke-width="1.6" stroke-linejoin="round"/>
+      <path d="M0 2 C-14 4 -31 12 -27 27 C-23 38 -6 27 0 8 Z" fill="#f9abc9" stroke="#d977a2" stroke-width="1.6" stroke-linejoin="round"/>
+      <circle cx="-27" cy="-14" r="5" fill="#ffffff" opacity=".7"/>
+      <circle cx="-14" cy="-18" r="2.6" fill="#ffffff" opacity=".7"/>
+      <circle cx="-17" cy="19" r="3" fill="#ffffff" opacity=".7"/>
+    </g>
+    <use xlink:href="#wing" transform="scale(-1 1)"/>
+    <ellipse cy="2" rx="3" ry="12" fill="#5d4a85"/>
+    <circle cy="-11" r="3.6" fill="#5d4a85"/>
+    <path d="M-1 -13 Q-5 -24 -12 -26 M1 -13 Q5 -24 12 -26" fill="none" stroke="#5d4a85" stroke-width="1.4" stroke-linecap="round"/>
+  </g>
+
+  <!-- floor and baseboard -->
+  <rect y="648" width="800" height="152" fill="url(#floor)"/>
+  <path d="M0 702 H800 M0 762 H800 M120 652 V702 M690 652 V702 M36 702 V762 M770 702 V762 M210 762 V800 M600 762 V800" fill="none" stroke="#e4d0b8" stroke-width="2" opacity=".8"/>
+  <rect y="634" width="800" height="15" fill="#ffffff"/>
+  <rect y="649" width="800" height="3" fill="#dcc7af" opacity=".8"/>
+
+  <!-- rug -->
+  <ellipse cx="400" cy="735" rx="349" ry="60" fill="#c98a7a" opacity=".25"/>
+  <ellipse cx="400" cy="728" rx="345" ry="58" fill="url(#rug)" stroke="#e88ba6" stroke-width="3"/>
+  <ellipse cx="400" cy="728" rx="292" ry="39" fill="#fcd5df" opacity=".55"/>
+  <ellipse cx="400" cy="728" rx="320" ry="48" fill="none" stroke="#ffffff" stroke-width="3" stroke-dasharray="10 9" stroke-linecap="round" opacity=".8"/>
+
+  <!-- ground shadows -->
+  <ellipse cx="418" cy="727" rx="214" ry="17" fill="#a04f72" opacity=".22"/>
+  <ellipse cx="154" cy="742" rx="50" ry="8" fill="#a04f72" opacity=".22"/>
+
+  <!-- ================= KITTEN ================= -->
+
+  <!-- tail -->
+  <g fill="none" stroke-linecap="round">
+    <use xlink:href="#tailShape" stroke="#9a4f1d" stroke-width="46"/>
+    <use xlink:href="#tailShape" stroke="#f6a547" stroke-width="40"/>
+    <use xlink:href="#tailShape" stroke="#ffc474" stroke-width="14" opacity=".5"/>
+    <use xlink:href="#tailShape" stroke="#dc7822" stroke-width="40" stroke-linecap="butt" stroke-dasharray="11 25"/>
+    <path d="M697.3 491.4 C706.2 485.7 716.6 483.6 728 486" stroke="#fff3e2" stroke-width="40" stroke-linecap="butt"/>
+  </g>
+  <circle cx="728" cy="486" r="20" fill="#fff3e2"/>
+
+  <!-- body -->
+  <use xlink:href="#bodyShape" fill="url(#fur)"/>
+  <g clip-path="url(#bodyClip)">
+    <g fill="#dc7822">
+      <path d="M276 508 C296 506 314 514 326 526 C310 522 294 520 280 522 Z"/>
+      <path d="M264 542 C288 540 308 548 322 562 C304 556 286 554 266 556 Z"/>
+      <path d="M524 508 C504 506 486 514 474 526 C490 522 506 520 520 522 Z"/>
+      <path d="M536 542 C512 540 492 548 478 562 C496 556 514 554 534 556 Z"/>
+    </g>
+    <path d="M392 560 L408 560 L406 724 L394 724 Z" fill="#c2641b" opacity=".5"/>
+  </g>
+  <use xlink:href="#bodyShape" fill="none" stroke="#9a4f1d" stroke-width="3" stroke-linejoin="round"/>
+
+  <!-- left haunch, hind paw and front leg (mirrored below for the right side) -->
+  <g id="side">
+    <use xlink:href="#haunchShape" fill="url(#fur)"/>
+    <g clip-path="url(#haunchClip)" fill="#dc7822">
+      <path d="M252 628 C276 624 294 630 308 644 C290 639 272 639 254 642 Z"/>
+      <path d="M250 660 C274 656 292 662 306 676 C288 671 270 671 252 674 Z"/>
+    </g>
+    <use xlink:href="#haunchShape" fill="none" stroke="#9a4f1d" stroke-width="3" stroke-linejoin="round"/>
+
+    <ellipse cx="297" cy="709" rx="33" ry="15" fill="#fff3e2" stroke="#9a4f1d" stroke-width="3"/>
+    <path d="M287 713 Q285 719 288 723 M307 713 Q309 719 306 723" fill="none" stroke="#d2a377" stroke-width="2" stroke-linecap="round"/>
+
+    <use xlink:href="#legShape" fill="url(#fur)"/>
+    <g clip-path="url(#legClip)">
+      <path d="M330 600 Q368 610 402 600 L402 609 Q368 619 330 609 Z" fill="#dc7822"/>
+      <path d="M330 634 Q368 644 402 634 L402 643 Q368 653 330 643 Z" fill="#dc7822"/>
+      <path d="M326 690 Q366 674 406 690 L406 734 L326 734 Z" fill="#fff3e2"/>
+    </g>
+    <use xlink:href="#legShape" fill="none" stroke="#9a4f1d" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M356 713 Q354 721 358 726 M376 713 Q378 721 374 726" fill="none" stroke="#d2a377" stroke-width="2" stroke-linecap="round"/>
+  </g>
+  <use xlink:href="#side" transform="translate(800 0) scale(-1 1)"/>
+
+  <!-- fluffy chest -->
+  <path d="M340 452 C346 480 344 502 334 520 Q349 519 357 525 Q350 541 342 559 Q358 552 371 556 Q369 571 371 585 Q383 577 392 579 Q394 595 400 607 Q406 595 408 579 Q417 577 429 585 Q431 571 429 556 Q442 552 458 559 Q450 541 443 525 Q451 519 466 520 C456 502 454 480 460 452 Z" fill="#fff3e2" stroke="#e2b98d" stroke-width="1.5" stroke-linejoin="round"/>
+  <path d="M378 524 q4 8 8 0 M411 540 q4 8 8 0 M394 558 q4 8 8 0" fill="none" stroke="#ecd3b3" stroke-width="1.8" stroke-linecap="round"/>
+
+  <!-- collar and shadow under the chin -->
+  <g clip-path="url(#bodyClip)">
+    <path d="M286 450 Q400 500 514 450 L514 466 Q400 516 286 466 Z" fill="#3fb8ad" stroke="#23867f" stroke-width="2"/>
+    <path d="M286 455 Q400 505 514 455" fill="none" stroke="#8fe6dc" stroke-width="2.5" opacity=".8"/>
+    <ellipse cx="400" cy="478" rx="118" ry="24" fill="#7a3c10" opacity=".25" filter="url(#soft)"/>
+  </g>
+
+  <!-- bell -->
+  <circle cx="400" cy="488" r="3.5" fill="none" stroke="#c98a14" stroke-width="2"/>
+  <circle cx="400" cy="503" r="13" fill="url(#bell)" stroke="#b47a10" stroke-width="2"/>
+  <path d="M387.5 504 Q400 509 412.5 504" fill="none" stroke="#b47a10" stroke-width="1.6"/>
+  <circle cx="400" cy="509.5" r="2.4" fill="#6b4208"/>
+  <path d="M400 510 V515.5" stroke="#6b4208" stroke-width="1.6" stroke-linecap="round"/>
+  <ellipse cx="395" cy="497" rx="4" ry="2.4" fill="#ffffff" opacity=".75" transform="rotate(-25 395 497)"/>
+
+  <!-- head (slightly tilted) -->
+  <g transform="rotate(-4 400 470)">
+
+    <!-- ears -->
+    <g id="ear">
+      <path d="M236 292 C220 230 220 160 236 110 Q241 96 255 102 C300 124 345 162 370 204 Z" fill="url(#fur)" stroke="#9a4f1d" stroke-width="3" stroke-linejoin="round"/>
+      <path d="M250 276 C236 228 236 172 248 126 C296 142 338 172 360 208 C320 222 282 246 250 276 Z" fill="url(#earPink)"/>
+      <path d="M256 258 C256 225 260 198 268 176 C272 196 278 212 286 222 C288 202 294 186 302 172 C304 188 308 200 314 208 C318 196 324 188 332 182 C332 192 334 198 338 204 L300 240 Z" fill="#fff3e2"/>
+    </g>
+    <use xlink:href="#ear" transform="translate(800 0) scale(-1 1)"/>
+
+    <!-- head shape and tabby markings -->
+    <use xlink:href="#headShape" fill="url(#fur)"/>
+    <g clip-path="url(#headClip)" fill="#dc7822">
+      <path d="M400 196 C392 216 392 242 400 264 C408 242 408 216 400 196 Z"/>
+      <path d="M366 190 C358 214 362 238 376 256 C380 236 376 212 366 190 Z"/>
+      <path d="M434 190 C442 214 438 238 424 256 C420 236 424 212 434 190 Z"/>
+      <path d="M334 200 C330 216 336 232 348 244 C350 228 344 212 334 200 Z"/>
+      <path d="M466 200 C470 216 464 232 452 244 C450 228 456 212 466 200 Z"/>
+      <path d="M214 318 C234 318 248 324 258 334 C244 332 230 332 216 332 Z"/>
+      <path d="M214 346 C236 346 250 352 260 362 C246 360 232 360 216 360 Z"/>
+      <path d="M586 318 C566 318 552 324 542 334 C556 332 570 332 584 332 Z"/>
+      <path d="M586 346 C564 346 550 352 540 362 C554 360 568 360 584 360 Z"/>
+    </g>
+    <use xlink:href="#headShape" fill="none" stroke="#9a4f1d" stroke-width="3" stroke-linejoin="round"/>
+
+    <!-- little cowlick -->
+    <path d="M385 188 Q388 175 396 168 Q396 180 401 186 Q406 172 416 166 Q412 178 415 188 L415 192 L385 192 Z" fill="#faad52"/>
+    <path d="M385 188 Q388 175 396 168 Q396 180 401 186 Q406 172 416 166 Q412 178 415 188" fill="none" stroke="#9a4f1d" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+
+    <!-- muzzle and chin -->
+    <ellipse cx="400" cy="452" rx="27" ry="15" fill="#fff5e6"/>
+    <path d="M400 374 C414 374 426 386 440 394 C462 404 466 432 446 444 C432 453 412 451 400 443 C388 451 368 453 354 444 C334 432 338 404 360 394 C374 386 386 374 400 374 Z" fill="#fff5e6"/>
+
+    <!-- blush -->
+    <g fill="#ff8ea0" opacity=".38" filter="url(#soft)">
+      <ellipse cx="268" cy="404" rx="26" ry="15"/>
+      <ellipse cx="532" cy="404" rx="26" ry="15"/>
+    </g>
+
+    <!-- eyes -->
+    <use xlink:href="#eye" transform="translate(318 338)"/>
+    <use xlink:href="#eye" transform="translate(482 338)"/>
+    <path d="M276 325 Q268 320 262 311 M524 325 Q532 320 538 311" fill="none" stroke="#2a170c" stroke-width="3" stroke-linecap="round"/>
+
+    <!-- nose -->
+    <path d="M387 385 Q400 380 413 385 Q416 391 406 399 Q400 404 394 399 Q384 391 387 385 Z" fill="#f47f95" stroke="#cf5f78" stroke-width="1.5" stroke-linejoin="round"/>
+    <ellipse cx="396" cy="387.5" rx="4.5" ry="1.8" fill="#ffffff" opacity=".6"/>
+
+    <!-- tongue and mouth -->
+    <path d="M392 421 Q400 414 408 421 Q409.5 434 400 435 Q390.5 434 392 421 Z" fill="#ff8fa6" stroke="#d9647e" stroke-width="1.3"/>
+    <path d="M400 425 V431" stroke="#e0708a" stroke-width="1.2" stroke-linecap="round"/>
+    <path d="M400 402 V412 M376 414 Q388 430 400 412 Q412 430 424 414" fill="none" stroke="#6b3a22" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+
+    <!-- whisker dots -->
+    <g fill="#d9a877">
+      <circle cx="366" cy="410" r="1.8"/><circle cx="360" cy="419" r="1.8"/><circle cx="367" cy="428" r="1.8"/>
+      <circle cx="434" cy="410" r="1.8"/><circle cx="440" cy="419" r="1.8"/><circle cx="433" cy="428" r="1.8"/>
+    </g>
+
+    <!-- whiskers -->
+    <g fill="none" stroke-linecap="round">
+      <g stroke="#a55a20" stroke-width="3.4" opacity=".3">
+        <use xlink:href="#whiskers"/>
+        <use xlink:href="#whiskers" transform="translate(800 0) scale(-1 1)"/>
+      </g>
+      <g stroke="#fffdf8" stroke-width="1.9">
+        <use xlink:href="#whiskers"/>
+        <use xlink:href="#whiskers" transform="translate(800 0) scale(-1 1)"/>
+      </g>
+      <path d="M304 284 Q298 268 288 258 M316 281 Q314 266 308 254 M496 284 Q502 268 512 258 M484 281 Q486 266 492 254" stroke="#fffdf8" stroke-width="1.6" opacity=".9"/>
+    </g>
+  </g>
+
+  <!-- ================= YARN ================= -->
+  <path d="M180 716 C204 750 246 764 286 754 C322 745 346 750 372 758 C392 764 410 754 400 744 C392 736 379 743 385 752" fill="none" stroke="#5c9cdd" stroke-width="4" stroke-linecap="round"/>
+  <g transform="translate(150 690)">
+    <circle r="52" fill="url(#yarn)"/>
+    <g clip-path="url(#yarnClip)" fill="none" stroke-linecap="round">
+      <g stroke="#3d7fc0" stroke-width="2.2" opacity=".6">
+        <path d="M-54 -14 C-22 -34 20 -34 54 -12"/>
+        <path d="M-54 6 C-20 -16 22 -16 54 8"/>
+        <path d="M-50 26 C-16 4 20 4 50 26"/>
+        <path d="M-28 -50 C-4 -22 -4 22 -30 48"/>
+        <path d="M-6 -54 C18 -22 18 22 -6 54"/>
+        <path d="M16 -52 C40 -20 38 20 16 52"/>
+        <path d="M-46 -32 C-12 -20 20 10 40 40"/>
+      </g>
+      <g stroke="#e3f2ff" stroke-width="2" opacity=".55">
+        <path d="M-52 -4 C-20 -25 21 -25 53 -2"/>
+        <path d="M-17 -52 C7 -22 7 22 -18 51"/>
+        <path d="M-40 -40 C-6 -28 26 2 46 32"/>
+      </g>
+    </g>
+    <circle r="52" fill="none" stroke="#3d7fc0" stroke-width="3"/>
+    <ellipse cx="-20" cy="-25" rx="15" ry="8" fill="#ffffff" opacity=".35" transform="rotate(-35 -20 -25)"/>
+  </g>
+</svg>
