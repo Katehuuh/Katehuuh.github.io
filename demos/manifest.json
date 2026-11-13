@@ -1,6 +1,12 @@
 {
   "demos": [
     {
+      "name": "[SHOW]-Kate-Octane",
+      "type": "file",
+      "filename": "[SHOW]-Kate-Octane.html",
+      "description": "A hand-painted Rocket League Octane, 3D printed. Spin it, repaint it, drive it around the arena, or download the mesh."
+    },
+    {
       "name": "[TOOL]-Neko-Minecraft-Collection-Mod-Pack",
       "type": "file",
       "filename": "[TOOL]-Neko-Minecraft-Collection-Mod-Pack.html",
