@@ -1,7 +1,15 @@
 {
   "base": "https://katehuuh.github.io/demos/CatBench/",
-  "updated": "2026-11-10T02:47:08Z",
+  "updated": "2026-11-15T02:46:02Z",
   "models": {
+    "gemini-4-hydrogen": {
+      "display_name": "gemini-4-hydrogen",
+      "python_render": "assets/gemini-4-hydrogen-python.jpg",
+      "svg": "assets/gemini-4-hydrogen-svg.jpg",
+      "python_source": "assets/gemini-4-hydrogen.py",
+      "svg_source": "assets/gemini-4-hydrogen.svg",
+      "added": "2026-11-15T02:46:02Z"
+    },
     "claude-fable-5.2": {
       "display_name": "claude-fable-5.2",
       "python_render": "assets/claude-fable-5.2-python.jpg",
