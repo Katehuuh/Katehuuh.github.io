@@ -1,7 +1,55 @@
 {
   "base": "https://katehuuh.github.io/demos/CatBench/",
-  "updated": "2026-11-15T02:46:02Z",
+  "updated": "2026-11-16T23:55:33Z",
   "models": {
+    "gemini-4-argon": {
+      "display_name": "gemini-4-argon",
+      "python_render": "assets/gemini-4-argon-python.jpg",
+      "svg": "assets/gemini-4-argon-svg.jpg",
+      "python_source": "assets/gemini-4-argon.py",
+      "svg_source": "assets/gemini-4-argon.svg",
+      "added": "2026-11-16T23:55:33Z"
+    },
+    "gemini-4-carbon": {
+      "display_name": "gemini-4-carbon",
+      "python_render": "assets/gemini-4-carbon-python.jpg",
+      "svg": "assets/gemini-4-carbon-svg.jpg",
+      "python_source": "assets/gemini-4-carbon.py",
+      "svg_source": "assets/gemini-4-carbon.svg",
+      "added": "2026-11-16T23:55:33Z"
+    },
+    "gpt-6-luna": {
+      "display_name": "gpt-6-luna",
+      "python_render": "assets/gpt-6-luna-python.jpg",
+      "svg": "assets/gpt-6-luna-svg.jpg",
+      "python_source": "assets/gpt-6-luna.py",
+      "svg_source": "assets/gpt-6-luna.svg",
+      "added": "2026-11-16T23:55:33Z"
+    },
+    "gpt-6.1-sol": {
+      "display_name": "gpt-6.1-sol",
+      "python_render": "assets/gpt-6.1-sol-python.jpg",
+      "svg": "assets/gpt-6.1-sol-svg.jpg",
+      "python_source": "assets/gpt-6.1-sol.py",
+      "svg_source": "assets/gpt-6.1-sol.svg",
+      "added": "2026-11-16T23:55:33Z"
+    },
+    "gpt-6.1-terra": {
+      "display_name": "gpt-6.1-terra",
+      "python_render": "assets/gpt-6.1-terra-python.jpg",
+      "svg": "assets/gpt-6.1-terra-svg.jpg",
+      "python_source": "assets/gpt-6.1-terra.py",
+      "svg_source": "assets/gpt-6.1-terra.svg",
+      "added": "2026-11-16T23:55:33Z"
+    },
+    "grok-4.7": {
+      "display_name": "grok-4.7",
+      "python_render": "assets/grok-4.7-python.jpg",
+      "svg": "assets/grok-4.7-svg.jpg",
+      "python_source": "assets/grok-4.7.py",
+      "svg_source": "assets/grok-4.7.svg",
+      "added": "2026-11-16T23:55:33Z"
+    },
     "gemini-4-hydrogen": {
       "display_name": "gemini-4-hydrogen",
       "python_render": "assets/gemini-4-hydrogen-python.jpg",
