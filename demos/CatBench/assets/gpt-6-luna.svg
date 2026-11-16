@@ -1,0 +1,241 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="720" viewBox="0 0 640 720" role="img" aria-labelledby="title desc">
+  <title id="title">A cute little kitten</title>
+  <desc id="desc">A fluffy gray kitten with bright green eyes, pink ears, a curled striped tail, and a warm pastel backdrop.</desc>
+
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFF9F1"/>
+      <stop offset="1" stop-color="#F8E8E3"/>
+    </linearGradient>
+
+    <radialGradient id="halo" cx="50%" cy="45%" r="55%">
+      <stop offset="0" stop-color="#FFFDFC"/>
+      <stop offset="0.78" stop-color="#FFF8F1"/>
+      <stop offset="1" stop-color="#F7DFDC" stop-opacity=".55"/>
+    </radialGradient>
+
+    <linearGradient id="fur" x1="0" y1="0" x2=".8" y2="1">
+      <stop offset="0" stop-color="#E3DFE7"/>
+      <stop offset=".48" stop-color="#C8C3D0"/>
+      <stop offset="1" stop-color="#AAA5B5"/>
+    </linearGradient>
+
+    <linearGradient id="headFur" x1="0" y1="0" x2=".25" y2="1">
+      <stop offset="0" stop-color="#E7E3EA"/>
+      <stop offset=".52" stop-color="#CDC8D4"/>
+      <stop offset="1" stop-color="#B6B1C0"/>
+    </linearGradient>
+
+    <linearGradient id="cream" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFEFA"/>
+      <stop offset="1" stop-color="#F1EAE3"/>
+    </linearGradient>
+
+    <linearGradient id="earPink" x1="0" y1="0" x2=".8" y2="1">
+      <stop offset="0" stop-color="#F7C7CD"/>
+      <stop offset="1" stop-color="#D98F9F"/>
+    </linearGradient>
+
+    <linearGradient id="iris" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#BCE7C9"/>
+      <stop offset=".45" stop-color="#66B99B"/>
+      <stop offset="1" stop-color="#347E78"/>
+    </linearGradient>
+
+    <filter id="softShadow" x="-30%" y="-80%" width="160%" height="260%">
+      <feGaussianBlur stdDeviation="9"/>
+    </filter>
+  </defs>
+
+  <!-- Soft pastel setting -->
+  <rect width="640" height="720" fill="url(#background)"/>
+  <rect x="14" y="14" width="612" height="692" rx="30" fill="none" stroke="#EBD8D3" stroke-width="2.5" opacity=".8"/>
+  <circle cx="320" cy="336" r="246" fill="url(#halo)"/>
+
+  <!-- Little floating decorations -->
+  <g opacity=".76">
+    <path d="M150 294 C144 288 136 289 136 296 C136 303 150 311 150 311 C150 311 164 303 164 296 C164 289 156 288 150 294Z" fill="#E9A9B1"/>
+    <path d="M491 247 C486 241 478 242 478 249 C478 256 491 264 491 264 C491 264 504 256 504 249 C504 242 496 241 491 247Z" fill="#E9A9B1"/>
+    <path d="M128 186 L132 198 L144 202 L132 206 L128 218 L124 206 L112 202 L124 198Z" fill="#E9C77D"/>
+    <path d="M509 378 L513 389 L524 393 L513 397 L509 408 L505 397 L494 393 L505 389Z" fill="#E9C77D"/>
+    <path d="M508 172 L511 180 L519 183 L511 186 L508 194 L505 186 L497 183 L505 180Z" fill="#D9B8C6"/>
+    <path d="M132 424 L135 432 L143 435 L135 438 L132 446 L129 438 L121 435 L129 432Z" fill="#D9B8C6"/>
+    <circle cx="176" cy="224" r="3.5" fill="#E7B4B0"/>
+    <circle cx="467" cy="430" r="3" fill="#E7B4B0"/>
+    <circle cx="488" cy="308" r="2.5" fill="#E9C77D"/>
+    <circle cx="159" cy="477" r="2.5" fill="#E9C77D"/>
+  </g>
+
+  <!-- Ground shadow -->
+  <ellipse cx="320" cy="633" rx="150" ry="20" fill="#766577" opacity=".19" filter="url(#softShadow)"/>
+
+  <g stroke-linecap="round" stroke-linejoin="round">
+    <!-- Curled striped tail, behind the kitten -->
+    <path d="M394 524 C450 513 489 535 491 568 C493 592 478 609 459 609 C441 609 431 594 438 582 C444 572 459 574 465 585"
+          fill="none" stroke="#62596B" stroke-width="37"/>
+    <path d="M394 524 C450 513 489 535 491 568 C493 592 478 609 459 609 C441 609 431 594 438 582 C444 572 459 574 465 585"
+          fill="none" stroke="url(#fur)" stroke-width="29"/>
+    <path d="M454 521 C465 525 473 533 477 543" fill="none" stroke="#918A9B" stroke-width="19" opacity=".9"/>
+    <path d="M484 551 C490 560 491 571 488 580" fill="none" stroke="#918A9B" stroke-width="19" opacity=".9"/>
+
+    <!-- Seated body -->
+    <path d="M246 394
+             C225 420 216 465 219 514
+             C221 558 239 586 267 600
+             C282 608 301 611 320 611
+             C339 611 358 608 373 600
+             C401 586 419 558 421 514
+             C424 465 415 420 394 394
+             C375 414 350 425 320 425
+             C290 425 265 414 246 394Z"
+          fill="url(#fur)" stroke="#62596B" stroke-width="5"/>
+
+    <!-- Subtle tabby markings on the shoulders -->
+    <path d="M233 452 Q245 460 256 462 M228 473 Q240 480 252 481"
+          fill="none" stroke="#8E8799" stroke-width="4" opacity=".62"/>
+    <path d="M407 452 Q395 460 384 462 M412 473 Q400 480 388 481"
+          fill="none" stroke="#8E8799" stroke-width="4" opacity=".62"/>
+
+    <!-- Cream chest patch -->
+    <path d="M278 404
+             C269 432 270 484 276 526
+             C281 558 295 580 320 589
+             C345 580 359 558 364 526
+             C370 484 371 432 362 404
+             C349 414 335 420 320 420
+             C305 420 291 414 278 404Z"
+          fill="url(#cream)"/>
+
+    <!-- Front paws -->
+    <path d="M252 556
+             C263 566 279 571 296 570
+             C307 570 315 565 320 559
+             L320 589
+             C320 603 310 611 296 612
+             C280 613 263 609 255 600
+             C248 592 248 572 252 556Z"
+          fill="url(#fur)" stroke="#62596B" stroke-width="4"/>
+    <path d="M388 556
+             C377 566 361 571 344 570
+             C333 570 325 565 320 559
+             L320 589
+             C320 603 330 611 344 612
+             C360 613 377 609 385 600
+             C392 592 392 572 388 556Z"
+          fill="url(#fur)" stroke="#62596B" stroke-width="4"/>
+
+    <!-- Toe details -->
+    <path d="M276 591 C276 596 274 599 271 601 M296 592 C296 597 294 600 291 602
+             M344 592 C344 597 346 600 349 602 M364 591 C364 596 366 599 369 601"
+          fill="none" stroke="#81798A" stroke-width="2.5" opacity=".78"/>
+
+    <!-- Oversized kitten head and ears -->
+    <path d="M201 269
+             C195 231 199 185 210 145
+             C215 126 229 126 243 144
+             L274 185
+             C303 174 337 174 366 185
+             L397 144
+             C411 126 425 126 430 145
+             C441 185 445 231 439 269
+             C448 287 448 309 440 330
+             C422 373 382 397 320 399
+             C258 397 218 373 200 330
+             C192 309 192 287 201 269Z"
+          fill="url(#headFur)" stroke="#62596B" stroke-width="5"/>
+
+    <!-- Inner ears -->
+    <path d="M215 164 C219 152 225 153 234 166 L258 199
+             C246 204 235 212 225 225 C220 207 216 186 215 164Z"
+          fill="url(#earPink)" stroke="#A97D8E" stroke-width="2"/>
+    <path d="M425 164 C421 152 415 153 406 166 L382 199
+             C394 204 405 212 415 225 C420 207 424 186 425 164Z"
+          fill="url(#earPink)" stroke="#A97D8E" stroke-width="2"/>
+    <path d="M222 169 Q225 164 230 172 L249 196" fill="none" stroke="#FFE8E4" stroke-width="3" opacity=".75"/>
+    <path d="M418 169 Q415 164 410 172 L391 196" fill="none" stroke="#FFE8E4" stroke-width="3" opacity=".75"/>
+
+    <!-- Tabby stripes on the forehead -->
+    <path d="M303 210 C309 220 310 229 308 239
+             M320 204 C322 217 322 229 320 241
+             M337 210 C331 220 330 229 332 239"
+          fill="none" stroke="#91899B" stroke-width="5" opacity=".78"/>
+    <path d="M207 275 Q217 279 227 286 M205 294 Q216 298 227 304
+             M433 275 Q423 279 413 286 M435 294 Q424 298 413 304"
+          fill="none" stroke="#91899B" stroke-width="4" opacity=".68"/>
+
+    <!-- Soft cream muzzle and chin marking -->
+    <path d="M267 332
+             C271 316 288 309 304 315
+             C312 318 317 323 320 327
+             C323 323 328 318 336 315
+             C352 309 369 316 373 332
+             C370 356 355 375 337 382
+             C331 384 325 386 320 386
+             C315 386 309 384 303 382
+             C285 375 270 356 267 332Z"
+          fill="url(#cream)"/>
+
+    <!-- Eyebrows -->
+    <path d="M252 246 Q271 237 291 246 M349 246 Q369 237 388 246"
+          fill="none" stroke="#8D8495" stroke-width="3" opacity=".58"/>
+
+    <!-- Big glossy eyes -->
+    <path d="M247 284 C247 267 258 255 273 255 C289 255 298 268 297 285
+             C296 302 286 314 272 314 C258 314 248 302 247 284Z"
+          fill="#FFFCF6" stroke="#62596B" stroke-width="3"/>
+    <path d="M393 284 C393 267 382 255 367 255 C351 255 342 268 343 285
+             C344 302 354 314 368 314 C382 314 392 302 393 284Z"
+          fill="#FFFCF6" stroke="#62596B" stroke-width="3"/>
+
+    <ellipse cx="273" cy="284" rx="13.5" ry="18" fill="url(#iris)" stroke="#387A73" stroke-width="1.5"/>
+    <ellipse cx="367" cy="284" rx="13.5" ry="18" fill="url(#iris)" stroke="#387A73" stroke-width="1.5"/>
+    <ellipse cx="275" cy="286" rx="7" ry="13" fill="#263640"/>
+    <ellipse cx="365" cy="286" rx="7" ry="13" fill="#263640"/>
+    <circle cx="268" cy="276" r="5" fill="#FFFFFF"/>
+    <circle cx="360" cy="276" r="5" fill="#FFFFFF"/>
+    <circle cx="279" cy="294" r="2.4" fill="#DDF8E9"/>
+    <circle cx="371" cy="294" r="2.4" fill="#DDF8E9"/>
+    <path d="M250 265 Q245 261 242 256 M390 265 Q395 261 398 256"
+          fill="none" stroke="#62596B" stroke-width="3"/>
+
+    <!-- Blushing cheeks -->
+    <ellipse cx="250" cy="339" rx="15" ry="9" fill="#E99EAA" opacity=".34"/>
+    <ellipse cx="390" cy="339" rx="15" ry="9" fill="#E99EAA" opacity=".34"/>
+
+    <!-- Whiskers -->
+    <path d="M295 333 C273 327 252 326 229 330
+             M294 342 C271 343 250 349 231 358
+             M296 350 C277 360 263 370 249 382
+             M345 333 C367 327 388 326 411 330
+             M346 342 C369 343 390 349 409 358
+             M344 350 C363 360 377 370 391 382"
+          fill="none" stroke="#81798A" stroke-width="2.2" opacity=".82"/>
+
+    <!-- Muzzle puffs -->
+    <ellipse cx="303" cy="340" rx="20" ry="14" fill="#FFFCF7"/>
+    <ellipse cx="337" cy="340" rx="20" ry="14" fill="#FFFCF7"/>
+
+    <!-- Tiny whisker freckles -->
+    <g fill="#B58C98" opacity=".76">
+      <circle cx="291" cy="337" r="1.7"/>
+      <circle cx="296" cy="343" r="1.7"/>
+      <circle cx="291" cy="348" r="1.7"/>
+      <circle cx="349" cy="337" r="1.7"/>
+      <circle cx="344" cy="343" r="1.7"/>
+      <circle cx="349" cy="348" r="1.7"/>
+    </g>
+
+    <!-- Pink nose and sweet little mouth -->
+    <path d="M310 324 Q320 316 330 324 Q330 333 320 337 Q310 333 310 324Z"
+          fill="#E88F9C" stroke="#B96F80" stroke-width="1.5"/>
+    <path d="M315 323 Q320 320 324 323" fill="none" stroke="#FFD6D7" stroke-width="2.5" opacity=".9"/>
+    <path d="M320 336 C320 341 320 343 320 345
+             M320 345 C316 351 309 354 303 350
+             M320 345 C324 351 331 354 337 350"
+          fill="none" stroke="#62596B" stroke-width="2.8"/>
+
+    <!-- A few soft fur strokes on the chest -->
+    <path d="M307 548 Q313 553 320 554 Q327 553 333 548"
+          fill="none" stroke="#D8D1D8" stroke-width="2.5" opacity=".72"/>
+  </g>
+</svg>

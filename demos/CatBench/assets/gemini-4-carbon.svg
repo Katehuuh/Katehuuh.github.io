@@ -1,0 +1,676 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 800" width="100%" height="100%">
+  <defs>
+    <!-- Background & Scene Gradients -->
+    <radialGradient id="canvasGrad" cx="50%" cy="45%" r="65%">
+      <stop offset="0%" stop-color="#FFFDF9"/>
+      <stop offset="100%" stop-color="#F7EFE4"/>
+    </radialGradient>
+
+    <linearGradient id="backdropCircle" x1="20%" y1="10%" x2="80%" y2="90%">
+      <stop offset="0%" stop-color="#E5F7F4"/>
+      <stop offset="55%" stop-color="#CFECE8"/>
+      <stop offset="100%" stop-color="#B9E1DC"/>
+    </linearGradient>
+
+    <radialGradient id="rugCenter" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#FFF6EB"/>
+      <stop offset="65%" stop-color="#F7E2CE"/>
+      <stop offset="100%" stop-color="#EBCAB0"/>
+    </radialGradient>
+
+    <linearGradient id="rugTrim" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#E8A598"/>
+      <stop offset="50%" stop-color="#F3BBAE"/>
+      <stop offset="100%" stop-color="#DF9587"/>
+    </linearGradient>
+
+    <radialGradient id="floorShadow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#7A543E" stop-opacity="0.32"/>
+      <stop offset="65%" stop-color="#7A543E" stop-opacity="0.14"/>
+      <stop offset="100%" stop-color="#7A543E" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Kitten Fur Gradients -->
+    <radialGradient id="headFurGrad" cx="42%" cy="32%" r="65%">
+      <stop offset="0%" stop-color="#FFD194"/>
+      <stop offset="48%" stop-color="#FCA856"/>
+      <stop offset="85%" stop-color="#EE8530"/>
+      <stop offset="100%" stop-color="#DC6E1F"/>
+    </radialGradient>
+
+    <linearGradient id="bodyFurGrad" x1="30%" y1="10%" x2="75%" y2="95%">
+      <stop offset="0%" stop-color="#FFC278"/>
+      <stop offset="45%" stop-color="#F69641"/>
+      <stop offset="90%" stop-color="#DF7220"/>
+      <stop offset="100%" stop-color="#C85D14"/>
+    </linearGradient>
+
+    <linearGradient id="legFurGrad" x1="20%" y1="0%" x2="80%" y2="100%">
+      <stop offset="0%" stop-color="#F79844"/>
+      <stop offset="55%" stop-color="#FDAF63"/>
+      <stop offset="100%" stop-color="#EE8935"/>
+    </linearGradient>
+
+    <linearGradient id="tailFurGrad" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#D46618"/>
+      <stop offset="50%" stop-color="#F5933E"/>
+      <stop offset="100%" stop-color="#FFB96E"/>
+    </linearGradient>
+
+    <linearGradient id="stripeGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#C95210"/>
+      <stop offset="100%" stop-color="#DF6A1E"/>
+    </linearGradient>
+
+    <radialGradient id="creamFluffGrad" cx="48%" cy="35%" r="65%">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="60%" stop-color="#FFF5E6"/>
+      <stop offset="100%" stop-color="#F2D8BC"/>
+    </radialGradient>
+
+    <linearGradient id="pawCreamGrad" x1="50%" y1="0%" x2="50%" y2="100%">
+      <stop offset="0%" stop-color="#FFF9F0"/>
+      <stop offset="70%" stop-color="#FCECD9"/>
+      <stop offset="100%" stop-color="#E8CCB0"/>
+    </linearGradient>
+
+    <!-- Ear, Nose, Mouth & Blush Gradients -->
+    <linearGradient id="innerEarGrad" x1="30%" y1="10%" x2="70%" y2="95%">
+      <stop offset="0%" stop-color="#FFC4D0"/>
+      <stop offset="55%" stop-color="#FF8FA6"/>
+      <stop offset="100%" stop-color="#E36883"/>
+    </linearGradient>
+
+    <linearGradient id="noseGrad" x1="50%" y1="0%" x2="50%" y2="100%">
+      <stop offset="0%" stop-color="#FF9EB0"/>
+      <stop offset="60%" stop-color="#F26B85"/>
+      <stop offset="100%" stop-color="#D14D68"/>
+    </linearGradient>
+
+    <linearGradient id="tongueGrad" x1="50%" y1="0%" x2="50%" y2="100%">
+      <stop offset="0%" stop-color="#C93B58"/>
+      <stop offset="45%" stop-color="#FF7A93"/>
+      <stop offset="100%" stop-color="#FFAEC0"/>
+    </linearGradient>
+
+    <radialGradient id="cheekBlush" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#FF6B8B" stop-opacity="0.48"/>
+      <stop offset="60%" stop-color="#FF859E" stop-opacity="0.20"/>
+      <stop offset="100%" stop-color="#FF859E" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Glossy Emerald-Teal Eye Gradients -->
+    <linearGradient id="irisGrad" x1="50%" y1="5%" x2="50%" y2="95%">
+      <stop offset="0%" stop-color="#0E4242"/>
+      <stop offset="32%" stop-color="#18736D"/>
+      <stop offset="72%" stop-color="#36BA9E"/>
+      <stop offset="100%" stop-color="#87F7D2"/>
+    </linearGradient>
+
+    <radialGradient id="irisCenterGlow" cx="50%" cy="55%" r="48%">
+      <stop offset="0%" stop-color="#B8FFE3" stop-opacity="0.6"/>
+      <stop offset="65%" stop-color="#3CD1AD" stop-opacity="0.2"/>
+      <stop offset="100%" stop-color="#125450" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Collar & Gold Bell Gradients -->
+    <linearGradient id="collarGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#B8253E"/>
+      <stop offset="35%" stop-color="#EB4662"/>
+      <stop offset="65%" stop-color="#F25771"/>
+      <stop offset="100%" stop-color="#B02139"/>
+    </linearGradient>
+
+    <radialGradient id="goldBellGrad" cx="35%" cy="30%" r="65%">
+      <stop offset="0%" stop-color="#FFF6B3"/>
+      <stop offset="35%" stop-color="#FFD84D"/>
+      <stop offset="75%" stop-color="#E09B19"/>
+      <stop offset="100%" stop-color="#A86808"/>
+    </radialGradient>
+
+    <!-- Yarn Ball Gradients -->
+    <radialGradient id="yarnBaseGrad" cx="35%" cy="30%" r="70%">
+      <stop offset="0%" stop-color="#A3C2FF"/>
+      <stop offset="45%" stop-color="#6A93EB"/>
+      <stop offset="85%" stop-color="#4365BD"/>
+      <stop offset="100%" stop-color="#2B448C"/>
+    </radialGradient>
+
+    <linearGradient id="yarnStrandLight" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#C4D9FF"/>
+      <stop offset="50%" stop-color="#80A6F5"/>
+      <stop offset="100%" stop-color="#486BC4"/>
+    </linearGradient>
+
+    <!-- Soft Filters -->
+    <filter id="headShadow" x="-15%" y="-15%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="8" stdDeviation="7" flood-color="#7A360B" flood-opacity="0.22"/>
+    </filter>
+
+    <filter id="softGlow" x="-25%" y="-25%" width="150%" height="150%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <!-- Clip Paths -->
+    <clipPath id="tailClip">
+      <path d="M 485 632 C 575 638, 650 590, 662 518 C 668 475, 645 442, 614 446 C 585 450, 578 482, 595 508 C 608 528, 588 575, 495 585 Z"/>
+    </clipPath>
+
+    <clipPath id="bodyClip">
+      <path d="M 345 385 C 325 445, 282 520, 285 590 C 287 635, 318 655, 365 655 L 445 655 C 492 655, 523 635, 525 590 C 528 520, 485 445, 465 385 Z"/>
+    </clipPath>
+
+    <clipPath id="headClip">
+      <path d="M 388 158 Q 394 143 400 154 Q 408 140 413 157 Q 422 148 424 160 C 485 165, 538 215, 548 285 C 562 298, 572 310, 558 318 C 574 328, 568 344, 550 346 C 560 358, 546 370, 530 370 C 500 398, 450 410, 400 410 C 350 410, 300 398, 270 370 C 254 370, 240 358, 250 346 C 232 344, 226 328, 242 318 C 228 310, 238 298, 252 285 C 262 215, 315 165, 388 158 Z"/>
+    </clipPath>
+
+    <clipPath id="leftEyeClip">
+      <ellipse cx="330" cy="294" rx="42" ry="44" transform="rotate(-4 330 294)"/>
+    </clipPath>
+
+    <clipPath id="rightEyeClip">
+      <ellipse cx="470" cy="294" rx="42" ry="44" transform="rotate(4 470 294)"/>
+    </clipPath>
+
+    <clipPath id="yarnClip">
+      <circle cx="222" cy="648" r="47"/>
+    </clipPath>
+  </defs>
+
+  <!-- ==================== 1. BACKGROUND & COZY RUG ==================== -->
+  <rect width="800" height="800" fill="url(#canvasGrad)"/>
+
+  <!-- Pastel Mint Backdrop Circle -->
+  <circle cx="400" cy="390" r="315" fill="url(#backdropCircle)"/>
+  <circle cx="400" cy="390" r="326" fill="none" stroke="#DCF2EF" stroke-width="3" stroke-dasharray="10 14"/>
+
+  <!-- Dreamy Sunlit Bokeh Orbs -->
+  <g fill="#FFFFFF" opacity="0.45">
+    <circle cx="165" cy="255" r="24"/>
+    <circle cx="195" cy="215" r="11"/>
+    <circle cx="625" cy="260" r="30"/>
+    <circle cx="655" cy="320" r="14"/>
+    <circle cx="240" cy="140" r="16"/>
+    <circle cx="555" cy="135" r="19"/>
+  </g>
+
+  <!-- Cozy Woven Oval Rug -->
+  <g id="cozy-rug">
+    <ellipse cx="400" cy="666" rx="305" ry="74" fill="#D9B69C" opacity="0.45"/>
+    <ellipse cx="400" cy="660" rx="298" ry="70" fill="url(#rugTrim)"/>
+    <ellipse cx="400" cy="659" rx="276" ry="61" fill="#F2D7C1" stroke="#E0988A" stroke-width="2" stroke-dasharray="8 6"/>
+    <ellipse cx="400" cy="658" rx="246" ry="51" fill="#B8DCD7" stroke="#9AC7C0" stroke-width="2" stroke-dasharray="6 6"/>
+    <ellipse cx="400" cy="657" rx="215" ry="42" fill="url(#rugCenter)" stroke="#E6C2A6" stroke-width="2" stroke-dasharray="7 5"/>
+  </g>
+
+  <!-- Soft Floor Contact Shadows -->
+  <ellipse cx="412" cy="656" rx="185" ry="34" fill="url(#floorShadow)"/>
+  <ellipse cx="222" cy="692" rx="62" ry="15" fill="url(#floorShadow)"/>
+
+  <!-- ==================== 2. FLUFFY CURLED TAIL ==================== -->
+  <g id="tail">
+    <!-- Base Tail Silhouette -->
+    <path d="M 485 632 C 575 638, 650 590, 662 518 C 668 475, 645 442, 614 446 C 585 450, 578 482, 595 508 C 608 528, 588 575, 495 585 Z"
+          fill="url(#tailFurGrad)"/>
+
+    <!-- Clipped Tabby Rings & Cream Tail Tip -->
+    <g clip-path="url(#tailClip)">
+      <!-- Cream Tail Tip -->
+      <path d="M 572 485 Q 615 505 668 482 L 672 432 L 570 435 Z" fill="url(#creamFluffGrad)"/>
+      <!-- Ginger Stripes -->
+      <path d="M 532 572 Q 548 605 538 638 L 556 636 Q 568 602 550 568 Z" fill="url(#stripeGrad)" opacity="0.82"/>
+      <path d="M 572 555 Q 600 582 604 615 L 621 605 Q 616 572 586 544 Z" fill="url(#stripeGrad)" opacity="0.82"/>
+      <path d="M 594 528 Q 628 542 652 565 L 660 546 Q 635 524 598 512 Z" fill="url(#stripeGrad)" opacity="0.82"/>
+      <path d="M 588 498 Q 626 498 666 512 L 668 495 Q 628 482 585 485 Z" fill="url(#stripeGrad)" opacity="0.80"/>
+      <!-- Underside Warm Shading -->
+      <path d="M 485 632 C 575 638, 650 590, 662 518 C 652 576, 575 620, 488 618 Z" fill="#B5490B" opacity="0.28"/>
+    </g>
+
+    <!-- Fluffy Tip Fur Tufts -->
+    <path d="M 604 449 Q 610 434 619 445 Q 630 434 635 447" fill="#FFF8EC" stroke="#F2D8BC" stroke-width="1.2" stroke-linecap="round"/>
+  </g>
+
+  <!-- ==================== 3. TORSO & TUCKED BACK PAWS ==================== -->
+  <g id="body">
+    <!-- Main Sitting Torso -->
+    <path d="M 345 385 C 325 445, 282 520, 285 590 C 287 635, 318 655, 365 655 L 445 655 C 492 655, 523 635, 525 590 C 528 520, 485 445, 465 385 Z"
+          fill="url(#bodyFurGrad)"/>
+
+    <!-- Clipped Body Tabby Stripes & Depth Shading -->
+    <g clip-path="url(#bodyClip)">
+      <!-- Left Flank Stripes -->
+      <path d="M 278 502 Q 318 508 335 522 Q 312 528 276 520 Z" fill="url(#stripeGrad)" opacity="0.78"/>
+      <path d="M 276 540 Q 322 546 340 562 Q 315 568 275 558 Z" fill="url(#stripeGrad)" opacity="0.78"/>
+      <path d="M 280 578 Q 320 584 336 600 Q 312 605 278 596 Z" fill="url(#stripeGrad)" opacity="0.75"/>
+
+      <!-- Right Flank Stripes -->
+      <path d="M 532 502 Q 492 508 475 522 Q 498 528 534 520 Z" fill="url(#stripeGrad)" opacity="0.78"/>
+      <path d="M 534 540 Q 488 546 470 562 Q 495 568 535 558 Z" fill="url(#stripeGrad)" opacity="0.78"/>
+      <path d="M 530 578 Q 490 584 474 600 Q 498 605 532 596 Z" fill="url(#stripeGrad)" opacity="0.75"/>
+
+      <!-- Central Inner Belly Shadow (Separates Front Legs) -->
+      <ellipse cx="405" cy="595" rx="44" ry="72" fill="#B5490B" opacity="0.35"/>
+      <!-- Under-Head Cast Shadow on Shoulders -->
+      <ellipse cx="405" cy="405" rx="75" ry="32" fill="#8F3505" opacity="0.32"/>
+    </g>
+
+    <!-- Tucked Left Back Paw -->
+    <g id="back-paw-left">
+      <path d="M 274 644 C 272 620, 310 615, 334 632 C 342 645, 332 658, 296 658 C 280 658, 274 652, 274 644 Z"
+            fill="url(#pawCreamGrad)" stroke="#E3BE98" stroke-width="1.5"/>
+      <path d="M 288 656 Q 291 642 299 639" fill="none" stroke="#D4AA82" stroke-width="2" stroke-linecap="round"/>
+      <path d="M 304 657 Q 307 644 314 641" fill="none" stroke="#D4AA82" stroke-width="2" stroke-linecap="round"/>
+    </g>
+
+    <!-- Tucked Right Back Paw -->
+    <g id="back-paw-right">
+      <path d="M 536 644 C 538 620, 500 615, 476 632 C 468 645, 478 658, 514 658 C 530 658, 536 652, 536 644 Z"
+            fill="url(#pawCreamGrad)" stroke="#E3BE98" stroke-width="1.5"/>
+      <path d="M 522 656 Q 519 642 511 639" fill="none" stroke="#D4AA82" stroke-width="2" stroke-linecap="round"/>
+      <path d="M 506 657 Q 503 644 496 641" fill="none" stroke="#D4AA82" stroke-width="2" stroke-linecap="round"/>
+    </g>
+  </g>
+
+  <!-- ==================== 4. FRONT LEGS, CHEST FLUFF & COLLAR ==================== -->
+  <g id="front-legs-and-chest">
+    <!-- Left Front Leg -->
+    <g id="front-leg-left">
+      <path d="M 336 475 C 334 530, 342 585, 345 628 C 334 636, 334 665, 355 667 L 388 667 C 402 667, 403 646, 396 630 C 394 585, 396 530, 392 485 Z"
+            fill="url(#legFurGrad)"/>
+      <!-- Subtle Leg Tabby Bracelets -->
+      <path d="M 339 548 Q 366 556 393 547 Q 393 558 366 565 Q 340 559 339 548 Z" fill="url(#stripeGrad)" opacity="0.68"/>
+      <path d="M 342 578 Q 368 586 394 577 Q 394 587 368 594 Q 343 588 342 578 Z" fill="url(#stripeGrad)" opacity="0.65"/>
+      <!-- White/Cream Mitten Sock -->
+      <path d="M 344 612 Q 356 620 364 611 Q 373 621 382 612 Q 389 619 395 614 L 396 630 C 403 646, 402 667, 388 667 L 355 667 C 334 665, 334 636, 345 628 Z"
+            fill="url(#pawCreamGrad)"/>
+      <!-- Paw Outline & Toe Creases -->
+      <path d="M 345 628 C 334 636, 334 665, 355 667 L 388 667 C 402 667, 403 646, 396 630"
+            fill="none" stroke="#E3BE98" stroke-width="1.4"/>
+      <path d="M 357 666 Q 356 648 361 643" fill="none" stroke="#D4AA82" stroke-width="2.2" stroke-linecap="round"/>
+      <path d="M 377 666 Q 378 648 374 643" fill="none" stroke="#D4AA82" stroke-width="2.2" stroke-linecap="round"/>
+    </g>
+
+    <!-- Right Front Leg -->
+    <g id="front-leg-right">
+      <path d="M 474 475 C 476 530, 468 585, 465 628 C 476 636, 476 665, 455 667 L 422 667 C 408 667, 407 646, 414 630 C 416 585, 414 530, 418 485 Z"
+            fill="url(#legFurGrad)"/>
+      <!-- Subtle Leg Tabby Bracelets -->
+      <path d="M 471 548 Q 444 556 417 547 Q 417 558 444 565 Q 470 559 471 548 Z" fill="url(#stripeGrad)" opacity="0.68"/>
+      <path d="M 468 578 Q 442 586 416 577 Q 416 587 442 594 Q 467 588 468 578 Z" fill="url(#stripeGrad)" opacity="0.65"/>
+      <!-- White/Cream Mitten Sock -->
+      <path d="M 466 612 Q 454 620 446 611 Q 437 621 428 612 Q 421 619 415 614 L 414 630 C 407 646, 408 667, 422 667 L 455 667 C 476 665, 476 636, 465 628 Z"
+            fill="url(#pawCreamGrad)"/>
+      <!-- Paw Outline & Toe Creases -->
+      <path d="M 465 628 C 476 636, 476 665, 455 667 L 422 667 C 408 667, 407 646, 414 630"
+            fill="none" stroke="#E3BE98" stroke-width="1.4"/>
+      <path d="M 453 666 Q 454 648 449 643" fill="none" stroke="#D4AA82" stroke-width="2.2" stroke-linecap="round"/>
+      <path d="M 433 666 Q 432 648 436 643" fill="none" stroke="#D4AA82" stroke-width="2.2" stroke-linecap="round"/>
+    </g>
+
+    <!-- Plush Cream Chest Ruff -->
+    <g id="chest-ruff">
+      <!-- Soft Ruff Shadow -->
+      <path d="M 352 418 C 330 446, 326 478, 342 492 C 332 508, 346 528, 364 530 C 375 550, 393 560, 405 565 C 417 560, 435 550, 446 530 C 464 528, 478 508, 468 492 C 484 478, 480 446, 458 418 Z"
+            fill="#C75A14" opacity="0.22"/>
+      <!-- Main Fluffy Bib -->
+      <path d="M 352 412 C 332 440, 326 472, 342 485 C 332 500, 345 520, 362 522 C 372 542, 392 552, 405 556 C 418 552, 438 542, 448 522 C 465 520, 478 500, 468 485 C 484 472, 478 440, 458 412 Z"
+            fill="url(#creamFluffGrad)"/>
+      <!-- Delicate Fur Wisps on Chest -->
+      <path d="M 378 468 Q 384 486 376 498 M 432 468 Q 426 486 434 498 M 405 485 Q 405 508 401 522"
+            fill="none" stroke="#EBD0B3" stroke-width="2.2" stroke-linecap="round" opacity="0.75"/>
+    </g>
+
+    <!-- Berry-Red Collar & Golden Bell -->
+    <g id="collar-and-bell">
+      <!-- Collar Drop Shadow -->
+      <path d="M 340 404 Q 405 436 470 404 Q 473 418 466 424 Q 405 452 344 424 Q 337 418 340 404 Z"
+            fill="#8F3B0E" opacity="0.28"/>
+      <!-- Collar Strap -->
+      <path d="M 341 398 Q 405 430 469 398 Q 473 412 465 418 Q 405 446 345 418 Q 337 412 341 398 Z"
+            fill="url(#collarGrad)" stroke="#9E1930" stroke-width="1.2"/>
+      <!-- Collar Highlight Stitch -->
+      <path d="M 350 406 Q 405 433 460 406" fill="none" stroke="#FF8DA1" stroke-width="1.4" stroke-dasharray="5 5" opacity="0.75"/>
+
+      <!-- Bell Shadow on Chest -->
+      <circle cx="405" cy="444" r="20" fill="#B88E65" opacity="0.38"/>
+      <!-- Bell Loop -->
+      <rect x="399" y="416" width="12" height="9" rx="3" fill="#D98B14" stroke="#995D05" stroke-width="1"/>
+      <!-- Metallic Golden Bell -->
+      <circle cx="405" cy="438" r="19" fill="url(#goldBellGrad)" stroke="#9E6004" stroke-width="1.3"/>
+      <!-- Bell Equator Ridge -->
+      <path d="M 386 436 Q 405 443 424 436" fill="none" stroke="#B57007" stroke-width="2.2"/>
+      <path d="M 387 434 Q 405 441 423 434" fill="none" stroke="#FFF4B8" stroke-width="1.2"/>
+      <!-- Bell Acoustic Cutout -->
+      <circle cx="405" cy="446" r="3.6" fill="#593202"/>
+      <path d="M 405 446 L 405 456" stroke="#593202" stroke-width="2.6" stroke-linecap="round"/>
+      <!-- Crisp Specular Shine -->
+      <ellipse cx="397" cy="429" rx="4.5" ry="2.8" transform="rotate(-30 397 429)" fill="#FFFFFF" opacity="0.9"/>
+    </g>
+  </g>
+
+  <!-- ==================== 5. TILTED KITTEN HEAD ==================== -->
+  <g id="kitten-head" transform="rotate(-5 400 380)" filter="url(#headShadow)">
+
+    <!-- Left Ear -->
+    <g id="ear-left">
+      <path d="M 258 262 C 238 205, 222 140, 232 104 C 236 88, 254 86, 270 99 C 306 126, 342 158, 362 180 Z"
+            fill="url(#headFurGrad)"/>
+      <!-- Subtle Darker Ginger Ear Tip -->
+      <path d="M 232 104 C 236 88, 254 86, 270 99 C 282 108, 294 118, 304 127 C 278 118, 252 122, 230 138 C 229 124, 230 112, 232 104 Z"
+            fill="#D46017" opacity="0.55"/>
+      <!-- Pink Inner Ear -->
+      <path d="M 268 244 C 252 198, 241 146, 248 115 C 250 105, 260 104, 271 113 C 300 136, 326 164, 342 184 C 314 202, 288 222, 268 244 Z"
+            fill="url(#innerEarGrad)"/>
+      <!-- Inner Ear Canal Depth Fold -->
+      <path d="M 272 235 C 264 202, 260 168, 266 142 C 282 162, 302 182, 314 198 C 296 210, 282 222, 272 235 Z"
+            fill="#D1526E" opacity="0.38"/>
+      <!-- Fluffy Cream Ear Furnishings (Wisps) -->
+      <path d="M 262 246 Q 274 208 264 196 Q 284 204 292 182 Q 302 198 318 188 Q 312 204 338 186 C 316 208, 288 230, 262 246 Z"
+            fill="url(#creamFluffGrad)"/>
+    </g>
+
+    <!-- Right Ear -->
+    <g id="ear-right">
+      <path d="M 542 262 C 562 205, 578 140, 568 104 C 564 88, 546 86, 530 99 C 494 126, 458 158, 438 180 Z"
+            fill="url(#headFurGrad)"/>
+      <!-- Subtle Darker Ginger Ear Tip -->
+      <path d="M 568 104 C 564 88, 546 86, 530 99 C 518 108, 506 118, 496 127 C 522 118, 548 122, 570 138 C 571 124, 570 112, 568 104 Z"
+            fill="#D46017" opacity="0.55"/>
+      <!-- Pink Inner Ear -->
+      <path d="M 532 244 C 548 198, 559 146, 552 115 C 550 105, 540 104, 529 113 C 500 136, 474 164, 458 184 C 486 202, 512 222, 532 244 Z"
+            fill="url(#innerEarGrad)"/>
+      <!-- Inner Ear Canal Depth Fold -->
+      <path d="M 528 235 C 536 202, 540 168, 534 142 C 518 162, 498 182, 486 198 C 504 210, 518 222, 528 235 Z"
+            fill="#D1526E" opacity="0.38"/>
+      <!-- Fluffy Cream Ear Furnishings (Wisps) -->
+      <path d="M 538 246 Q 526 208 536 196 Q 516 204 508 182 Q 498 198 482 188 Q 488 204 462 186 C 484 208, 512 230, 538 246 Z"
+            fill="url(#creamFluffGrad)"/>
+    </g>
+
+    <!-- Main Fluffy Head Base -->
+    <path d="M 388 158 Q 394 143 400 154 Q 408 140 413 157 Q 422 148 424 160 C 485 165, 538 215, 548 285 C 562 298, 572 310, 558 318 C 574 328, 568 344, 550 346 C 560 358, 546 370, 530 370 C 500 398, 450 410, 400 410 C 350 410, 300 398, 270 370 C 254 370, 240 358, 250 346 C 232 344, 226 328, 242 318 C 228 310, 238 298, 252 285 C 262 215, 315 165, 388 158 Z"
+          fill="url(#headFurGrad)"/>
+
+    <!-- Clipped Tabby Markings, Cream Patches & Blush -->
+    <g clip-path="url(#headClip)">
+      <!-- Forehead Crown & Classic Tabby 'M' Stripes -->
+      <path d="M 394 148 Q 400 198 400 236 Q 406 198 406 148 Z" fill="url(#stripeGrad)" opacity="0.85"/>
+      <path d="M 364 154 Q 368 196 378 232 Q 384 228 380 194 Q 378 168 375 152 Z" fill="url(#stripeGrad)" opacity="0.82"/>
+      <path d="M 436 154 Q 432 196 422 232 Q 416 228 420 194 Q 422 168 425 152 Z" fill="url(#stripeGrad)" opacity="0.82"/>
+      <!-- Tabby 'M' Brow Arches -->
+      <path d="M 326 232 Q 352 206 376 230 Q 388 216 400 234 Q 412 216 424 230 Q 448 206 474 232 Q 450 220 426 240 Q 412 228 400 244 Q 388 228 374 240 Q 350 220 326 232 Z"
+            fill="url(#stripeGrad)" opacity="0.78"/>
+
+      <!-- Left Cheek Stripes -->
+      <path d="M 235 304 Q 264 300 284 308 Q 264 314 234 315 Z" fill="url(#stripeGrad)" opacity="0.76"/>
+      <path d="M 236 332 Q 268 326 290 332 Q 270 340 238 343 Z" fill="url(#stripeGrad)" opacity="0.76"/>
+
+      <!-- Right Cheek Stripes -->
+      <path d="M 565 304 Q 536 300 516 308 Q 536 314 566 315 Z" fill="url(#stripeGrad)" opacity="0.76"/>
+      <path d="M 564 332 Q 532 326 510 332 Q 530 340 562 343 Z" fill="url(#stripeGrad)" opacity="0.76"/>
+
+      <!-- Soft Cream Tabby "Spectacles" Around Eyes -->
+      <ellipse cx="328" cy="295" rx="49" ry="50" fill="#FFF4E2" opacity="0.58"/>
+      <ellipse cx="472" cy="295" rx="49" ry="50" fill="#FFF4E2" opacity="0.58"/>
+
+      <!-- Soft Cream Lower Face & Chin Patch -->
+      <path d="M 400 304 C 424 304, 442 328, 468 348 C 488 364, 482 405, 400 414 C 318 405, 312 364, 332 348 C 358 328, 376 304, 400 304 Z"
+            fill="url(#creamFluffGrad)"/>
+
+      <!-- Cute Cream Eyebrow Puffs -->
+      <ellipse cx="348" cy="240" rx="14" ry="8" transform="rotate(-12 348 240)" fill="#FFF5E4" opacity="0.82"/>
+      <ellipse cx="452" cy="240" rx="14" ry="8" transform="rotate(12 452 240)" fill="#FFF5E4" opacity="0.82"/>
+
+      <!-- Rosy Cheek Blush -->
+      <ellipse cx="288" cy="342" rx="34" ry="22" fill="url(#cheekBlush)"/>
+      <ellipse cx="512" cy="342" rx="34" ry="22" fill="url(#cheekBlush)"/>
+
+      <!-- Warm Sunlit Rim Highlight on Top-Left Cranium -->
+      <path d="M 255 275 C 266 212, 316 168, 386 160 C 324 174, 278 216, 264 278 Z" fill="#FFF7E6" opacity="0.55"/>
+    </g>
+
+    <!-- ==================== EXPRESSIVE GLOSSY EYES ==================== -->
+    <!-- Left Eye -->
+    <g id="eye-left">
+      <!-- Outer Dark Eye Socket Base -->
+      <ellipse cx="330" cy="294" rx="43" ry="45" transform="rotate(-4 330 294)" fill="#0B2E30"/>
+
+      <!-- Clipped Iris Interior -->
+      <g clip-path="url(#leftEyeClip)">
+        <ellipse cx="330" cy="294" rx="42" ry="44" fill="url(#irisGrad)"/>
+        <ellipse cx="330" cy="300" rx="36" ry="36" fill="url(#irisCenterGlow)"/>
+
+        <!-- Subtle Radial Iris Fibers -->
+        <g stroke="#0D403E" stroke-width="1.3" opacity="0.32">
+          <line x1="330" y1="294" x2="290" y2="265"/>
+          <line x1="330" y1="294" x2="286" y2="292"/>
+          <line x1="330" y1="294" x2="294" y2="322"/>
+          <line x1="330" y1="294" x2="312" y2="338"/>
+          <line x1="330" y1="294" x2="348" y2="338"/>
+          <line x1="330" y1="294" x2="368" y2="320"/>
+          <line x1="330" y1="294" x2="374" y2="292"/>
+          <line x1="330" y1="294" x2="366" y2="264"/>
+        </g>
+
+        <!-- Luminous Lower Crescent Bounce Light -->
+        <path d="M 298 314 Q 330 344 362 314 Q 330 332 298 314 Z" fill="#BAFFE5" opacity="0.7"/>
+
+        <!-- Large Velvety Pupil -->
+        <ellipse cx="332" cy="295" rx="23" ry="29" fill="#07191C"/>
+        <ellipse cx="332" cy="295" rx="19" ry="25" fill="#030D0F"/>
+
+        <!-- Upper Eyelid Cast Shadow -->
+        <path d="M 282 246 L 378 246 L 378 282 Q 330 268 282 284 Z" fill="#062124" opacity="0.48"/>
+      </g>
+
+      <!-- Expressive Upper Lash Line -->
+      <path d="M 285 288 C 288 256, 312 246, 336 248 C 356 250, 372 266, 373 292 C 370 268, 354 255, 334 254 C 310 253, 292 264, 285 288 Z"
+            fill="#3B1A0B"/>
+      <!-- Cute Outer Lash Flick -->
+      <path d="M 287 282 Q 279 276 277 270 Q 285 273 291 277 Z" fill="#3B1A0B"/>
+
+      <!-- Crisp Glossy Catchlights -->
+      <ellipse cx="314" cy="276" rx="12.5" ry="9.5" transform="rotate(-28 314 276)" fill="#FFFFFF" opacity="0.97"/>
+      <circle cx="347" cy="312" r="5.5" fill="#FFFFFF" opacity="0.92"/>
+      <circle cx="348" cy="275" r="2.6" fill="#FFFFFF" opacity="0.85"/>
+    </g>
+
+    <!-- Right Eye -->
+    <g id="eye-right">
+      <!-- Outer Dark Eye Socket Base -->
+      <ellipse cx="470" cy="294" rx="43" ry="45" transform="rotate(4 470 294)" fill="#0B2E30"/>
+
+      <!-- Clipped Iris Interior -->
+      <g clip-path="url(#rightEyeClip)">
+        <ellipse cx="470" cy="294" rx="42" ry="44" fill="url(#irisGrad)"/>
+        <ellipse cx="470" cy="300" rx="36" ry="36" fill="url(#irisCenterGlow)"/>
+
+        <!-- Subtle Radial Iris Fibers -->
+        <g stroke="#0D403E" stroke-width="1.3" opacity="0.32">
+          <line x1="470" y1="294" x2="434" y2="264"/>
+          <line x1="470" y1="294" x2="426" y2="292"/>
+          <line x1="470" y1="294" x2="432" y2="320"/>
+          <line x1="470" y1="294" x2="452" y2="338"/>
+          <line x1="470" y1="294" x2="488" y2="338"/>
+          <line x1="470" y1="294" x2="506" y2="322"/>
+          <line x1="470" y1="294" x2="514" y2="292"/>
+          <line x1="470" y1="294" x2="510" y2="265"/>
+        </g>
+
+        <!-- Luminous Lower Crescent Bounce Light -->
+        <path d="M 438 314 Q 470 344 502 314 Q 470 332 438 314 Z" fill="#BAFFE5" opacity="0.7"/>
+
+        <!-- Large Velvety Pupil -->
+        <ellipse cx="468" cy="295" rx="23" ry="29" fill="#07191C"/>
+        <ellipse cx="468" cy="295" rx="19" ry="25" fill="#030D0F"/>
+
+        <!-- Upper Eyelid Cast Shadow -->
+        <path d="M 422 246 L 518 246 L 518 284 Q 470 268 422 282 Z" fill="#062124" opacity="0.48"/>
+      </g>
+
+      <!-- Expressive Upper Lash Line -->
+      <path d="M 515 288 C 512 256, 488 246, 464 248 C 444 250, 428 266, 427 292 C 430 268, 446 255, 466 254 C 490 253, 508 264, 515 288 Z"
+            fill="#3B1A0B"/>
+      <!-- Cute Outer Lash Flick -->
+      <path d="M 513 282 Q 521 276 523 270 Q 515 273 509 277 Z" fill="#3B1A0B"/>
+
+      <!-- Crisp Glossy Catchlights -->
+      <ellipse cx="454" cy="276" rx="12.5" ry="9.5" transform="rotate(-28 454 276)" fill="#FFFFFF" opacity="0.97"/>
+      <circle cx="487" cy="312" r="5.5" fill="#FFFFFF" opacity="0.92"/>
+      <circle cx="488" cy="275" r="2.6" fill="#FFFFFF" opacity="0.85"/>
+    </g>
+
+    <!-- ==================== MUZZLE, NOSE & SWEET MOUTH ==================== -->
+    <g id="muzzle-and-mouth">
+      <!-- Happy Little Pink Tongue & Open Mouth -->
+      <path d="M 386 353 Q 400 377 414 353 Q 400 348 386 353 Z" fill="url(#tongueGrad)" stroke="#9E2A42" stroke-width="1.5"/>
+      <!-- Tongue Center Groove -->
+      <path d="M 400 353 L 400 364" stroke="#D14966" stroke-width="1.2" stroke-linecap="round" opacity="0.6"/>
+
+      <!-- Plump Whisker Pads -->
+      <path d="M 366 346 C 366 334, 398 334, 400 347 C 400 358, 376 362, 368 352" fill="#FFFDF9"/>
+      <path d="M 434 346 C 434 334, 402 334, 400 347 C 400 358, 424 362, 432 352" fill="#FFFDF9"/>
+
+      <!-- ':3' Upper Lip Curve -->
+      <path d="M 370 350 Q 386 362 400 348 Q 414 362 430 350"
+            fill="none" stroke="#6E331D" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+
+      <!-- Vertical Philtrum -->
+      <line x1="400" y1="341" x2="400" y2="349" stroke="#6E331D" stroke-width="2.5" stroke-linecap="round"/>
+
+      <!-- Tiny Rosy Triangle Nose -->
+      <path d="M 386 329 C 385 324, 415 324, 414 329 C 413 335, 404 343, 400 343 C 396 343, 387 335, 386 329 Z"
+            fill="url(#noseGrad)" stroke="#BA3F58" stroke-width="1.1"/>
+      <!-- Soft Nose Highlight -->
+      <ellipse cx="397" cy="328.5" rx="5.5" ry="2" fill="#FFD6DF" opacity="0.85"/>
+
+      <!-- Subtle Whisker Follicle Dots -->
+      <g fill="#DEB896" opacity="0.75">
+        <circle cx="375" cy="344" r="1.6"/>
+        <circle cx="382" cy="348" r="1.6"/>
+        <circle cx="372" cy="350" r="1.6"/>
+        <circle cx="425" cy="344" r="1.6"/>
+        <circle cx="418" cy="348" r="1.6"/>
+        <circle cx="428" cy="350" r="1.6"/>
+      </g>
+
+      <!-- Soft Chin Fur Tuft Accent -->
+      <path d="M 390 382 Q 400 387 410 382" fill="none" stroke="#E8C7A7" stroke-width="2" stroke-linecap="round"/>
+    </g>
+
+    <!-- ==================== DELICATE CURVED WHISKERS ==================== -->
+    <g id="whiskers" fill="none" stroke-linecap="round">
+      <!-- Subtle Warm Shadow Layer for Contrast -->
+      <g stroke="#C98A55" stroke-width="3.4" opacity="0.28">
+        <!-- Left Cheek Whiskers -->
+        <path d="M 300 335 Q 235 322 178 332"/>
+        <path d="M 296 346 Q 232 344 172 362"/>
+        <path d="M 302 357 Q 244 364 192 388"/>
+        <!-- Right Cheek Whiskers -->
+        <path d="M 500 335 Q 565 322 622 332"/>
+        <path d="M 504 346 Q 568 344 628 362"/>
+        <path d="M 498 357 Q 556 364 608 388"/>
+        <!-- Eyebrow Whiskers -->
+        <path d="M 332 238 Q 305 202 272 198"/>
+        <path d="M 342 235 Q 322 196 296 188"/>
+        <path d="M 468 238 Q 495 202 528 198"/>
+        <path d="M 458 235 Q 478 196 504 188"/>
+      </g>
+
+      <!-- Crisp Cream-White Whiskers -->
+      <g stroke="#FFFDF9" stroke-width="2.1">
+        <!-- Left Cheek Whiskers -->
+        <path d="M 300 334 Q 235 321 178 331"/>
+        <path d="M 296 345 Q 232 343 172 361"/>
+        <path d="M 302 356 Q 244 363 192 387"/>
+        <!-- Right Cheek Whiskers -->
+        <path d="M 500 334 Q 565 321 622 331"/>
+        <path d="M 504 345 Q 568 343 628 361"/>
+        <path d="M 498 356 Q 556 363 608 387"/>
+        <!-- Eyebrow Whiskers -->
+        <path d="M 332 237 Q 305 201 272 197" stroke-width="1.7" opacity="0.92"/>
+        <path d="M 342 234 Q 322 195 296 187" stroke-width="1.7" opacity="0.92"/>
+        <path d="M 468 237 Q 495 201 528 197" stroke-width="1.7" opacity="0.92"/>
+        <path d="M 458 234 Q 478 195 504 187" stroke-width="1.7" opacity="0.92"/>
+      </g>
+    </g>
+  </g>
+
+  <!-- ==================== 6. FOREGROUND YARN BALL & CUTE DETAILS ==================== -->
+  <g id="yarn-ball-and-strand">
+    <!-- Loose Playful Yarn Strand Snaking Near Paws -->
+    <path d="M 252 684 C 292 708, 345 696, 378 682 C 412 668, 438 696, 478 688 C 502 684, 514 696, 502 704"
+          fill="none" stroke="#314FA1" stroke-width="7.5" stroke-linecap="round"/>
+    <path d="M 252 683 C 292 707, 345 695, 378 681 C 412 667, 438 695, 478 687 C 502 683, 514 695, 502 703"
+          fill="none" stroke="#7BA3FA" stroke-width="4.5" stroke-linecap="round"/>
+    <path d="M 252 682 C 292 706, 345 694, 378 680 C 412 666, 438 694, 478 686"
+          fill="none" stroke="#BDD3FF" stroke-width="1.4" stroke-dasharray="6 8" stroke-linecap="round"/>
+
+    <!-- Main Periwinkle Yarn Sphere -->
+    <circle cx="222" cy="648" r="47" fill="url(#yarnBaseGrad)"/>
+
+    <!-- Clipped Wound Yarn Texture -->
+    <g clip-path="url(#yarnClip)" fill="none" stroke-linecap="round">
+      <!-- Band Group 1 (Top-Left to Bottom-Right) -->
+      <g stroke="#2B4694" stroke-width="8.5" opacity="0.65">
+        <path d="M 172 622 Q 222 605 270 645"/>
+        <path d="M 168 636 Q 220 620 268 660"/>
+        <path d="M 166 650 Q 218 635 264 676"/>
+      </g>
+      <g stroke="url(#yarnStrandLight)" stroke-width="5.5">
+        <path d="M 172 621 Q 222 604 270 644"/>
+        <path d="M 168 635 Q 220 619 268 659"/>
+        <path d="M 166 649 Q 218 634 264 675"/>
+      </g>
+
+      <!-- Band Group 2 (Bottom-Left to Top-Right Cross Wrap) -->
+      <g stroke="#263E85" stroke-width="9" opacity="0.7">
+        <path d="M 182 688 Q 204 636 254 604"/>
+        <path d="M 196 696 Q 218 644 268 614"/>
+        <path d="M 212 702 Q 234 654 276 628"/>
+      </g>
+      <g stroke="url(#yarnStrandLight)" stroke-width="5.8">
+        <path d="M 182 687 Q 204 635 254 603"/>
+        <path d="M 196 695 Q 218 643 268 613"/>
+        <path d="M 212 701 Q 234 653 276 627"/>
+      </g>
+
+      <!-- Band Group 3 (Top Cap Wrap) -->
+      <g stroke="#2B4694" stroke-width="8" opacity="0.6">
+        <path d="M 186 604 Q 224 624 234 696"/>
+        <path d="M 202 598 Q 238 620 248 692"/>
+      </g>
+      <g stroke="#99BAFF" stroke-width="5">
+        <path d="M 186 603 Q 224 623 234 695"/>
+        <path d="M 202 597 Q 238 619 248 691"/>
+      </g>
+
+      <!-- Spherical Shading Overlay for 3D Volume -->
+      <circle cx="222" cy="648" r="47" fill="url(#yarnBaseGrad)" opacity="0.28"/>
+      <path d="M 175 655 A 47 47 0 0 0 266 665 A 52 44 0 0 1 175 655 Z" fill="#1B2E69" opacity="0.35"/>
+    </g>
+
+    <!-- Yarn Outer Rim Accent -->
+    <circle cx="222" cy="648" r="47" fill="none" stroke="#3655AD" stroke-width="1.4"/>
+  </g>
+
+  <!-- Charming Floating Hearts & Sparkles -->
+  <g id="atmosphere-accents">
+    <!-- Floating Pastel Coral Hearts (Complementing Head Tilt) -->
+    <path d="M 605 202 C 605 193, 618 190, 621 199 C 624 190, 637 193, 637 202 C 637 214, 621 222, 621 226 C 621 222, 605 214, 605 202 Z"
+          fill="#FF8FA3" opacity="0.85" transform="rotate(14 621 208)"/>
+    <path d="M 578 164 C 578 158, 587 156, 589 162 C 591 156, 600 158, 600 164 C 600 172, 589 177, 589 180 C 589 177, 578 172, 578 164 Z"
+          fill="#FFB3C1" opacity="0.8" transform="rotate(-10 589 168)"/>
+
+    <!-- Four-Point Twinkle Sparkles -->
+    <g fill="#FFE082" filter="url(#softGlow)">
+      <path d="M 175 340 Q 175 356 159 356 Q 175 356 175 372 Q 175 356 191 356 Q 175 356 175 340 Z"/>
+      <path d="M 638 400 Q 638 412 626 412 Q 638 412 638 424 Q 638 412 650 412 Q 638 412 638 400 Z"/>
+      <path d="M 218 175 Q 218 185 208 185 Q 218 185 218 195 Q 218 185 228 185 Q 218 185 218 175 Z"/>
+    </g>
+  </g>
+</svg>
