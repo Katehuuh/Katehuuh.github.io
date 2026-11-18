@@ -1,7 +1,23 @@
 {
   "base": "https://katehuuh.github.io/demos/CatBench/",
-  "updated": "2026-11-16T23:55:33Z",
+  "updated": "2026-11-18T02:00:57Z",
   "models": {
+    "gpt-6.2-astra": {
+      "display_name": "gpt-6.2-astra",
+      "python_render": "assets/gpt-6.2-astra-python.jpg",
+      "svg": "assets/gpt-6.2-astra-svg.jpg",
+      "python_source": "assets/gpt-6.2-astra.py",
+      "svg_source": "assets/gpt-6.2-astra.svg",
+      "added": "2026-11-18T02:00:57Z"
+    },
+    "gpt-6.2-sol": {
+      "display_name": "gpt-6.2-sol",
+      "python_render": "assets/gpt-6.2-sol-python.jpg",
+      "svg": "assets/gpt-6.2-sol-svg.jpg",
+      "python_source": "assets/gpt-6.2-sol.py",
+      "svg_source": "assets/gpt-6.2-sol.svg",
+      "added": "2026-11-18T02:00:57Z"
+    },
     "gemini-4-argon": {
       "display_name": "gemini-4-argon",
       "python_render": "assets/gemini-4-argon-python.jpg",
