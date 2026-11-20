@@ -23,7 +23,9 @@ const UE_BULK = 12;
 const ueScope = self.registration.scope;
 const ueNativeFetch = self.fetch.bind(self);
 const ueCacheName = 'ue-remote:' + new URL(ueScope).pathname + ':' + UE_BUILD;
-const ueStats = { requests: 0, bytes: 0, hits: 0, stored: 0, failed: 0, told: '' };
+const ueStats = { requests: 0, bytes: 0, hits: 0, stored: 0, failed: 0, kinds: {}, told: '' };
+// Why a request had to be asked again: the data host publishes no limits, so the page's log says what it answered
+function ueFailed(kind) { ueStats.failed++; ueStats.kinds[kind] = (ueStats.kinds[kind] || 0) + 1; }
 function ueType(rel) {
   if (/\.wasm(\.part\d+)?$/.test(rel)) return 'application/wasm';
   if (rel.endsWith('.js')) return 'text/javascript';
@@ -53,7 +55,8 @@ function ueRemote(input) {
 }
 function ueTell() {
   const text = 'SW REMOTE ' + ueStats.requests + ' requests, ' + (ueStats.bytes / 1048576).toFixed(1) + ' MiB from the network; ' +
-    ueStats.hits + ' chunk reads from the cache; ' + ueStats.failed + ' failed';
+    ueStats.hits + ' chunk reads from the cache; ' + ueStats.failed + ' failed' +
+    (ueStats.failed ? ' (' + Object.keys(ueStats.kinds).map((kind) => ueStats.kinds[kind] + ' ' + kind).join(', ') + ')' : '');
   if (text === ueStats.told) return;
   ueStats.told = text;
   self.clients.matchAll({ type: 'window' }).then((pages) => { for (const page of pages) page.postMessage({ type: 'log', text }); });
@@ -97,7 +100,8 @@ async function ueNet(rel, range, init) {
     const stop = () => control.abort();
     if (outer) { if (outer.aborted) control.abort(); else outer.addEventListener('abort', stop, { once: true }); }
     options.signal = control.signal;
-    const timer = patience ? setTimeout(stop, patience) : 0;
+    let late = false;
+    const timer = patience ? setTimeout(() => { late = true; stop(); }, patience) : 0;
     try { response = await ueNativeFetch(url, options); } catch (e) { error = e; }
     if (timer) clearTimeout(timer);
     ueStats.requests++;
@@ -107,8 +111,8 @@ async function ueNet(rel, range, init) {
       if (gate) gate.at = Date.now();
       return response;
     }
-    ueStats.failed++;
     const stopped = outer && outer.aborted;
+    ueFailed(response ? 'HTTP ' + response.status : late ? 'no answer in ' + Math.round(patience / 1000) + ' s' : stopped ? 'stopped' : 'network error');
     if (attempt >= 6 || stopped) {
       if (!stopped) ueProblem(rel + ': ' + (response ? 'HTTP ' + response.status : String(error)));
       if (response) return response;
@@ -135,7 +139,7 @@ async function ueRead(rel, first, last, size) {
       return bytes;
     } catch (e) {
       if (attempt >= 2) throw e;
-      ueStats.failed++;
+      ueFailed('cut off');
     } finally {
       clearTimeout(timer);
     }
