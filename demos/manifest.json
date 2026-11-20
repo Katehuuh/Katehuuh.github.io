@@ -1,6 +1,12 @@
 {
   "demos": [
     {
+      "name": "[GAME]-Shelf-Life",
+      "type": "file",
+      "filename": "[GAME]-Shelf-Life.html",
+      "description": "44 mini games in 44 worlds, built from about 330 free-tier Fab packs, on Unreal Engine 5.9 and its comeback to the browser (WebGPU, Lumen). By Fable 5.2."
+    },
+    {
       "name": "[SHOW]-Kate-Octane",
       "type": "file",
       "filename": "[SHOW]-Kate-Octane.html",
