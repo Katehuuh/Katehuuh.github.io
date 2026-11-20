@@ -14,7 +14,7 @@
      (device pixels per CSS pixel, default 1), ue-start (auto|click), ue-hint ("Esc=Menu;Tab=Controls": the key hint shown while
      playing, none by default), ue-gpucheck (1: the first-visit GPU check picks a starting resolution), ue-native-build (a link
      for players whose browser cannot run the game). -->
-<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><title>ShelfLife</title><meta name="ue-project" content="ShelfLife"><meta name="ue-game" content="ShelfLife"><link rel="icon" href="data:,">
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><title>SHELF LIFE</title><meta name="ue-project" content="ShelfLife"><meta name="ue-game" content="ShelfLife"><link rel="icon" href="data:,">
 <!-- The name under a home-screen icon on iOS. Installing the game (a progressive web app: Add to Home Screen, Install in
      Chrome and Edge, then it opens without the browser's bars) is opt-in: with bInstallable UAT stages manifest.webmanifest
      (name, display mode, orientation, colours, icons, filled from the Install settings) and the icons, and adds the manifest
@@ -265,25 +265,6 @@ td:first-child{white-space:nowrap;color:var(--accent);width:1%}
 </style><meta name="ue-audio-thread" content="1">
 <meta name="ue-memory64" content="lowered">
 <script>
-// (added by ShelfLife Tools/web_publish.py) The game logs the world it is about to open ("SHELF_RUN ... on to <world>").
-// The service worker is told at once, so that it asks for that world's data before the engine starts reading it.
-(function () {
-  var wrap = function (name) {
-    var original = console[name];
-    console[name] = function () {
-      try {
-        var text = arguments[0];
-        if (typeof text === 'string' && text.indexOf('SHELF_RUN') >= 0 && navigator.serviceWorker && navigator.serviceWorker.controller) {
-          var match = /SHELF_RUN (?:[0-9]+ starts in|step [0-9]+ drift -?[0-9]+: on to|visit:) ([a-z0-9_]+)/.exec(text);
-          if (match) navigator.serviceWorker.controller.postMessage({ type: 'ue-world', name: match[1] });
-        }
-      } catch (e) { /* the log line is printed whatever happens here */ }
-      return original.apply(console, arguments);
-    };
-  };
-  wrap('log');
-  wrap('info');
-})();
 // (added by ShelfLife Tools/web_publish.py) Shown when the data host refuses requests: GitHub limits how fast one address
 // may read files, and gives no warning.
 if (navigator.serviceWorker) navigator.serviceWorker.addEventListener('message', function (event) {

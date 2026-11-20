@@ -367,13 +367,8 @@ self.addEventListener('fetch', (event) => {
   if (remote.listed) return;
   event.respondWith(ueAnswer(remote, request.headers.get('Range'), null));
 });
-// The page passes on the world the game has just chosen (its log line), seconds before the level is opened
-self.addEventListener('message', (event) => {
-  const data = event.data;
-  if (data && data.type === 'ue-world' && UE_PLANS && typeof data.name === 'string' && UE_PLANS.worlds[data.name]) {
-    uePlan(data.name, UE_PLANS.worlds[data.name]);
-  }
-});
+// (The page cannot tell this worker which world comes next: the game logs it on the game thread, which is a worker of
+// its own, and those lines never reach the page. The reads themselves say it, 0.2 to 7 s after the game's choice.)
 self.addEventListener('activate', (event) => event.waitUntil(caches.keys().then((names) => Promise.all(
   names.filter((name) => name.startsWith('ue-remote:' + new URL(ueScope).pathname + ':') && name !== ueCacheName).map((name) => caches.delete(name))))));
 importScripts('sw-engine.js');
