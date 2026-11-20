@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SHELF LIFE</title>
+<meta name="description" content="44 mini games in 44 worlds, built from about 330 free-tier Fab packs, on Unreal Engine 5.9 and its comeback to the browser (WebGPU, Lumen). By Fable 5.2.">
+<meta name="thumbnail" content="custom">
+<meta name="color-scheme" content="dark">
+<style>
+:root { --bg: #0d0b09; --paper: #dcbd8c; --ink: #f4efe6; --dim: rgba(244, 239, 230, 0.62); --orange: #ff6b0d; --line: rgba(220, 189, 140, 0.28); }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { min-height: 100%; }
+body { background: var(--bg); color: var(--ink); font: 16px/1.55 "Segoe UI", system-ui, -apple-system, sans-serif; }
+main { max-width: 860px; margin: 0 auto; padding: 56px 24px 72px; }
+.label { display: inline-block; border: 1px solid var(--line); color: var(--paper); font: 600 12px/1 ui-monospace, Consolas, monospace; letter-spacing: 0.14em; padding: 7px 10px; text-transform: uppercase; }
+h1 { font: 800 clamp(44px, 9vw, 92px)/0.95 "Segoe UI", system-ui, sans-serif; letter-spacing: -0.02em; color: var(--orange); margin: 22px 0 18px; }
+p.lead { font-size: 20px; color: var(--ink); max-width: 44em; }
+p { color: var(--dim); margin-top: 14px; max-width: 46em; }
+.play { display: flex; flex-wrap: wrap; gap: 12px; margin: 34px 0 10px; }
+a.go { display: inline-block; text-decoration: none; font-weight: 700; padding: 15px 22px; border: 1px solid var(--line); color: var(--ink); }
+a.go.first { background: var(--orange); border-color: var(--orange); color: #160b02; }
+a.go:hover, a.go:focus-visible { outline: 2px solid var(--paper); outline-offset: 2px; }
+a.go small { display: block; font-weight: 400; font-size: 13px; opacity: 0.8; margin-top: 3px; }
+dl { display: grid; grid-template-columns: max-content 1fr; gap: 8px 22px; margin-top: 30px; padding-top: 24px; border-top: 1px solid var(--line); }
+dt { color: var(--paper); font: 600 12px/1.9 ui-monospace, Consolas, monospace; letter-spacing: 0.1em; text-transform: uppercase; }
+dd { color: var(--dim); }
+kbd { font: 600 13px ui-monospace, Consolas, monospace; border: 1px solid var(--line); padding: 1px 6px; color: var(--ink); }
+@media (max-width: 560px) { dl { grid-template-columns: 1fr; gap: 2px; } dd { margin-bottom: 12px; } }
+</style>
+</head>
+<body>
+<main>
+  <span class="label">Unreal Engine 5.9 &middot; WebGPU &middot; Lumen in a browser tab</span>
+  <h1>SHELF LIFE</h1>
+  <p class="lead">Everything you ever claimed and never opened sits boxed on an endless shelf. Every crate is a world caught mid-scene, and you are the one thing on the shelf that woke up.</p>
+  <p>You fall from crate to crate. Each world gives you a few seconds and one thing to do, different every time: fit a power cell, ram a runaway truck, bark, pick a lock. Do it and the shelf files you upward. Do nothing and you drop a shelf, where it gets darker. A fall is seven worlds long, it always ends, and <kbd>E</kbd> on the shelf opens any world you missed.</p>
+  <div class="play">
+    <a class="go first" target="_top" href="shelf-life/index.html?tier=desktop">Play<small>Lumen, quality picked for your GPU</small></a>
+    <a class="go" target="_top" href="shelf-life/index.html?tier=desktop&amp;args=-WebQualityPreset%3DEpic">Highest quality<small>for a strong graphics card</small></a>
+    <a class="go" target="_top" href="shelf-life/index.html?tier=desktop&amp;args=-WebQualityPreset%3DLow">Lowest quality<small>if it stutters</small></a>
+  </div>
+  <dl>
+    <dt>Needs</dt><dd>A desktop computer with a dedicated graphics card and Chrome or Edge (WebGPU). No phones.</dd>
+    <dt>Loads</dt><dd>About 450 MB before the shelf appears, then each world as you reach it (100 to 600 MB the first time, kept afterwards), so a fast connection helps. The first visit reloads once by itself.</dd>
+    <dt>Keys</dt><dd><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> move &middot; mouse looks &middot; <kbd>SPACE</kbd> or click does the world's one thing &middot; <kbd>E</kbd> uses</dd>
+    <dt>Made of</dt><dd>44 worlds built from about 330 packs of a Fab library, most of them free monthly giveaways, staged in the packs' own levels. Built with Claude Fable 5.2.</dd>
+  </dl>
+</main>
+</body>
+</html>
