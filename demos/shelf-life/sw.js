@@ -4,7 +4,7 @@
 // workers and from the engine's worker itself, are answered here: the right Content-Type, a Content-Range computed from
 // the sizes below (the data host hides it from cross-origin readers), whole files as their gzip sibling, and the
 // container partitions out of WORLD PACKS (below) or, for what no pack holds, by byte range in aligned chunks.
-const UE_REMOTE = "https://raw.githubusercontent.com/Katehuuh/Katehuuh.github.io/d0fed49bb001dccb88db0724a509bfd538876f3e/";
+const UE_REMOTE = "https://raw.githubusercontent.com/Katehuuh/Katehuuh.github.io/aa72620693e1e1e922876ce9ea2fb5e2b329cdf0/";
 const UE_BUILD = "08b28052391c";
 const UE_CHUNK = 262144;            // bytes of a chunk of a partition; 0: every read is passed on as it is
 const UE_MEMORY_CHUNKS = 1280;   // chunks kept in memory
