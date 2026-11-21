@@ -22,6 +22,8 @@ a.go { display: inline-block; text-decoration: none; font-weight: 700; padding: 
 a.go.first { background: var(--orange); border-color: var(--orange); color: #160b02; }
 a.go:hover, a.go:focus-visible { outline: 2px solid var(--paper); outline-offset: 2px; }
 a.go small { display: block; font-weight: 400; font-size: 13px; opacity: 0.8; margin-top: 3px; }
+label.lite { display: flex; align-items: center; gap: 8px; color: var(--dim); font-size: 14px; cursor: pointer; }
+label.lite input { width: 16px; height: 16px; accent-color: var(--orange); }
 dl { display: grid; grid-template-columns: max-content 1fr; gap: 8px 22px; margin-top: 30px; padding-top: 24px; border-top: 1px solid var(--line); }
 dt { color: var(--paper); font: 600 12px/1.9 ui-monospace, Consolas, monospace; letter-spacing: 0.1em; text-transform: uppercase; }
 dd { color: var(--dim); }
@@ -36,13 +38,24 @@ kbd { font: 600 13px ui-monospace, Consolas, monospace; border: 1px solid var(--
   <p class="lead">Everything you ever claimed and never opened sits boxed on an endless shelf. Every crate is a world caught mid-scene, and you are the one thing on the shelf that woke up.</p>
   <p>You fall from crate to crate. Each world gives you a few seconds and one thing to do, different every time: fit a power cell, ram a runaway truck, bark, pick a lock. Do it and the shelf files you upward. Do nothing and you drop a shelf, where it gets darker. A fall is seven worlds long, it always ends, and <kbd>E</kbd> on the shelf opens any world you missed.</p>
   <div class="play">
-    <a class="go first" target="_top" href="shelf-life/index.html?tier=desktop">Play<small>Lumen, quality picked for your GPU</small></a>
-    <a class="go" target="_top" href="shelf-life/index.html?tier=desktop&amp;args=-WebQualityPreset%3DEpic">Highest quality<small>for a strong graphics card</small></a>
-    <a class="go" target="_top" href="shelf-life/index.html?tier=desktop&amp;args=-WebQualityPreset%3DLow">Lowest quality<small>if it stutters</small></a>
+    <a class="go first" id="go" target="_top" href="shelf-life/index.html?tier=desktop" data-lite="shelf-life/index.html?tier=desktop&amp;args=-WebQualityPreset%3DLow">Play<small id="how">the best quality your graphics card holds</small></a>
+    <label class="lite"><input type="checkbox" id="lite"> lowest quality instead, if it stutters</label>
   </div>
+  <script>
+  (function () {
+    var go = document.getElementById('go'), lite = document.getElementById('lite'), how = document.getElementById('how');
+    var best = go.getAttribute('href'), words = how.textContent;
+    var set = function () {
+      go.setAttribute('href', lite.checked ? go.getAttribute('data-lite') : best);
+      how.textContent = lite.checked ? 'lowest quality' : words;
+    };
+    lite.addEventListener('change', set);
+    set();
+  })();
+  </script>
   <dl>
     <dt>Needs</dt><dd>A desktop computer with a dedicated graphics card and Chrome or Edge (WebGPU). No phones.</dd>
-    <dt>Loads</dt><dd>About 450 MB before the shelf appears, then each world as you reach it (100 MB to 1 GB the first time, half a gigabyte for most, kept afterwards), so a fast connection helps: a world takes 10 to 30 seconds to open the first time. The first visit reloads once by itself.</dd>
+    <dt>Loads</dt><dd>About 220 MB before the shelf appears, then each world as you reach it (60 to 850 MB the first time, about 380 MB for most, kept afterwards): on a fast connection a world opens in 5 to 20 seconds the first time. The first visit reloads once by itself.</dd>
     <dt>Keys</dt><dd><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> move &middot; mouse looks &middot; <kbd>SPACE</kbd> or click does the world's one thing &middot; <kbd>E</kbd> uses</dd>
     <dt>Made of</dt><dd>44 worlds built from about 330 packs of a Fab library, most of them free monthly giveaways, staged in the packs' own levels. Built with Claude Fable 5.2.</dd>
   </dl>

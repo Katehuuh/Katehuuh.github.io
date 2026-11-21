@@ -67,7 +67,7 @@
      the built-in ones); with GPU timing (timestamp-query) the lowest starting resolution step, as dynamic resolution lowers it
      under load (empty: no floor) -->
 <meta name="ue-default-tier" content="auto">
-<meta name="ue-desktop-tiers" content="">
+<meta name="ue-desktop-tiers" content="0.2=Epic,0.3=High,0.42=Medium">
 <meta name="ue-mobile-tiers" content="">
 <meta name="ue-resolution-floor" content="">
 <!-- Compatibility policy (wasm-compat.js): warnings below these, required texture features, phones and tablets (warn|block|
@@ -264,22 +264,111 @@ td{padding:3px 6px;border-bottom:1px solid #262626;vertical-align:top}
 td:first-child{white-space:nowrap;color:var(--accent);width:1%}
 </style><meta name="ue-audio-thread" content="1">
 <meta name="ue-memory64" content="lowered">
+<style>
+/* (added by ShelfLife Tools/web_publish.py) What the page shows while the game waits for a world's data: the game cannot
+   draw then, its screen is black. Nothing here takes the pointer or the keys. */
+#ue-load { position: fixed; left: 50%; bottom: 9vh; transform: translateX(-50%); z-index: 9; pointer-events: none;
+  opacity: 0; transition: opacity .3s; min-width: min(600px, 76vw); text-align: center; color: #dcbd8c;
+  font: 600 14px/1.2 ui-monospace, Consolas, monospace; letter-spacing: .18em; text-transform: uppercase; text-shadow: 0 1px 6px #000; }
+#ue-load.on { opacity: 1; }
+#ue-load b { display: block; margin: 10px 0 14px; color: #f4efe6; font: 800 34px/1.15 "Segoe UI", system-ui, sans-serif; letter-spacing: .03em; }
+#ue-load .bar { position: relative; height: 5px; background: rgba(220, 189, 140, .22); overflow: hidden; }
+#ue-load .bar i { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: #ff6b0d; transition: width .25s linear; }
+#ue-load .bar::after { content: ''; position: absolute; top: 0; bottom: 0; left: -30%; width: 30%;
+  background: linear-gradient(90deg, transparent, rgba(244, 239, 230, .65), transparent); animation: ue-load-sweep 1.15s linear infinite; }
+@keyframes ue-load-sweep { to { transform: translateX(440%); } }
+#ue-load small { display: block; margin-top: 10px; font-size: 13px; font-weight: 400; letter-spacing: .1em; opacity: .85; }
+</style>
 <script>
-// (added by ShelfLife Tools/web_publish.py) Shown when the data host refuses requests: GitHub limits how fast one address
-// may read files, and gives no warning.
-if (navigator.serviceWorker) navigator.serviceWorker.addEventListener('message', function (event) {
-  var text = event.data && event.data.type === 'log' && typeof event.data.text === 'string' ? event.data.text : '';
-  if (text.indexOf('SW REMOTE ERROR') !== 0) return;
-  console.log(text);
-  var box = document.getElementById('ue-remote-note');
-  if (!box) {
+// (added by ShelfLife Tools/web_publish.py)
+(function () {
+  if (!navigator.serviceWorker) return;
+  var box = null, bar = null, title = null, note = null, head = null;
+  function build() {
     box = document.createElement('div');
-    box.id = 'ue-remote-note';
-    box.style.cssText = 'position:fixed;left:0;right:0;top:0;z-index:99999;background:#7a1408;color:#fff;font:15px/1.4 system-ui,sans-serif;padding:10px 16px;text-align:center';
-    (document.body || document.documentElement).appendChild(box);
+    box.id = 'ue-load';
+    box.setAttribute('aria-live', 'polite');
+    head = document.createElement('span');
+    title = document.createElement('b');
+    var rail = document.createElement('div');
+    rail.className = 'bar';
+    bar = document.createElement('i');
+    rail.appendChild(bar);
+    note = document.createElement('small');
+    box.appendChild(head); box.appendChild(title); box.appendChild(rail); box.appendChild(note);
+    place();
   }
-  box.textContent = "The game's data could not be fetched from GitHub, which limits how fast one address may read. Wait and reload later (reports speak of an hour or more): what was already fetched is kept.";
-});
+  // in full screen only what is inside the full-screen element is drawn
+  function place() { if (box) (document.fullscreenElement || document.body || document.documentElement).appendChild(box); }
+  document.addEventListener('fullscreenchange', place);
+  var mb = function (bytes) { return Math.round(bytes / 1048576); };
+  navigator.serviceWorker.addEventListener('message', function (event) {
+    var data = event.data || {};
+    if (data.type === 'ue-load') {
+      if (!box) { if (!data.on) return; build(); }
+      if (data.on) {
+        var here = data.total > 0 && data.got >= data.total;
+        head.textContent = data.title ? 'Unpacking' : 'Loading';
+        title.textContent = data.title || '';
+        title.style.display = data.title ? 'block' : 'none';
+        bar.style.width = (data.total > 0 ? Math.min(100, 100 * data.got / data.total) : 0) + '%';
+        note.textContent = data.total > 0 ? (here ? 'all here, setting the scene' : mb(data.got) + ' of ' + mb(data.total) + ' MB') : '';
+      }
+      box.className = data.on ? 'on' : '';
+      return;
+    }
+    // Shown when the data host refuses requests: GitHub limits how fast one address may read files, and gives no warning.
+    var text = data.type === 'log' && typeof data.text === 'string' ? data.text : '';
+    if (text.indexOf('SW REMOTE ERROR') !== 0) return;
+    console.log(text);
+    var warn = document.getElementById('ue-remote-note');
+    if (!warn) {
+      warn = document.createElement('div');
+      warn.id = 'ue-remote-note';
+      warn.style.cssText = 'position:fixed;left:0;right:0;top:0;z-index:2147483001;background:#7a1408;color:#fff;font:15px/1.4 system-ui,sans-serif;padding:10px 16px;text-align:center';
+      (document.body || document.documentElement).appendChild(warn);
+    }
+    warn.textContent = "Some of the game's data could not be fetched from GitHub, which limits how fast one address may read. If the game stops, wait and reload later (reports speak of an hour or more): what was already fetched is kept.";
+  });
+  // The game's log. The engine posts every line of it on this channel (-WasmLogChannel, in UECommandLine.txt); the page
+  // itself never sees the game thread's lines otherwise. What the game says about worlds goes to the worker, which then
+  // knows which world's data to fetch, and when the game is between two places and draws nothing.
+  // The last word is kept and said again with every ping: the browser may stop the worker and start it again, and a
+  // worker that has just started knows nothing of the game.
+  var last = {};
+  var tell = function (hint) {
+    if (typeof hint.now === 'string') last = { now: hint.now };
+    else if (hint.state === 'loading') last = {};          // a fall or a visit is over: back to the Shelf
+    if (hint.next) last.next = hint.next;
+    if (hint.state) last.state = hint.state;
+    var worker = navigator.serviceWorker.controller;
+    if (worker) { hint.type = 'ue-hint'; worker.postMessage(hint); }
+  };
+  // A new worker that takes this page over belongs to a newer copy of the game than the page: its lists of files do not
+  // fit what the page has started with. The page starts again, on one copy.
+  var controlled = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.addEventListener('controllerchange', function () {
+    if (controlled) location.reload();
+    controlled = true;
+  });
+  if (typeof BroadcastChannel === 'function') {
+    new BroadcastChannel('ue-log').onmessage = function (event) {
+      var line = typeof event.data === 'string' ? event.data : '';
+      if (line.indexOf('SHELF_') < 0) return;
+      var match = /SHELF_RUN (?:[0-9]+ starts in|step [0-9]+ drift -?[0-9]+: on to|visit:) ([a-z0-9_]+)/.exec(line);
+      if (match) { tell({ now: match[1], state: 'loading' }); return; }
+      match = /SHELF_RUN next: ([a-z0-9_ ]+)/.exec(line);
+      if (match) { tell({ next: match[1].trim().split(/ +/) }); return; }
+      if (/SHELF_RUN (?:ended after|visit of [a-z0-9_]+ ended)/.test(line)) { tell({ state: 'loading' }); return; }
+      if (/SHELF_SCENE begin /.test(line)) tell({ state: 'play' });
+    };
+  }
+  // the worker fetches the next worlds while the game asks for nothing: it must hear from the page or the browser stops it
+  setInterval(function () {
+    var worker = navigator.serviceWorker.controller;
+    if (worker) worker.postMessage({ type: 'ue-ping', now: last.now, next: last.next, state: last.state });
+  }, 15000);
+})();
 </script>
 </head>
 <body><canvas id="canvas" tabindex="0" aria-label="ShelfLife"></canvas><div id="status"></div>

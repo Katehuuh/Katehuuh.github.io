@@ -1,1 +1,1 @@
--project="../../../ShelfLife/ShelfLife.uproject"
+-project="../../../ShelfLife/ShelfLife.uproject" -WasmLogChannel
